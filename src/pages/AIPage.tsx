@@ -16,7 +16,6 @@ interface TMDBActionItem {
 export default function AIPage() {
   const { data, addMovie, addSeries, updateAIHistory } = useApp();
   
-  // YENİ: Başlangıçta Context'ten eski mesajları al (Welcome hariç)
   const [messages, setMessages] = useState<AIMessage[]>(() => {
     const defaultWelcome: AIMessage = {
       id: 'welcome',
@@ -26,7 +25,6 @@ export default function AIPage() {
     };
     
     if (data.aiChatHistory && data.aiChatHistory.length > 0) {
-      // Hoşgeldin mesajının her zaman en üstte olması için ekle (hafızada yoksa)
       if (!data.aiChatHistory.find(m => m.id === 'welcome')) {
         return [defaultWelcome, ...data.aiChatHistory];
       }
@@ -143,7 +141,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
     setIsLoading(true);
 
     try {
-      // Hata mesajlarını ve gereksizleri çıkararak saf sohbet geçmişini oluştur
       const chatHistory = newMessages
         .filter(m => m.id !== 'welcome' && !m.text.includes('Hata detayı:'))
         .map(m => ({
@@ -151,7 +148,8 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
           parts: [{ text: m.text }]
         }));
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+      // BURASI DÜZELTİLDİ: Model gemini-3.6-flash olarak güncellendi
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -187,7 +185,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
       const finalMessages = [...newMessages, aiMessage];
       setMessages(finalMessages);
       
-      // YENİ: Başarılı olan konuşmayı AppContext (Local Storage) üzerine kaydet
       updateAIHistory(finalMessages.filter(m => m.id !== 'welcome'));
       
     } catch (error: any) {
@@ -230,7 +227,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
           return m;
         }));
         
-        // Ekleme sonrası buton durumları değiştiği için geçmişi tekrar güncelle
         updateAIHistory(messages.filter(m => m.id !== 'welcome'));
         
     } catch (error) {
@@ -238,7 +234,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
     }
   };
 
-  // YENİ: Geçmişi Temizleme Fonksiyonu
   const handleClearHistory = () => {
     setMessages([{
       id: 'welcome',
@@ -252,7 +247,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
   return (
     <div className="h-[calc(100vh-10rem)] md:h-[calc(100vh-5rem)] flex flex-col bg-ink-950 border border-ink-800/50 rounded-[2rem] shadow-2xl overflow-hidden animate-fade-in relative">
       
-      {/* HEADER */}
       <div className="flex items-center justify-between p-4 md:p-5 border-b border-ink-800/50 bg-ink-900/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-azure-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-azure-500/20">
@@ -264,7 +258,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
           </div>
         </div>
         
-        {/* YENİ: Geçmişi Temizle Butonu */}
         {messages.length > 1 && (
           <button 
             onClick={handleClearHistory}
@@ -275,7 +268,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
         )}
       </div>
 
-      {/* SOHBET ALANI */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 hide-scrollbar relative">
         <div className="absolute inset-0 bg-gradient-to-b from-azure-500/5 to-transparent pointer-events-none" />
         
@@ -284,7 +276,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
             
             <div className={`max-w-[90%] md:max-w-[70%] flex gap-2 md:gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
               
-              {/* AVATAR */}
               <div className="flex-shrink-0 mt-1">
                 {msg.sender === 'user' ? (
                   <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-ink-800 flex items-center justify-center border border-ink-700">
@@ -297,7 +288,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
                 )}
               </div>
 
-              {/* MESAJ İÇERİĞİ */}
               <div className="flex flex-col gap-2 md:gap-3">
                 <div className={`p-3 md:p-4 rounded-xl md:rounded-2xl text-xs md:text-sm leading-relaxed shadow-md ${
                   msg.sender === 'user' 
@@ -307,7 +297,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
                   {msg.text}
                 </div>
 
-                {/* EĞER AJAN FİLM/DİZİ BULDUYSA KARTLARI ÇİZ */}
                 {msg.actionItems && msg.actionItems.length > 0 && (
                   <div className="flex flex-wrap gap-2 md:gap-3 mt-1">
                     {msg.actionItems.map((item, idx) => {
@@ -373,7 +362,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
         <div ref={messagesEndRef} />
       </div>
 
-      {/* GİRDİ ALANI */}
       <div className="p-3 md:p-4 border-t border-ink-800/50 bg-ink-900/50 backdrop-blur-md z-10">
         {!GEMINI_API_KEY && (
           <div className="mb-3 p-2.5 md:p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2">
