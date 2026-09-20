@@ -61,13 +61,15 @@ export default function BulkAddModal({
 
   const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45'; 
 
-  // YENİ: Mobilde arka planı tamamen donduran güçlü kod
+  // GERÇEK SCROLL LOCK: Hem body'yi hem de Layout içindeki ana kaydırma alanını dondurur.
   useEffect(() => {
-    document.body.classList.add('overflow-hidden');
-    document.documentElement.classList.add('overflow-hidden');
+    const scrollEl = document.getElementById('main-scroll');
+    if (scrollEl) scrollEl.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    
     return () => {
-      document.body.classList.remove('overflow-hidden');
-      document.documentElement.classList.remove('overflow-hidden');
+      if (scrollEl) scrollEl.style.overflow = '';
+      document.body.style.overflow = '';
     };
   }, []);
   
@@ -175,11 +177,11 @@ export default function BulkAddModal({
   const activeGenres = activeTab === 'movie' ? MOVIE_GENRES : TV_GENRES;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden md:pl-56 p-2 md:p-4 overscroll-none">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 md:pl-56 overscroll-none" onTouchMove={(e) => e.stopPropagation()}>
       <div className="absolute inset-0 bg-ink-950/95 backdrop-blur-xl animate-fade-in" onClick={handleSafeClose} />
       
       {showCloseConfirm && (
-        <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm animate-fade-in px-4 md:pl-56 overscroll-none">
+        <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm animate-fade-in px-4 md:pl-56">
           <div className="bg-ink-900 border border-ink-700 rounded-2xl p-5 md:p-6 shadow-2xl max-w-sm w-full text-center animate-fade-in-up">
             <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
               <AlertTriangle className="text-red-500" size={28} />
@@ -198,7 +200,7 @@ export default function BulkAddModal({
         </div>
       )}
 
-      <div className="relative z-10 w-full max-w-6xl h-[95dvh] md:h-[90vh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
+      <div className="relative z-10 w-full max-w-6xl h-[90svh] md:h-[90vh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
         
         <div className="flex items-center justify-between p-4 md:p-6 border-b border-ink-800/50 bg-ink-900/50 shrink-0">
           <div className="flex items-center gap-3">

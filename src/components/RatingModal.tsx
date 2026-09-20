@@ -18,13 +18,15 @@ export default function RatingModal({ title, subtitle, initialRating, initialNot
 
   const display = hover ?? rating;
 
-  // YENİ: Mobilde arka planı tamamen donduran güçlü kod
+  // GERÇEK SCROLL LOCK
   useEffect(() => {
-    document.body.classList.add('overflow-hidden');
-    document.documentElement.classList.add('overflow-hidden');
+    const scrollEl = document.getElementById('main-scroll');
+    if (scrollEl) scrollEl.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    
     return () => {
-      document.body.classList.remove('overflow-hidden');
-      document.documentElement.classList.remove('overflow-hidden');
+      if (scrollEl) scrollEl.style.overflow = '';
+      document.body.style.overflow = '';
     };
   }, []);
 
@@ -45,9 +47,9 @@ export default function RatingModal({ title, subtitle, initialRating, initialNot
   const isEditing = initialRating !== undefined;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 md:pl-56 overscroll-none" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 md:p-4 md:pl-56 overscroll-none" onClick={onClose} onTouchMove={(e) => e.stopPropagation()}>
       <div
-        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[95dvh] flex flex-col"
+        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[85svh] md:max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 md:p-5 border-b border-ink-700 shrink-0">
