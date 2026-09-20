@@ -1,0 +1,533 @@
+import React, { useState, useEffect } from 'react';
+import { Search, X, Check, Film, Tv, ShoppingCart, FolderPlus, Loader2, Sparkles, Plus, Trash2, ChevronDown, ChevronUp, Filter, ArrowUpDown, AlertTriangle } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+
+const MOVIE_GENRES = [
+  { id: 28, name: 'Aksiyon' }, { id: 12, name: 'Macera' }, { id: 16, name: 'Animasyon' },
+  { id: 35, name: 'Komedi' }, { id: 80, name: 'Suç' }, { id: 18, name: 'Dram' },
+  { id: 14, name: 'Fantastik' }, { id: 27, name: 'Korku' }, { id: 878, name: 'Bilim Kurgu' },
+  { id: 53, name: 'Gerilim' }
+];
+
+const TV_GENRES = [
+  { id: 10759, name: 'Aksiyon & Macera' }, { id: 16, name: 'Animasyon' }, { id: 35, name: 'Komedi' },
+  { id: 80, name: 'Suç' }, { id: 18, name: 'Dram' }, { id: 9648, name: 'Gizem' },
+  { id: 10765, name: 'Bilim Kurgu & Fantastik' }, { id: 10768, name: 'Savaş & Politik' }
+];
+
+type MediaType = 'movie' | 'tv';
+type Step = 'browse' | 'collection' | 'importing';
+
+interface TMDBItem {
+  id: number;
+  title?: string;
+  name?: string;
+  poster_path: string | null;
+  release_date?: string;
+  first_air_date?: string;
+  media_type?: MediaType;
+}
+
+export default function BulkAddModal({ 
+  initialTab = 'movie', 
+  onClose 
+}: { 
+  initialTab?: MediaType; 
+  onClose: () => void;
+}) {
+  const { data, addMovie, addSeries, addCollection } = useApp();
+  
+  const [activeTab, setActiveTab] = useState<MediaType>(initialTab);
+  const [step, setStep] = useState<Step>('browse');
+  
+  const [query, setQuery] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<string>('popularity.desc');
+  
+  const [results, setResults] = useState<TMDBItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false); 
+  
+  const [cart, setCart] = useState<TMDBItem[]>([]);
+  const [isCartExpanded, setIsCartExpanded] = useState(false); // Sepetin açık/kapalı durumu
+  
+  const [collectionName, setCollectionName] = useState('');
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState(0);
+
+  // YENİ: Özel onay penceresi durumu
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45'; 
+  
+  useEffect(() => {
+    setPage(1);
+    setResults([]);
+  }, [query, activeTab, selectedGenre, sortBy]);
+
+  useEffect(() => {
+    const fetchTMDB = async () => {
+      if (page === 1) setIsLoading(true);
+      else setIsLoadingMore(true);
+
+      try {
+        let url = '';
+        if (query.trim().length > 1) {
+          url = `https://api.themoviedb.org/3/search/${activeTab}?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=tr-TR&page=${page}`;
+        } else {
+          let dateSortParam = activeTab === 'movie' ? 'primary_release_date.desc' : 'first_air_date.desc';
+          let actualSort = sortBy === 'date.desc' ? dateSortParam : sortBy;
+          
+          url = `https://api.themoviedb.org/3/discover/${activeTab}?api_key=${API_KEY}&language=tr-TR&sort_by=${actualSort}&page=${page}`;
+          if (selectedGenre) url += `&with_genres=${selectedGenre}`;
+          
+          if (actualSort === 'vote_average.desc') {
+            url += '&vote_count.gte=200';
+          }
+        }
+
+        const res = await fetch(url);
+        const json = await res.json();
+        
+        if (page === 1) setResults(json.results || []);
+        else setResults(prev => [...prev, ...(json.results || [])]);
+        
+        setTotalPages(json.total_pages || 1);
+      } catch (error) {
+        console.error("TMDB Hatası", error);
+      } finally {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+      }
+    };
+
+    const debounce = setTimeout(fetchTMDB, 500);
+    return () => clearTimeout(debounce);
+  }, [query, activeTab, selectedGenre, sortBy, page]);
+
+  const toggleCartItem = (item: TMDBItem) => {
+    const itemType = item.media_type || activeTab;
+    const exists = cart.find(c => c.id === item.id);
+    if (exists) {
+      const newCart = cart.filter(c => c.id !== item.id);
+      setCart(newCart);
+      if (newCart.length === 0) setIsCartExpanded(false);
+    } else {
+      setCart([...cart, { ...item, media_type: itemType }]);
+    }
+  };
+
+  // YENİ: Uygulama İçi Güvenli Çıkış (Custom Confirm Modal)
+  const handleSafeClose = () => {
+    if (cart.length > 0 && step !== 'importing') {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleImport = async () => {
+    setStep('importing');
+    let finalColId = selectedCollectionId;
+    
+    if (collectionName.trim()) {
+      finalColId = addCollection(collectionName) as unknown as string;
+    }
+
+    for (let i = 0; i < cart.length; i++) {
+      const item = cart[i];
+      try {
+        if (item.media_type === 'movie') {
+          const res = await fetch(`https://api.themoviedb.org/3/movie/${item.id}?api_key=${API_KEY}&language=tr-TR`);
+          const details = await res.json();
+          const year = details.release_date ? details.release_date.substring(0, 4) : '';
+          const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
+          const runtime = details.runtime || 0;
+          const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
+          addMovie(details.title || item.title || '', year, genres, finalColId, runtime, posterFullUrl, details.original_title, details.id);
+        } else if (item.media_type === 'tv') {
+          const res = await fetch(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${API_KEY}&language=tr-TR`);
+          const details = await res.json();
+          const year = details.first_air_date ? details.first_air_date.substring(0, 4) : '';
+          const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
+          const seasons = (details.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => s.episode_count);
+          const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
+          addSeries(details.name || item.name || '', genres, seasons, posterFullUrl, details.original_name, details.id, year);
+        }
+      } catch (error) {
+        console.error(`${item.title || item.name} eklenirken hata:`, error);
+      }
+      setImportProgress(Math.floor(((i + 1) / cart.length) * 100));
+    }
+    setTimeout(() => { onClose(); }, 1000);
+  };
+
+  const activeGenres = activeTab === 'movie' ? MOVIE_GENRES : TV_GENRES;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden">
+      <div className="absolute inset-0 bg-ink-950/95 backdrop-blur-xl animate-fade-in" onClick={handleSafeClose} />
+      
+      {/* İÇ ONAY MODALI (Custom Confirm) */}
+      {showCloseConfirm && (
+        <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm animate-fade-in px-4">
+          <div className="bg-ink-900 border border-ink-700 rounded-2xl p-6 shadow-2xl max-w-sm w-full text-center animate-fade-in-up">
+            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+              <AlertTriangle className="text-red-500" size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Emin misiniz?</h3>
+            <p className="text-sm text-ink-400 mb-6">Sepetinizde seçili yapımlar var. Kapatırsanız bu seçimler silinecek.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowCloseConfirm(false)} className="flex-1 py-3 rounded-xl bg-ink-800 text-white font-bold hover:bg-ink-700 border border-ink-700 transition-colors">
+                Vazgeç
+              </button>
+              <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold shadow-lg shadow-red-500/20 transition-colors">
+                Evet, Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="relative z-10 w-full max-w-6xl h-[90vh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
+        
+        {/* HEADER */}
+        <div className="flex items-center justify-between p-6 border-b border-ink-800/50 bg-ink-900/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 flex items-center justify-center border border-gold-500/20">
+              <Sparkles className="text-gold-400" size={20} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white tracking-wide">Kütüphaneyi Genişlet</h2>
+              <p className="text-xs text-ink-400 font-medium">Toplu ekleme ve keşif modu</p>
+            </div>
+          </div>
+          <button onClick={handleSafeClose} className="text-ink-400 hover:text-white transition-colors bg-ink-800/50 hover:bg-ink-700 p-2 rounded-full">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* 1. ADIM: KEŞİF VE SEÇİM */}
+        {step === 'browse' && (
+          <>
+            <div className="p-6 border-b border-ink-800/50 space-y-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex bg-ink-950 rounded-xl p-1.5 border border-ink-800/50 flex-shrink-0">
+                  <button 
+                    onClick={() => { setActiveTab('movie'); setSelectedGenre(null); setSortBy('popularity.desc'); }}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'movie' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
+                  >
+                    <Film size={16} /> Filmler
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab('tv'); setSelectedGenre(null); setSortBy('popularity.desc'); }}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'tv' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
+                  >
+                    <Tv size={16} /> Diziler
+                  </button>
+                </div>
+
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="İsimle ara..."
+                    className="w-full bg-ink-950 border border-ink-800/50 rounded-xl pl-12 pr-4 py-3 text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 transition-all shadow-inner"
+                  />
+                </div>
+              </div>
+
+              {!query && (
+                <div className="pt-2 flex flex-col gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="text-xs font-black text-ink-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Filter size={14} /> Kategoriye Göre Keşfet
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ArrowUpDown size={14} className="text-ink-500 hidden sm:block" />
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="bg-ink-900 border border-ink-700 text-gold-400 text-xs font-bold rounded-lg px-3 py-2 focus:outline-none focus:border-gold-500/50 cursor-pointer shadow-inner hover:bg-ink-800 transition-colors"
+                      >
+                        <option value="popularity.desc">🔥 En Popüler</option>
+                        <option value="vote_average.desc">⭐ En Yüksek Puanlılar</option>
+                        <option value="date.desc">🆕 En Yeniler</option>
+                        {activeTab === 'movie' && <option value="revenue.desc">💰 En Çok Hasılat Yapanlar</option>}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                    {activeGenres.map(g => (
+                      <button
+                        key={g.id}
+                        onClick={() => setSelectedGenre(selectedGenre === g.id ? null : g.id)}
+                        className={`flex-shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+                          selectedGenre === g.id 
+                            ? 'bg-gold-500/20 text-gold-400 border-gold-500/30 shadow-sm' 
+                            : 'bg-ink-950 border-ink-800/50 text-ink-400 hover:bg-ink-800'
+                        }`}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 bg-ink-950/30">
+              {isLoading && page === 1 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-gold-500">
+                  <Loader2 className="animate-spin mb-4" size={40} />
+                  <span className="text-sm font-bold tracking-widest uppercase">Aranıyor...</span>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-4">
+                    {results.filter(r => r.poster_path).map((item) => {
+                      const isSelected = cart.some(c => c.id === item.id);
+                      const title = item.title || item.name;
+                      const date = item.release_date || item.first_air_date;
+                      
+                      return (
+                        <div 
+                          key={item.id}
+                          onClick={() => toggleCartItem(item)}
+                          className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 ${isSelected ? 'ring-4 ring-gold-500 ring-offset-2 ring-offset-ink-900 scale-95 shadow-[0_0_20px_rgba(234,179,8,0.4)]' : 'hover:scale-105 hover:shadow-xl hover:ring-2 hover:ring-ink-500 hover:ring-offset-2 hover:ring-offset-ink-900'}`}
+                        >
+                          <img 
+                            src={`https://image.tmdb.org/t/p/w300${item.poster_path}`} 
+                            alt={title} 
+                            className="w-full h-auto aspect-[2/3] object-cover"
+                            loading="lazy"
+                          />
+                          
+                          <div className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all ${isSelected ? 'bg-gold-500 text-ink-900 opacity-100 scale-100' : 'bg-black/50 text-white opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100'}`}>
+                            {isSelected ? <Check size={18} strokeWidth={3} /> : <Plus size={18} />}
+                          </div>
+                          
+                          <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 pt-10 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                            <div className="text-xs font-bold text-white truncate">{title}</div>
+                            <div className="text-[10px] text-gold-400 font-medium">{date?.substring(0, 4)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {results.length > 0 && page < totalPages && (
+                    <div className="flex justify-center pt-4 pb-8">
+                      <button 
+                        onClick={() => setPage(p => p + 1)}
+                        disabled={isLoadingMore}
+                        className="flex items-center gap-2 px-6 py-3 bg-ink-800 hover:bg-ink-700 text-white rounded-xl font-bold transition-all border border-ink-700/50 shadow-lg disabled:opacity-50"
+                      >
+                        {isLoadingMore ? (
+                          <><Loader2 size={18} className="animate-spin text-gold-400" /> Yükleniyor...</>
+                        ) : (
+                          <>Daha Fazla Göster <ChevronDown size={18} className="text-gold-400" /></>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {results.length === 0 && !isLoading && (
+                    <div className="text-center py-20 text-ink-500">
+                      Sonuç bulunamadı. Başka bir arama terimi veya filtre deneyin.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* YENİ: GENİŞLETİLEBİLİR VE YÖNETİLEBİLİR SEPET ÇUBUĞU */}
+            {cart.length > 0 && (
+              <div className="bg-ink-900 border-t border-ink-800/80 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] animate-fade-in-up flex flex-col">
+                
+                {/* Sepet Detayları (Açılır/Kapanır) */}
+                {isCartExpanded && (
+                  <div className="p-4 border-b border-ink-800 bg-ink-950/50 max-h-60 overflow-y-auto animate-fade-in">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-bold text-white">Sepetindeki Yapımlar</h4>
+                      <button 
+                        onClick={() => { setCart([]); setIsCartExpanded(false); }} 
+                        className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 font-bold transition-colors"
+                      >
+                        <Trash2 size={14} /> Tümünü Sil
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {cart.map(item => (
+                        <div key={item.id} className="relative group w-16 h-24 rounded-lg overflow-hidden border border-ink-700 shadow-md">
+                          <img src={`https://image.tmdb.org/t/p/w200${item.poster_path}`} alt="" className="w-full h-full object-cover" />
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); toggleCartItem(item); }}
+                            className="absolute inset-0 bg-red-500/90 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex backdrop-blur-sm"
+                          >
+                            <Trash2 size={20} className="text-white" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Alt Bar Kontrolleri */}
+                <div className="p-4 px-6 flex items-center justify-between">
+                  <button 
+                    onClick={() => setIsCartExpanded(!isCartExpanded)}
+                    className="flex items-center gap-4 hover:opacity-80 transition-opacity text-left group"
+                  >
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-full bg-gold-500/10 flex items-center justify-center border border-gold-500/30 group-hover:bg-gold-500/20 transition-colors">
+                        <ShoppingCart className="text-gold-400" size={24} />
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-gold-500 text-ink-950 font-black text-xs flex items-center justify-center shadow-lg shadow-gold-500/40">
+                        {cart.length}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-white flex items-center gap-1.5">
+                        Sepeti Yönet {isCartExpanded ? <ChevronDown size={16} className="text-ink-400"/> : <ChevronUp size={16} className="text-ink-400"/>}
+                      </div>
+                      <div className="text-xs font-medium text-ink-400">{cart.filter(c => c.media_type === 'movie').length} Film, {cart.filter(c => c.media_type === 'tv').length} Dizi seçildi.</div>
+                    </div>
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setIsCartExpanded(false); setStep('collection'); }}
+                    className="bg-gradient-to-r from-gold-500 to-gold-400 text-ink-950 px-8 py-3.5 rounded-xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-gold-500/20 flex items-center gap-2"
+                  >
+                    Onayla ve İlerle <Check size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 2. ADIM: KOLEKSİYON ATAMA */}
+        {step === 'collection' && (
+          <div className="flex-1 flex flex-col p-8 overflow-y-auto bg-ink-950/50">
+            <div className="max-w-3xl mx-auto w-full space-y-8">
+              
+              <div className="text-center space-y-2">
+                <h3 className="text-3xl font-black text-white">Toplu Atama</h3>
+                <p className="text-ink-400">Seçtiğin {cart.length} yapımı istersen tek tıkla bir koleksiyona atayabilirsin.</p>
+              </div>
+
+              <div className="flex flex-wrap justify-center gap-3 p-4 bg-ink-900/50 rounded-2xl border border-ink-800/50">
+                {cart.map(item => (
+                  <div key={item.id} className="relative group w-16 h-24 rounded-lg overflow-hidden border border-ink-700 shadow-md">
+                    <img src={`https://image.tmdb.org/t/p/w200${item.poster_path}`} alt="" className="w-full h-full object-cover" />
+                    <button 
+                      onClick={() => setCart(cart.filter(c => c.id !== item.id))}
+                      className="absolute inset-0 bg-red-500/80 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex backdrop-blur-sm"
+                    >
+                      <Trash2 size={20} className="text-white" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-ink-900 border border-ink-800 rounded-2xl p-6 space-y-6 shadow-lg">
+                <div className="flex items-center gap-3 text-gold-400 mb-4">
+                  <FolderPlus size={24} />
+                  <h4 className="font-bold text-lg text-white">Koleksiyona Ekle (Opsiyonel)</h4>
+                </div>
+
+                <div className="space-y-4">
+                  <input
+                    type="text"
+                    value={collectionName}
+                    onChange={(e) => { setCollectionName(e.target.value); setSelectedCollectionId(null); }}
+                    placeholder="Yeni bir koleksiyon adı yazın (Örn: Hafta Sonu Maratonu)"
+                    className="w-full bg-ink-950 border border-ink-800 rounded-xl px-4 py-3 text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+                  />
+                  
+                  {data.collections?.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-4">
+                        <div className="h-px bg-ink-800 flex-1" />
+                        <span className="text-xs font-bold text-ink-500 uppercase tracking-widest">VEYA MEVCUT SEÇ</span>
+                        <div className="h-px bg-ink-800 flex-1" />
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        {data.collections.map((col: any) => (
+                          <button
+                            key={col.id}
+                            onClick={() => { setSelectedCollectionId(col.id); setCollectionName(''); }}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+                              selectedCollectionId === col.id 
+                                ? 'bg-gold-500/20 text-gold-400 border-gold-500/30' 
+                                : 'bg-ink-950 border-ink-800 text-ink-400 hover:bg-ink-800'
+                            }`}
+                          >
+                            {col.name}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button onClick={() => setStep('browse')} className="flex-1 py-4 bg-ink-900 text-ink-300 font-bold rounded-xl hover:bg-ink-800 transition-colors border border-ink-700">
+                  Geri Dön
+                </button>
+                <button onClick={handleImport} className="flex-[2] py-4 bg-gradient-to-r from-gold-500 to-gold-400 text-ink-950 font-black tracking-widest uppercase rounded-xl hover:scale-[1.02] transition-transform shadow-lg shadow-gold-500/20">
+                  {cart.length} Yapımı Kütüphaneye Ekle
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* 3. ADIM: İÇE AKTARMA (IMPORT) İLERLEMESİ */}
+        {step === 'importing' && (
+          <div className="flex-1 flex flex-col items-center justify-center bg-ink-950/80 p-8">
+            <div className="w-24 h-24 relative mb-8">
+              <div className="absolute inset-0 border-4 border-gold-500/20 rounded-full" />
+              <div className="absolute inset-0 border-4 border-gold-500 rounded-full border-t-transparent animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sparkles className="text-gold-400" size={32} />
+              </div>
+            </div>
+            
+            <h3 className="text-2xl font-black text-white mb-2">Veriler Çekiliyor...</h3>
+            <p className="text-ink-400 mb-8 text-center max-w-md">Özellikle dizilerin sezon ve bölüm detayları işlenirken bu işlem biraz sürebilir. Lütfen bekleyin.</p>
+            
+            <div className="w-full max-w-md">
+              <div className="flex justify-between text-xs font-bold text-ink-300 mb-2 uppercase tracking-widest">
+                <span>İlerleme</span>
+                <span className="text-gold-400">% {importProgress}</span>
+              </div>
+              <div className="h-3 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800 shadow-inner relative">
+                <div 
+                  className="h-full bg-gradient-to-r from-gold-600 to-yellow-400 transition-all duration-300" 
+                  style={{ width: `${importProgress}%` }}
+                />
+              </div>
+            </div>
+            
+            {importProgress === 100 && (
+              <div className="mt-8 text-green-400 font-bold flex items-center gap-2 animate-fade-in-up">
+                <Check size={20} /> İşlem Tamamlandı!
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
