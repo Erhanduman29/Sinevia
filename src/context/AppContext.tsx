@@ -8,12 +8,27 @@ import { levelFromXp } from '../lib/xp';
 const STORAGE_KEY = 'sinevia-v1';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
 
-function defaultData(): AppData {
+// YENİ: Ajan mesaj yapısı eklendi
+export interface AIMessage {
+  id: string;
+  sender: 'user' | 'ai';
+  text: string;
+  timestamp: number; // 3 günlük kontrol için ms cinsinden zaman damgası
+  actionItems?: any[]; 
+}
+
+// AppData tipini genişlettiğimizi varsayarak (types.ts'de yoksa bile burada varsayılan olarak tutuyoruz)
+interface ExtendedAppData extends AppData {
+  aiChatHistory?: AIMessage[];
+}
+
+function defaultData(): ExtendedAppData {
   return {
     movies: [], series: [], removedSeriesTitles: [], collections: [],
     genres: DEFAULT_GENRES, history: [], achievements: [],
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null,
-    dailyStreak: 0, dailyStreakDate: null, showLockedNames: false
+    dailyStreak: 0, dailyStreakDate: null, showLockedNames: false,
+    aiChatHistory: [] // YENİ: AI geçmişi
   };
 }
 
@@ -62,15 +77,16 @@ type Action =
   | { type: 'DELETE_COLLECTION'; id: string }
   | { type: 'RENAME_COLLECTION'; id: string; name: string }
   | { type: 'SET_MOVIE_COLLECTION'; id: string; collectionId: string | null }
-  | { type: 'IMPORT_DATA'; data: AppData }
+  | { type: 'IMPORT_DATA'; data: ExtendedAppData }
   | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
   | { type: 'TOGGLE_LOCKED_NAMES' }
   | { type: 'CLEAR_TOASTS' }
   | { type: 'CLEAR_LEVELUP' }
   | { type: 'CLEAR_XP_GAIN' }
-  | { type: 'SYNC_ACHIEVEMENTS' };
+  | { type: 'SYNC_ACHIEVEMENTS' }
+  | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }; // YENİ: AI mesajlarını kaydetme komutu
 
-function applyAchievements(state: AppData): AppData {
+function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   const unlocked: { achievementId: string; tier: string; xp: number; name: string; icon: string; description: string }[] = [];
   const validHistory = [...(state.history || [])].filter((h) => h.watchedAt).sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
   const moviesHistory = validHistory.filter(h => h.type === 'movie' || h.kind === 'movie');
@@ -105,7 +121,6 @@ function applyAchievements(state: AppData): AppData {
       case 'daily_movie': currentVal = calcMaxStreak(validHistory, 'movie'); break;
       case 'daily_series': currentVal = calcMaxStreak(validHistory, 'series'); break;
       
-      // YENİ: FİLM VE DİZİ TÜR BAŞARIMLARI (Dizilerde farklı dizi sayısı sayılıyor)
       case 'movie_genre_action': currentVal = moviesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('aksiyon'))).length; break;
       case 'series_genre_action': currentVal = new Set(seriesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('aksiyon'))).map(h => h.seriesId)).size; break;
       
@@ -344,13 +359,14 @@ function applyAchievements(state: AppData): AppData {
   return { ...state, achievements: newAchievements };
 }
 
-function rootReducer(state: AppData, action: Action): AppData {
+function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'IMPORT_DATA') return action.data;
   if (action.type === 'CLEAR_TOASTS') return { ...state, pendingToasts: [] };
   if (action.type === 'CLEAR_LEVELUP') return { ...state, pendingLevelUp: undefined };
   if (action.type === 'CLEAR_XP_GAIN') return { ...state, pendingXpGain: undefined };
   if (action.type === 'TOGGLE_LOCKED_NAMES') return { ...state, showLockedNames: !state.showLockedNames };
   if (action.type === 'SET_ACHIEVEMENT_PROGRESS') return { ...state, achievements: action.progress };
+  if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages }; // YENİ: Geçmişi kaydet
 
   let nextState = { ...state };
 
@@ -402,8 +418,6 @@ function rootReducer(state: AppData, action: Action): AppData {
       nextState.series = state.series.filter((s) => s.id !== action.id);
       break;
     case 'COMPLETE_SERIES':
-      // YENİ DÜZENLEME: Dizi bitince state içerisinden SİLMİYORUZ! 
-      // Böylece afişleri "Bitenler" sekmesinde ve "Geçmiş" sayfasında görünmeye devam ediyor.
       break;
     case 'ADD_EPISODES':
       nextState.series = state.series.map((s) => s.id === action.seriesId ? { ...s, episodes: [...s.episodes, ...action.episodes] } : s);
@@ -489,7 +503,7 @@ interface LevelUpData { newLevel: number; }
 interface SeasonCompleteData { seriesTitle: string; season: number; }
 
 interface AppContextValue {
-  data: AppData;
+  data: ExtendedAppData;
   addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number) => boolean;
   deleteMovie: (id: string) => void;
   watchMovie: (id: string, r: number, n: string) => void;
@@ -513,6 +527,7 @@ interface AppContextValue {
   dismissLevelUp: () => void; dismissSeasonComplete: () => void;
   toggleLockedNames: () => void;
   xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
+  updateAIHistory: (messages: AIMessage[]) => void; // YENİ: Geçmişi kaydetmek için fonksiyon
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -527,7 +542,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [data, dispatch] = useReducer(rootReducer, undefined, () => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) return { ...defaultData(), ...JSON.parse(stored) };
+      if (stored) {
+        const parsedData = { ...defaultData(), ...JSON.parse(stored) };
+        
+        // YENİ: Başlangıçta 3 günden eski AI mesajlarını (72 saat) temizle
+        if (parsedData.aiChatHistory) {
+          const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
+          parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= threeDaysAgo);
+        }
+        
+        return parsedData;
+      }
     } catch {}
     return defaultData();
   });
@@ -691,6 +716,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const renameCollection = useCallback((i: string, n: string) => { dispatch({ type: 'RENAME_COLLECTION', id: i, name: n.trim() }); showToast('Koleksiyon güncellendi'); }, [showToast]);
   const setMovieCollection = useCallback((i: string, c: string | null) => { dispatch({ type: 'SET_MOVIE_COLLECTION', id: i, collectionId: c }); }, []);
   
+  // YENİ: Geçmişi kaydetme fonksiyonu
+  const updateAIHistory = useCallback((messages: AIMessage[]) => { 
+    dispatch({ type: 'UPDATE_AI_HISTORY', messages }); 
+  }, []);
+
   const exportData = useCallback(() => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `sinevia-yedek-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('Yedek alındı');
@@ -701,10 +731,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismissLevelUp = useCallback(() => setLevelUpData(null), []);
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
 
-  return <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory }}>{children}</AppContext.Provider>;
 }
 
-function updateStreak(data: AppData): number {
+function updateStreak(data: ExtendedAppData): number {
   const today = todayStr();
   if (data.dailyStreakDate === today) return data.dailyStreak;
   if (data.dailyStreakDate) {

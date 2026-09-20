@@ -61,6 +61,7 @@ export default function BulkAddModal({
 
   const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45'; 
 
+  // GERÇEK SCROLL LOCK
   useEffect(() => {
     const scrollEl = document.getElementById('main-scroll');
     if (scrollEl) scrollEl.style.overflow = 'hidden';
@@ -203,6 +204,7 @@ export default function BulkAddModal({
 
       <div className="relative z-10 w-full max-w-6xl h-[90svh] md:h-[90vh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
         
+        {/* ANA ÜST BAŞLIK (Sabit kalır) */}
         <div className="flex items-center justify-between p-4 md:p-6 border-b border-ink-800/50 bg-ink-900/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 flex items-center justify-center border border-gold-500/20">
@@ -220,141 +222,147 @@ export default function BulkAddModal({
 
         {step === 'browse' && (
           <>
-            <div className="p-4 md:p-6 border-b border-ink-800/50 space-y-4 shrink-0">
-              <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-                <div className="flex bg-ink-950 rounded-xl p-1.5 border border-ink-800/50 flex-shrink-0">
-                  <button 
-                    onClick={() => { setActiveTab('movie'); setSelectedGenre(null); setSortBy('popularity.desc'); }}
-                    className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'movie' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
-                  >
-                    <Film size={16} /> Filmler
-                  </button>
-                  <button 
-                    onClick={() => { setActiveTab('tv'); setSelectedGenre(null); setSortBy('popularity.desc'); }}
-                    className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'tv' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
-                  >
-                    <Tv size={16} /> Diziler
-                  </button>
+            {/* KAYDIRILABİLİR İÇERİK ALANI (Filtreler + Afişler) */}
+            <div className="flex-1 overflow-y-auto overscroll-contain hide-scrollbar relative z-0 flex flex-col bg-ink-950/30">
+              
+              {/* YENİ: ARAMA VE FİLTRELER ARTIK İÇERİYLE BİRLİKTE KAYIYOR */}
+              <div className="p-4 md:p-6 border-b border-ink-800/50 space-y-4 shrink-0 bg-ink-900/40">
+                <div className="flex flex-col md:flex-row gap-3 md:gap-4">
+                  <div className="flex bg-ink-950 rounded-xl p-1.5 border border-ink-800/50 flex-shrink-0">
+                    <button 
+                      onClick={() => { setActiveTab('movie'); setSelectedGenre(null); setSortBy('popularity.desc'); }}
+                      className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'movie' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
+                    >
+                      <Film size={16} /> Filmler
+                    </button>
+                    <button 
+                      onClick={() => { setActiveTab('tv'); setSelectedGenre(null); setSortBy('popularity.desc'); }}
+                      className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'tv' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200'}`}
+                    >
+                      <Tv size={16} /> Diziler
+                    </button>
+                  </div>
+
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
+                    <input
+                      type="text"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="İsimle ara..."
+                      className="w-full bg-ink-950 border border-ink-800/50 rounded-xl pl-11 pr-4 py-3 text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 transition-all shadow-inner"
+                    />
+                  </div>
                 </div>
 
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="İsimle ara..."
-                    className="w-full bg-ink-950 border border-ink-800/50 rounded-xl pl-11 pr-4 py-3 text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 transition-all shadow-inner"
-                  />
-                </div>
+                {!query && (
+                  <div className="pt-1 md:pt-2 flex flex-col gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="text-[10px] md:text-xs font-black text-ink-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <Filter size={14} /> Kategoriye Göre Keşfet
+                      </div>
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <ArrowUpDown size={14} className="text-ink-500 hidden sm:block" />
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                          className="w-full sm:w-auto bg-ink-900 border border-ink-700 text-gold-400 text-xs font-bold rounded-lg px-3 py-2.5 focus:outline-none focus:border-gold-500/50 cursor-pointer shadow-inner hover:bg-ink-800 transition-colors"
+                        >
+                          <option value="popularity.desc">🔥 En Popüler</option>
+                          <option value="vote_average.desc">⭐ En Yüksek Puanlılar</option>
+                          <option value="date.desc">🆕 En Yeniler</option>
+                          {activeTab === 'movie' && <option value="revenue.desc">💰 En Çok Hasılat Yapanlar</option>}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0 overscroll-contain">
+                      {activeGenres.map(g => (
+                        <button
+                          key={g.id}
+                          onClick={() => setSelectedGenre(selectedGenre === g.id ? null : g.id)}
+                          className={`flex-shrink-0 px-3 md:px-4 py-2 rounded-lg text-[11px] md:text-xs font-bold transition-all border ${
+                            selectedGenre === g.id 
+                              ? 'bg-gold-500/20 text-gold-400 border-gold-500/30 shadow-sm' 
+                              : 'bg-ink-950 border-ink-800/50 text-ink-400 hover:bg-ink-800'
+                          }`}
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {!query && (
-                <div className="pt-1 md:pt-2 flex flex-col gap-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="text-[10px] md:text-xs font-black text-ink-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <Filter size={14} /> Kategoriye Göre Keşfet
-                    </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <ArrowUpDown size={14} className="text-ink-500 hidden sm:block" />
-                      <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        className="w-full sm:w-auto bg-ink-900 border border-ink-700 text-gold-400 text-xs font-bold rounded-lg px-3 py-2.5 focus:outline-none focus:border-gold-500/50 cursor-pointer shadow-inner hover:bg-ink-800 transition-colors"
-                      >
-                        <option value="popularity.desc">🔥 En Popüler</option>
-                        <option value="vote_average.desc">⭐ En Yüksek Puanlılar</option>
-                        <option value="date.desc">🆕 En Yeniler</option>
-                        {activeTab === 'movie' && <option value="revenue.desc">💰 En Çok Hasılat Yapanlar</option>}
-                      </select>
-                    </div>
+              {/* FİLMLER VE DİZİLER LİSTESİ */}
+              <div className="p-3 md:p-6 pb-24 md:pb-6 flex-1">
+                {isLoading && page === 1 ? (
+                  <div className="flex flex-col items-center justify-center h-48 md:h-64 text-gold-500">
+                    <Loader2 className="animate-spin mb-4" size={32} />
+                    <span className="text-xs md:text-sm font-bold tracking-widest uppercase">Aranıyor...</span>
                   </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2 md:gap-4">
+                      {results.filter(r => r.poster_path).map((item) => {
+                        const isSelected = cart.some(c => c.id === item.id);
+                        const title = item.title || item.name;
+                        const date = item.release_date || item.first_air_date;
+                        
+                        return (
+                          <div 
+                            key={item.id}
+                            onClick={() => toggleCartItem(item)}
+                            className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 ${isSelected ? 'ring-2 md:ring-4 ring-gold-500 ring-offset-1 md:ring-offset-2 ring-offset-ink-900 scale-95 shadow-[0_0_15px_rgba(234,179,8,0.4)]' : 'hover:scale-105 hover:shadow-xl hover:ring-2 hover:ring-ink-500 hover:ring-offset-2 hover:ring-offset-ink-900'}`}
+                          >
+                            <img 
+                              src={`https://image.tmdb.org/t/p/w300${item.poster_path}`} 
+                              alt={title} 
+                              className="w-full h-auto aspect-[2/3] object-cover"
+                              loading="lazy"
+                            />
+                            
+                            <div className={`absolute top-1.5 right-1.5 md:top-2 md:right-2 w-5 h-5 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-all ${isSelected ? 'bg-gold-500 text-ink-900 opacity-100 scale-100' : 'bg-black/50 text-white opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100'}`}>
+                              {isSelected ? <Check size={12} strokeWidth={3} className="md:w-3.5 md:h-3.5" /> : <Plus size={12} className="md:w-3.5 md:h-3.5" />}
+                            </div>
+                            
+                            <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-1.5 md:p-3 pt-6 md:pt-10 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                              <div className="text-[10px] md:text-xs font-bold text-white truncate">{title}</div>
+                              <div className="text-[8px] md:text-[10px] text-gold-400 font-medium">{date?.substring(0, 4)}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                  <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0 overscroll-contain">
-                    {activeGenres.map(g => (
-                      <button
-                        key={g.id}
-                        onClick={() => setSelectedGenre(selectedGenre === g.id ? null : g.id)}
-                        className={`flex-shrink-0 px-3 md:px-4 py-2 rounded-lg text-[11px] md:text-xs font-bold transition-all border ${
-                          selectedGenre === g.id 
-                            ? 'bg-gold-500/20 text-gold-400 border-gold-500/30 shadow-sm' 
-                            : 'bg-ink-950 border-ink-800/50 text-ink-400 hover:bg-ink-800'
-                        }`}
-                      >
-                        {g.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto overscroll-contain p-3 md:p-6 bg-ink-950/30 pb-24 md:pb-6 relative z-0">
-              {isLoading && page === 1 ? (
-                <div className="flex flex-col items-center justify-center h-48 md:h-64 text-gold-500">
-                  <Loader2 className="animate-spin mb-4" size={32} />
-                  <span className="text-xs md:text-sm font-bold tracking-widest uppercase">Aranıyor...</span>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* YENİ: Mobilde 3 sütun (grid-cols-3) yapıldı ve boşluklar daraltıldı */}
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2 md:gap-4">
-                    {results.filter(r => r.poster_path).map((item) => {
-                      const isSelected = cart.some(c => c.id === item.id);
-                      const title = item.title || item.name;
-                      const date = item.release_date || item.first_air_date;
-                      
-                      return (
-                        <div 
-                          key={item.id}
-                          onClick={() => toggleCartItem(item)}
-                          className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 ${isSelected ? 'ring-2 md:ring-4 ring-gold-500 ring-offset-1 md:ring-offset-2 ring-offset-ink-900 scale-95 shadow-[0_0_15px_rgba(234,179,8,0.4)]' : 'hover:scale-105 hover:shadow-xl hover:ring-2 hover:ring-ink-500 hover:ring-offset-2 hover:ring-offset-ink-900'}`}
+                    {results.length > 0 && page < totalPages && (
+                      <div className="flex justify-center pt-4 pb-8">
+                        <button 
+                          onClick={() => setPage(p => p + 1)}
+                          disabled={isLoadingMore}
+                          className="flex items-center gap-2 px-6 py-3 bg-ink-800 hover:bg-ink-700 text-white rounded-xl font-bold transition-all border border-ink-700/50 shadow-lg disabled:opacity-50 text-sm"
                         >
-                          <img 
-                            src={`https://image.tmdb.org/t/p/w300${item.poster_path}`} 
-                            alt={title} 
-                            className="w-full h-auto aspect-[2/3] object-cover"
-                            loading="lazy"
-                          />
-                          
-                          <div className={`absolute top-1.5 right-1.5 md:top-2 md:right-2 w-5 h-5 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-all ${isSelected ? 'bg-gold-500 text-ink-900 opacity-100 scale-100' : 'bg-black/50 text-white opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100'}`}>
-                            {isSelected ? <Check size={12} strokeWidth={3} className="md:w-3.5 md:h-3.5" /> : <Plus size={12} className="md:w-3.5 md:h-3.5" />}
-                          </div>
-                          
-                          <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-1.5 md:p-3 pt-6 md:pt-10 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                            <div className="text-[10px] md:text-xs font-bold text-white truncate">{title}</div>
-                            <div className="text-[8px] md:text-[10px] text-gold-400 font-medium">{date?.substring(0, 4)}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                          {isLoadingMore ? (
+                            <><Loader2 size={16} className="animate-spin text-gold-400" /> Yükleniyor...</>
+                          ) : (
+                            <>Daha Fazla Göster <ChevronDown size={16} className="text-gold-400" /></>
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {results.length === 0 && !isLoading && (
+                      <div className="text-center py-16 md:py-20 text-xs md:text-sm text-ink-500 px-4">
+                        Sonuç bulunamadı. Başka bir arama terimi veya filtre deneyin.
+                      </div>
+                    )}
                   </div>
-
-                  {results.length > 0 && page < totalPages && (
-                    <div className="flex justify-center pt-4 pb-8">
-                      <button 
-                        onClick={() => setPage(p => p + 1)}
-                        disabled={isLoadingMore}
-                        className="flex items-center gap-2 px-6 py-3 bg-ink-800 hover:bg-ink-700 text-white rounded-xl font-bold transition-all border border-ink-700/50 shadow-lg disabled:opacity-50 text-sm"
-                      >
-                        {isLoadingMore ? (
-                          <><Loader2 size={16} className="animate-spin text-gold-400" /> Yükleniyor...</>
-                        ) : (
-                          <>Daha Fazla Göster <ChevronDown size={16} className="text-gold-400" /></>
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {results.length === 0 && !isLoading && (
-                    <div className="text-center py-16 md:py-20 text-xs md:text-sm text-ink-500 px-4">
-                      Sonuç bulunamadı. Başka bir arama terimi veya filtre deneyin.
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
+            {/* YENİ: MİNİMİZE EDİLMİŞ ŞIK SEPET BARI */}
             {cart.length > 0 && (
               <div className="bg-ink-900 border-t border-ink-800/80 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] animate-fade-in-up flex flex-col absolute bottom-0 inset-x-0 md:relative z-20">
                 
@@ -385,32 +393,36 @@ export default function BulkAddModal({
                   </div>
                 )}
 
-                <div className="p-3 md:p-4 px-4 md:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-0">
+                {/* YATAY (FLEX-ROW) MİNİMİZE SEPET BAR */}
+                <div className="p-2.5 md:p-4 px-3 md:px-6 flex flex-row items-center justify-between gap-3">
                   <button 
                     onClick={() => setIsCartExpanded(!isCartExpanded)}
-                    className="flex items-center gap-3 w-full sm:w-auto hover:opacity-80 transition-opacity text-left group"
+                    className="flex items-center gap-2.5 md:gap-3 hover:opacity-80 transition-opacity text-left group flex-1"
                   >
                     <div className="relative">
-                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gold-500/10 flex items-center justify-center border border-gold-500/30 group-hover:bg-gold-500/20 transition-colors">
-                        <ShoppingCart className="text-gold-400" size={20} />
+                      <div className="w-9 h-9 md:w-12 md:h-12 rounded-full bg-gold-500/10 flex items-center justify-center border border-gold-500/30 group-hover:bg-gold-500/20 transition-colors">
+                        <ShoppingCart className="text-gold-400 w-4 h-4 md:w-5 md:h-5" />
                       </div>
-                      <div className="absolute -top-1 -right-1 w-5 h-5 md:w-6 md:h-6 rounded-full bg-gold-500 text-ink-950 font-black text-[10px] md:text-xs flex items-center justify-center shadow-lg shadow-gold-500/40">
+                      <div className="absolute -top-1 -right-1 w-4 h-4 md:w-6 md:h-6 rounded-full bg-gold-500 text-ink-950 font-black text-[9px] md:text-xs flex items-center justify-center shadow-lg shadow-gold-500/40">
                         {cart.length}
                       </div>
                     </div>
                     <div>
-                      <div className="font-bold text-sm md:text-base text-white flex items-center gap-1.5">
-                        Sepeti Yönet {isCartExpanded ? <ChevronDown size={14} className="text-ink-400"/> : <ChevronUp size={14} className="text-ink-400"/>}
+                      <div className="font-bold text-xs md:text-base text-white flex items-center gap-1">
+                        Sepet {isCartExpanded ? <ChevronDown size={14} className="text-ink-400"/> : <ChevronUp size={14} className="text-ink-400"/>}
                       </div>
-                      <div className="text-[10px] md:text-xs font-medium text-ink-400">{cart.filter(c => c.media_type === 'movie').length} Film, {cart.filter(c => c.media_type === 'tv').length} Dizi seçildi.</div>
+                      {/* Sadece Tablet ve Masaüstünde detay göster */}
+                      <div className="hidden md:block text-[10px] md:text-xs font-medium text-ink-400">
+                        {cart.filter(c => c.media_type === 'movie').length} Film, {cart.filter(c => c.media_type === 'tv').length} Dizi
+                      </div>
                     </div>
                   </button>
                   
                   <button 
                     onClick={() => { setIsCartExpanded(false); setStep('collection'); }}
-                    className="w-full sm:w-auto bg-gradient-to-r from-gold-500 to-gold-400 text-ink-950 px-6 md:px-8 py-3 rounded-xl text-sm md:text-base font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-gold-500/20 flex items-center justify-center gap-2"
+                    className="bg-gradient-to-r from-gold-500 to-gold-400 text-ink-950 px-4 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl text-[11px] md:text-base font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-gold-500/20 flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
-                    İlerle <Check size={18} />
+                    İlerle <Check size={14} className="md:w-[18px] md:h-[18px]" />
                   </button>
                 </div>
               </div>
