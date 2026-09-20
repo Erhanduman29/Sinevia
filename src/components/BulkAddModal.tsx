@@ -61,15 +61,16 @@ export default function BulkAddModal({
 
   const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45'; 
 
-  // GERÇEK SCROLL LOCK: Hem body'yi hem de Layout içindeki ana kaydırma alanını dondurur.
   useEffect(() => {
     const scrollEl = document.getElementById('main-scroll');
     if (scrollEl) scrollEl.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('overflow-hidden');
+    document.documentElement.classList.add('overflow-hidden');
     
     return () => {
       if (scrollEl) scrollEl.style.overflow = '';
-      document.body.style.overflow = '';
+      document.body.classList.remove('overflow-hidden');
+      document.documentElement.classList.remove('overflow-hidden');
     };
   }, []);
   
@@ -288,7 +289,7 @@ export default function BulkAddModal({
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 bg-ink-950/30 pb-24 md:pb-6 relative z-0">
+            <div className="flex-1 overflow-y-auto overscroll-contain p-3 md:p-6 bg-ink-950/30 pb-24 md:pb-6 relative z-0">
               {isLoading && page === 1 ? (
                 <div className="flex flex-col items-center justify-center h-48 md:h-64 text-gold-500">
                   <Loader2 className="animate-spin mb-4" size={32} />
@@ -296,7 +297,8 @@ export default function BulkAddModal({
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+                  {/* YENİ: Mobilde 3 sütun (grid-cols-3) yapıldı ve boşluklar daraltıldı */}
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2 md:gap-4">
                     {results.filter(r => r.poster_path).map((item) => {
                       const isSelected = cart.some(c => c.id === item.id);
                       const title = item.title || item.name;
@@ -306,7 +308,7 @@ export default function BulkAddModal({
                         <div 
                           key={item.id}
                           onClick={() => toggleCartItem(item)}
-                          className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 ${isSelected ? 'ring-4 ring-gold-500 ring-offset-2 ring-offset-ink-900 scale-95 shadow-[0_0_20px_rgba(234,179,8,0.4)]' : 'hover:scale-105 hover:shadow-xl hover:ring-2 hover:ring-ink-500 hover:ring-offset-2 hover:ring-offset-ink-900'}`}
+                          className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 ${isSelected ? 'ring-2 md:ring-4 ring-gold-500 ring-offset-1 md:ring-offset-2 ring-offset-ink-900 scale-95 shadow-[0_0_15px_rgba(234,179,8,0.4)]' : 'hover:scale-105 hover:shadow-xl hover:ring-2 hover:ring-ink-500 hover:ring-offset-2 hover:ring-offset-ink-900'}`}
                         >
                           <img 
                             src={`https://image.tmdb.org/t/p/w300${item.poster_path}`} 
@@ -315,13 +317,13 @@ export default function BulkAddModal({
                             loading="lazy"
                           />
                           
-                          <div className={`absolute top-2 right-2 w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-all ${isSelected ? 'bg-gold-500 text-ink-900 opacity-100 scale-100' : 'bg-black/50 text-white opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100'}`}>
-                            {isSelected ? <Check size={16} strokeWidth={3} /> : <Plus size={16} />}
+                          <div className={`absolute top-1.5 right-1.5 md:top-2 md:right-2 w-5 h-5 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-all ${isSelected ? 'bg-gold-500 text-ink-900 opacity-100 scale-100' : 'bg-black/50 text-white opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100'}`}>
+                            {isSelected ? <Check size={12} strokeWidth={3} className="md:w-3.5 md:h-3.5" /> : <Plus size={12} className="md:w-3.5 md:h-3.5" />}
                           </div>
                           
-                          <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-2 md:p-3 pt-10 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                            <div className="text-[11px] md:text-xs font-bold text-white truncate">{title}</div>
-                            <div className="text-[9px] md:text-[10px] text-gold-400 font-medium">{date?.substring(0, 4)}</div>
+                          <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-1.5 md:p-3 pt-6 md:pt-10 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                            <div className="text-[10px] md:text-xs font-bold text-white truncate">{title}</div>
+                            <div className="text-[8px] md:text-[10px] text-gold-400 font-medium">{date?.substring(0, 4)}</div>
                           </div>
                         </div>
                       );
