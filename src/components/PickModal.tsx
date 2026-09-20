@@ -106,61 +106,61 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 md:pl-56" onClick={spinning ? undefined : onClose}>
       <div
-        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[95svh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b border-ink-700 bg-ink-900 z-10 relative">
-          <h2 className="text-lg font-semibold text-ink-100 flex items-center gap-2">
-            <Sparkles size={20} className="text-gold-400" />
+        <div className="flex items-center justify-between p-4 md:p-5 border-b border-ink-700 bg-ink-900 z-10 shrink-0">
+          <h2 className="text-base md:text-lg font-semibold text-ink-100 flex items-center gap-2">
+            <Sparkles size={18} className="text-gold-400" />
             Bugün Ne İzlesem?
           </h2>
-          <button onClick={onClose} disabled={spinning} className="text-ink-400 hover:text-ink-200 transition-colors disabled:opacity-40">
-            <X size={22} />
+          <button onClick={onClose} disabled={spinning} className="text-ink-400 hover:text-ink-200 transition-colors disabled:opacity-40 p-1">
+            <X size={20} />
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+        <div className="p-4 md:p-5 space-y-4 overflow-y-auto hide-scrollbar">
           <div>
-            <p className="text-sm text-ink-400 mb-2">Neyden seçim yapılsın?</p>
+            <p className="text-xs md:text-sm text-ink-400 mb-2">Neyden seçim yapılsın?</p>
             <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setFilter('all')}
                 disabled={spinning || !!finalPick}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all disabled:opacity-50 ${
+                className={`flex flex-col items-center gap-1.5 py-2.5 md:py-3 rounded-xl border transition-all disabled:opacity-50 ${
                   filter === 'all'
                     ? 'bg-gradient-to-br from-gold-500/20 to-gold-700/20 border-gold-500/50 text-gold-300'
                     : 'bg-ink-800/60 border-ink-700 text-ink-400 hover:text-ink-200 hover:border-ink-600'
                 }`}
               >
-                <Sparkles size={20} />
-                <span className="text-xs font-medium">Hepsi</span>
-                <span className="text-[10px] text-ink-500">{totalCount}</span>
+                <Sparkles size={18} />
+                <span className="text-[11px] md:text-xs font-medium">Hepsi</span>
+                <span className="text-[9px] md:text-[10px] text-ink-500">{totalCount}</span>
               </button>
               <button
                 onClick={() => setFilter('movie')}
                 disabled={spinning || !!finalPick}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all disabled:opacity-50 ${
+                className={`flex flex-col items-center gap-1.5 py-2.5 md:py-3 rounded-xl border transition-all disabled:opacity-50 ${
                   filter === 'movie'
                     ? 'bg-gradient-to-br from-gold-500/20 to-gold-700/20 border-gold-500/50 text-gold-300'
                     : 'bg-ink-800/60 border-ink-700 text-ink-400 hover:text-ink-200 hover:border-ink-600'
                 }`}
               >
-                <Film size={20} />
-                <span className="text-xs font-medium">Film</span>
-                <span className="text-[10px] text-ink-500">{movieCount}</span>
+                <Film size={18} />
+                <span className="text-[11px] md:text-xs font-medium">Film</span>
+                <span className="text-[9px] md:text-[10px] text-ink-500">{movieCount}</span>
               </button>
               <button
                 onClick={() => setFilter('series')}
                 disabled={spinning || !!finalPick}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all disabled:opacity-50 ${
+                className={`flex flex-col items-center gap-1.5 py-2.5 md:py-3 rounded-xl border transition-all disabled:opacity-50 ${
                   filter === 'series'
                     ? 'bg-gradient-to-br from-azure-500/20 to-azure-700/20 border-azure-500/50 text-azure-300'
                     : 'bg-ink-800/60 border-ink-700 text-ink-400 hover:text-ink-200 hover:border-ink-600'
                 }`}
               >
-                <Tv size={20} />
-                <span className="text-xs font-medium">Dizi</span>
-                <span className="text-[10px] text-ink-500">{seriesCount}</span>
+                <Tv size={18} />
+                <span className="text-[11px] md:text-xs font-medium">Dizi</span>
+                <span className="text-[9px] md:text-[10px] text-ink-500">{seriesCount}</span>
               </button>
             </div>
           </div>
@@ -168,19 +168,19 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
           {availableGenres.length > 0 && (
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <Tag size={14} className="text-ink-500" />
-                <p className="text-sm text-ink-400">Türlere göre filtrele</p>
+                <Tag size={12} className="text-ink-500" />
+                <p className="text-xs md:text-sm text-ink-400">Türlere göre filtrele</p>
                 {selectedGenres.size > 0 && (
                   <button
                     onClick={clearGenres}
                     disabled={spinning || !!finalPick}
-                    className="ml-auto text-xs text-gold-400 hover:text-gold-300 transition-colors disabled:opacity-40"
+                    className="ml-auto text-[10px] md:text-xs text-gold-400 hover:text-gold-300 transition-colors disabled:opacity-40"
                   >
                     Temizle
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto no-scrollbar">
+              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto hide-scrollbar">
                 {availableGenres.map((g) => {
                   const active = selectedGenres.has(g);
                   return (
@@ -188,13 +188,13 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
                       key={g}
                       onClick={() => toggleGenre(g)}
                       disabled={spinning || !!finalPick}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all disabled:opacity-50 ${
+                      className={`flex items-center gap-1 px-3 py-1.5 md:px-2.5 md:py-1 rounded-full text-[11px] md:text-xs font-medium transition-all disabled:opacity-50 ${
                         active
                           ? 'bg-gold-500 text-ink-950'
                           : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
                       }`}
                     >
-                      {active && <Check size={11} />}
+                      {active && <Check size={10} />}
                       {g}
                     </button>
                   );
@@ -204,7 +204,7 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
           )}
 
           {(!spinning && !finalPick) && (
-            <div className="text-xs text-ink-500 bg-ink-800/40 rounded-lg p-3">
+            <div className="text-[11px] md:text-xs text-ink-500 bg-ink-800/40 rounded-lg p-3">
               {filter === 'series'
                 ? 'Dizilerde sadece izlenmesi gereken sonraki bölüm seçilir. Bölümler sırayla izlenir.'
                 : filter === 'movie'
@@ -214,11 +214,11 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
           )}
 
           {(spinning || finalPick) && currentPick && (
-            <div className={`bg-gradient-to-br from-ink-800/80 to-ink-950 border ${finalPick ? (currentPick.kind === 'movie' ? 'border-gold-500/40 shadow-lg shadow-gold-500/10' : 'border-azure-500/40 shadow-lg shadow-azure-500/10') : 'border-ink-700/50'} rounded-xl p-4 flex gap-4 min-h-[140px] items-center transition-all`}>
+            <div className={`bg-gradient-to-br from-ink-800/80 to-ink-950 border ${finalPick ? (currentPick.kind === 'movie' ? 'border-gold-500/40 shadow-lg shadow-gold-500/10' : 'border-azure-500/40 shadow-lg shadow-azure-500/10') : 'border-ink-700/50'} rounded-xl p-3 md:p-4 flex gap-3 md:gap-4 min-h-[120px] md:min-h-[140px] items-center transition-all`}>
               
-              <div className="w-20 sm:w-24 aspect-[2/3] flex-shrink-0 bg-ink-950 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-inner relative">
+              <div className="w-16 sm:w-20 md:w-24 aspect-[2/3] flex-shrink-0 bg-ink-950 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-inner relative">
                 {spinning ? (
-                  <Shuffle size={28} className="text-gold-500/30 animate-spin" style={{ animationDuration: '3s' }} />
+                  <Shuffle size={24} className="text-gold-500/30 animate-spin" style={{ animationDuration: '3s' }} />
                 ) : (
                   (currentPick.kind === 'movie' ? currentPick.movie.posterUrl : currentPick.series.posterUrl) ? (
                     <img 
@@ -227,48 +227,48 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
                       className="w-full h-full object-cover animate-fade-in" 
                     />
                   ) : (
-                    currentPick.kind === 'movie' ? <Film size={24} className="text-ink-700" /> : <Tv size={24} className="text-ink-700" />
+                    currentPick.kind === 'movie' ? <Film size={20} className="text-ink-700" /> : <Tv size={20} className="text-ink-700" />
                   )
                 )}
               </div>
 
               <div className="flex-1 text-left">
-                <div className={`text-lg font-bold line-clamp-2 leading-tight ${spinning ? 'text-gold-300/80 animate-pulse' : 'text-ink-100'}`}>
+                <div className={`text-sm md:text-lg font-bold line-clamp-2 leading-tight ${spinning ? 'text-gold-300/80 animate-pulse' : 'text-ink-100'}`}>
                   {currentPick.kind === 'movie' ? currentPick.movie.title : currentPick.series.title}
                 </div>
 
                 {!spinning ? (
-                  <div className="text-sm text-ink-400 mt-2.5 space-y-1.5 animate-fade-in-up">
+                  <div className="text-xs md:text-sm text-ink-400 mt-1.5 md:mt-2.5 space-y-1 animate-fade-in-up">
                     {currentPick.kind === 'movie' ? (
                       <>
                         {currentPick.movie.year && (
-                          <div className="flex items-center gap-1.5 text-ink-300">
-                            <Calendar size={13} className="text-ink-500" /> {currentPick.movie.year}
+                          <div className="flex items-center gap-1.5 text-ink-300 text-[11px] md:text-xs">
+                            <Calendar size={12} className="text-ink-500" /> {currentPick.movie.year}
                           </div>
                         )}
                         {currentPick.movie.runtime && (
-                          <div className="flex items-center gap-1.5 text-ink-300">
-                            <Clock size={13} className="text-ink-500" /> {currentPick.movie.runtime} dk
+                          <div className="flex items-center gap-1.5 text-ink-300 text-[11px] md:text-xs">
+                            <Clock size={12} className="text-ink-500" /> {currentPick.movie.runtime} dk
                           </div>
                         )}
                         {currentPick.movie.genres.length > 0 && (
-                          <div className="text-xs text-ink-500 mt-2 line-clamp-1 border-t border-ink-800 pt-2">
+                          <div className="text-[10px] md:text-xs text-ink-500 mt-2 line-clamp-1 border-t border-ink-800 pt-1.5 md:pt-2">
                             {currentPick.movie.genres.join(' · ')}
                           </div>
                         )}
                       </>
                     ) : (
                       <>
-                        <div className="flex items-center gap-1.5 font-semibold text-azure-400 bg-azure-500/10 px-2 py-1 rounded w-fit">
+                        <div className="flex items-center gap-1 font-semibold text-azure-400 bg-azure-500/10 px-1.5 py-0.5 md:px-2 md:py-1 rounded w-fit text-[10px] md:text-xs">
                           {currentPick.episode.season}. Sezon {currentPick.episode.episode}. Bölüm
                         </div>
                         {currentPick.series.year && (
-                          <div className="flex items-center gap-1.5 text-ink-300 mt-2">
-                            <Calendar size={13} className="text-ink-500" /> Başlangıç: {currentPick.series.year}
+                          <div className="flex items-center gap-1.5 text-ink-300 mt-1.5 md:mt-2 text-[11px] md:text-xs">
+                            <Calendar size={12} className="text-ink-500" /> Başlangıç: {currentPick.series.year}
                           </div>
                         )}
                         {currentPick.series.genres.length > 0 && (
-                          <div className="text-xs text-ink-500 mt-2 line-clamp-1 border-t border-ink-800 pt-2">
+                          <div className="text-[10px] md:text-xs text-ink-500 mt-2 line-clamp-1 border-t border-ink-800 pt-1.5 md:pt-2">
                             {currentPick.series.genres.join(' · ')}
                           </div>
                         )}
@@ -276,7 +276,7 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
                     )}
                   </div>
                 ) : (
-                  <div className="text-xs text-ink-500 mt-2 animate-pulse">
+                  <div className="text-[10px] md:text-xs text-ink-500 mt-2 animate-pulse">
                     {currentPick.kind === 'movie' ? 'Aranıyor...' : 'Seçiliyor...'}
                   </div>
                 )}
@@ -285,25 +285,25 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
           )}
         </div>
 
-        <div className="p-5 border-t border-ink-700 bg-ink-900 relative z-10">
+        <div className="p-4 md:p-5 border-t border-ink-700 bg-ink-900 shrink-0">
           {finalPick ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 md:gap-3">
               <button
                 onClick={handleRespin}
-                className="flex-1 flex items-center justify-center gap-2 bg-ink-800 text-ink-200 rounded-lg py-3 font-semibold hover:bg-ink-700 transition-all border border-ink-700"
+                className="flex-1 flex items-center justify-center gap-1.5 md:gap-2 bg-ink-800 text-ink-200 rounded-lg py-2.5 md:py-3 font-semibold hover:bg-ink-700 transition-all border border-ink-700 text-xs md:text-sm"
               >
-                <Shuffle size={18} />
+                <Shuffle size={16} />
                 Tekrar Çek
               </button>
               <button
                 onClick={handleConfirm}
-                className={`flex-1 flex items-center justify-center gap-2 text-white rounded-lg py-3 font-semibold transition-all shadow-lg ${
+                className={`flex-1 flex items-center justify-center gap-1.5 md:gap-2 text-white rounded-lg py-2.5 md:py-3 font-semibold transition-all shadow-lg text-xs md:text-sm ${
                   finalPick.kind === 'movie' 
                     ? 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 shadow-gold-500/20 text-ink-950' 
                     : 'bg-gradient-to-r from-azure-500 to-azure-600 hover:from-azure-400 hover:to-azure-500 shadow-azure-500/20'
                 }`}
               >
-                <Check size={18} />
+                <Check size={16} />
                 Bunu İzle
               </button>
             </div>
@@ -311,9 +311,9 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
             <button
               onClick={handlePick}
               disabled={poolCount === 0 || spinning}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 rounded-lg py-3 font-semibold hover:from-gold-400 hover:to-gold-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-gold-500/20"
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 rounded-lg py-2.5 md:py-3 font-semibold hover:from-gold-400 hover:to-gold-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-gold-500/20 text-sm md:text-base"
             >
-              <Shuffle size={20} className={spinning ? 'animate-spin' : ''} style={spinning ? { animationDuration: '0.5s'} : {}} />
+              <Shuffle size={18} className={spinning ? 'animate-spin' : ''} style={spinning ? { animationDuration: '0.5s'} : {}} />
               {spinning ? 'Çekiliyor...' : poolCount === 0 ? 'İzlenecek Bir Şey Yok' : 'Rastgele Çek'}
             </button>
           )}
