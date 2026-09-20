@@ -26,11 +26,13 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
 
   const totalCount = movieCount + seriesCount;
 
-  // YENİ: Arka planı kilitleyen kod
+  // YENİ: Mobilde arka planı tamamen donduran güçlü kod
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('overflow-hidden');
+    document.documentElement.classList.add('overflow-hidden');
     return () => {
-      document.body.style.overflow = '';
+      document.body.classList.remove('overflow-hidden');
+      document.documentElement.classList.remove('overflow-hidden');
     };
   }, []);
 
@@ -112,7 +114,7 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
   const currentPick = spinning ? displayItem : finalPick;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 md:pl-56" onClick={spinning ? undefined : onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 md:pl-56 overscroll-none" onClick={spinning ? undefined : onClose}>
       <div
         className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[95dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -127,7 +129,7 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
           </button>
         </div>
 
-        <div className="p-4 md:p-5 space-y-4 overflow-y-auto hide-scrollbar">
+        <div className="p-4 md:p-5 space-y-4 overflow-y-auto overscroll-contain hide-scrollbar">
           <div>
             <p className="text-xs md:text-sm text-ink-400 mb-2">Neyden seçim yapılsın?</p>
             <div className="grid grid-cols-3 gap-2">
@@ -188,7 +190,7 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto hide-scrollbar">
+              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto overscroll-contain hide-scrollbar">
                 {availableGenres.map((g) => {
                   const active = selectedGenres.has(g);
                   return (

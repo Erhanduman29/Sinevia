@@ -61,11 +61,13 @@ export default function BulkAddModal({
 
   const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45'; 
 
-  // YENİ: Arka planı kilitleyen kod
+  // YENİ: Mobilde arka planı tamamen donduran güçlü kod
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('overflow-hidden');
+    document.documentElement.classList.add('overflow-hidden');
     return () => {
-      document.body.style.overflow = '';
+      document.body.classList.remove('overflow-hidden');
+      document.documentElement.classList.remove('overflow-hidden');
     };
   }, []);
   
@@ -173,11 +175,11 @@ export default function BulkAddModal({
   const activeGenres = activeTab === 'movie' ? MOVIE_GENRES : TV_GENRES;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden md:pl-56 p-2 md:p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden md:pl-56 p-2 md:p-4 overscroll-none">
       <div className="absolute inset-0 bg-ink-950/95 backdrop-blur-xl animate-fade-in" onClick={handleSafeClose} />
       
       {showCloseConfirm && (
-        <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm animate-fade-in px-4 md:pl-56">
+        <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm animate-fade-in px-4 md:pl-56 overscroll-none">
           <div className="bg-ink-900 border border-ink-700 rounded-2xl p-5 md:p-6 shadow-2xl max-w-sm w-full text-center animate-fade-in-up">
             <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
               <AlertTriangle className="text-red-500" size={28} />
@@ -265,7 +267,7 @@ export default function BulkAddModal({
                     </div>
                   </div>
 
-                  <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+                  <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0 overscroll-contain">
                     {activeGenres.map(g => (
                       <button
                         key={g.id}
@@ -284,7 +286,7 @@ export default function BulkAddModal({
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-ink-950/30 pb-24 md:pb-6 relative z-0">
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-6 bg-ink-950/30 pb-24 md:pb-6 relative z-0">
               {isLoading && page === 1 ? (
                 <div className="flex flex-col items-center justify-center h-48 md:h-64 text-gold-500">
                   <Loader2 className="animate-spin mb-4" size={32} />
@@ -353,7 +355,7 @@ export default function BulkAddModal({
               <div className="bg-ink-900 border-t border-ink-800/80 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] animate-fade-in-up flex flex-col absolute bottom-0 inset-x-0 md:relative z-20">
                 
                 {isCartExpanded && (
-                  <div className="p-4 border-b border-ink-800 bg-ink-950/50 max-h-48 md:max-h-60 overflow-y-auto animate-fade-in">
+                  <div className="p-4 border-b border-ink-800 bg-ink-950/50 max-h-48 md:max-h-60 overflow-y-auto overscroll-contain animate-fade-in">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-xs md:text-sm font-bold text-white">Sepetindeki Yapımlar</h4>
                       <button 
@@ -413,7 +415,7 @@ export default function BulkAddModal({
         )}
 
         {step === 'collection' && (
-          <div className="flex-1 flex flex-col p-4 md:p-8 overflow-y-auto bg-ink-950/50">
+          <div className="flex-1 flex flex-col p-4 md:p-8 overflow-y-auto overscroll-contain bg-ink-950/50">
             <div className="max-w-3xl mx-auto w-full space-y-6 md:space-y-8">
               
               <div className="text-center space-y-2">
