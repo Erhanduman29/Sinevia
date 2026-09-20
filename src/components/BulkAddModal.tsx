@@ -51,13 +51,12 @@ export default function BulkAddModal({
   const [isLoadingMore, setIsLoadingMore] = useState(false); 
   
   const [cart, setCart] = useState<TMDBItem[]>([]);
-  const [isCartExpanded, setIsCartExpanded] = useState(false); // Sepetin açık/kapalı durumu
+  const [isCartExpanded, setIsCartExpanded] = useState(false);
   
   const [collectionName, setCollectionName] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState(0);
 
-  // YENİ: Özel onay penceresi durumu
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45'; 
@@ -119,7 +118,6 @@ export default function BulkAddModal({
     }
   };
 
-  // YENİ: Uygulama İçi Güvenli Çıkış (Custom Confirm Modal)
   const handleSafeClose = () => {
     if (cart.length > 0 && step !== 'importing') {
       setShowCloseConfirm(true);
@@ -167,12 +165,11 @@ export default function BulkAddModal({
   const activeGenres = activeTab === 'movie' ? MOVIE_GENRES : TV_GENRES;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden md:pl-56">
       <div className="absolute inset-0 bg-ink-950/95 backdrop-blur-xl animate-fade-in" onClick={handleSafeClose} />
       
-      {/* İÇ ONAY MODALI (Custom Confirm) */}
       {showCloseConfirm && (
-        <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm animate-fade-in px-4">
+        <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm animate-fade-in px-4 md:pl-56">
           <div className="bg-ink-900 border border-ink-700 rounded-2xl p-6 shadow-2xl max-w-sm w-full text-center animate-fade-in-up">
             <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
               <AlertTriangle className="text-red-500" size={32} />
@@ -193,7 +190,6 @@ export default function BulkAddModal({
 
       <div className="relative z-10 w-full max-w-6xl h-[90vh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
         
-        {/* HEADER */}
         <div className="flex items-center justify-between p-6 border-b border-ink-800/50 bg-ink-900/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 flex items-center justify-center border border-gold-500/20">
@@ -209,7 +205,6 @@ export default function BulkAddModal({
           </button>
         </div>
 
-        {/* 1. ADIM: KEŞİF VE SEÇİM */}
         {step === 'browse' && (
           <>
             <div className="p-6 border-b border-ink-800/50 space-y-4">
@@ -346,11 +341,9 @@ export default function BulkAddModal({
               )}
             </div>
 
-            {/* YENİ: GENİŞLETİLEBİLİR VE YÖNETİLEBİLİR SEPET ÇUBUĞU */}
             {cart.length > 0 && (
               <div className="bg-ink-900 border-t border-ink-800/80 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] animate-fade-in-up flex flex-col">
                 
-                {/* Sepet Detayları (Açılır/Kapanır) */}
                 {isCartExpanded && (
                   <div className="p-4 border-b border-ink-800 bg-ink-950/50 max-h-60 overflow-y-auto animate-fade-in">
                     <div className="flex items-center justify-between mb-3">
@@ -378,7 +371,6 @@ export default function BulkAddModal({
                   </div>
                 )}
 
-                {/* Alt Bar Kontrolleri */}
                 <div className="p-4 px-6 flex items-center justify-between">
                   <button 
                     onClick={() => setIsCartExpanded(!isCartExpanded)}
@@ -412,7 +404,6 @@ export default function BulkAddModal({
           </>
         )}
 
-        {/* 2. ADIM: KOLEKSİYON ATAMA */}
         {step === 'collection' && (
           <div className="flex-1 flex flex-col p-8 overflow-y-auto bg-ink-950/50">
             <div className="max-w-3xl mx-auto w-full space-y-8">
@@ -492,7 +483,6 @@ export default function BulkAddModal({
           </div>
         )}
 
-        {/* 3. ADIM: İÇE AKTARMA (IMPORT) İLERLEMESİ */}
         {step === 'importing' && (
           <div className="flex-1 flex flex-col items-center justify-center bg-ink-950/80 p-8">
             <div className="w-24 h-24 relative mb-8">

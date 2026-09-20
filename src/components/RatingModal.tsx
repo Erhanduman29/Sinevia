@@ -5,14 +5,13 @@ import { ratingBgClass } from '../lib/utils';
 interface Props {
   title: string;
   subtitle?: string;
-  initialRating?: number | null; // YENİ: Önceden verilmiş puanı tutacak
-  initialNote?: string;          // YENİ: Önceden yazılmış notu tutacak
+  initialRating?: number | null; 
+  initialNote?: string;          
   onRate: (rating: number, note: string) => void;
   onClose: () => void;
 }
 
 export default function RatingModal({ title, subtitle, initialRating, initialNote, onRate, onClose }: Props) {
-  // YENİ: State'leri ilk açılışta gönderilen verilerle (varsa) başlatıyoruz
   const [rating, setRating] = useState<number | null>(initialRating ?? null);
   const [hover, setHover] = useState<number | null>(null);
   const [note, setNote] = useState(initialNote ?? '');
@@ -33,11 +32,10 @@ export default function RatingModal({ title, subtitle, initialRating, initialNot
     onClose();
   };
 
-  // Düzenleme mi yapıyoruz yoksa ilk kez mi puanlıyoruz?
   const isEditing = initialRating !== undefined;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 md:pl-56" onClick={onClose}>
       <div
         className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}

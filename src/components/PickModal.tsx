@@ -19,7 +19,6 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [spinning, setSpinning] = useState(false);
   
-  // Ekranda anlık gösterilecek objeyi tutuyoruz
   const [displayItem, setDisplayItem] = useState<PickItem | null>(null);
   const [finalPick, setFinalPick] = useState<PickItem | null>(null);
   
@@ -105,7 +104,7 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
   const currentPick = spinning ? displayItem : finalPick;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={spinning ? undefined : onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 md:pl-56" onClick={spinning ? undefined : onClose}>
       <div
         className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -121,7 +120,6 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
         </div>
 
         <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-          {/* Type filter */}
           <div>
             <p className="text-sm text-ink-400 mb-2">Neyden seçim yapılsın?</p>
             <div className="grid grid-cols-3 gap-2">
@@ -167,7 +165,6 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
             </div>
           </div>
 
-          {/* Genre filter */}
           {availableGenres.length > 0 && (
             <div>
               <div className="flex items-center gap-1.5 mb-2">
@@ -206,7 +203,6 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
             </div>
           )}
 
-          {/* Info text */}
           {(!spinning && !finalPick) && (
             <div className="text-xs text-ink-500 bg-ink-800/40 rounded-lg p-3">
               {filter === 'series'
@@ -217,11 +213,9 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
             </div>
           )}
 
-          {/* Slot animation & result area */}
           {(spinning || finalPick) && currentPick && (
             <div className={`bg-gradient-to-br from-ink-800/80 to-ink-950 border ${finalPick ? (currentPick.kind === 'movie' ? 'border-gold-500/40 shadow-lg shadow-gold-500/10' : 'border-azure-500/40 shadow-lg shadow-azure-500/10') : 'border-ink-700/50'} rounded-xl p-4 flex gap-4 min-h-[140px] items-center transition-all`}>
               
-              {/* Afiş Alanı */}
               <div className="w-20 sm:w-24 aspect-[2/3] flex-shrink-0 bg-ink-950 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-inner relative">
                 {spinning ? (
                   <Shuffle size={28} className="text-gold-500/30 animate-spin" style={{ animationDuration: '3s' }} />
@@ -238,7 +232,6 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
                 )}
               </div>
 
-              {/* Detay Alanı */}
               <div className="flex-1 text-left">
                 <div className={`text-lg font-bold line-clamp-2 leading-tight ${spinning ? 'text-gold-300/80 animate-pulse' : 'text-ink-100'}`}>
                   {currentPick.kind === 'movie' ? currentPick.movie.title : currentPick.series.title}
