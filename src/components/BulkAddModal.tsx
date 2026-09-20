@@ -60,6 +60,14 @@ export default function BulkAddModal({
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45'; 
+
+  // YENİ: Arka planı kilitleyen kod
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
   
   useEffect(() => {
     setPage(1);
@@ -188,9 +196,9 @@ export default function BulkAddModal({
         </div>
       )}
 
-      <div className="relative z-10 w-full max-w-6xl h-[95svh] md:h-[90vh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
+      <div className="relative z-10 w-full max-w-6xl h-[95dvh] md:h-[90vh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
         
-        <div className="flex items-center justify-between p-4 md:p-6 border-b border-ink-800/50 bg-ink-900/50">
+        <div className="flex items-center justify-between p-4 md:p-6 border-b border-ink-800/50 bg-ink-900/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 flex items-center justify-center border border-gold-500/20">
               <Sparkles className="text-gold-400" size={18} />
@@ -276,7 +284,7 @@ export default function BulkAddModal({
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-ink-950/30 pb-24 md:pb-6">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-ink-950/30 pb-24 md:pb-6 relative z-0">
               {isLoading && page === 1 ? (
                 <div className="flex flex-col items-center justify-center h-48 md:h-64 text-gold-500">
                   <Loader2 className="animate-spin mb-4" size={32} />
@@ -342,7 +350,7 @@ export default function BulkAddModal({
             </div>
 
             {cart.length > 0 && (
-              <div className="bg-ink-900 border-t border-ink-800/80 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] animate-fade-in-up flex flex-col absolute bottom-0 inset-x-0 md:relative">
+              <div className="bg-ink-900 border-t border-ink-800/80 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] animate-fade-in-up flex flex-col absolute bottom-0 inset-x-0 md:relative z-20">
                 
                 {isCartExpanded && (
                   <div className="p-4 border-b border-ink-800 bg-ink-950/50 max-h-48 md:max-h-60 overflow-y-auto animate-fade-in">

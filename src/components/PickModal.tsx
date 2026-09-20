@@ -26,6 +26,14 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
 
   const totalCount = movieCount + seriesCount;
 
+  // YENİ: Arka planı kilitleyen kod
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   const availableGenres = useMemo(() => {
     const set = new Set<string>();
     unwatchedMovies.forEach((m) => m.genres.forEach((g) => set.add(g)));
@@ -106,7 +114,7 @@ export default function PickModal({ movieCount, seriesCount, unwatchedMovies, ne
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 md:pl-56" onClick={spinning ? undefined : onClose}>
       <div
-        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[95svh] flex flex-col"
+        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[95dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 md:p-5 border-b border-ink-700 bg-ink-900 z-10 shrink-0">

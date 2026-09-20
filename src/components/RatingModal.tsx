@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Star } from 'lucide-react';
 import { ratingBgClass } from '../lib/utils';
 
@@ -17,6 +17,14 @@ export default function RatingModal({ title, subtitle, initialRating, initialNot
   const [note, setNote] = useState(initialNote ?? '');
 
   const display = hover ?? rating;
+
+  // YENİ: Arka planı kilitleyen kod
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
 
   const handleStarClick = (val: number) => {
     if (rating === val) {
@@ -37,7 +45,7 @@ export default function RatingModal({ title, subtitle, initialRating, initialNot
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 md:pl-56" onClick={onClose}>
       <div
-        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[95svh] flex flex-col"
+        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[95dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 md:p-5 border-b border-ink-700 shrink-0">
