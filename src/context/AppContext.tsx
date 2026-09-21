@@ -137,7 +137,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'series_add': currentVal = state.series.length; break;
       case 'daily_movie': currentVal = calcMaxStreak(validHistory, 'movie'); break;
       case 'daily_series': currentVal = calcMaxStreak(validHistory, 'series'); break;
-      
       case 'movie_genre_action': currentVal = moviesHistory.filter(h => checkGenre(h.genres, ['aksiyon', 'action'])).length; break;
       case 'series_genre_action': currentVal = new Set(seriesHistory.filter(h => checkGenre(h.genres, ['aksiyon', 'action'])).map(h => h.seriesId)).size; break;
       case 'movie_genre_comedy': currentVal = moviesHistory.filter(h => checkGenre(h.genres, ['komedi', 'comedy'])).length; break;
@@ -148,19 +147,16 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'series_genre_horror': currentVal = new Set(seriesHistory.filter(h => checkGenre(h.genres, ['korku', 'horror'])).map(h => h.seriesId)).size; break;
       case 'movie_genre_scifi': currentVal = moviesHistory.filter(h => checkGenre(h.genres, ['bilim kurgu', 'bilimkurgu', 'sci-fi', 'scifi'])).length; break;
       case 'series_genre_scifi': currentVal = new Set(seriesHistory.filter(h => checkGenre(h.genres, ['bilim kurgu', 'bilimkurgu', 'sci-fi', 'scifi'])).map(h => h.seriesId)).size; break;
-      
       case 'perfect_rating': case 'secret_perfectionist': currentVal = validHistory.filter(h => h.rating === 10).length; break;
       case 'high_rating': currentVal = validHistory.filter(h => h.rating === 9 || h.rating === 9.5).length; break;
       case 'low_rating': case 'secret_critic': currentVal = validHistory.filter(h => h.rating !== null && h.rating <= 3).length; break;
       case 'first_rating': currentVal = validHistory.filter(h => h.rating !== null).length; break;
       case 'strict_critic': currentVal = validHistory.filter(h => h.rating !== null && h.note && h.note.trim().length > 0).length; break;
-      
       case 'total_watch': currentVal = validHistory.length; break;
       case 'genre_explorer': currentVal = new Set(validHistory.flatMap(h => h.genres || [])).size; break;
       case 'note_taker': currentVal = validHistory.filter(h => h.note && h.note.trim().length > 0).length; break;
       case 'night_owl': currentVal = validHistory.filter(h => { const hr = new Date(h.watchedAt).getHours(); return hr >= 0 && hr < 5; }).length; break;
       case 'weekend_watcher': currentVal = validHistory.filter(h => { const d = new Date(h.watchedAt).getDay(); return d === 0 || d === 6; }).length; break;
-      
       case 'marathon': {
         const days:any = {}; validHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
         currentVal = Object.values(days).filter((c:any) => c >= 3).length; break;
@@ -185,7 +181,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         });
         currentVal = c; break;
       }
-      
       case 'sinevia_legend': currentVal = validHistory.length; break;
       case 'caveman': {
         const days:any = {}; validHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
@@ -205,13 +200,11 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'epic_writer': currentVal = validHistory.filter(h => h.note && h.note.trim().length >= 5000).length; break;
       case 'ghost_viewer': currentVal = validHistory.filter(h => h.rating === null && (!h.note || h.note.trim() === '')).length; break;
       case 'trash_lover': currentVal = validHistory.filter(h => h.rating !== null && h.rating < 3 && h.note && h.note.trim().length >= 500).length; break;
-      
       case 'polarization': {
         const tens = validHistory.filter(h => h.rating === 10).length;
         const lows = validHistory.filter(h => h.rating !== null && h.rating <= 2).length;
         currentVal = (tens >= 20 && lows >= 20) ? 1 : 0; break;
       }
-      
       case 'new_year_lonely': {
         currentVal = validHistory.filter(h => { 
           const d = new Date(h.watchedAt); 
@@ -221,19 +214,16 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         }).length;
         break;
       }
-      
       case 'cinephile': currentVal = (seriesHistory.length > 0) ? 0 : moviesHistory.length; break;
       case 'short_day_profit': {
         const days:any = {}; moviesHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
         currentVal = Object.values(days).filter((c:any) => c >= 3).length; break;
       }
-      
       case 'selective_critic': {
         const rated = moviesHistory.filter(h => h.rating !== null);
         currentVal = !rated.some(r => r.rating === 10) ? rated.length : 0; 
         break;
       }
-      
       case 'weekend_cinema': {
         const wknd: any = {};
         moviesHistory.forEach(h => {
@@ -287,7 +277,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'morning_sweet': currentVal = moviesHistory.filter(h => { const hr = new Date(h.watchedAt).getHours(); return hr >= 6 && hr < 9; }).length; break;
       case 'nostalgia_wind': currentVal = moviesHistory.filter(h => h.year && parseInt(h.year) <= 1980).length; break;
       case 'universe_conqueror': currentVal = (state.collections || []).filter(c => { const cM = state.movies.filter(m => m.collectionId === c.id); return cM.length >= 3 && cM.every(m => m.watched); }).length; break;
-      
       case 'final_phobia': case 'delayed_goodbye': {
         let phobiaGap = 0; let delayedCount = 0;
         state.series.forEach(s => {
@@ -306,7 +295,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         if (def.id === 'delayed_goodbye') currentVal = delayedCount;
         break;
       }
-      
       case 'half_century_series': currentVal = state.series.filter(s => s.episodes && s.episodes.length > 100 && s.episodes.every(e => e.watched)).length; break;
       case 'light_speed': {
         let lsCount = 0;
@@ -323,12 +311,10 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         currentVal = lsCount; break;
       }
       case 'color_palette': currentVal = new Set(validHistory.filter(h => h.rating !== null).map(h => h.rating)).size; break;
-      
       case 'caps_lock': currentVal = validHistory.filter(h => {
           if (!h.note || h.note.trim().length < 5) return false;
           const n = h.note.trim(); return /[a-zA-ZğüşöçİĞÜŞÖÇ]/.test(n) && n === n.toLocaleUpperCase('tr-TR');
         }).length; break;
-        
       case 'spider_sense': currentVal = state.movies.filter(m => !m.watched && m.year && parseInt(m.year) > new Date().getFullYear()).length; break;
       case 'time_bender': currentVal = watchedMoviesWithRuntime.reduce((sum, m) => sum + (m.runtime || 0), 0); break;
       case 'epic_watcher': currentVal = watchedMoviesWithRuntime.filter(m => (m.runtime || 0) >= 180).length; break;
@@ -350,17 +336,30 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
     prog.current = currentVal;
 
     for (const tier of def.tiers) {
-      if (currentVal >= tier.threshold && !prog.unlockedTiers.includes(tier.tier)) {
-        prog.unlockedTiers.push(tier.tier);
-        prog.tierDates[tier.tier] = new Date().toISOString();
-        prog.unlockedAt = new Date().toISOString();
-        prog.lastNotifiedTier = tier.tier;
-        
-        unlocked.push({ 
-          achievementId: def.id, tier: tier.tier, xp: tier.xp, 
-          name: tier.name || def.name, icon: def.icon, 
-          description: def.description.replace('{threshold}', String(tier.threshold)) 
-        });
+      if (currentVal >= tier.threshold) {
+        if (!prog.unlockedTiers.includes(tier.tier)) {
+          prog.unlockedTiers.push(tier.tier);
+          prog.tierDates[tier.tier] = new Date().toISOString();
+          prog.unlockedAt = new Date().toISOString();
+          prog.lastNotifiedTier = tier.tier;
+          
+          unlocked.push({ 
+            achievementId: def.id, tier: tier.tier, xp: tier.xp, 
+            name: tier.name || def.name, icon: def.icon, 
+            description: def.description.replace('{threshold}', String(tier.threshold)) 
+          });
+        } else {
+          // OTO-ONARIM: Eski yedeklerde tarihi eksik veya '2000-01-01' olan başarımları onar
+          if (!prog.tierDates) prog.tierDates = {};
+          const d = prog.tierDates[tier.tier];
+          if (!d || d.startsWith('2000-') || d.startsWith('1970-')) {
+            const fallbackDate = validHistory.length > 0 ? validHistory[validHistory.length - 1].watchedAt : new Date().toISOString();
+            prog.tierDates[tier.tier] = fallbackDate;
+            if (!prog.unlockedAt || prog.unlockedAt.startsWith('2000-') || prog.unlockedAt.startsWith('1970-')) {
+              prog.unlockedAt = fallbackDate;
+            }
+          }
+        }
       }
     }
   }
@@ -628,7 +627,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SYNC_ACHIEVEMENTS' });
   }, []);
 
-  // Daha snappier (hızlı) toast süresi
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => {
     const id = uid();
     setAchievementToasts({ type: 'add', toast: { ...item, id } });
@@ -661,9 +659,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const nextAchievement = achievementQueue[0];
     const remainingCount = achievementQueue.length - 1;
-    
-    // YENİ: Bekleyen başarımı belirgin bir [+X Bekliyor] formatında gösterir
-    const comboText = remainingCount > 0 ? ` [+${remainingCount} Bekliyor]` : '';
+    const comboText = remainingCount > 0 ? ` (+${remainingCount} Bekliyor)` : '';
     
     setAchievementQueue(prev => prev.slice(1));
     setIsShowingAchievement(true);
@@ -678,7 +674,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     dispatch({ type: 'GRANT_XP', xp: nextAchievement.xp });
 
-    // YENİ: Bekleme süresi daha akıcı bir deneyim için kısaltıldı
     setTimeout(() => {
       setIsShowingAchievement(false);
     }, 3800); 
