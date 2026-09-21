@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress } from '../types';
+import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion } from '../types';
 import { normalize, uid, todayStr, daysBetween } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
@@ -8,16 +8,14 @@ import { levelFromXp } from '../lib/xp';
 const STORAGE_KEY = 'sinevia-v1';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
 
-// YENİ: Ajan mesaj yapısı eklendi
 export interface AIMessage {
   id: string;
   sender: 'user' | 'ai';
   text: string;
-  timestamp: number; // 3 günlük kontrol için ms cinsinden zaman damgası
+  timestamp: number; 
   actionItems?: any[]; 
 }
 
-// AppData tipini genişlettiğimizi varsayarak (types.ts'de yoksa bile burada varsayılan olarak tutuyoruz)
 interface ExtendedAppData extends AppData {
   aiChatHistory?: AIMessage[];
 }
@@ -26,9 +24,14 @@ function defaultData(): ExtendedAppData {
   return {
     movies: [], series: [], removedSeriesTitles: [], collections: [],
     genres: DEFAULT_GENRES, history: [], achievements: [],
+    criteria: [
+      { id: 'crit_1', name: 'Senaryo ve Hikaye', weight: 10, appliesTo: 'both', genres: [] },
+      { id: 'crit_2', name: 'Oyunculuk', weight: 8, appliesTo: 'both', genres: [] },
+      { id: 'crit_3', name: 'Görsel Yönetim', weight: 7, appliesTo: 'both', genres: [] }
+    ],
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null,
     dailyStreak: 0, dailyStreakDate: null, showLockedNames: false,
-    aiChatHistory: [] // YENİ: AI geçmişi
+    aiChatHistory: [] 
   };
 }
 
@@ -58,14 +61,14 @@ function addNewGenres(currentGenres: string[], incomingGenres: string[]): string
 type Action =
   | { type: 'ADD_MOVIE'; movie: Movie }
   | { type: 'DELETE_MOVIE'; id: string }
-  | { type: 'WATCH_MOVIE'; id: string; rating: number; note: string; watchedAt: string; historyItem: WatchHistoryItem }
+  | { type: 'WATCH_MOVIE'; id: string; rating: number; note: string; detailedRating?: Record<string, number>; watchedAt: string; historyItem: WatchHistoryItem }
   | { type: 'UNWATCH_MOVIE'; id: string }
-  | { type: 'UPDATE_HISTORY_RATING'; historyId: string; rating: number; note: string }
+  | { type: 'UPDATE_HISTORY_RATING'; historyId: string; rating: number; note: string; detailedRating?: Record<string, number> }
   | { type: 'ADD_SERIES'; series: Series }
   | { type: 'DELETE_SERIES'; id: string }
   | { type: 'COMPLETE_SERIES'; id: string; title: string }
   | { type: 'ADD_EPISODES'; seriesId: string; episodes: Episode[] }
-  | { type: 'WATCH_EPISODE'; seriesId: string; episodeId: string; rating: number; note: string; watchedAt: string; historyItem: WatchHistoryItem }
+  | { type: 'WATCH_EPISODE'; seriesId: string; episodeId: string; rating: number; note: string; detailedRating?: Record<string, number>; watchedAt: string; historyItem: WatchHistoryItem }
   | { type: 'UNWATCH_EPISODE'; seriesId: string; episodeId: string }
   | { type: 'DELETE_EPISODE'; seriesId: string; episodeId: string }
   | { type: 'ADD_GENRE'; genre: string }
@@ -84,7 +87,10 @@ type Action =
   | { type: 'CLEAR_LEVELUP' }
   | { type: 'CLEAR_XP_GAIN' }
   | { type: 'SYNC_ACHIEVEMENTS' }
-  | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }; // YENİ: AI mesajlarını kaydetme komutu
+  | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }
+  | { type: 'ADD_CRITERION'; criterion: RatingCriterion }
+  | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion }
+  | { type: 'DELETE_CRITERION'; id: string };
 
 function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   const unlocked: { achievementId: string; tier: string; xp: number; name: string; icon: string; description: string }[] = [];
@@ -120,204 +126,13 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'series_add': currentVal = state.series.length; break;
       case 'daily_movie': currentVal = calcMaxStreak(validHistory, 'movie'); break;
       case 'daily_series': currentVal = calcMaxStreak(validHistory, 'series'); break;
-      
-      case 'movie_genre_action': currentVal = moviesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('aksiyon'))).length; break;
-      case 'series_genre_action': currentVal = new Set(seriesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('aksiyon'))).map(h => h.seriesId)).size; break;
-      
-      case 'movie_genre_comedy': currentVal = moviesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('komedi'))).length; break;
-      case 'series_genre_comedy': currentVal = new Set(seriesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('komedi'))).map(h => h.seriesId)).size; break;
-      
-      case 'movie_genre_drama': currentVal = moviesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('drama') || g.toLowerCase().includes('dram'))).length; break;
-      case 'series_genre_drama': currentVal = new Set(seriesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('drama') || g.toLowerCase().includes('dram'))).map(h => h.seriesId)).size; break;
-      
-      case 'movie_genre_horror': currentVal = moviesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('korku'))).length; break;
-      case 'series_genre_horror': currentVal = new Set(seriesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('korku'))).map(h => h.seriesId)).size; break;
-      
-      case 'movie_genre_scifi': currentVal = moviesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('bilim kurgu'))).length; break;
-      case 'series_genre_scifi': currentVal = new Set(seriesHistory.filter(h => h.genres?.some((g:string) => g.toLowerCase().includes('bilim kurgu'))).map(h => h.seriesId)).size; break;
-
       case 'perfect_rating': case 'secret_perfectionist': currentVal = validHistory.filter(h => h.rating === 10).length; break;
       case 'high_rating': currentVal = validHistory.filter(h => h.rating === 9 || h.rating === 9.5).length; break;
       case 'low_rating': case 'secret_critic': currentVal = validHistory.filter(h => h.rating != null && h.rating <= 3).length; break;
       case 'first_rating': currentVal = validHistory.filter(h => h.rating != null).length; break;
-      case 'strict_critic': currentVal = validHistory.filter(h => h.rating != null && h.note && h.note.trim().length > 0).length; break;
       case 'total_watch': currentVal = validHistory.length; break;
       case 'genre_explorer': currentVal = new Set(validHistory.flatMap(h => h.genres || [])).size; break;
       case 'note_taker': currentVal = validHistory.filter(h => h.note && h.note.trim().length > 0).length; break;
-      case 'night_owl': currentVal = validHistory.filter(h => { const hr = new Date(h.watchedAt).getHours(); return hr >= 0 && hr < 5; }).length; break;
-      case 'weekend_watcher': currentVal = validHistory.filter(h => { const d = new Date(h.watchedAt).getDay(); return d === 0 || d === 6; }).length; break;
-      case 'marathon': {
-        const days:any = {}; validHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
-        currentVal = Object.values(days).filter((c:any) => c >= 3).length; break;
-      }
-      case 'secret_binge': {
-        const days:any = {}; seriesHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
-        const m = Math.max(0, ...Object.values(days as Record<string,number>)); currentVal = m >= 10 ? m : 0; break;
-      }
-      case 'season_complete': {
-        let c = 0;
-        state.series.forEach(s => {
-          const eps = s.episodes || []; const seas = new Set(eps.map(e => e.season));
-          seas.forEach(season => { const sEps = eps.filter(e => e.season === season); if (sEps.length > 0 && sEps.every(e => e.watched)) c++; });
-        });
-        currentVal = c; break;
-      }
-      case 'collection_complete': {
-        let c = 0;
-        (state.collections || []).forEach(col => {
-          const cm = state.movies.filter(m => m.collectionId === col.id);
-          if (cm.length > 0 && cm.every(m => m.watched)) c++;
-        });
-        currentVal = c; break;
-      }
-      case 'sinevia_legend': currentVal = validHistory.length; break;
-      case 'caveman': {
-        const days:any = {}; validHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
-        let streak = 0, maxS = 0; const sortedDays = Object.keys(days).sort();
-        for (let i = 0; i < sortedDays.length; i++) {
-          if (days[sortedDays[i]] >= 5) {
-            if (i > 0) {
-              const diff = Math.round((new Date(sortedDays[i]).getTime() - new Date(sortedDays[i - 1]).getTime()) / 86400000);
-              if (diff === 1) streak++; else streak = 1;
-            } else streak = 1;
-          } else streak = 0;
-          if (streak > maxS) maxS = streak;
-        }
-        currentVal = maxS; break;
-      }
-      case 'hater': currentVal = validHistory.filter(h => h.rating && h.rating <= 2).length; break;
-      case 'epic_writer': currentVal = validHistory.some(h => h.note && h.note.length > 5000) ? 1 : 0; break;
-      case 'ghost_viewer': currentVal = validHistory.filter(h => !h.rating && (!h.note || h.note.trim() === '')).length; break;
-      case 'trash_lover': currentVal = validHistory.filter(h => h.rating && h.rating < 3 && h.note && h.note.length > 500).length; break;
-      case 'polarization': {
-        const tens = validHistory.filter(h => h.rating === 10).length;
-        const lows = validHistory.filter(h => h.rating && h.rating <= 2).length;
-        currentVal = (tens >= 20 && lows >= 20) ? 1 : 0; break;
-      }
-      case 'new_year_lonely': currentVal = validHistory.some(h => { const d = new Date(h.watchedAt); return d.getMonth() === 11 && d.getDate() === 31 && d.getHours() === 0; }) ? 1 : 0; break;
-      case 'cinephile': currentVal = (seriesHistory.length > 0) ? 0 : moviesHistory.length; break;
-      case 'short_day_profit': {
-        const days:any = {}; moviesHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
-        currentVal = Math.max(0, ...Object.values(days as Record<string,number>)) >= 3 ? 1 : 0; break;
-      }
-      case 'selective_critic': {
-        const rated = moviesHistory.filter(h => h.rating != null);
-        currentVal = (rated.length >= 50 && !rated.some(r => r.rating === 10)) ? 1 : 0; break;
-      }
-      case 'weekend_cinema': {
-        const wknd: any = {};
-        moviesHistory.forEach(h => {
-          const d = new Date(h.watchedAt);
-          if (d.getDay() === 0 || d.getDay() === 6) {
-            const sat = new Date(d); if (d.getDay() === 0) sat.setDate(sat.getDate() - 1);
-            wknd[sat.toISOString().slice(0, 10)] = (wknd[sat.toISOString().slice(0, 10)] || 0) + 1;
-          }
-        });
-        currentVal = Math.max(0, ...Object.values(wknd as Record<string, number>)) >= 5 ? 1 : 0; break;
-      }
-      case 'episode_monster': currentVal = seriesHistory.length; break;
-      case 'patience_stone': currentVal = state.series.some(s => {
-          if (!s.episodes) return false;
-          const maxS = Math.max(0, ...s.episodes.map(e => e.season));
-          return maxS >= 8 && s.episodes.every(e => e.watched);
-        }) ? 1 : 0; break;
-      case 'loyalty_test': {
-        let maxL = 0; const byS:any = {};
-        seriesHistory.forEach(h => {
-          const sid = h.seriesId || h.itemId || h.id;
-          if (!byS[sid]) byS[sid] = new Set();
-          byS[sid].add(h.watchedAt.slice(0, 10)); 
-        });
-        Object.values(byS).forEach((dSet:any) => {
-          const dates = Array.from(dSet).sort() as string[]; let s = 1;
-          for (let i = 1; i < dates.length; i++) {
-            if (Math.round((new Date(dates[i]).getTime() - new Date(dates[i-1]).getTime()) / 86400000) === 1) s++; else s = 1;
-            if (s > maxL) maxL = s;
-          }
-        });
-        currentVal = maxL >= 10 ? 1 : 0; break;
-      }
-      case 'break_taker': case 'lost_colony': {
-        let maxGap = 0; const byS:any = {};
-        seriesHistory.forEach(h => {
-          const sid = h.seriesId || h.itemId || h.id;
-          if (!byS[sid]) byS[sid] = []; 
-          byS[sid].push(new Date(h.watchedAt).getTime()); 
-        });
-        Object.values(byS).forEach((dates:any) => {
-          dates.sort((a:number, b:number) => a - b);
-          for (let i = 1; i < dates.length; i++) {
-            const gap = (dates[i] - dates[i-1]) / 86400000; if (gap > maxGap) maxGap = gap;
-          }
-        });
-        if (def.id === 'break_taker') currentVal = maxGap >= 30 ? 1 : 0;
-        if (def.id === 'lost_colony') currentVal = maxGap >= 365 ? 1 : 0;
-        break;
-      }
-      case 'morning_sweet': currentVal = moviesHistory.filter(h => { const hr = new Date(h.watchedAt).getHours(); return hr >= 6 && hr < 9; }).length; break;
-      case 'nostalgia_wind': currentVal = moviesHistory.filter(h => h.year && parseInt(h.year) <= 1980).length; break;
-      case 'universe_conqueror': currentVal = (state.collections || []).filter(c => { const cM = state.movies.filter(m => m.collectionId === c.id); return cM.length >= 3 && cM.every(m => m.watched); }).length; break;
-      case 'final_phobia': case 'delayed_goodbye': {
-        let phobia = 0; let delayed = 0;
-        state.series.forEach(s => {
-          if (!s.episodes || s.episodes.length < 2) return;
-          const eps = [...s.episodes].sort((a, b) => a.season === b.season ? a.episode - b.episode : a.season - b.season);
-          const finalEp = eps[eps.length - 1]; const penEp = eps[eps.length - 2];
-          if (penEp.watched && penEp.watchedAt) {
-            const penTime = new Date(penEp.watchedAt).getTime();
-            const finalTime = (finalEp.watched && finalEp.watchedAt) ? new Date(finalEp.watchedAt).getTime() : Date.now();
-            const gap = (finalTime - penTime) / 86400000;
-            if (!finalEp.watched && gap >= 90) phobia = 1;
-            if (finalEp.watched && gap >= 90) delayed = 1;
-          }
-        });
-        if (def.id === 'final_phobia') currentVal = phobia;
-        if (def.id === 'delayed_goodbye') currentVal = delayed;
-        break;
-      }
-      case 'half_century_series': currentVal = state.series.some(s => s.episodes && s.episodes.length > 100 && s.episodes.every(e => e.watched)) ? 1 : 0; break;
-      case 'light_speed': {
-        let lsCount = 0;
-        validHistory.forEach(h => {
-          if (h.rating != null) {
-            const addedAt = h.kind === 'series'
-              ? state.series.find(s => s.id === (h.seriesId || h.itemId || h.id))?.addedAt
-              : state.movies.find(m => m.id === (h.itemId || h.id))?.addedAt;
-            if (addedAt) {
-              if ((new Date(h.watchedAt).getTime() - new Date(addedAt).getTime()) / 3600000 <= 24) lsCount++;
-            }
-          }
-        });
-        currentVal = lsCount; break;
-      }
-      case 'color_palette': currentVal = new Set(validHistory.filter(h => h.rating != null).map(h => h.rating)).size; break;
-      case 'caps_lock': currentVal = validHistory.some(h => {
-          if (!h.note || h.note.trim().length < 5) return false;
-          const n = h.note.trim(); return /[a-zA-ZğüşöçİĞÜŞÖÇ]/.test(n) && n === n.toLocaleUpperCase('tr-TR');
-        }) ? 1 : 0; break;
-      case 'spider_sense': currentVal = state.movies.some(m => !m.watched && m.year && parseInt(m.year) > new Date().getFullYear()) ? 1 : 0; break;
-
-      case 'time_bender': 
-        currentVal = watchedMoviesWithRuntime.reduce((sum, m) => sum + (m.runtime || 0), 0); 
-        break;
-      case 'epic_watcher': 
-        currentVal = watchedMoviesWithRuntime.filter(m => (m.runtime || 0) >= 180).length; 
-        break;
-      case 'short_sweet': 
-        currentVal = watchedMoviesWithRuntime.filter(m => (m.runtime || 0) > 0 && (m.runtime || 0) < 90).length; 
-        break;
-      case 'couch_potato': {
-        const daysRuntime: Record<string, number> = {};
-        moviesHistory.forEach(h => {
-          const movie = state.movies.find(m => m.id === (h.itemId || h.id));
-          if (movie && movie.runtime) {
-            const d = h.watchedAt.slice(0, 10);
-            daysRuntime[d] = (daysRuntime[d] || 0) + movie.runtime;
-          }
-        });
-        currentVal = Object.values(daysRuntime).filter(minutes => minutes > 300).length;
-        break;
-      }
     }
 
     prog.current = currentVal;
@@ -366,7 +181,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'CLEAR_XP_GAIN') return { ...state, pendingXpGain: undefined };
   if (action.type === 'TOGGLE_LOCKED_NAMES') return { ...state, showLockedNames: !state.showLockedNames };
   if (action.type === 'SET_ACHIEVEMENT_PROGRESS') return { ...state, achievements: action.progress };
-  if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages }; // YENİ: Geçmişi kaydet
+  if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages };
 
   let nextState = { ...state };
 
@@ -382,27 +197,27 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
       nextState.movies = state.movies.filter((m) => m.id !== action.id);
       break;
     case 'WATCH_MOVIE':
-      nextState.movies = state.movies.map((m) => m.id === action.id ? { ...m, watched: true, rating: action.rating, note: action.note, watchedAt: action.watchedAt } : m);
+      nextState.movies = state.movies.map((m) => m.id === action.id ? { ...m, watched: true, rating: action.rating, detailedRating: action.detailedRating, note: action.note, watchedAt: action.watchedAt } : m);
       nextState.history = [action.historyItem, ...state.history];
       nextState.dailyStreak = updateStreak(state);
       nextState.dailyStreakDate = todayStr();
       nextState.lastWatchDate = todayStr();
       break;
     case 'UNWATCH_MOVIE':
-      nextState.movies = state.movies.map((m) => m.id === action.id ? { ...m, watched: false, rating: null, note: '', watchedAt: null } : m);
+      nextState.movies = state.movies.map((m) => m.id === action.id ? { ...m, watched: false, rating: null, detailedRating: undefined, note: '', watchedAt: null } : m);
       nextState.history = state.history.filter((h) => h.itemId !== action.id && h.id !== action.id);
       break;
     case 'UPDATE_HISTORY_RATING': {
       const hItem = state.history.find(h => h.id === action.historyId);
       if (!hItem) break;
-      nextState.history = state.history.map(h => h.id === action.historyId ? { ...h, rating: action.rating, note: action.note } : h);
+      nextState.history = state.history.map(h => h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, note: action.note } : h);
       const targetId = hItem.itemId || hItem.id;
       if (hItem.kind === 'movie' || hItem.type === 'movie') {
-        nextState.movies = state.movies.map(m => m.id === targetId ? { ...m, rating: action.rating, note: action.note } : m);
+        nextState.movies = state.movies.map(m => m.id === targetId ? { ...m, rating: action.rating, detailedRating: action.detailedRating, note: action.note } : m);
       } else {
         nextState.series = state.series.map(s => ({
           ...s,
-          episodes: s.episodes.map(e => e.id === targetId ? { ...e, rating: action.rating, note: action.note } : e)
+          episodes: s.episodes.map(e => e.id === targetId ? { ...e, rating: action.rating, detailedRating: action.detailedRating, note: action.note } : e)
         }));
       }
       break;
@@ -423,14 +238,14 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
       nextState.series = state.series.map((s) => s.id === action.seriesId ? { ...s, episodes: [...s.episodes, ...action.episodes] } : s);
       break;
     case 'WATCH_EPISODE':
-      nextState.series = state.series.map((s) => s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => e.id === action.episodeId ? { ...e, watched: true, rating: action.rating, note: action.note, watchedAt: action.watchedAt } : e) } : s);
+      nextState.series = state.series.map((s) => s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => e.id === action.episodeId ? { ...e, watched: true, rating: action.rating, detailedRating: action.detailedRating, note: action.note, watchedAt: action.watchedAt } : e) } : s);
       nextState.history = [action.historyItem, ...state.history];
       nextState.dailyStreak = updateStreak(state);
       nextState.dailyStreakDate = todayStr();
       nextState.lastWatchDate = todayStr();
       break;
     case 'UNWATCH_EPISODE':
-      nextState.series = state.series.map((s) => s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => e.id === action.episodeId ? { ...e, watched: false, rating: null, note: '', watchedAt: null } : e) } : s);
+      nextState.series = state.series.map((s) => s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => e.id === action.episodeId ? { ...e, watched: false, rating: null, detailedRating: undefined, note: '', watchedAt: null } : e) } : s);
       nextState.history = state.history.filter((h) => h.itemId !== action.episodeId && h.id !== action.episodeId);
       break;
     case 'DELETE_EPISODE':
@@ -452,11 +267,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
       const resolved = resolveTMDBGenres(action.genres, state.genres);
       nextState.genres = addNewGenres(state.genres, resolved);
       nextState.movies = state.movies.map((m) => m.id === action.id ? { 
-        ...m, 
-        title: action.title, 
-        year: action.year, 
-        genres: resolved, 
-        runtime: action.runtime,
+        ...m, title: action.title, year: action.year, genres: resolved, runtime: action.runtime,
         ...(action.posterUrl !== undefined && { posterUrl: action.posterUrl }),
         ...(action.overview !== undefined && { overview: action.overview }),
         ...(action.tmdbId !== undefined && { tmdbId: action.tmdbId })
@@ -467,9 +278,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
       const resolved = resolveTMDBGenres(action.genres, state.genres);
       nextState.genres = addNewGenres(state.genres, resolved);
       nextState.series = state.series.map((s) => s.id === action.id ? { 
-        ...s, 
-        title: action.title, 
-        genres: resolved,
+        ...s, title: action.title, genres: resolved,
         ...(action.year !== undefined && { year: action.year }),
         ...(action.posterUrl !== undefined && { posterUrl: action.posterUrl }),
         ...(action.overview !== undefined && { overview: action.overview }),
@@ -490,8 +299,15 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
     case 'SET_MOVIE_COLLECTION':
       nextState.movies = state.movies.map((m) => m.id === action.id ? { ...m, collectionId: action.collectionId } : m);
       break;
-    case 'SYNC_ACHIEVEMENTS':
-      break; 
+    case 'ADD_CRITERION':
+      nextState.criteria = [...(state.criteria || []), action.criterion];
+      break;
+    case 'EDIT_CRITERION':
+      nextState.criteria = (state.criteria || []).map(c => c.id === action.id ? action.criterion : c);
+      break;
+    case 'DELETE_CRITERION':
+      nextState.criteria = (state.criteria || []).filter(c => c.id !== action.id);
+      break;
   }
 
   return applyAchievements(nextState);
@@ -506,13 +322,13 @@ interface AppContextValue {
   data: ExtendedAppData;
   addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number) => boolean;
   deleteMovie: (id: string) => void;
-  watchMovie: (id: string, r: number, n: string) => void;
+  watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>) => void;
   unwatchMovie: (id: string) => void;
-  updateHistoryRating: (historyId: string, rating: number, note: string) => void;
+  updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>) => void;
   addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string) => boolean;
   deleteSeries: (id: string) => void;
   addEpisodes: (sId: string, s: number, ec: number) => void;
-  watchEpisode: (sId: string, eId: string, r: number, n: string) => void;
+  watchEpisode: (sId: string, eId: string, r: number, n: string, dr?: Record<string, number>) => void;
   canWatchEpisode: (sId: string, eId: string) => boolean;
   unwatchEpisode: (sId: string, eId: string) => void;
   deleteEpisode: (sId: string, eId: string) => void;
@@ -527,7 +343,10 @@ interface AppContextValue {
   dismissLevelUp: () => void; dismissSeasonComplete: () => void;
   toggleLockedNames: () => void;
   xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
-  updateAIHistory: (messages: AIMessage[]) => void; // YENİ: Geçmişi kaydetmek için fonksiyon
+  updateAIHistory: (messages: AIMessage[]) => void;
+  addCriterion: (criterion: RatingCriterion) => void;
+  editCriterion: (id: string, criterion: RatingCriterion) => void;
+  deleteCriterion: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -544,13 +363,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsedData = { ...defaultData(), ...JSON.parse(stored) };
-        
-        // YENİ: Başlangıçta 3 günden eski AI mesajlarını (72 saat) temizle
         if (parsedData.aiChatHistory) {
           const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
           parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= threeDaysAgo);
         }
-        
+        if (!parsedData.criteria) parsedData.criteria = defaultData().criteria;
         return parsedData;
       }
     } catch {}
@@ -634,22 +451,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
       dispatch({ 
         type: 'ADD_MOVIE', 
-        movie: { 
-          id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, watched: false, rating: null, note: '', watchedAt: null, addedAt: new Date().toISOString() 
-        } 
+        movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, watched: false, rating: null, note: '', watchedAt: null, addedAt: new Date().toISOString() } 
       });
       showToast('Film eklendi'); return true;
     }, [data.movies, showToast]
   );
 
-  const watchMovie = useCallback((id: string, rating: number, note: string) => {
+  const watchMovie = useCallback((id: string, rating: number, note: string, detailedRating?: Record<string, number>) => {
       const movie = data.movies.find((m) => m.id === id); if (!movie) return;
-      dispatch({ type: 'WATCH_MOVIE', id, rating, note, watchedAt: new Date().toISOString(), historyItem: { id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title, rating, note, watchedAt: new Date().toISOString(), genres: movie.genres, year: movie.year } });
+      dispatch({ type: 'WATCH_MOVIE', id, rating, detailedRating, note, watchedAt: new Date().toISOString(), historyItem: { id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title, rating, detailedRating, note, watchedAt: new Date().toISOString(), genres: movie.genres, year: movie.year } });
     }, [data.movies]
   );
 
-  const updateHistoryRating = useCallback((historyId: string, rating: number, note: string) => {
-    dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note });
+  const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>) => {
+    dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating });
     showToast('Puan güncellendi');
   }, [showToast]);
 
@@ -663,10 +478,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, [data.series, data.removedSeriesTitles, showToast]
   );
 
-  const watchEpisode = useCallback((seriesId: string, episodeId: string, rating: number, note: string) => {
+  const watchEpisode = useCallback((seriesId: string, episodeId: string, rating: number, note: string, detailedRating?: Record<string, number>) => {
       const series = data.series.find((s) => s.id === seriesId); if (!series) return;
       const ep = series.episodes.find((e) => e.id === episodeId); if (!ep) return;
-      dispatch({ type: 'WATCH_EPISODE', seriesId, episodeId, rating, note, watchedAt: new Date().toISOString(), historyItem: { id: uid(), itemId: ep.id, seriesId: series.id, kind: 'series', type: 'series', title: series.title, rating, note, watchedAt: new Date().toISOString(), genres: series.genres, season: ep.season, episode: ep.episode } });
+      dispatch({ type: 'WATCH_EPISODE', seriesId, episodeId, rating, detailedRating, note, watchedAt: new Date().toISOString(), historyItem: { id: uid(), itemId: ep.id, seriesId: series.id, kind: 'series', type: 'series', title: series.title, rating, detailedRating, note, watchedAt: new Date().toISOString(), genres: series.genres, season: ep.season, episode: ep.episode } });
       setTimeout(() => {
         const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
         const updatedSeries = state.series?.find((s: any) => s.id === seriesId);
@@ -716,10 +531,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const renameCollection = useCallback((i: string, n: string) => { dispatch({ type: 'RENAME_COLLECTION', id: i, name: n.trim() }); showToast('Koleksiyon güncellendi'); }, [showToast]);
   const setMovieCollection = useCallback((i: string, c: string | null) => { dispatch({ type: 'SET_MOVIE_COLLECTION', id: i, collectionId: c }); }, []);
   
-  // YENİ: Geçmişi kaydetme fonksiyonu
   const updateAIHistory = useCallback((messages: AIMessage[]) => { 
     dispatch({ type: 'UPDATE_AI_HISTORY', messages }); 
   }, []);
+
+  const addCriterion = useCallback((c: RatingCriterion) => {
+    dispatch({ type: 'ADD_CRITERION', criterion: c });
+    showToast('Kriter Eklendi');
+  }, [showToast]);
+
+  const editCriterion = useCallback((id: string, c: RatingCriterion) => {
+    dispatch({ type: 'EDIT_CRITERION', id, criterion: c });
+    showToast('Kriter Güncellendi');
+  }, [showToast]);
+
+  const deleteCriterion = useCallback((id: string) => {
+    dispatch({ type: 'DELETE_CRITERION', id });
+    showToast('Kriter Silindi');
+  }, [showToast]);
 
   const exportData = useCallback(() => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
@@ -731,7 +560,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismissLevelUp = useCallback(() => setLevelUpData(null), []);
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
 
-  return <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion }}>{children}</AppContext.Provider>;
 }
 
 function updateStreak(data: ExtendedAppData): number {
