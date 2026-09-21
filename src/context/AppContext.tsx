@@ -202,14 +202,8 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         currentVal = maxS; break;
       }
       case 'hater': currentVal = validHistory.filter(h => h.rating !== null && h.rating <= 2).length; break;
-      
-      // DÜZELTİLDİ: Artık 5000 karakteri geçen notların sayısını tutuyor
       case 'epic_writer': currentVal = validHistory.filter(h => h.note && h.note.trim().length >= 5000).length; break;
-      
-      // DÜZELTİLDİ: Sadece puanı NULL olan ve notu BOŞ olanları sayar
       case 'ghost_viewer': currentVal = validHistory.filter(h => h.rating === null && (!h.note || h.note.trim() === '')).length; break;
-      
-      // DÜZELTİLDİ: Kötü filme (3'ün altı) yazılmış uzun yorumları eksiksiz sayar
       case 'trash_lover': currentVal = validHistory.filter(h => h.rating !== null && h.rating < 3 && h.note && h.note.trim().length >= 500).length; break;
       
       case 'polarization': {
@@ -218,7 +212,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         currentVal = (tens >= 20 && lows >= 20) ? 1 : 0; break;
       }
       
-      // DÜZELTİLDİ: 31 Aralık 20:00 ile 1 Ocak 04:00 arasını kapsar
       case 'new_year_lonely': {
         currentVal = validHistory.filter(h => { 
           const d = new Date(h.watchedAt); 
@@ -235,7 +228,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         currentVal = Object.values(days).filter((c:any) => c >= 3).length; break;
       }
       
-      // DÜZELTİLDİ: Puan verilen film sayısını gösterir, hiç 10 verilmemişse sayaç artar, 10 verilirse sıfırlanır
       case 'selective_critic': {
         const rated = moviesHistory.filter(h => h.rating !== null);
         currentVal = !rated.some(r => r.rating === 10) ? rated.length : 0; 
@@ -296,7 +288,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'nostalgia_wind': currentVal = moviesHistory.filter(h => h.year && parseInt(h.year) <= 1980).length; break;
       case 'universe_conqueror': currentVal = (state.collections || []).filter(c => { const cM = state.movies.filter(m => m.collectionId === c.id); return cM.length >= 3 && cM.every(m => m.watched); }).length; break;
       
-      // DÜZELTİLDİ: Progress bar mantığı için max bekleme gününü kaydeder
       case 'final_phobia': case 'delayed_goodbye': {
         let phobiaGap = 0; let delayedCount = 0;
         state.series.forEach(s => {
@@ -333,7 +324,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       }
       case 'color_palette': currentVal = new Set(validHistory.filter(h => h.rating !== null).map(h => h.rating)).size; break;
       
-      // DÜZELTİLDİ: Artık Türkçe karakterleri ve sadece büyük harfleri daha doğru yakalar
       case 'caps_lock': currentVal = validHistory.filter(h => {
           if (!h.note || h.note.trim().length < 5) return false;
           const n = h.note.trim(); return /[a-zA-ZğüşöçİĞÜŞÖÇ]/.test(n) && n === n.toLocaleUpperCase('tr-TR');
@@ -634,7 +624,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { achievementId: def.id, current: 0, unlockedTiers: [], lastNotifiedTier: null };
     });
     if (needsUpdate) dispatch({ type: 'SET_ACHIEVEMENT_PROGRESS', progress });
-    setTimeout(() => dispatch({ type: 'SYNC_ACHIEVEMENTS' }), 1000);
+    
+    // YENİ: setTimeout kaldırıldı, böylece ilk açılışta gecikme olmadan senkronizasyon tamamlanır.
+    dispatch({ type: 'SYNC_ACHIEVEMENTS' });
   }, []);
 
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => {
@@ -662,18 +654,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [data.pendingToasts, data.pendingLevelUp, data.pendingXpGain]);
 
+  // YENİ: Birden fazla başarım kazanıldığında kuyruktaki diğer başarımları da bildirir.
   useEffect(() => {
     if (levelUpData) return;
     if (isShowingAchievement) return;
     if (achievementQueue.length === 0) return;
 
     const nextAchievement = achievementQueue[0];
+    const remainingCount = achievementQueue.length - 1;
+    const comboText = remainingCount > 0 ? ` (+${remainingCount} Bekliyor)` : '';
     
     setAchievementQueue(prev => prev.slice(1));
     setIsShowingAchievement(true);
 
     showAchievementToast({
-      achievementName: nextAchievement.name,
+      achievementName: nextAchievement.name + comboText,
       tier: nextAchievement.tier,
       icon: nextAchievement.icon,
       description: nextAchievement.description
