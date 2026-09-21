@@ -1,13 +1,17 @@
 import { useState, useRef } from 'react';
-import { Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X, AlertTriangle, Wrench, SlidersHorizontal } from 'lucide-react';
+import { Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X, AlertTriangle, Wrench, SlidersHorizontal, Smartphone } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { RatingCriterion } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { uid } from '../lib/utils';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 export default function SettingsPage() {
   const { data, addGenre, deleteGenre, renameGenre, addCollection, deleteCollection, renameCollection, exportData, importData, resetData, toggleLockedNames, addCriterion, editCriterion, deleteCriterion } = useApp();
   
+  // PWA Kurulum Hook'u
+  const { isInstallable, installPWA } = usePWAInstall();
+
   const [newGenre, setNewGenre] = useState('');
   const [newCollection, setNewCollection] = useState('');
   const [editingColl, setEditingColl] = useState<string | null>(null);
@@ -427,6 +431,28 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* PWA (UYGULAMAYI YÜKLE) EKRANI */}
+      {isInstallable && (
+        <div className="bg-gradient-to-r from-azure-950/40 to-indigo-950/40 border border-azure-500/30 rounded-2xl p-5 shadow-xl shadow-ink-950/30 flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Smartphone size={20} className="text-azure-400" />
+              Sinevia'yı Cihazına Yükle
+            </h2>
+            <p className="text-sm text-ink-400 mt-0.5">
+              Tarayıcı çubuğu olmadan tam ekran ve internet olmadan da kullanmak için uygulamayı ana ekranına ekle.
+            </p>
+          </div>
+          <button
+            onClick={installPWA}
+            className="bg-gradient-to-r from-azure-600 to-indigo-600 hover:from-azure-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-azure-500/20 transition-all text-sm"
+          >
+            Uygulamayı İndir
+          </button>
+        </div>
+      )}
+
+      {/* YEDEKLE / GERİ YÜKLE */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl shadow-ink-950/30">
         <h2 className="text-lg font-semibold text-ink-100 mb-1 flex items-center gap-2">
           <Download size={18} className="text-emerald-400" />
@@ -471,6 +497,7 @@ export default function SettingsPage() {
         />
       )}
 
+      {/* GELİŞTİRİCİ AYARLARI */}
       <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-5 shadow-xl shadow-ink-950/30">
         <h2 className="text-lg font-semibold text-amber-500 mb-1 flex items-center gap-2">
           <Wrench size={18} />
@@ -490,6 +517,7 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      {/* SIFIRLA */}
       <div className="bg-crimson-950/30 border border-crimson-800/40 rounded-2xl p-5 shadow-xl shadow-ink-950/30">
         <h2 className="text-lg font-semibold text-crimson-400 mb-1 flex items-center gap-2">
           <AlertTriangle size={18} className="text-crimson-400" />

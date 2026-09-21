@@ -20,7 +20,10 @@ export default function SeriesPage() {
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [ratingTarget, setRatingTarget] = useState<{ series: Series; episode: Episode } | null>(null);
   const [editTarget, setEditTarget] = useState<Series | null>(null);
+  
+  // DİZİ SİLME VE BÖLÜM SİLME STATE'LERİ
   const [deleteTarget, setDeleteTarget] = useState<Series | null>(null);
+  const [deleteEpisodeTarget, setDeleteEpisodeTarget] = useState<{ series: Series; episode: Episode } | null>(null);
   
   const [watchedFilter, setWatchedFilter] = useState<boolean | null>(false);
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
@@ -40,7 +43,6 @@ export default function SeriesPage() {
       try {
         const results = await searchTMDBSeries(s.title);
         if (results.length > 0) {
-          // Sistem dizinin ilk eşleşmesini alır. Sezon verisini DEĞİŞTİRMİYORUZ ki eski ilerlemelerin/izlemelerin kaybolmasın.
           const match = results[0];
           const newGenres = Array.from(new Set([...s.genres, ...match.genres]));
           
@@ -150,7 +152,6 @@ export default function SeriesPage() {
           Diziler
         </h1>
         <div className="flex items-center gap-2">
-          {/* YENİ: Senkronizasyon Butonu */}
           <button
             onClick={handleSyncTMDBSeries}
             disabled={isSyncing}
@@ -300,7 +301,6 @@ export default function SeriesPage() {
                   <div className="flex items-center gap-3 min-w-0">
                     {isExpanded ? <ChevronDown size={18} className="text-ink-500 flex-shrink-0" /> : <ChevronRight size={18} className="text-ink-500 flex-shrink-0" />}
                     
-                    {/* YENİ: AFİŞ */}
                     <div className="w-10 sm:w-12 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50">
                       {s.posterUrl ? (
                         <img src={s.posterUrl} alt={s.title} className="w-full h-full object-cover" />
@@ -364,7 +364,7 @@ export default function SeriesPage() {
                                       else showToast('Önce önceki bölümleri izlemelisin!', 'warning');
                                     }}
                                     onUnwatch={() => unwatchEpisode(s.id, ep.id)}
-                                    onDelete={() => deleteEpisode(s.id, ep.id)}
+                                    onDelete={() => setDeleteEpisodeTarget({ series: s, episode: ep })} // Doğrudan silmek yerine onaya gönderir
                                   />
                                 );
                               })}
@@ -407,6 +407,7 @@ export default function SeriesPage() {
       )}
 
       {showAdd && <AddSeriesModal onClose={() => setShowAdd(false)} />}
+      
       {ratingTarget && (
         <RatingModal
           title={ratingTarget.series.title}
@@ -415,7 +416,10 @@ export default function SeriesPage() {
           onClose={() => setRatingTarget(null)}
         />
       )}
+      
       {editTarget && <EditSeriesModal series={editTarget} onClose={() => setEditTarget(null)} />}
+      
+      {/* 1. ONAY KUTUSU: Tüm Diziyi Silme Onayı */}
       {deleteTarget && (
         <ConfirmDialog
           title="Dizi Sil"
@@ -425,6 +429,19 @@ export default function SeriesPage() {
             setDeleteTarget(null);
           }}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {/* 2. ONAY KUTUSU: Sadece Bölüm Silme Onayı */}
+      {deleteEpisodeTarget && (
+        <ConfirmDialog
+          title="Bölümü Sil"
+          message={`"${deleteEpisodeTarget.series.title}" dizisinin ${deleteEpisodeTarget.episode.season}. Sezon ${deleteEpisodeTarget.episode.episode}. Bölümü tamamen silinecek. Emin misin?`}
+          onConfirm={() => {
+            deleteEpisode(deleteEpisodeTarget.series.id, deleteEpisodeTarget.episode.id);
+            setDeleteEpisodeTarget(null);
+          }}
+          onCancel={() => setDeleteEpisodeTarget(null)}
         />
       )}
     </div>

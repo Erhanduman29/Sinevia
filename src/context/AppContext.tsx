@@ -90,7 +90,8 @@ type Action =
   | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }
   | { type: 'ADD_CRITERION'; criterion: RatingCriterion }
   | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion }
-  | { type: 'DELETE_CRITERION'; id: string };
+  | { type: 'DELETE_CRITERION'; id: string }
+  | { type: 'GRANT_XP'; xp: number };
 
 function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   const unlocked: { achievementId: string; tier: string; xp: number; name: string; icon: string; description: string }[] = [];
@@ -111,6 +112,15 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
     return max;
   };
 
+  const checkGenre = (genres: string[] | undefined, words: string[]) => {
+    if (!genres) return false;
+    return genres.some(g => {
+      const trLower = g.toLocaleLowerCase('tr-TR');
+      const enLower = g.toLowerCase();
+      return words.some(w => trLower.includes(w) || enLower.includes(w));
+    });
+  };
+
   const newAchievements = state.achievements.map(a => ({ ...a, unlockedTiers: [...(a.unlockedTiers || [])], tierDates: { ...(a.tierDates || {}) } }));
   const progressMap = new Map(newAchievements.map(a => [a.achievementId, a]));
 
@@ -121,18 +131,230 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
     if (!prog) continue;
 
     let currentVal = 0;
+    
     switch (def.id) {
       case 'movie_add': currentVal = state.movies.length; break;
       case 'series_add': currentVal = state.series.length; break;
       case 'daily_movie': currentVal = calcMaxStreak(validHistory, 'movie'); break;
       case 'daily_series': currentVal = calcMaxStreak(validHistory, 'series'); break;
+      
+      case 'movie_genre_action': currentVal = moviesHistory.filter(h => checkGenre(h.genres, ['aksiyon', 'action'])).length; break;
+      case 'series_genre_action': currentVal = new Set(seriesHistory.filter(h => checkGenre(h.genres, ['aksiyon', 'action'])).map(h => h.seriesId)).size; break;
+      case 'movie_genre_comedy': currentVal = moviesHistory.filter(h => checkGenre(h.genres, ['komedi', 'comedy'])).length; break;
+      case 'series_genre_comedy': currentVal = new Set(seriesHistory.filter(h => checkGenre(h.genres, ['komedi', 'comedy'])).map(h => h.seriesId)).size; break;
+      case 'movie_genre_drama': currentVal = moviesHistory.filter(h => checkGenre(h.genres, ['dram', 'drama'])).length; break;
+      case 'series_genre_drama': currentVal = new Set(seriesHistory.filter(h => checkGenre(h.genres, ['dram', 'drama'])).map(h => h.seriesId)).size; break;
+      case 'movie_genre_horror': currentVal = moviesHistory.filter(h => checkGenre(h.genres, ['korku', 'horror'])).length; break;
+      case 'series_genre_horror': currentVal = new Set(seriesHistory.filter(h => checkGenre(h.genres, ['korku', 'horror'])).map(h => h.seriesId)).size; break;
+      case 'movie_genre_scifi': currentVal = moviesHistory.filter(h => checkGenre(h.genres, ['bilim kurgu', 'bilimkurgu', 'sci-fi', 'scifi'])).length; break;
+      case 'series_genre_scifi': currentVal = new Set(seriesHistory.filter(h => checkGenre(h.genres, ['bilim kurgu', 'bilimkurgu', 'sci-fi', 'scifi'])).map(h => h.seriesId)).size; break;
+      
       case 'perfect_rating': case 'secret_perfectionist': currentVal = validHistory.filter(h => h.rating === 10).length; break;
       case 'high_rating': currentVal = validHistory.filter(h => h.rating === 9 || h.rating === 9.5).length; break;
-      case 'low_rating': case 'secret_critic': currentVal = validHistory.filter(h => h.rating != null && h.rating <= 3).length; break;
-      case 'first_rating': currentVal = validHistory.filter(h => h.rating != null).length; break;
+      case 'low_rating': case 'secret_critic': currentVal = validHistory.filter(h => h.rating !== null && h.rating <= 3).length; break;
+      case 'first_rating': currentVal = validHistory.filter(h => h.rating !== null).length; break;
+      case 'strict_critic': currentVal = validHistory.filter(h => h.rating !== null && h.note && h.note.trim().length > 0).length; break;
+      
       case 'total_watch': currentVal = validHistory.length; break;
       case 'genre_explorer': currentVal = new Set(validHistory.flatMap(h => h.genres || [])).size; break;
       case 'note_taker': currentVal = validHistory.filter(h => h.note && h.note.trim().length > 0).length; break;
+      case 'night_owl': currentVal = validHistory.filter(h => { const hr = new Date(h.watchedAt).getHours(); return hr >= 0 && hr < 5; }).length; break;
+      case 'weekend_watcher': currentVal = validHistory.filter(h => { const d = new Date(h.watchedAt).getDay(); return d === 0 || d === 6; }).length; break;
+      
+      case 'marathon': {
+        const days:any = {}; validHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
+        currentVal = Object.values(days).filter((c:any) => c >= 3).length; break;
+      }
+      case 'secret_binge': {
+        const days:any = {}; seriesHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
+        currentVal = Math.max(0, ...Object.values(days as Record<string,number>)); break;
+      }
+      case 'season_complete': {
+        let c = 0;
+        state.series.forEach(s => {
+          const eps = s.episodes || []; const seas = new Set(eps.map(e => e.season));
+          seas.forEach(season => { const sEps = eps.filter(e => e.season === season); if (sEps.length > 0 && sEps.every(e => e.watched)) c++; });
+        });
+        currentVal = c; break;
+      }
+      case 'collection_complete': {
+        let c = 0;
+        (state.collections || []).forEach(col => {
+          const cm = state.movies.filter(m => m.collectionId === col.id);
+          if (cm.length > 0 && cm.every(m => m.watched)) c++;
+        });
+        currentVal = c; break;
+      }
+      
+      case 'sinevia_legend': currentVal = validHistory.length; break;
+      case 'caveman': {
+        const days:any = {}; validHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
+        let streak = 0, maxS = 0; const sortedDays = Object.keys(days).sort();
+        for (let i = 0; i < sortedDays.length; i++) {
+          if (days[sortedDays[i]] >= 5) {
+            if (i > 0) {
+              const diff = Math.round((new Date(sortedDays[i]).getTime() - new Date(sortedDays[i - 1]).getTime()) / 86400000);
+              if (diff === 1) streak++; else streak = 1;
+            } else streak = 1;
+          } else streak = 0;
+          if (streak > maxS) maxS = streak;
+        }
+        currentVal = maxS; break;
+      }
+      case 'hater': currentVal = validHistory.filter(h => h.rating !== null && h.rating <= 2).length; break;
+      
+      // DÜZELTİLDİ: Artık 5000 karakteri geçen notların sayısını tutuyor
+      case 'epic_writer': currentVal = validHistory.filter(h => h.note && h.note.trim().length >= 5000).length; break;
+      
+      // DÜZELTİLDİ: Sadece puanı NULL olan ve notu BOŞ olanları sayar
+      case 'ghost_viewer': currentVal = validHistory.filter(h => h.rating === null && (!h.note || h.note.trim() === '')).length; break;
+      
+      // DÜZELTİLDİ: Kötü filme (3'ün altı) yazılmış uzun yorumları eksiksiz sayar
+      case 'trash_lover': currentVal = validHistory.filter(h => h.rating !== null && h.rating < 3 && h.note && h.note.trim().length >= 500).length; break;
+      
+      case 'polarization': {
+        const tens = validHistory.filter(h => h.rating === 10).length;
+        const lows = validHistory.filter(h => h.rating !== null && h.rating <= 2).length;
+        currentVal = (tens >= 20 && lows >= 20) ? 1 : 0; break;
+      }
+      
+      // DÜZELTİLDİ: 31 Aralık 20:00 ile 1 Ocak 04:00 arasını kapsar
+      case 'new_year_lonely': {
+        currentVal = validHistory.filter(h => { 
+          const d = new Date(h.watchedAt); 
+          const month = d.getMonth();
+          const hr = d.getHours();
+          return (month === 11 && d.getDate() === 31 && hr >= 20) || (month === 0 && d.getDate() === 1 && hr <= 4);
+        }).length;
+        break;
+      }
+      
+      case 'cinephile': currentVal = (seriesHistory.length > 0) ? 0 : moviesHistory.length; break;
+      case 'short_day_profit': {
+        const days:any = {}; moviesHistory.forEach(h => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d]||0)+1; });
+        currentVal = Object.values(days).filter((c:any) => c >= 3).length; break;
+      }
+      
+      // DÜZELTİLDİ: Puan verilen film sayısını gösterir, hiç 10 verilmemişse sayaç artar, 10 verilirse sıfırlanır
+      case 'selective_critic': {
+        const rated = moviesHistory.filter(h => h.rating !== null);
+        currentVal = !rated.some(r => r.rating === 10) ? rated.length : 0; 
+        break;
+      }
+      
+      case 'weekend_cinema': {
+        const wknd: any = {};
+        moviesHistory.forEach(h => {
+          const d = new Date(h.watchedAt);
+          if (d.getDay() === 0 || d.getDay() === 6) {
+            const sat = new Date(d); if (d.getDay() === 0) sat.setDate(sat.getDate() - 1);
+            wknd[sat.toISOString().slice(0, 10)] = (wknd[sat.toISOString().slice(0, 10)] || 0) + 1;
+          }
+        });
+        currentVal = Math.max(0, ...Object.values(wknd as Record<string, number>)); break;
+      }
+      case 'episode_monster': currentVal = seriesHistory.length; break;
+      case 'patience_stone': currentVal = state.series.filter(s => {
+          if (!s.episodes || s.episodes.length === 0) return false;
+          const maxS = Math.max(...s.episodes.map(e => e.season));
+          return maxS >= 8 && s.episodes.every(e => e.watched);
+        }).length; break;
+      case 'loyalty_test': {
+        let maxL = 0; const byS:any = {};
+        seriesHistory.forEach(h => {
+          const sid = h.seriesId || h.itemId || h.id;
+          if (!byS[sid]) byS[sid] = new Set();
+          byS[sid].add(h.watchedAt.slice(0, 10)); 
+        });
+        Object.values(byS).forEach((dSet:any) => {
+          const dates = Array.from(dSet).sort() as string[]; let s = 1;
+          for (let i = 1; i < dates.length; i++) {
+            if (Math.round((new Date(dates[i]).getTime() - new Date(dates[i-1]).getTime()) / 86400000) === 1) s++; else s = 1;
+            if (s > maxL) maxL = s;
+          }
+        });
+        currentVal = maxL; break;
+      }
+      case 'break_taker': case 'lost_colony': {
+        let maxGap = 0; const byS:any = {};
+        seriesHistory.forEach(h => {
+          const sid = h.seriesId || h.itemId || h.id;
+          if (!byS[sid]) byS[sid] = []; 
+          byS[sid].push(new Date(h.watchedAt).getTime()); 
+        });
+        Object.values(byS).forEach((dates:any) => {
+          dates.sort((a:number, b:number) => a - b);
+          for (let i = 1; i < dates.length; i++) {
+            const gap = (dates[i] - dates[i-1]) / 86400000; if (gap > maxGap) maxGap = gap;
+          }
+        });
+        if (def.id === 'break_taker') currentVal = Math.floor(maxGap);
+        if (def.id === 'lost_colony') currentVal = Math.floor(maxGap);
+        break;
+      }
+      case 'morning_sweet': currentVal = moviesHistory.filter(h => { const hr = new Date(h.watchedAt).getHours(); return hr >= 6 && hr < 9; }).length; break;
+      case 'nostalgia_wind': currentVal = moviesHistory.filter(h => h.year && parseInt(h.year) <= 1980).length; break;
+      case 'universe_conqueror': currentVal = (state.collections || []).filter(c => { const cM = state.movies.filter(m => m.collectionId === c.id); return cM.length >= 3 && cM.every(m => m.watched); }).length; break;
+      
+      // DÜZELTİLDİ: Progress bar mantığı için max bekleme gününü kaydeder
+      case 'final_phobia': case 'delayed_goodbye': {
+        let phobiaGap = 0; let delayedCount = 0;
+        state.series.forEach(s => {
+          if (!s.episodes || s.episodes.length < 2) return;
+          const eps = [...s.episodes].sort((a, b) => a.season === b.season ? a.episode - b.episode : a.season - b.season);
+          const finalEp = eps[eps.length - 1]; const penEp = eps[eps.length - 2];
+          if (penEp.watched && penEp.watchedAt) {
+            const penTime = new Date(penEp.watchedAt).getTime();
+            const finalTime = (finalEp.watched && finalEp.watchedAt) ? new Date(finalEp.watchedAt).getTime() : Date.now();
+            const gap = (finalTime - penTime) / 86400000;
+            if (!finalEp.watched) phobiaGap = Math.max(phobiaGap, gap);
+            if (finalEp.watched && gap >= 90) delayedCount++;
+          }
+        });
+        if (def.id === 'final_phobia') currentVal = Math.floor(phobiaGap);
+        if (def.id === 'delayed_goodbye') currentVal = delayedCount;
+        break;
+      }
+      
+      case 'half_century_series': currentVal = state.series.filter(s => s.episodes && s.episodes.length > 100 && s.episodes.every(e => e.watched)).length; break;
+      case 'light_speed': {
+        let lsCount = 0;
+        validHistory.forEach(h => {
+          if (h.rating != null) {
+            const addedAt = h.kind === 'series'
+              ? state.series.find(s => s.id === (h.seriesId || h.itemId || h.id))?.addedAt
+              : state.movies.find(m => m.id === (h.itemId || h.id))?.addedAt;
+            if (addedAt) {
+              if ((new Date(h.watchedAt).getTime() - new Date(addedAt).getTime()) / 3600000 <= 24) lsCount++;
+            }
+          }
+        });
+        currentVal = lsCount; break;
+      }
+      case 'color_palette': currentVal = new Set(validHistory.filter(h => h.rating !== null).map(h => h.rating)).size; break;
+      
+      // DÜZELTİLDİ: Artık Türkçe karakterleri ve sadece büyük harfleri daha doğru yakalar
+      case 'caps_lock': currentVal = validHistory.filter(h => {
+          if (!h.note || h.note.trim().length < 5) return false;
+          const n = h.note.trim(); return /[a-zA-ZğüşöçİĞÜŞÖÇ]/.test(n) && n === n.toLocaleUpperCase('tr-TR');
+        }).length; break;
+        
+      case 'spider_sense': currentVal = state.movies.filter(m => !m.watched && m.year && parseInt(m.year) > new Date().getFullYear()).length; break;
+      case 'time_bender': currentVal = watchedMoviesWithRuntime.reduce((sum, m) => sum + (m.runtime || 0), 0); break;
+      case 'epic_watcher': currentVal = watchedMoviesWithRuntime.filter(m => (m.runtime || 0) >= 180).length; break;
+      case 'short_sweet': currentVal = watchedMoviesWithRuntime.filter(m => (m.runtime || 0) > 0 && (m.runtime || 0) < 90).length; break;
+      case 'couch_potato': {
+        const daysRuntime: Record<string, number> = {};
+        moviesHistory.forEach(h => {
+          const movie = state.movies.find(m => m.id === (h.itemId || h.id));
+          if (movie && movie.runtime) {
+            const d = h.watchedAt.slice(0, 10);
+            daysRuntime[d] = (daysRuntime[d] || 0) + movie.runtime;
+          }
+        });
+        currentVal = Object.values(daysRuntime).filter((minutes: any) => minutes > 300).length;
+        break;
+      }
     }
 
     prog.current = currentVal;
@@ -154,20 +376,10 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   }
 
   if (unlocked.length > 0) {
-    const totalXpGained = unlocked.reduce((s, u) => s + u.xp, 0);
-    const newTotalXp = state.totalXp + totalXpGained;
-    const oldLevel = levelFromXp(state.totalXp).level;
-    const levelData = levelFromXp(newTotalXp);
-
     return {
       ...state,
       achievements: newAchievements,
-      totalXp: newTotalXp,
-      xp: levelData.currentLevelXp,
-      level: levelData.level,
-      pendingToasts: [...(state.pendingToasts || []), ...unlocked],
-      pendingXpGain: { gained: totalXpGained, oldTotal: state.totalXp, newTotal: newTotalXp },
-      pendingLevelUp: levelData.level > oldLevel ? { newLevel: levelData.level } : state.pendingLevelUp
+      pendingToasts: [...(state.pendingToasts || []), ...unlocked]
     };
   }
 
@@ -186,6 +398,20 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   let nextState = { ...state };
 
   switch (action.type) {
+    case 'GRANT_XP': {
+      const newTotalXp = state.totalXp + action.xp;
+      const oldLevel = levelFromXp(state.totalXp).level;
+      const levelData = levelFromXp(newTotalXp);
+
+      return {
+        ...state,
+        totalXp: newTotalXp,
+        xp: levelData.currentLevelXp,
+        level: levelData.level,
+        pendingXpGain: { gained: action.xp, oldTotal: state.totalXp, newTotal: newTotalXp },
+        pendingLevelUp: levelData.level > oldLevel ? { newLevel: levelData.level } : state.pendingLevelUp
+      };
+    }
     case 'ADD_MOVIE': {
       const resolved = resolveTMDBGenres(action.movie.genres, state.genres);
       action.movie.genres = resolved;
@@ -377,6 +603,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toastsRef = useRef<ToastItem[]>([]);
   const achievementToastsRef = useRef<AchievementToastItem[]>([]);
   
+  const [achievementQueue, setAchievementQueue] = useState<any[]>([]);
+  const [isShowingAchievement, setIsShowingAchievement] = useState(false);
+
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => {
       if (a.type === 'add') { toastsRef.current = [...state, a.toast]; return toastsRef.current; }
       toastsRef.current = state.filter((t) => t.id !== a.id); return toastsRef.current;
@@ -420,24 +649,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTimeout(() => setXpGainData(null), 4000);
       dispatch({ type: 'CLEAR_XP_GAIN' });
     }
+    
     if (data.pendingLevelUp) {
       setLevelUpData(data.pendingLevelUp);
       import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound());
       dispatch({ type: 'CLEAR_LEVELUP' });
     }
+    
     if (data.pendingToasts && data.pendingToasts.length > 0) {
-      data.pendingToasts.forEach(toast => {
-         showAchievementToast({
-           achievementName: toast.name,
-           tier: toast.tier,
-           icon: toast.icon,
-           description: toast.description
-         });
-      });
-      import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound());
+      setAchievementQueue(prev => [...prev, ...data.pendingToasts!]);
       dispatch({ type: 'CLEAR_TOASTS' });
     }
-  }, [data.pendingToasts, data.pendingLevelUp, data.pendingXpGain, showAchievementToast]);
+  }, [data.pendingToasts, data.pendingLevelUp, data.pendingXpGain]);
+
+  useEffect(() => {
+    if (levelUpData) return;
+    if (isShowingAchievement) return;
+    if (achievementQueue.length === 0) return;
+
+    const nextAchievement = achievementQueue[0];
+    
+    setAchievementQueue(prev => prev.slice(1));
+    setIsShowingAchievement(true);
+
+    showAchievementToast({
+      achievementName: nextAchievement.name,
+      tier: nextAchievement.tier,
+      icon: nextAchievement.icon,
+      description: nextAchievement.description
+    });
+    import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound());
+
+    dispatch({ type: 'GRANT_XP', xp: nextAchievement.xp });
+
+    setTimeout(() => {
+      setIsShowingAchievement(false);
+    }, 5500);
+
+  }, [achievementQueue, isShowingAchievement, levelUpData, showAchievementToast]);
 
   const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => {
     const id = uid();
