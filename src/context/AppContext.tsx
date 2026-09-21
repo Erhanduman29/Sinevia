@@ -625,14 +625,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     if (needsUpdate) dispatch({ type: 'SET_ACHIEVEMENT_PROGRESS', progress });
     
-    // YENİ: setTimeout kaldırıldı, böylece ilk açılışta gecikme olmadan senkronizasyon tamamlanır.
     dispatch({ type: 'SYNC_ACHIEVEMENTS' });
   }, []);
 
+  // Daha snappier (hızlı) toast süresi
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => {
     const id = uid();
     setAchievementToasts({ type: 'add', toast: { ...item, id } });
-    setTimeout(() => setAchievementToasts({ type: 'remove', id }), 5000);
+    setTimeout(() => setAchievementToasts({ type: 'remove', id }), 3500); 
   }, []);
 
   useEffect(() => {
@@ -654,7 +654,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [data.pendingToasts, data.pendingLevelUp, data.pendingXpGain]);
 
-  // YENİ: Birden fazla başarım kazanıldığında kuyruktaki diğer başarımları da bildirir.
   useEffect(() => {
     if (levelUpData) return;
     if (isShowingAchievement) return;
@@ -662,13 +661,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const nextAchievement = achievementQueue[0];
     const remainingCount = achievementQueue.length - 1;
-    const comboText = remainingCount > 0 ? ` (+${remainingCount} Bekliyor)` : '';
+    
+    // YENİ: Bekleyen başarımı belirgin bir [+X Bekliyor] formatında gösterir
+    const comboText = remainingCount > 0 ? ` [+${remainingCount} Bekliyor]` : '';
     
     setAchievementQueue(prev => prev.slice(1));
     setIsShowingAchievement(true);
 
     showAchievementToast({
-      achievementName: nextAchievement.name + comboText,
+      achievementName: `${nextAchievement.name}${comboText}`,
       tier: nextAchievement.tier,
       icon: nextAchievement.icon,
       description: nextAchievement.description
@@ -677,9 +678,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     dispatch({ type: 'GRANT_XP', xp: nextAchievement.xp });
 
+    // YENİ: Bekleme süresi daha akıcı bir deneyim için kısaltıldı
     setTimeout(() => {
       setIsShowingAchievement(false);
-    }, 5500);
+    }, 3800); 
 
   }, [achievementQueue, isShowingAchievement, levelUpData, showAchievementToast]);
 
