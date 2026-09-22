@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter, ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock, CalendarPlus, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter, ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock, CalendarPlus, Image as ImageIcon, RefreshCw, Dna } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateShort } from '../lib/utils';
 import { searchTMDB } from '../lib/tmdb';
@@ -8,6 +8,7 @@ import RatingModal from '../components/RatingModal';
 import EditMovieModal from '../components/EditMovieModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
+import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import type { Movie } from '../types';
 
 type SortMode = 'az' | 'year' | 'rating' | 'added';
@@ -16,6 +17,7 @@ export default function MoviesPage() {
   const { data, editMovie, deleteMovie, watchMovie, unwatchMovie, showToast } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
+  const [showDna, setShowDna] = useState(false);
   const [pickedMovie, setPickedMovie] = useState<Movie | null>(null);
   const [ratingTarget, setRatingTarget] = useState<Movie | null>(null);
   const [editTarget, setEditTarget] = useState<Movie | null>(null);
@@ -31,7 +33,8 @@ export default function MoviesPage() {
 
   const handleSyncTMDB = async () => {
     setIsSyncing(true);
-    const moviesToSync = data.movies.filter(m => !m.tmdbId || !m.posterUrl);
+    // DÜZELTİLDİ: Sadece afişi eksik olanları değil, DNA'sı (keywords/directors) eksik olanları da bulur
+    const moviesToSync = data.movies.filter(m => !m.tmdbId || !m.posterUrl || !m.keywords || !m.directors);
     let syncedCount = 0;
     
     for (const movie of moviesToSync) {
@@ -62,9 +65,9 @@ export default function MoviesPage() {
     
     setIsSyncing(false);
     if (syncedCount > 0) {
-      showToast(`${syncedCount} film otomatik güncellendi!`, 'success');
+      showToast(`${syncedCount} filme DNA ve eksik veriler eklendi!`, 'success');
     } else {
-      showToast('Güncellenecek eksik film bulunamadı.', 'info');
+      showToast('Kütüphanenin DNA verileri tamamen güncel.', 'info');
     }
   };
 
@@ -115,7 +118,6 @@ export default function MoviesPage() {
     return m.title.toLocaleLowerCase('tr-TR').includes(q);
   };
 
-  // Bu filtre sadece BAĞIMSIZ FİLMLER için kullanılıyor.
   const sortMovies = (movies: Movie[]): Movie[] => {
     let filtered = movies;
 
@@ -173,6 +175,15 @@ export default function MoviesPage() {
           Filmler
         </h1>
         <div className="flex items-center gap-2">
+          {/* DNA Sentez Butonu */}
+          <button
+            onClick={() => setShowDna(true)}
+            className="flex items-center gap-2 bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-400 border border-emerald-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm"
+          >
+            <Dna size={18} />
+            <span className="hidden sm:inline">DNA Sentezle</span>
+          </button>
+
           <button
             onClick={handleSyncTMDB}
             disabled={isSyncing}
@@ -324,14 +335,12 @@ export default function MoviesPage() {
             const coll = data.collections.find((c) => c.id === collId);
             if (!coll) return null;
             
-            // YENİ: Arama filtresi koleksiyonları ekranda göstermek için kullanılır (kolay bulabilmek için)
             const matchesSearch = search.trim() === '' || 
               coll.name.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR')) ||
               movies.some(m => m.title.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR')));
               
             if (!matchesSearch) return null;
 
-            // YENİ: Koleksiyon içindeki filmler tür/izlendi filtresinden muaftır ve her zaman Eskiden-Yeniye dizilir
             const visibleMovies = [...movies].sort((a, b) => {
               const yearA = parseInt(a.year || '9999', 10);
               const yearB = parseInt(b.year || '9999', 10);
@@ -412,6 +421,9 @@ export default function MoviesPage() {
           onClose={() => setShowPick(false)}
         />
       )}
+
+      {/* YENİ EKLENEN DNA SENTEZLEYİCİ */}
+      {showDna && <DnaSynthesizerModal onClose={() => setShowDna(false)} />}
 
       {pickedMovie && (
         <RatingModal

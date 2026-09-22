@@ -18,10 +18,17 @@ export interface Movie {
   tmdbId?: number;
   watched: boolean;
   rating: number | null;
-  detailedRating?: Record<string, number>; // YENİ: Alt kriter puanları
+  detailedRating?: Record<string, number>;
   note: string;
   watchedAt: string | null;
   addedAt: string;
+  
+  // DNA Sentezleyici için Genetik Veriler
+  keywords?: string[];
+  directors?: string[];
+  cast?: string[];
+  studios?: string[];
+  originalLanguage?: string; // YENİ
 }
 
 export interface Episode {
@@ -30,7 +37,7 @@ export interface Episode {
   episode: number;
   watched: boolean;
   rating: number | null;
-  detailedRating?: Record<string, number>; // YENİ
+  detailedRating?: Record<string, number>;
   note: string;
   watchedAt: string | null;
 }
@@ -45,6 +52,13 @@ export interface Series {
   overview?: string;
   tmdbId?: number;
   addedAt: string;
+  
+  // DNA Sentezleyici için Genetik Veriler
+  keywords?: string[];
+  creators?: string[];
+  cast?: string[];
+  studios?: string[];
+  originalLanguage?: string; // YENİ
 }
 
 export interface Collection {
@@ -57,7 +71,7 @@ export type WatchHistoryItem = {
   kind: 'movie' | 'series';
   title: string;
   rating: number | null;
-  detailedRating?: Record<string, number>; // YENİ
+  detailedRating?: Record<string, number>;
   note: string;
   watchedAt: string;
   genres: string[];
@@ -105,7 +119,7 @@ export interface AppData {
   genres: string[];
   history: WatchHistoryItem[];
   achievements: AchievementProgress[];
-  criteria?: RatingCriterion[]; // YENİ: Puanlama Kriterleri
+  criteria?: RatingCriterion[];
   xp: number;
   level: number;
   totalXp: number;

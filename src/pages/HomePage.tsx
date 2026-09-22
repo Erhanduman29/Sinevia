@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Shuffle, Projector, Tv, Sparkles, Trophy, Star, Crown, Search, TrendingUp, Zap, Clock, Bot } from 'lucide-react';
+import { Shuffle, Projector, Tv, Sparkles, Trophy, Star, Crown, Search, TrendingUp, Zap, Clock, Bot, Dna } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { levelFromXp } from '../lib/xp';
 import { getNextUnwatchedEpisode } from '../lib/utils';
 import PickModal from '../components/PickModal';
 import RatingModal from '../components/RatingModal';
 import BulkAddModal from '../components/BulkAddModal';
+import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import type { Movie, Series, Episode } from '../types';
 
 export default function HomePage() {
@@ -13,6 +14,7 @@ export default function HomePage() {
   
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
   const [showPick, setShowPick] = useState(false);
+  const [showDnaModal, setShowDnaModal] = useState(false);
   const [pickedItem, setPickedItem] = useState<
     | { kind: 'movie'; movie: Movie }
     | { kind: 'series'; series: Series; episode: Episode }
@@ -113,6 +115,29 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* KLASİK ACTION CENTER (SEVİYE ÇUBUĞUNUN HEMEN ALTINA TAŞINDI) */}
+      <div className="bg-ink-900/40 backdrop-blur-md border border-ink-700/50 rounded-[2rem] p-6 md:p-8 text-center space-y-6 shadow-xl animate-fade-in-up">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <button
+            onClick={() => setShowPick(true)}
+            className="w-full sm:w-auto flex items-center justify-center gap-3 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-8 py-4 rounded-xl font-bold hover:from-gold-400 hover:to-gold-500 transition-all hover:scale-105 active:scale-95 shadow-xl shadow-gold-500/25 group"
+          >
+            <Shuffle size={24} className="group-hover:rotate-180 transition-transform duration-500" />
+            Rastgele Seçim Yap
+          </button>
+          
+          <div className="flex w-full sm:w-auto gap-4">
+            <button
+              onClick={() => setShowBulkAdd('movie')}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2.5 bg-ink-800/80 text-white px-8 py-4 rounded-xl font-semibold hover:bg-ink-700 transition-all border border-ink-700 hover:border-ink-500 shadow-md"
+            >
+              <Search size={20} className="text-ink-400" />
+              Katalogdan Ekle
+            </button>
+          </div>
+        </div>
+      </div>
+
       {data.dailyStreak > 1 && (
         <div className="bg-gradient-to-r from-orange-900/40 via-ink-900/60 to-ink-900/40 border border-orange-700/30 rounded-2xl p-4 flex items-center gap-4 shadow-lg animate-fade-in-up">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/20 flex-shrink-0">
@@ -125,7 +150,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* YENİ: YENİ NESİL YAPAY ZEKA BANNER'I */}
+      {/* YENİ NESİL YAPAY ZEKA BANNER'I */}
       <div className="bg-gradient-to-r from-azure-900/30 via-indigo-900/30 to-ink-900/40 border border-azure-700/40 rounded-[2rem] p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden animate-fade-in-up">
         <div className="absolute top-0 right-0 w-64 h-64 bg-azure-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         
@@ -154,27 +179,33 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* KLASİK ACTION CENTER */}
-      <div className="bg-ink-900/40 backdrop-blur-md border border-ink-700/50 rounded-[2rem] p-6 md:p-8 text-center space-y-6 shadow-xl">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <button
-            onClick={() => setShowPick(true)}
-            className="w-full sm:w-auto flex items-center justify-center gap-3 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-8 py-4 rounded-xl font-bold hover:from-gold-400 hover:to-gold-500 transition-all hover:scale-105 active:scale-95 shadow-xl shadow-gold-500/25 group"
-          >
-            <Shuffle size={24} className="group-hover:rotate-180 transition-transform duration-500" />
-            Rastgele Seçim Yap
-          </button>
-          
-          <div className="flex w-full sm:w-auto gap-4">
-            <button
-              onClick={() => setShowBulkAdd('movie')}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2.5 bg-ink-800/80 text-white px-8 py-4 rounded-xl font-semibold hover:bg-ink-700 transition-all border border-ink-700 hover:border-ink-500 shadow-md"
-            >
-              <Search size={20} className="text-ink-400" />
-              Katalogdan Ekle
-            </button>
+      {/* DNA SENTEZLEYİCİ LABORATUVAR BANNER'I */}
+      <div className="bg-gradient-to-r from-emerald-900/30 via-teal-900/30 to-ink-900/40 border border-emerald-700/40 rounded-[2rem] p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden animate-fade-in-up delay-75">
+        <div className="absolute top-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none" />
+        
+        <div className="flex items-center gap-5 relative z-10 w-full md:w-auto">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-0.5 shadow-lg shadow-emerald-500/30 shrink-0">
+            <div className="w-full h-full bg-ink-950 rounded-[14px] flex items-center justify-center">
+              <Dna className="text-emerald-400" size={32} />
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1 flex items-center gap-1.5">
+              <Sparkles size={12} /> Çapraz Tavsiye Motoru
+            </div>
+            <h3 className="text-xl md:text-2xl font-black text-white mb-1 tracking-tight">Film Laboratuvarı</h3>
+            <p className="text-sm text-ink-300 max-w-md leading-relaxed">
+              İki favori filmini seç, DNA'larını çaprazla ve genetik olarak sana en uygun yapımı kütüphanenden sentezle.
+            </p>
           </div>
         </div>
+        
+        <button 
+          onClick={() => setShowDnaModal(true)} 
+          className="w-full md:w-auto shrink-0 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black px-8 py-4 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2.5 relative z-10"
+        >
+          <Dna size={20} /> DNA Sentezle
+        </button>
       </div>
 
       {/* İSTATİSTİK KARTLARI */}
@@ -281,6 +312,8 @@ export default function HomePage() {
           onClose={() => setShowPick(false)}
         />
       )}
+      
+      {showDnaModal && <DnaSynthesizerModal onClose={() => setShowDnaModal(false)} />}
       
       {pickedItem && (
         <RatingModal
