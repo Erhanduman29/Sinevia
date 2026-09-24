@@ -32,7 +32,7 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null,
     dailyStreak: 0, dailyStreakDate: null, showLockedNames: false,
     aiChatHistory: [],
-    altWatchTemplate: 'https://ornek-site.com/embed/{imdb}' // Varsayılan alternatif şablon
+    altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle'
   };
 }
 
@@ -97,7 +97,14 @@ type Action =
 
 function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   const unlocked: { achievementId: string; tier: string; xp: number; name: string; icon: string; description: string }[] = [];
-  const validHistory = [...(state.history || [])].filter((h) => h.watchedAt).sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
+  
+  // GÜVENLİK FİLTRESİ: 1970 (Sıfırıncı ms) tarihlerinin sistemi bozmasını engelliyoruz.
+  const validHistory = [...(state.history || [])].filter((h) => {
+    if (!h.watchedAt) return false;
+    const t = new Date(h.watchedAt).getTime();
+    return !isNaN(t) && t > 1262304000000; // 2010 yılından daha eski tarihleri engelle
+  }).sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
+
   const moviesHistory = validHistory.filter(h => h.type === 'movie' || h.kind === 'movie');
   const seriesHistory = validHistory.filter(h => h.type === 'series' || h.kind === 'series');
 
@@ -269,7 +276,9 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         Object.values(byS).forEach((dates:any) => {
           dates.sort((a:number, b:number) => a - b);
           for (let i = 1; i < dates.length; i++) {
-            const gap = (dates[i] - dates[i-1]) / 86400000; if (gap > maxGap) maxGap = gap;
+            // ZAMAN HESAPLAMASI KUSURSUZLAŞTIRILDI (Hatalı/Negatif Verileri Engeller)
+            const gap = Math.max(0, (dates[i] - dates[i-1]) / 86400000); 
+            if (gap > maxGap) maxGap = gap;
           }
         });
         if (def.id === 'break_taker') currentVal = Math.floor(maxGap);
@@ -285,10 +294,17 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
           if (!s.episodes || s.episodes.length < 2) return;
           const eps = [...s.episodes].sort((a, b) => a.season === b.season ? a.episode - b.episode : a.season - b.season);
           const finalEp = eps[eps.length - 1]; const penEp = eps[eps.length - 2];
+          
           if (penEp.watched && penEp.watchedAt) {
             const penTime = new Date(penEp.watchedAt).getTime();
+            // GÜVENLİK FİLTRESİ
+            if (isNaN(penTime) || penTime < 1262304000000) return; 
+
             const finalTime = (finalEp.watched && finalEp.watchedAt) ? new Date(finalEp.watchedAt).getTime() : Date.now();
-            const gap = (finalTime - penTime) / 86400000;
+            if (isNaN(finalTime) || finalTime < 1262304000000) return;
+
+            const gap = Math.max(0, (finalTime - penTime) / 86400000);
+            
             if (!finalEp.watched) phobiaGap = Math.max(phobiaGap, gap);
             if (finalEp.watched && gap >= 90) delayedCount++;
           }
@@ -306,7 +322,10 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
               ? state.series.find(s => s.id === (h.seriesId || h.itemId || h.id))?.addedAt
               : state.movies.find(m => m.id === (h.itemId || h.id))?.addedAt;
             if (addedAt) {
-              if ((new Date(h.watchedAt).getTime() - new Date(addedAt).getTime()) / 3600000 <= 24) lsCount++;
+              const addTime = new Date(addedAt).getTime();
+              const watchTime = new Date(h.watchedAt).getTime();
+              // Negatif (Geçmişe dönük) veya geçersiz saatleri engeller
+              if (!isNaN(addTime) && addTime > 1262304000000 && (watchTime - addTime) / 3600000 <= 24 && (watchTime - addTime) >= 0) lsCount++;
             }
           }
         });
