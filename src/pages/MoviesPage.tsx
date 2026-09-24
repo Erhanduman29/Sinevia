@@ -610,7 +610,7 @@ function MovieRow({
             <button onClick={() => onUnwatch(movie.id)} className="flex-1 sm:flex-none text-xs text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 rounded-lg transition-colors border border-ink-700/50">Geri Al</button>
           ) : (
             <button onClick={() => onRate(movie)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-4 py-1.5 rounded-lg transition-all shadow-md shadow-gold-500/10 font-bold">
-              <Star size={14} /> İzle
+              <Star size={14} /> Puanla
             </button>
           )}
           <div className="flex items-center gap-1 ml-auto sm:ml-0">
