@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter, ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, Image as ImageIcon, RefreshCw, PlayCircle, ExternalLink } from 'lucide-react';
+import { Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter, ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, RefreshCw, PlayCircle, ExternalLink, Eye } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, getNextUnwatchedEpisode } from '../lib/utils';
 import { searchTMDBSeries } from '../lib/tmdb';
@@ -8,6 +8,7 @@ import RatingModal from '../components/RatingModal';
 import EditSeriesModal from '../components/EditSeriesModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
+import MediaDetailModal from '../components/MediaDetailModal';
 import type { Series, Episode } from '../types';
 
 type SortMode = 'az' | 'recent' | 'rating';
@@ -20,6 +21,7 @@ export default function SeriesPage() {
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [ratingTarget, setRatingTarget] = useState<{ series: Series; episode: Episode } | null>(null);
   const [editTarget, setEditTarget] = useState<Series | null>(null);
+  const [detailSeries, setDetailSeries] = useState<Series | null>(null);
   
   const [deleteTarget, setDeleteTarget] = useState<Series | null>(null);
   const [deleteEpisodeTarget, setDeleteEpisodeTarget] = useState<{ series: Series; episode: Episode } | null>(null);
@@ -33,7 +35,9 @@ export default function SeriesPage() {
 
   const handleSyncTMDBSeries = async () => {
     setIsSyncing(true);
-    const seriesToSync = data.series.filter(s => !s.tmdbId || !s.posterUrl || !s.imdbId || !s.watchProviders);
+    const seriesToSync = data.series.filter(
+      s => !s.tmdbId || !s.posterUrl || !s.imdbId || !s.watchProviders || !s.creators || s.creators.length === 0 || !s.cast || s.cast.length === 0
+    );
     let syncedCount = 0;
     
     for (const s of seriesToSync) {
@@ -47,14 +51,21 @@ export default function SeriesPage() {
             s.id, 
             s.title, 
             newGenres, 
-            match.posterUrl, 
-            match.overview, 
+            match.posterUrl || s.posterUrl, 
+            match.overview || s.overview, 
             match.id, 
             match.year || s.year, 
             true,
             s.customUrl,
-            match.imdbId,
-            match.watchProviders
+            match.imdbId || s.imdbId,
+            match.watchProviders && match.watchProviders.length > 0 ? match.watchProviders : s.watchProviders,
+            {
+              creators: match.creators && match.creators.length > 0 ? match.creators : s.creators,
+              cast: match.cast && match.cast.length > 0 ? match.cast : s.cast,
+              studios: match.studios && match.studios.length > 0 ? match.studios : s.studios,
+              keywords: match.keywords && match.keywords.length > 0 ? match.keywords : s.keywords,
+              originalLanguage: match.originalLanguage || s.originalLanguage
+            }
           );
           syncedCount++;
         }
@@ -66,9 +77,9 @@ export default function SeriesPage() {
     
     setIsSyncing(false);
     if (syncedCount > 0) {
-      showToast(`${syncedCount} diziye İzleme Linkleri ve güncel veriler eklendi!`, 'success');
+      showToast(`${syncedCount} diziye Sinema Kartı künyesi ve izleme linkleri eklendi!`, 'success');
     } else {
-      showToast('Kütüphanenin tüm dizi linkleri güncel.', 'info');
+      showToast('Kütüphanenin tüm dizi künyeleri güncel.', 'info');
     }
   };
 
@@ -339,23 +350,37 @@ export default function SeriesPage() {
             }
 
             return (
-              <div key={s.id} className="flex flex-col sm:flex-row bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50">
+              <div key={s.id} className="flex flex-col sm:flex-row bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50 flex-wrap">
                 
-                {/* SOL: Başlık ve İçerik (Buton özelliği flex-1 olarak ayrıldı) */}
-                <button
+                {/* SOL: Başlık ve İçerik */}
+                <div
                   onClick={() => toggleSeries(s.id)}
-                  className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 hover:bg-ink-800/40 transition-colors w-full"
+                  className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 hover:bg-ink-800/40 transition-colors w-full cursor-pointer"
                 >
                   <div className="flex items-center gap-3 w-full min-w-0 pr-0">
                     {isExpanded ? <ChevronDown size={18} className="text-ink-500 flex-shrink-0" /> : <ChevronRight size={18} className="text-ink-500 flex-shrink-0" />}
                     
-                    <div className="w-16 sm:w-16 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailSeries(s);
+                      }}
+                      title="Dizi Sinema Kartını Gör"
+                      className="w-16 sm:w-16 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-azure-500"
+                    >
                       {s.posterUrl ? (
-                        <img src={s.posterUrl} alt={s.title} className="w-full h-full object-cover" />
+                        <img src={s.posterUrl} alt={s.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
                       ) : (
                         <Tv size={16} className="text-ink-600" />
                       )}
-                    </div>
+                      <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 p-1">
+                        <div className="w-6 h-6 rounded-full bg-azure-500 text-white flex items-center justify-center shadow-md">
+                          <Eye size={13} />
+                        </div>
+                        <span className="text-[8px] font-black text-white uppercase tracking-wider">İncele</span>
+                      </div>
+                    </button>
                     
                     <div className="text-left min-w-0 flex flex-col justify-center h-full">
                       <div className={`font-bold text-sm sm:text-base truncate mb-1 ${allWatched ? 'text-ink-500' : 'text-ink-100'}`}>
@@ -366,7 +391,6 @@ export default function SeriesPage() {
                         {s.genres.join(' · ') || 'Tür yok'} {s.year && ` · Çıkış: ${s.year}`}
                       </div>
                       
-                      {/* İzleme Butonları */}
                       <div className="flex gap-2 flex-wrap">
                         {watchLinks.map((link, idx) => {
                           const Icon = link.icon;
@@ -387,7 +411,7 @@ export default function SeriesPage() {
                       </div>
                     </div>
                   </div>
-                </button>
+                </div>
 
                 {/* SAĞ (Mobilde Alt): Aksiyon Butonları */}
                 <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 p-3 sm:p-4 border-t border-ink-800/50 sm:border-t-0 sm:border-l shrink-0">
@@ -411,7 +435,7 @@ export default function SeriesPage() {
                 </div>
 
                 {isExpanded && (
-                  <div className="w-full border-t border-ink-700/40 bg-ink-950/20 sm:col-span-2">
+                  <div className="w-full basis-full border-t border-ink-700/40 bg-ink-950/20">
                     {seasons.length === 0 ? (
                       <div className="p-4 text-sm text-ink-500 text-center">Henüz bölüm eklenmedi.</div>
                     ) : (
@@ -513,6 +537,13 @@ export default function SeriesPage() {
             setDeleteEpisodeTarget(null);
           }}
           onCancel={() => setDeleteEpisodeTarget(null)}
+        />
+      )}
+
+      {detailSeries && (
+        <MediaDetailModal
+          target={{ type: 'series', data: detailSeries }}
+          onClose={() => setDetailSeries(null)}
         />
       )}
     </div>

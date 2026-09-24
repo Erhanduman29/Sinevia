@@ -6,105 +6,257 @@
 
 :root {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  /* 1. KARANLIK (Orijinal Sinema) */
+  --bg-base: #0a0a0e;
+  --bg-surface: rgba(18, 18, 26, 0.75);
+  --bg-card: rgba(28, 28, 38, 0.6);
+  --border-dim: rgba(63, 63, 70, 0.4);
+
+  --color-1: #f59e0b; /* Amber/Gold */
+  --color-2: #0ea5e9; /* Sky/Azure */
+  --color-3: #8b5cf6; /* Violet */
+
+  --blob-1: rgba(245, 158, 11, 0.15);
+  --blob-2: rgba(14, 165, 233, 0.15);
+  --blob-3: rgba(139, 92, 246, 0.15);
+  
+  --text-main: #f8fafc;
+}
+
+/* 2. AYDINLIK (Ferah ve Modern) */
+body[data-theme="light"] {
+  --bg-base: #f1f5f9;
+  --bg-surface: rgba(255, 255, 255, 0.85);
+  --bg-card: rgba(255, 255, 255, 0.6);
+  --border-dim: rgba(203, 213, 225, 0.8);
+
+  --color-1: #f59e0b; 
+  --color-2: #3b82f6; 
+  --color-3: #ec4899; 
+  
+  --blob-1: rgba(245, 158, 11, 0.15);
+  --blob-2: rgba(59, 130, 246, 0.15);
+  --blob-3: rgba(236, 72, 153, 0.15);
+
+  --text-main: #000000;
+}
+
+/* 3. CYBERPUNK (Neon) */
+body[data-theme="cyberpunk"] {
+  --bg-base: #070312;
+  --bg-surface: rgba(16, 8, 34, 0.80);
+  --bg-card: rgba(28, 14, 56, 0.65);
+  --border-dim: rgba(236, 72, 153, 0.3);
+
+  --color-1: #ec4899; 
+  --color-2: #06b6d4; 
+  --color-3: #eab308; 
+
+  --blob-1: rgba(236, 72, 153, 0.25);
+  --blob-2: rgba(6, 182, 212, 0.25);
+  --blob-3: rgba(234, 179, 8, 0.2);
+  
+  --text-main: #fdf2f8;
+}
+
+/* 4. DRACULA (Kan Kırmızı & Gotik) */
+body[data-theme="blood"] {
+  --bg-base: #0a0204;
+  --bg-surface: rgba(24, 6, 10, 0.85);
+  --bg-card: rgba(40, 10, 16, 0.65);
+  --border-dim: rgba(225, 29, 72, 0.3);
+
+  --color-1: #e11d48; 
+  --color-2: #a855f7; 
+  --color-3: #f97316; 
+
+  --blob-1: rgba(225, 29, 72, 0.25);
+  --blob-2: rgba(168, 85, 247, 0.2);
+  --blob-3: rgba(249, 115, 22, 0.2);
+  
+  --text-main: #fff1f2;
+}
+
+/* 5. MATRIX (Terminal Yeşili) */
+body[data-theme="matrix"] {
+  --bg-base: #020804;
+  --bg-surface: rgba(6, 20, 12, 0.85);
+  --bg-card: rgba(10, 34, 20, 0.65);
+  --border-dim: rgba(16, 185, 129, 0.3);
+
+  --color-1: #10b981; 
+  --color-2: #84cc16; 
+  --color-3: #14b8a6; 
+
+  --blob-1: rgba(16, 185, 129, 0.25);
+  --blob-2: rgba(132, 204, 22, 0.2);
+  --blob-3: rgba(20, 184, 166, 0.2);
+  
+  --text-main: #ecfdf5;
+}
+
+/* 6. AURORA (Kuzey Işıkları) */
+body[data-theme="ocean"] {
+  --bg-base: #020617;
+  --bg-surface: rgba(15, 23, 42, 0.80);
+  --bg-card: rgba(30, 41, 59, 0.65);
+  --border-dim: rgba(56, 189, 248, 0.3);
+
+  --color-1: #38bdf8; 
+  --color-2: #6366f1; 
+  --color-3: #2dd4bf; 
+
+  --blob-1: rgba(56, 189, 248, 0.25);
+  --blob-2: rgba(99, 102, 241, 0.25);
+  --blob-3: rgba(45, 212, 191, 0.2);
+  
+  --text-main: #f0f9ff;
 }
 
 body {
-  color: #e4e4e7;
+  background-color: var(--bg-base) !important;
+  color: var(--text-main) !important;
+  transition: background-color 0.5s ease, color 0.3s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #0a0a0e;
 }
 
-/* Cinematic animated gradient background */
-.app-bg {
-  position: relative;
-  min-height: 100vh;
-  background: #0a0a0e;
-  overflow-x: hidden;
+/* =========================================================
+   TAILWIND DÖNÜŞÜM MOTORU (Tema Renklerini Sisteme Enjekte Eder)
+   ========================================================= */
+
+body[data-theme] .bg-ink-950,
+body[data-theme] .bg-ink-900,
+body[data-theme] .bg-ink-800,
+body[data-theme] .bg-ink-700,
+body[data-theme] .bg-ink-900\/60,
+body[data-theme] .bg-ink-900\/80,
+body[data-theme] .bg-ink-800\/40,
+body[data-theme] .bg-ink-800\/50,
+body[data-theme] .bg-ink-800\/60,
+body[data-theme] .bg-ink-800\/80 {
+  background-color: var(--bg-surface) !important;
 }
 
-.app-bg::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 80% 60% at 15% 0%, rgba(245, 158, 11, 0.10), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 85% 10%, rgba(139, 92, 246, 0.10), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 50% 100%, rgba(20, 184, 166, 0.08), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 90% 80%, rgba(244, 63, 94, 0.07), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 10% 70%, rgba(14, 165, 233, 0.06), transparent 60%);
-  animation: bg-shift 20s ease-in-out infinite alternate;
+/* GRADYAN DESTEĞİ (Seviye barındaki görünmezlik buradan çözülür) */
+body[data-theme] .from-ink-950,
+body[data-theme] .from-ink-900,
+body[data-theme] .from-ink-800 {
+  --tw-gradient-from: var(--bg-surface) var(--tw-gradient-from-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+body[data-theme] .to-ink-950,
+body[data-theme] .to-ink-900,
+body[data-theme] .to-ink-800 {
+  --tw-gradient-to: var(--bg-surface) var(--tw-gradient-to-position) !important;
 }
 
-.app-bg::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+/* =========================================================
+   AYDINLIK MOD METİN DÜZENLEMELERİ (DAHA SİYAH, DAHA KESKİN)
+   ========================================================= */
+body[data-theme="light"] .text-ink-50,
+body[data-theme="light"] .text-ink-100,
+body[data-theme="light"] .text-ink-200 { color: #000000 !important; } /* Tam Siyah */
+
+body[data-theme="light"] .text-ink-300,
+body[data-theme="light"] .text-ink-400 { color: #1e293b !important; } /* Koyu Lacivert/Siyah Gri */
+
+body[data-theme="light"] .text-ink-500,
+body[data-theme="light"] .text-ink-600 { color: #334155 !important; } /* Orta-Koyu Gri */
+
+/* Aydınlık modda genel beyaz yazıları koyulaştır, ANCAK RENKLİ BUTONLARI KORU */
+body[data-theme="light"] .text-white { color: #000000 !important; }
+
+body[data-theme="light"] .bg-gold-500 .text-white,
+body[data-theme="light"] .bg-azure-500 .text-white,
+body[data-theme="light"] .bg-emerald-500 .text-white,
+body[data-theme="light"] .bg-red-500 .text-white,
+body[data-theme="light"] .bg-red-600 .text-white,
+body[data-theme="light"] [class*="from-gold-"] .text-white,
+body[data-theme="light"] [class*="from-azure-"] .text-white,
+body[data-theme="light"] [class*="from-emerald-"] .text-white,
+body[data-theme="light"] [class*="from-red-"] .text-white {
+  color: #ffffff !important;
 }
 
-@keyframes bg-shift {
-  0% { transform: scale(1) rotate(0deg); }
-  100% { transform: scale(1.1) rotate(1deg); }
+body[data-theme] .border-ink-800,
+body[data-theme] .border-ink-800\/50,
+body[data-theme] .border-ink-800\/60,
+body[data-theme] .border-ink-700,
+body[data-theme] .border-ink-700\/50 {
+  border-color: var(--border-dim) !important;
 }
 
+/* Color 1 (Gold/Primary) Dönüşümü */
+body[data-theme] .text-gold-300, body[data-theme] .text-gold-400, body[data-theme] .text-gold-500 { color: var(--color-1) !important; }
+body[data-theme] .bg-gold-500 { background-color: var(--color-1) !important; color: #fff !important; }
+body[data-theme] .bg-gold-500\/10, body[data-theme] .bg-gold-500\/20 { background-color: var(--blob-1) !important; }
+body[data-theme] .border-gold-500\/30, body[data-theme] .border-gold-500\/50 { border-color: var(--color-1) !important; }
+
+/* Color 2 (Azure/Secondary) Dönüşümü */
+body[data-theme] .text-azure-300, body[data-theme] .text-azure-400, body[data-theme] .text-azure-500 { color: var(--color-2) !important; }
+body[data-theme] .bg-azure-500 { background-color: var(--color-2) !important; color: #fff !important;}
+body[data-theme] .bg-azure-500\/10, body[data-theme] .bg-azure-500\/20 { background-color: var(--blob-2) !important; }
+body[data-theme] .border-azure-500\/30, body[data-theme] .border-azure-500\/50 { border-color: var(--color-2) !important; }
+
+/* Dinamik Gradyanlar (3 Renk Üzerinden) */
+body[data-theme] .from-gold-500, body[data-theme] .from-gold-600 {
+  --tw-gradient-from: var(--color-1) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: var(--color-2) var(--tw-gradient-to-position) !important;
+  color: #ffffff !important;
+}
+body[data-theme] .to-gold-600, body[data-theme] .to-gold-700, body[data-theme] .to-gold-400 {
+  --tw-gradient-to: var(--color-2) var(--tw-gradient-to-position) !important;
+}
+body[data-theme] .from-azure-500, body[data-theme] .from-azure-600 {
+  --tw-gradient-from: var(--color-2) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: var(--color-3) var(--tw-gradient-to-position) !important;
+  color: #ffffff !important;
+}
+
+/* Hareketli Arka Plan Işıkları (Blobs) */
+.ambient-glow-1 { background: radial-gradient(circle, var(--blob-1) 0%, transparent 70%); }
+.ambient-glow-2 { background: radial-gradient(circle, var(--blob-2) 0%, transparent 70%); }
+.ambient-glow-3 { background: radial-gradient(circle, var(--blob-3) 0%, transparent 70%); }
+
+/* =========================================================
+   YENİ MODERN KAYDIRMA ÇUBUĞU (SCROLLBAR) - TEMAYA UYUMLU
+   ========================================================= */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px; 
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-dim);
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #f59e0b, #8b5cf6);
-  border-radius: 3px;
+  background: linear-gradient(180deg, var(--color-1), var(--color-2));
+  border-radius: 10px;
+  border: 2px solid var(--bg-surface); 
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #fbbf24, #a78bfa);
+  background: linear-gradient(180deg, var(--color-2), var(--color-3));
 }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Animasyonlar */
 @keyframes slide-in-right {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
-.animate-slide-in-right {
-  animation: slide-in-right 0.3s ease-out;
-}
+.animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
 
 @keyframes fade-in-up {
   from { transform: translateY(8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
-.animate-fade-in-up {
-  animation: fade-in-up 0.35s ease-out;
-}
-
-.bg-gradient-radial {
-  background: radial-gradient(circle, var(--tw-gradient-stops));
-}
+.animate-fade-in-up { animation: fade-in-up 0.35s ease-out; }
 
 input[type='number']::-webkit-inner-spin-button,
-input[type='number']::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type='number'] {
-  -moz-appearance: textfield;
-}
-
-* {
-  -webkit-tap-highlight-color: transparent;
-}
+input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type='number'] { -moz-appearance: textfield; }
+* { -webkit-tap-highlight-color: transparent; }

@@ -8,6 +8,10 @@ import { levelFromXp } from '../lib/xp';
 const STORAGE_KEY = 'sinevia-v1';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
 
+// BİLDİRİM VE XP ANİMASYONU ORTAK SÜRESİ (3.5 Saniye Gösterim + 0.3 Saniye Geçiş Boşluğu)
+const DISPLAY_DURATION_MS = 3500;
+const QUEUE_STEP_DURATION_MS = 3800;
+
 export interface AIMessage {
   id: string;
   sender: 'user' | 'ai';
@@ -16,8 +20,25 @@ export interface AIMessage {
   actionItems?: any[]; 
 }
 
+export interface MovieExtraData {
+  keywords?: string[];
+  directors?: string[];
+  cast?: string[];
+  studios?: string[];
+  originalLanguage?: string;
+}
+
+export interface SeriesExtraData {
+  keywords?: string[];
+  creators?: string[];
+  cast?: string[];
+  studios?: string[];
+  originalLanguage?: string;
+}
+
 interface ExtendedAppData extends AppData {
   aiChatHistory?: AIMessage[];
+  theme?: string;
 }
 
 function defaultData(): ExtendedAppData {
@@ -32,6 +53,7 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null,
     dailyStreak: 0, dailyStreakDate: null, showLockedNames: false,
     aiChatHistory: [],
+    theme: 'default',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle'
   };
 }
@@ -75,8 +97,8 @@ type Action =
   | { type: 'ADD_GENRE'; genre: string }
   | { type: 'DELETE_GENRE'; genre: string }
   | { type: 'RENAME_GENRE'; oldName: string; newName: string }
-  | { type: 'EDIT_MOVIE'; id: string; title: string; year: string; genres: string[]; runtime?: number; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[] }
-  | { type: 'EDIT_SERIES'; id: string; title: string; genres: string[]; year?: string; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[] }
+  | { type: 'EDIT_MOVIE'; id: string; title: string; year: string; genres: string[]; runtime?: number; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[]; extra?: MovieExtraData }
+  | { type: 'EDIT_SERIES'; id: string; title: string; genres: string[]; year?: string; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[]; extra?: SeriesExtraData }
   | { type: 'ADD_COLLECTION'; collection: Collection }
   | { type: 'DELETE_COLLECTION'; id: string }
   | { type: 'RENAME_COLLECTION'; id: string; name: string }
@@ -93,16 +115,16 @@ type Action =
   | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion }
   | { type: 'DELETE_CRITERION'; id: string }
   | { type: 'UPDATE_ALT_TEMPLATE'; template: string }
+  | { type: 'SET_THEME'; theme: string }
   | { type: 'GRANT_XP'; xp: number };
 
 function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   const unlocked: { achievementId: string; tier: string; xp: number; name: string; icon: string; description: string }[] = [];
   
-  // GÜVENLİK FİLTRESİ: 1970 (Sıfırıncı ms) tarihlerinin sistemi bozmasını engelliyoruz.
   const validHistory = [...(state.history || [])].filter((h) => {
     if (!h.watchedAt) return false;
     const t = new Date(h.watchedAt).getTime();
-    return !isNaN(t) && t > 1262304000000; // 2010 yılından daha eski tarihleri engelle
+    return !isNaN(t) && t > 1262304000000; 
   }).sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
 
   const moviesHistory = validHistory.filter(h => h.type === 'movie' || h.kind === 'movie');
@@ -276,7 +298,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
         Object.values(byS).forEach((dates:any) => {
           dates.sort((a:number, b:number) => a - b);
           for (let i = 1; i < dates.length; i++) {
-            // ZAMAN HESAPLAMASI KUSURSUZLAŞTIRILDI (Hatalı/Negatif Verileri Engeller)
             const gap = Math.max(0, (dates[i] - dates[i-1]) / 86400000); 
             if (gap > maxGap) maxGap = gap;
           }
@@ -297,7 +318,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
           
           if (penEp.watched && penEp.watchedAt) {
             const penTime = new Date(penEp.watchedAt).getTime();
-            // GÜVENLİK FİLTRESİ
             if (isNaN(penTime) || penTime < 1262304000000) return; 
 
             const finalTime = (finalEp.watched && finalEp.watchedAt) ? new Date(finalEp.watchedAt).getTime() : Date.now();
@@ -324,7 +344,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
             if (addedAt) {
               const addTime = new Date(addedAt).getTime();
               const watchTime = new Date(h.watchedAt).getTime();
-              // Negatif (Geçmişe dönük) veya geçersiz saatleri engeller
               if (!isNaN(addTime) && addTime > 1262304000000 && (watchTime - addTime) / 3600000 <= 24 && (watchTime - addTime) >= 0) lsCount++;
             }
           }
@@ -404,6 +423,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'SET_ACHIEVEMENT_PROGRESS') return { ...state, achievements: action.progress };
   if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages };
   if (action.type === 'UPDATE_ALT_TEMPLATE') return { ...state, altWatchTemplate: action.template };
+  if (action.type === 'SET_THEME') return { ...state, theme: action.theme };
 
   let nextState = { ...state };
 
@@ -509,7 +529,12 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
         ...(action.tmdbId !== undefined && { tmdbId: action.tmdbId }),
         ...(action.customUrl !== undefined && { customUrl: action.customUrl }),
         ...(action.imdbId !== undefined && { imdbId: action.imdbId }),
-        ...(action.watchProviders !== undefined && { watchProviders: action.watchProviders })
+        ...(action.watchProviders !== undefined && { watchProviders: action.watchProviders }),
+        ...(action.extra?.directors !== undefined && { directors: action.extra.directors }),
+        ...(action.extra?.cast !== undefined && { cast: action.extra.cast }),
+        ...(action.extra?.studios !== undefined && { studios: action.extra.studios }),
+        ...(action.extra?.keywords !== undefined && { keywords: action.extra.keywords }),
+        ...(action.extra?.originalLanguage !== undefined && { originalLanguage: action.extra.originalLanguage })
       } : m);
       break;
     }
@@ -524,7 +549,12 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
         ...(action.tmdbId !== undefined && { tmdbId: action.tmdbId }),
         ...(action.customUrl !== undefined && { customUrl: action.customUrl }),
         ...(action.imdbId !== undefined && { imdbId: action.imdbId }),
-        ...(action.watchProviders !== undefined && { watchProviders: action.watchProviders })
+        ...(action.watchProviders !== undefined && { watchProviders: action.watchProviders }),
+        ...(action.extra?.creators !== undefined && { creators: action.extra.creators }),
+        ...(action.extra?.cast !== undefined && { cast: action.extra.cast }),
+        ...(action.extra?.studios !== undefined && { studios: action.extra.studios }),
+        ...(action.extra?.keywords !== undefined && { keywords: action.extra.keywords }),
+        ...(action.extra?.originalLanguage !== undefined && { originalLanguage: action.extra.originalLanguage })
       } : s);
       break;
     }
@@ -562,12 +592,12 @@ interface SeasonCompleteData { seriesTitle: string; season: number; }
 
 interface AppContextValue {
   data: ExtendedAppData;
-  addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[]) => boolean;
+  addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => boolean;
   deleteMovie: (id: string) => void;
   watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>) => void;
   unwatchMovie: (id: string) => void;
   updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>) => void;
-  addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string, imdbId?: string, watchProviders?: WatchProvider[]) => boolean;
+  addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => boolean;
   deleteSeries: (id: string) => void;
   addEpisodes: (sId: string, s: number, ec: number) => void;
   watchEpisode: (sId: string, eId: string, r: number, n: string, dr?: Record<string, number>) => void;
@@ -575,8 +605,8 @@ interface AppContextValue {
   unwatchEpisode: (sId: string, eId: string) => void;
   deleteEpisode: (sId: string, eId: string) => void;
   addGenre: (g: string) => void; deleteGenre: (g: string) => void; renameGenre: (o: string, n: string) => void;
-  editMovie: (i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[]) => void; 
-  editSeries: (i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[]) => void;
+  editMovie: (i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => void; 
+  editSeries: (i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => void;
   addCollection: (n: string) => string; deleteCollection: (i: string) => void; renameCollection: (i: string, n: string) => void; setMovieCollection: (i: string, c: string | null) => void;
   exportData: () => void; importData: (j: string) => boolean; resetData: () => void;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void;
@@ -590,6 +620,7 @@ interface AppContextValue {
   editCriterion: (id: string, criterion: RatingCriterion) => void;
   deleteCriterion: (id: string) => void;
   updateAltWatchTemplate: (template: string) => void;
+  updateTheme: (theme: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -611,6 +642,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= threeDaysAgo);
         }
         if (!parsedData.criteria) parsedData.criteria = defaultData().criteria;
+        if (!parsedData.theme) parsedData.theme = 'default';
         return parsedData;
       }
     } catch {}
@@ -619,6 +651,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toastsRef = useRef<ToastItem[]>([]);
   const achievementToastsRef = useRef<AchievementToastItem[]>([]);
+  const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const [achievementQueue, setAchievementQueue] = useState<any[]>([]);
   const [isShowingAchievement, setIsShowingAchievement] = useState(false);
@@ -638,6 +671,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [xpGainData, setXpGainData] = useState<{ gained: number; oldTotal: number; newTotal: number } | null>(null);
 
   useEffect(() => {
+    document.body.setAttribute('data-theme', data.theme || 'default');
+  }, [data.theme]);
+
+  useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
   }, [data]);
 
@@ -655,16 +692,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SYNC_ACHIEVEMENTS' });
   }, []);
 
+  // Başarım bildirimi de XP penceresiyle birebir aynı süre (3500 ms) ekranda kalır
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => {
     const id = uid();
     setAchievementToasts({ type: 'add', toast: { ...item, id } });
-    setTimeout(() => setAchievementToasts({ type: 'remove', id }), 3500); 
+    setTimeout(() => setAchievementToasts({ type: 'remove', id }), DISPLAY_DURATION_MS); 
   }, []);
 
+  // XP kazanım penceresi de başarım bildirimiyle birebir aynı süre (3500 ms) ekranda kalır ve kapanır
   useEffect(() => {
     if (data.pendingXpGain) {
+      if (xpTimerRef.current) clearTimeout(xpTimerRef.current);
       setXpGainData(data.pendingXpGain);
-      setTimeout(() => setXpGainData(null), 4000);
+      xpTimerRef.current = setTimeout(() => {
+        setXpGainData(null);
+        xpTimerRef.current = null;
+      }, DISPLAY_DURATION_MS);
       dispatch({ type: 'CLEAR_XP_GAIN' });
     }
     
@@ -680,6 +723,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [data.pendingToasts, data.pendingLevelUp, data.pendingXpGain]);
 
+  // Sıradaki başarımı tetikleyen kuyruk yöneticisi
   useEffect(() => {
     if (levelUpData) return;
     if (isShowingAchievement) return;
@@ -692,6 +736,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAchievementQueue(prev => prev.slice(1));
     setIsShowingAchievement(true);
 
+    // 1. Başarım bildirimini başlat (3500 ms)
     showAchievementToast({
       achievementName: `${nextAchievement.name}${comboText}`,
       tier: nextAchievement.tier,
@@ -700,11 +745,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound());
 
+    // 2. XP kazanımını başlat (3500 ms sonunda ikisi birlikte kapanır)
     dispatch({ type: 'GRANT_XP', xp: nextAchievement.xp });
 
+    // 3. İkisi kapandıktan 300 ms sonra (3800. ms'de) sıradaki başarıma geç
     setTimeout(() => {
       setIsShowingAchievement(false);
-    }, 3800); 
+    }, QUEUE_STEP_DURATION_MS); 
 
   }, [achievementQueue, isShowingAchievement, levelUpData, showAchievementToast]);
 
@@ -716,11 +763,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleLockedNames = useCallback(() => { dispatch({ type: 'TOGGLE_LOCKED_NAMES' }); }, []);
 
-  const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[]): boolean => {
+  const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
       if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
       dispatch({ 
         type: 'ADD_MOVIE', 
-        movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders, watched: false, rating: null, note: '', watchedAt: null, addedAt: new Date().toISOString() } 
+        movie: { 
+          id: uid(), 
+          title: title.trim(), 
+          year: year.trim(), 
+          genres, 
+          collectionId, 
+          runtime, 
+          posterUrl: posterUrl || undefined, 
+          overview: overview || undefined, 
+          tmdbId, 
+          imdbId, 
+          watchProviders, 
+          directors: extra?.directors,
+          cast: extra?.cast,
+          studios: extra?.studios,
+          keywords: extra?.keywords,
+          originalLanguage: extra?.originalLanguage,
+          watched: false, 
+          rating: null, 
+          note: '', 
+          watchedAt: null, 
+          addedAt: new Date().toISOString() 
+        } 
       });
       showToast('Film eklendi'); return true;
     }, [data.movies, showToast]
@@ -737,12 +806,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Puan güncellendi');
   }, [showToast]);
 
-  const addSeries = useCallback((title: string, genres: string[], seasons: number[], posterUrl?: string | null, overview?: string, tmdbId?: number, year?: string, imdbId?: string, watchProviders?: WatchProvider[]): boolean => {
+  const addSeries = useCallback((title: string, genres: string[], seasons: number[], posterUrl?: string | null, overview?: string, tmdbId?: number, year?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData): boolean => {
       if (data.removedSeriesTitles.some((t) => normalize(t) === normalize(title))) { showToast('Daha önce tamamlandı!', 'warning'); return false; }
       if (data.series.some((s) => normalize(s.title) === normalize(title))) { showToast('Bu dizi zaten listede var!', 'warning'); return false; }
       const episodes: Episode[] = [];
       seasons.forEach((epCount, s) => { for (let e = 1; e <= epCount; e++) { episodes.push({ id: uid(), season: s + 1, episode: e, watched: false, rating: null, note: '', watchedAt: null }); } });
-      dispatch({ type: 'ADD_SERIES', series: { id: uid(), title: title.trim(), genres, episodes, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, year, imdbId, watchProviders, addedAt: new Date().toISOString() } });
+      dispatch({ 
+        type: 'ADD_SERIES', 
+        series: { 
+          id: uid(), 
+          title: title.trim(), 
+          genres, 
+          episodes, 
+          posterUrl: posterUrl || undefined, 
+          overview: overview || undefined, 
+          tmdbId, 
+          year, 
+          imdbId, 
+          watchProviders, 
+          creators: extra?.creators,
+          cast: extra?.cast,
+          studios: extra?.studios,
+          keywords: extra?.keywords,
+          originalLanguage: extra?.originalLanguage,
+          addedAt: new Date().toISOString() 
+        } 
+      });
       showToast('Dizi eklendi'); return true;
     }, [data.series, data.removedSeriesTitles, showToast]
   );
@@ -785,13 +874,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteGenre = useCallback((g: string) => { dispatch({ type: 'DELETE_GENRE', genre: g }); }, []);
   const renameGenre = useCallback((o: string, n: string) => { if(!n.trim()) return; dispatch({ type: 'RENAME_GENRE', oldName: o, newName: n.trim() }); showToast('Tür güncellendi'); }, [showToast]);
   
-  const editMovie = useCallback((i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[]) => { 
-    dispatch({ type: 'EDIT_MOVIE', id: i, title: t, year: y, genres: g, runtime: r, posterUrl: p || undefined, overview: o || undefined, tmdbId, customUrl, imdbId, watchProviders }); 
+  const editMovie = useCallback((i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => { 
+    dispatch({ type: 'EDIT_MOVIE', id: i, title: t, year: y, genres: g, runtime: r, posterUrl: p || undefined, overview: o || undefined, tmdbId, customUrl, imdbId, watchProviders, extra }); 
     if (!silent) showToast('Film güncellendi'); 
   }, [showToast]);
   
-  const editSeries = useCallback((i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[]) => { 
-    dispatch({ type: 'EDIT_SERIES', id: i, title: t, genres: g, posterUrl: p || undefined, overview: o || undefined, tmdbId, year: y, customUrl, imdbId, watchProviders }); 
+  const editSeries = useCallback((i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => { 
+    dispatch({ type: 'EDIT_SERIES', id: i, title: t, genres: g, posterUrl: p || undefined, overview: o || undefined, tmdbId, year: y, customUrl, imdbId, watchProviders, extra }); 
     if (!silent) showToast('Dizi güncellendi'); 
   }, [showToast]);
 
@@ -824,6 +913,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Alternatif izleme şablonu güncellendi', 'success');
   }, [showToast]);
 
+  const updateTheme = useCallback((theme: string) => {
+    dispatch({ type: 'SET_THEME', theme });
+    showToast('Tema değiştirildi', 'success');
+  }, [showToast]);
+
   const exportData = useCallback(() => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `sinevia-yedek-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('Yedek alındı');
@@ -834,7 +928,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismissLevelUp = useCallback(() => setLevelUpData(null), []);
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
 
-  return <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme }}>{children}</AppContext.Provider>;
 }
 
 function updateStreak(data: ExtendedAppData): number {

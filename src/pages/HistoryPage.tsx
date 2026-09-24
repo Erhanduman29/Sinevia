@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, Film, Tv, StickyNote, Clock, Search, Filter, Star as StarIcon, Edit2, Image as ImageIcon, Calendar } from 'lucide-react';
+import { ChevronRight, Film, Tv, StickyNote, Clock, Search, Star as StarIcon, Edit2, Calendar, Eye } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateTime } from '../lib/utils';
 import RatingModal from '../components/RatingModal';
-import type { WatchHistoryItem, Movie } from '../types';
+import MediaDetailModal from '../components/MediaDetailModal';
+import type { DetailModalTarget } from '../components/MediaDetailModal';
+import type { WatchHistoryItem, Movie, Series } from '../types';
 
 type SortMode = 'newest' | 'oldest' | 'rating';
 type FilterType = 'all' | 'movie' | 'series';
@@ -13,6 +15,7 @@ export default function HistoryPage() {
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [showNotes, setShowNotes] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<WatchHistoryItem | null>(null);
+  const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
   
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('newest');
@@ -107,6 +110,35 @@ export default function HistoryPage() {
     });
   };
 
+  const openMovieDetail = (item: WatchHistoryItem, movieData?: Movie) => {
+    const fallbackMovie: Movie = movieData || {
+      id: item.itemId || item.id,
+      title: item.title,
+      year: item.year || '',
+      genres: item.genres || [],
+      collectionId: null,
+      watched: true,
+      rating: item.rating,
+      detailedRating: item.detailedRating,
+      note: item.note,
+      watchedAt: item.watchedAt,
+      addedAt: item.watchedAt,
+    };
+    setDetailTarget({ type: 'movie', data: fallbackMovie, historyItem: item });
+  };
+
+  const openSeriesDetail = (item: WatchHistoryItem, seriesData?: Series) => {
+    const fallbackSeries: Series = seriesData || {
+      id: item.seriesId || item.itemId || item.id,
+      title: item.title,
+      year: item.year,
+      genres: item.genres || [],
+      episodes: [],
+      addedAt: item.watchedAt,
+    };
+    setDetailTarget({ type: 'series', data: fallbackSeries, historyItem: item });
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-ink-100 flex items-center gap-2.5">
@@ -197,7 +229,6 @@ export default function HistoryPage() {
               <div className="space-y-3">
                 {items.map(({ type, item, seriesId }) => {
                   if (type === 'movie') {
-                    // Ana veritabanından filmin güncel verilerini (afiş, süre vb.) alıyoruz
                     const movieData = data.movies.find(m => m.id === (item.itemId || item.id));
                     return (
                       <MovieHistoryItem
@@ -207,11 +238,12 @@ export default function HistoryPage() {
                         showNote={showNotes.has(item.id)}
                         onToggleNote={() => toggleNote(item.id)}
                         onEdit={() => setEditingItem(item)}
+                        onSelectDetail={() => openMovieDetail(item, movieData)}
                       />
                     );
                   } else {
                     const sid = seriesId!;
-                    const seriesData = data.series.find(s => s.id === sid); // Afiş ve detaylar için
+                    const seriesData = data.series.find(s => s.id === sid);
                     const eps = (seriesGroups.get(sid) || []).sort(
                       (a, b) => {
                          if (sortMode === 'oldest') return new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime();
@@ -226,17 +258,32 @@ export default function HistoryPage() {
                         key={sid}
                         className="bg-gradient-to-br from-ink-900/80 to-ink-900/40 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50"
                       >
-                        <button
+                        <div
                           onClick={() => toggleSeries(sid)}
-                          className="w-full flex items-start gap-4 p-4 hover:bg-ink-800/30 transition-colors"
+                          className="w-full flex items-start gap-4 p-4 hover:bg-ink-800/30 transition-colors cursor-pointer"
                         >
-                          <div className="flex-shrink-0 w-14 sm:w-16 aspect-[2/3] rounded-lg bg-ink-950 border border-ink-700/50 flex items-center justify-center overflow-hidden">
+                          {/* Tıklanabilir Dizi Posteri */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openSeriesDetail(item, seriesData);
+                            }}
+                            title="Sinema Kartını & Detayları Gör"
+                            className="flex-shrink-0 w-14 sm:w-16 aspect-[2/3] rounded-lg bg-ink-950 border border-ink-700/50 flex items-center justify-center overflow-hidden relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-azure-500"
+                          >
                             {seriesData?.posterUrl ? (
-                              <img src={seriesData.posterUrl} alt={item.title} className="w-full h-full object-cover" />
+                              <img src={seriesData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
                             ) : (
                               <Tv size={24} className="text-ink-600" />
                             )}
-                          </div>
+                            <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 p-1">
+                              <div className="w-6 h-6 rounded-full bg-azure-500 text-white flex items-center justify-center shadow-md">
+                                <Eye size={13} />
+                              </div>
+                              <span className="text-[8px] font-black text-white uppercase tracking-wider">İncele</span>
+                            </div>
+                          </button>
                           
                           <div className="flex-1 min-w-0 text-left">
                             <div className="flex items-start justify-between gap-2">
@@ -267,7 +314,7 @@ export default function HistoryPage() {
                               </div>
                             </div>
                           </div>
-                        </button>
+                        </div>
 
                         {isExpanded && (
                           <div className="border-t border-ink-700/40 bg-ink-950/30">
@@ -277,9 +324,14 @@ export default function HistoryPage() {
                                   <div className="flex items-center gap-3 flex-1 min-w-0">
                                     <div className="w-1.5 h-1.5 rounded-full bg-azure-500/50 flex-shrink-0" />
                                     <div>
-                                      <div className="text-sm text-ink-200 font-medium">
+                                      <button
+                                        type="button"
+                                        onClick={() => openSeriesDetail(ep, seriesData)}
+                                        className="text-sm text-ink-200 font-medium hover:text-azure-400 transition-colors text-left"
+                                        title="Bu Bölümün Detay Kartını Gör"
+                                      >
                                         {ep.season}. Sezon {ep.episode}. Bölüm
-                                      </div>
+                                      </button>
                                       <div className="text-xs text-ink-500 mt-0.5 flex items-center gap-1.5">
                                         <Clock size={10} /> {formatDateTime(ep.watchedAt)}
                                       </div>
@@ -347,6 +399,13 @@ export default function HistoryPage() {
           onClose={() => setEditingItem(null)}
         />
       )}
+
+      {detailTarget && (
+        <MediaDetailModal
+          target={detailTarget}
+          onClose={() => setDetailTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -357,29 +416,49 @@ function MovieHistoryItem({
   showNote,
   onToggleNote,
   onEdit,
+  onSelectDetail,
 }: {
   item: WatchHistoryItem;
   movieData?: Movie;
   showNote: boolean;
   onToggleNote: () => void;
   onEdit: () => void;
+  onSelectDetail: () => void;
 }) {
   return (
     <div className="bg-gradient-to-br from-ink-900/80 to-ink-900/40 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50 animate-fade-in-up">
       <div className="flex items-start gap-4">
-        {/* YENİ: Afiş */}
-        <div className="flex-shrink-0 w-14 sm:w-16 aspect-[2/3] rounded-lg bg-ink-950 border border-ink-700/50 flex items-center justify-center overflow-hidden shadow-inner">
+        {/* Tıklanabilir Film Posteri */}
+        <button
+          type="button"
+          onClick={onSelectDetail}
+          title="Sinema Kartını & Detayları Gör"
+          className="flex-shrink-0 w-14 sm:w-16 aspect-[2/3] rounded-lg bg-ink-950 border border-ink-700/50 flex items-center justify-center overflow-hidden shadow-inner relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500"
+        >
           {movieData?.posterUrl ? (
-            <img src={movieData.posterUrl} alt={item.title} className="w-full h-full object-cover" />
+            <img src={movieData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
           ) : (
             <Film size={24} className="text-ink-600" />
           )}
-        </div>
+          <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 p-1">
+            <div className="w-6 h-6 rounded-full bg-gold-500 text-ink-950 flex items-center justify-center shadow-md">
+              <Eye size={13} />
+            </div>
+            <span className="text-[8px] font-black text-white uppercase tracking-wider">İncele</span>
+          </div>
+        </button>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h3 className="font-bold text-ink-100 truncate">{item.title}</h3>
+              <button
+                type="button"
+                onClick={onSelectDetail}
+                className="font-bold text-ink-100 truncate hover:text-gold-400 transition-colors text-left block"
+                title="Sinema Kartını Gör"
+              >
+                {item.title}
+              </button>
               
               <div className="text-xs text-ink-300 mt-1.5 flex items-center gap-1.5 flex-wrap">
                 {movieData?.year && <span>{movieData.year}</span>}
@@ -418,7 +497,6 @@ function MovieHistoryItem({
             </div>
           </div>
 
-          {/* YENİ: Not Alanı Düzenlemesi */}
           {item.note && (
             <div className="mt-3">
               <button

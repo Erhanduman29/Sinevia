@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter, ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock, CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink } from 'lucide-react';
+import { Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter, ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock, CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateShort } from '../lib/utils';
 import { searchTMDB } from '../lib/tmdb';
@@ -9,6 +9,7 @@ import EditMovieModal from '../components/EditMovieModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
 import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
+import MediaDetailModal from '../components/MediaDetailModal';
 import type { Movie } from '../types';
 
 type SortMode = 'az' | 'year' | 'rating' | 'added';
@@ -22,6 +23,7 @@ export default function MoviesPage() {
   const [ratingTarget, setRatingTarget] = useState<Movie | null>(null);
   const [editTarget, setEditTarget] = useState<Movie | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Movie | null>(null);
+  const [detailMovieId, setDetailMovieId] = useState<string | null>(null);
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
   
   const [watchedFilter, setWatchedFilter] = useState<boolean | null>(false);
@@ -31,9 +33,16 @@ export default function MoviesPage() {
   
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const detailMovie = useMemo(
+    () => (detailMovieId ? data.movies.find((m) => m.id === detailMovieId) || null : null),
+    [data.movies, detailMovieId]
+  );
+
   const handleSyncTMDB = async () => {
     setIsSyncing(true);
-    const moviesToSync = data.movies.filter(m => !m.tmdbId || !m.posterUrl || !m.keywords || !m.directors || !m.imdbId);
+    const moviesToSync = data.movies.filter(
+      m => !m.tmdbId || !m.posterUrl || !m.keywords || m.keywords.length === 0 || !m.directors || m.directors.length === 0 || !m.cast || m.cast.length === 0 || !m.imdbId
+    );
     let syncedCount = 0;
     
     for (const movie of moviesToSync) {
@@ -49,13 +58,20 @@ export default function MoviesPage() {
             match.year || movie.year, 
             newGenres, 
             match.runtime || movie.runtime, 
-            match.posterUrl, 
-            match.overview, 
+            match.posterUrl || movie.posterUrl, 
+            match.overview || movie.overview, 
             match.id,
             true,
             movie.customUrl,
-            match.imdbId,
-            match.watchProviders
+            match.imdbId || movie.imdbId,
+            match.watchProviders && match.watchProviders.length > 0 ? match.watchProviders : movie.watchProviders,
+            {
+              directors: match.directors && match.directors.length > 0 ? match.directors : movie.directors,
+              cast: match.cast && match.cast.length > 0 ? match.cast : movie.cast,
+              studios: match.studios && match.studios.length > 0 ? match.studios : movie.studios,
+              keywords: match.keywords && match.keywords.length > 0 ? match.keywords : movie.keywords,
+              originalLanguage: match.originalLanguage || movie.originalLanguage
+            }
           );
           syncedCount++;
         }
@@ -67,9 +83,9 @@ export default function MoviesPage() {
     
     setIsSyncing(false);
     if (syncedCount > 0) {
-      showToast(`${syncedCount} filme DNA ve eksik linkler eklendi!`, 'success');
+      showToast(`${syncedCount} filme Sinema Kartı, DNA ve izleme bilgileri eklendi!`, 'success');
     } else {
-      showToast('Kütüphanenin tüm verileri güncel.', 'info');
+      showToast('Kütüphanenin tüm film künyeleri güncel.', 'info');
     }
   };
 
@@ -374,17 +390,23 @@ export default function MoviesPage() {
                         onRate={(movie) => setRatingTarget(movie)}
                         onUnwatch={unwatchMovie}
                         onEdit={(movie) => setEditTarget(movie)}
+                        onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                         altWatchTemplate={data.altWatchTemplate}
                       />
                     ))}
                   </div>
                 )}
                 
-                {/* YENİ: KOLEKSİYON KAPALIYKEN AFİŞLER GÖZÜKÜR */}
                 {!isExpanded && (
                   <div className="px-4 pb-4 flex items-center gap-2 overflow-x-auto hide-scrollbar pt-1">
                     {visibleMovies.map((m) => (
-                      <div key={m.id} title={m.title} className="w-10 sm:w-12 aspect-[2/3] flex-shrink-0 rounded-md overflow-hidden border border-ink-700/50 shadow-sm relative group cursor-pointer" onClick={() => toggleCollection(collId)}>
+                      <button
+                        key={m.id}
+                        type="button"
+                        title={`${m.title} - Detayları Gör`}
+                        onClick={() => setDetailMovieId(m.id)}
+                        className="w-10 sm:w-12 aspect-[2/3] flex-shrink-0 rounded-md overflow-hidden border border-ink-700/50 shadow-sm relative group cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500"
+                      >
                         {m.posterUrl ? (
                           <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                         ) : (
@@ -393,11 +415,14 @@ export default function MoviesPage() {
                           </div>
                         )}
                         {m.watched && (
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px]">
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px] group-hover:opacity-0 transition-opacity">
                             <Check size={16} className="text-green-400 drop-shadow-md" />
                           </div>
                         )}
-                      </div>
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Eye size={14} className="text-white" />
+                        </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -423,6 +448,7 @@ export default function MoviesPage() {
               onRate={(movie) => setRatingTarget(movie)}
               onUnwatch={unwatchMovie}
               onEdit={(movie) => setEditTarget(movie)}
+              onSelectDetail={(movie) => setDetailMovieId(movie.id)}
               altWatchTemplate={data.altWatchTemplate}
             />
           ))
@@ -448,8 +474,8 @@ export default function MoviesPage() {
         <RatingModal
           title={pickedMovie.title}
           subtitle={pickedMovie.year ? `Çıkış Yılı: ${pickedMovie.year}` : 'Film'}
-          onRate={(rating, note) => {
-            watchMovie(pickedMovie.id, rating, note);
+          onRate={(rating, note, detailedRating) => {
+            watchMovie(pickedMovie.id, rating, note, detailedRating);
             setPickedMovie(null);
           }}
           onClose={() => setPickedMovie(null)}
@@ -461,7 +487,7 @@ export default function MoviesPage() {
         <RatingModal
           title={ratingTarget.title}
           subtitle={ratingTarget.year ? `Çıkış Yılı: ${ratingTarget.year}` : 'Film'}
-          onRate={(rating, note) => watchMovie(ratingTarget.id, rating, note)}
+          onRate={(rating, note, detailedRating) => watchMovie(ratingTarget.id, rating, note, detailedRating)}
           onClose={() => setRatingTarget(null)}
         />
       )}
@@ -477,6 +503,12 @@ export default function MoviesPage() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+      {detailMovie && (
+        <MediaDetailModal
+          target={{ type: 'movie', data: detailMovie }}
+          onClose={() => setDetailMovieId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -488,6 +520,7 @@ function MovieRow({
   onRate,
   onUnwatch,
   onEdit,
+  onSelectDetail,
   altWatchTemplate
 }: {
   movie: Movie;
@@ -496,6 +529,7 @@ function MovieRow({
   onRate: (movie: Movie) => void;
   onUnwatch: (id: string) => void;
   onEdit: (movie: Movie) => void;
+  onSelectDetail: (movie: Movie) => void;
   altWatchTemplate?: string;
 }) {
   
@@ -548,21 +582,37 @@ function MovieRow({
   return (
     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
       
-      {/* SOL: Resim ve Bilgiler Alanı */}
+      {/* SOL: Tıklanabilir Poster ve Bilgiler Alanı */}
       <div className="flex gap-3 sm:gap-4 flex-1 min-w-0">
-        <div className="w-16 sm:w-20 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md">
+        <button
+          type="button"
+          onClick={() => onSelectDetail(movie)}
+          title="Sinema Kartını & Detayları Gör"
+          className="w-16 sm:w-20 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500"
+        >
           {movie.posterUrl ? (
-            <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
+            <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
           ) : (
             <ImageIcon size={20} className="text-ink-600" />
           )}
-        </div>
+          <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
+            <div className="w-7 h-7 rounded-full bg-gold-500/90 text-ink-950 flex items-center justify-center shadow-md transform scale-75 group-hover/poster:scale-100 transition-transform">
+              <Eye size={15} />
+            </div>
+            <span className="text-[9px] font-black text-white uppercase tracking-wider">İncele</span>
+          </div>
+        </button>
 
         <div className="flex-1 min-w-0 flex flex-col justify-center">
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className={`font-bold text-sm sm:text-base truncate ${movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'}`}>
+            <button
+              type="button"
+              onClick={() => onSelectDetail(movie)}
+              className={`font-bold text-sm sm:text-base truncate text-left hover:text-gold-400 transition-colors ${movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'}`}
+              title="Sinema Kartını Gör"
+            >
               {movie.title}
-            </span>
+            </button>
             {collectionName && (
               <span className="text-[10px] text-gold-400/80 bg-gold-500/10 border border-gold-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 whitespace-nowrap">
                 <Boxes size={10} /> {collectionName}
@@ -625,7 +675,7 @@ function MovieRow({
             <button onClick={() => onUnwatch(movie.id)} className="flex-1 sm:flex-none text-xs text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 rounded-lg transition-colors border border-ink-700/50">Geri Al</button>
           ) : (
             <button onClick={() => onRate(movie)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-4 py-1.5 rounded-lg transition-all shadow-md shadow-gold-500/10 font-bold">
-              <Star size={14} /> İzle
+              <Star size={14} /> Puanla
             </button>
           )}
           <div className="flex items-center gap-1 ml-auto sm:ml-0">

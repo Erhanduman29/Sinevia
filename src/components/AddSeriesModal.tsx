@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Plus, Trash2, ChevronUp, ChevronDown, Search, Loader2, Image as ImageIcon } from 'lucide-react';
+import { X, Plus, Trash2, ChevronUp, ChevronDown, Search, Loader2, Image as ImageIcon, Users, User } from 'lucide-react';
 import { useApp, resolveTMDBGenres } from '../context/AppContext';
 import { searchTMDBSeries, type TMDBSeriesResult } from '../lib/tmdb';
 import type { WatchProvider } from '../types';
@@ -22,9 +22,14 @@ export default function AddSeriesModal({ onClose }: Props) {
   const [tmdbId, setTmdbId] = useState<number | undefined>();
   const [year, setYear] = useState('');
   
-  // YENİ: İzleme linki verilerini hafızada tut
+  // İzleme linki ve Sinema Kartı (Künye/DNA) verilerini hafızada tut
   const [imdbId, setImdbId] = useState<string | undefined>();
   const [watchProviders, setWatchProviders] = useState<WatchProvider[]>([]);
+  const [creators, setCreators] = useState<string[]>([]);
+  const [cast, setCast] = useState<string[]>([]);
+  const [studios, setStudios] = useState<string[]>([]);
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [originalLanguage, setOriginalLanguage] = useState<string | undefined>();
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -42,9 +47,14 @@ export default function AddSeriesModal({ onClose }: Props) {
     setTmdbId(series.id);
     setSeasons(series.seasons);
     
-    // İzleme Verilerini çek
+    // İzleme ve Künye Verilerini çek
     setImdbId(series.imdbId);
     setWatchProviders(series.watchProviders || []);
+    setCreators(series.creators || []);
+    setCast(series.cast || []);
+    setStudios(series.studios || []);
+    setKeywords(series.keywords || []);
+    setOriginalLanguage(series.originalLanguage);
     
     const mappedIncoming = resolveTMDBGenres(series.genres, data.genres);
     const newGenres = new Set([...selectedGenres, ...mappedIncoming]);
@@ -87,8 +97,25 @@ export default function AddSeriesModal({ onClose }: Props) {
 
   const handleSubmit = () => {
     if (!title.trim() || seasons.length === 0) return;
-    // YENİ: addSeries'e imdbId ve watchProviders'ı gönderiyoruz
-    const ok = addSeries(title, selectedGenres, seasons, posterUrl, overview, tmdbId, year, imdbId, watchProviders);
+    // YENİ: Tüm künye ve DNA bilgilerini de addSeries fonksiyonuna gönderiyoruz
+    const ok = addSeries(
+      title, 
+      selectedGenres, 
+      seasons, 
+      posterUrl, 
+      overview, 
+      tmdbId, 
+      year, 
+      imdbId, 
+      watchProviders,
+      {
+        creators,
+        cast,
+        studios,
+        keywords,
+        originalLanguage
+      }
+    );
     if (ok) onClose();
   };
 
@@ -176,13 +203,39 @@ export default function AddSeriesModal({ onClose }: Props) {
           </div>
 
           {posterUrl && (
-            <div className="flex items-center gap-3 p-3 bg-ink-800/30 rounded-lg border border-ink-700/50">
-              <img src={posterUrl} alt="Afiş" className="w-10 h-14 rounded object-cover shadow-sm" />
-              <div className="flex-1">
-                <div className="text-xs font-semibold text-azure-400 mb-0.5">Afiş, Özet ve İzleme Linkleri Eklendi</div>
-                <div className="text-[11px] text-ink-400 line-clamp-1">{overview}</div>
+            <div className="flex items-start gap-3 p-3.5 bg-ink-800/40 rounded-xl border border-azure-500/30">
+              <img src={posterUrl} alt="Afiş" className="w-12 h-18 rounded-lg object-cover shadow-md flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="text-xs font-bold text-azure-400">Sinema Kartı Bilgileri Hazır!</div>
+                <div className="text-[11px] text-ink-300 line-clamp-2">{overview}</div>
+                {creators.length > 0 && (
+                  <div className="text-[10px] text-ink-400 flex items-center gap-1 pt-0.5">
+                    <User size={11} className="text-azure-400" /> <span className="font-semibold text-ink-200">Yaratıcı:</span> {creators.slice(0, 2).join(', ')}
+                  </div>
+                )}
+                {cast.length > 0 && (
+                  <div className="text-[10px] text-ink-400 flex items-center gap-1">
+                    <Users size={11} className="text-azure-400" /> <span className="font-semibold text-ink-200">Oyuncular:</span> {cast.slice(0, 3).join(', ')}
+                  </div>
+                )}
               </div>
-              <button onClick={() => { setPosterUrl(null); setOverview(''); setTmdbId(undefined); setImdbId(undefined); setWatchProviders([]); }} className="text-xs text-red-400 hover:underline px-2">Kaldır</button>
+              <button 
+                onClick={() => { 
+                  setPosterUrl(null); 
+                  setOverview(''); 
+                  setTmdbId(undefined); 
+                  setImdbId(undefined); 
+                  setWatchProviders([]);
+                  setCreators([]);
+                  setCast([]);
+                  setStudios([]);
+                  setKeywords([]);
+                  setOriginalLanguage(undefined);
+                }} 
+                className="text-xs text-red-400 hover:underline px-2 flex-shrink-0"
+              >
+                Kaldır
+              </button>
             </div>
           )}
 

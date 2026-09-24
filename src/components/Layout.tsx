@@ -12,7 +12,6 @@ interface LayoutProps {
 export default function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Menü elemanlarına Ana Sayfa eklendi ve ikon LayoutDashboard yapıldı
   const navItems = [
     { id: 'home', icon: LayoutDashboard, label: 'Ana Sayfa' },
     { id: 'movies', icon: Film, label: 'Filmler' },
@@ -29,10 +28,15 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[100dvh] bg-ink-950 font-sans text-ink-50 selection:bg-azure-500/30 selection:text-azure-200 overflow-hidden relative">
+    <div className="flex flex-col md:flex-row h-[100dvh] bg-ink-950 font-sans text-ink-50 selection:bg-azure-500/30 selection:text-azure-200 overflow-hidden relative transition-colors duration-500">
       
-      {/* MOBİL: SABİT ÜST BAR (KALIP) */}
-      <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-ink-950 border-b border-ink-800 z-[60] flex items-center justify-between px-3 shadow-md shrink-0">
+      {/* DİNAMİK TEMA ARKA PLAN IŞIKLARI (Sabit ve Tüm Sayfaya Yayılır) */}
+      <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full blur-[130px] pointer-events-none ambient-glow-1 z-0 transition-all duration-700" />
+      <div className="fixed bottom-[-10%] left-[-5%] w-[600px] h-[600px] rounded-full blur-[130px] pointer-events-none ambient-glow-2 z-0 transition-all duration-700" />
+      <div className="fixed top-[40%] left-[30%] w-[500px] h-[500px] rounded-full blur-[140px] pointer-events-none ambient-glow-3 z-0 transition-all duration-700" />
+
+      {/* MOBİL: SABİT ÜST BAR */}
+      <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-ink-950/90 backdrop-blur-xl border-b border-ink-800 z-[60] flex items-center justify-between px-3 shadow-md shrink-0">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
@@ -42,7 +46,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           </button>
           
           <button onClick={() => handleMobileMenuClick('home')} className="flex items-center gap-2 transition-transform active:scale-95">
-            <div className="w-8 h-8 bg-gradient-to-br from-azure-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+            <div className="w-8 h-8 bg-gradient-to-br from-gold-500 to-gold-600 rounded-lg flex items-center justify-center shadow-md">
               <Film size={16} className="text-white" />
             </div>
             <span className="text-base font-black text-white tracking-widest uppercase">SINEVIA</span>
@@ -52,7 +56,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         <button
           onClick={() => handleMobileMenuClick('settings')}
           className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
-            activeTab === 'settings' ? 'bg-ink-800 text-white border border-ink-700' : 'text-ink-400 hover:bg-ink-900 hover:text-white'
+            activeTab === 'settings' ? 'bg-ink-800 text-gold-400 border border-gold-500/30' : 'text-ink-400 hover:bg-ink-900 hover:text-white'
           }`}
         >
           <Settings size={20} />
@@ -75,7 +79,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                     isActive 
                       ? isAI
                           ? 'text-azure-300 bg-azure-500/20 border border-azure-500/30 shadow-sm'
-                          : 'text-white bg-ink-800 border border-ink-700 shadow-sm'
+                          : 'text-gold-400 bg-ink-800 border border-gold-500/30 shadow-sm'
                       : isAI
                           ? 'text-azure-400 bg-azure-500/5 hover:bg-azure-500/10'
                           : 'text-ink-400 bg-ink-900/50 hover:bg-ink-800/50 hover:text-ink-200'
@@ -91,10 +95,10 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       )}
 
       {/* MASAÜSTÜ SOL SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-56 bg-ink-950/80 backdrop-blur-2xl border-r border-ink-800/60 shrink-0 shadow-2xl z-20">
-        <button onClick={() => onTabChange('home')} className="p-5 border-b border-ink-800/50 bg-ink-900/30 hover:bg-ink-900/50 transition-colors text-left cursor-pointer">
+      <aside className="hidden md:flex flex-col w-56 bg-ink-900/80 backdrop-blur-2xl border-r border-ink-800/60 shrink-0 shadow-2xl z-20 transition-colors duration-500">
+        <button onClick={() => onTabChange('home')} className="p-5 border-b border-ink-800/50 hover:bg-ink-800/40 transition-colors text-left cursor-pointer">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-azure-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-azure-500/20">
+            <div className="w-9 h-9 bg-gradient-to-br from-gold-500 to-gold-600 rounded-xl flex items-center justify-center shadow-lg">
               <Film size={18} className="text-white" />
             </div>
             <h1 className="text-xl font-black text-white tracking-widest uppercase">
@@ -115,11 +119,11 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 font-bold text-sm group ${
                   isActive
                     ? isAI 
-                        ? 'bg-gradient-to-r from-azure-600 to-indigo-600 text-white shadow-md shadow-azure-500/20 border border-azure-500/30'
-                        : 'bg-ink-800/80 text-white shadow-sm border border-ink-700/80'
+                        ? 'bg-gradient-to-r from-azure-500 to-indigo-600 text-white shadow-md border border-azure-500/30'
+                        : 'bg-gold-500/20 text-gold-400 shadow-sm border border-gold-500/30'
                     : isAI
-                        ? 'text-azure-400 hover:bg-ink-800/50 hover:text-azure-300 border border-transparent hover:border-azure-900/50'
-                        : 'text-ink-400 hover:bg-ink-800/50 hover:text-white'
+                        ? 'text-azure-400 hover:bg-ink-800/50 hover:text-azure-300 border border-transparent'
+                        : 'text-ink-400 hover:bg-ink-800/50 hover:text-white border border-transparent'
                 }`}
               >
                 <item.icon size={18} className={`transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
@@ -129,13 +133,13 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           })}
         </nav>
         
-        <div className="p-3 border-t border-ink-800/60 bg-ink-900/20">
+        <div className="p-3 border-t border-ink-800/60">
           <button
             onClick={() => onTabChange('settings')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 font-bold text-sm group ${
               activeTab === 'settings'
-                ? 'bg-ink-800/80 text-white shadow-sm border border-ink-700/80'
-                : 'text-ink-500 hover:bg-ink-800/50 hover:text-white'
+                ? 'bg-gold-500/20 text-gold-400 shadow-sm border border-gold-500/30'
+                : 'text-ink-400 hover:bg-ink-800/50 hover:text-white border border-transparent'
             }`}
           >
             <Settings size={18} className={`transition-transform duration-300 ${activeTab === 'settings' ? 'rotate-90' : 'group-hover:rotate-90'}`} />
@@ -144,12 +148,9 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         </div>
       </aside>
 
-      {/* ANA İÇERİK ALANI */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-ink-950 relative pt-14 md:pt-0">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gold-500/5 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-azure-500/5 rounded-full blur-[120px] pointer-events-none" />
-        
-        <div id="main-scroll" className="flex-1 overflow-y-auto p-4 md:p-8 hide-scrollbar relative z-10">
+      {/* ANA İÇERİK ALANI (hide-scrollbar kaldırıldı, SCROLLBAR ARTIK GÖRÜNÜR) */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent relative pt-14 md:pt-0 z-10">
+        <div id="main-scroll" className="flex-1 overflow-y-auto p-4 md:p-8 relative z-10 custom-scrollbar">
           <div className="max-w-7xl mx-auto pb-6 md:pb-0">
             {children}
           </div>
