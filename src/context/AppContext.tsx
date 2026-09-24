@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion } from '../types';
+import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion, WatchProvider } from '../types';
 import { normalize, uid, todayStr, daysBetween } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
@@ -31,7 +31,8 @@ function defaultData(): ExtendedAppData {
     ],
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null,
     dailyStreak: 0, dailyStreakDate: null, showLockedNames: false,
-    aiChatHistory: [] 
+    aiChatHistory: [],
+    altWatchTemplate: 'https://ornek-site.com/embed/{imdb}' // Varsayılan alternatif şablon
   };
 }
 
@@ -74,8 +75,8 @@ type Action =
   | { type: 'ADD_GENRE'; genre: string }
   | { type: 'DELETE_GENRE'; genre: string }
   | { type: 'RENAME_GENRE'; oldName: string; newName: string }
-  | { type: 'EDIT_MOVIE'; id: string; title: string; year: string; genres: string[]; runtime?: number; posterUrl?: string; overview?: string; tmdbId?: number }
-  | { type: 'EDIT_SERIES'; id: string; title: string; genres: string[]; year?: string; posterUrl?: string; overview?: string; tmdbId?: number }
+  | { type: 'EDIT_MOVIE'; id: string; title: string; year: string; genres: string[]; runtime?: number; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[] }
+  | { type: 'EDIT_SERIES'; id: string; title: string; genres: string[]; year?: string; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[] }
   | { type: 'ADD_COLLECTION'; collection: Collection }
   | { type: 'DELETE_COLLECTION'; id: string }
   | { type: 'RENAME_COLLECTION'; id: string; name: string }
@@ -91,6 +92,7 @@ type Action =
   | { type: 'ADD_CRITERION'; criterion: RatingCriterion }
   | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion }
   | { type: 'DELETE_CRITERION'; id: string }
+  | { type: 'UPDATE_ALT_TEMPLATE'; template: string }
   | { type: 'GRANT_XP'; xp: number };
 
 function applyAchievements(state: ExtendedAppData): ExtendedAppData {
@@ -349,7 +351,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
             description: def.description.replace('{threshold}', String(tier.threshold)) 
           });
         } else {
-          // OTO-ONARIM: Eski yedeklerde tarihi eksik veya '2000-01-01' olan başarımları onar
           if (!prog.tierDates) prog.tierDates = {};
           const d = prog.tierDates[tier.tier];
           if (!d || d.startsWith('2000-') || d.startsWith('1970-')) {
@@ -383,6 +384,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'TOGGLE_LOCKED_NAMES') return { ...state, showLockedNames: !state.showLockedNames };
   if (action.type === 'SET_ACHIEVEMENT_PROGRESS') return { ...state, achievements: action.progress };
   if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages };
+  if (action.type === 'UPDATE_ALT_TEMPLATE') return { ...state, altWatchTemplate: action.template };
 
   let nextState = { ...state };
 
@@ -485,7 +487,10 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
         ...m, title: action.title, year: action.year, genres: resolved, runtime: action.runtime,
         ...(action.posterUrl !== undefined && { posterUrl: action.posterUrl }),
         ...(action.overview !== undefined && { overview: action.overview }),
-        ...(action.tmdbId !== undefined && { tmdbId: action.tmdbId })
+        ...(action.tmdbId !== undefined && { tmdbId: action.tmdbId }),
+        ...(action.customUrl !== undefined && { customUrl: action.customUrl }),
+        ...(action.imdbId !== undefined && { imdbId: action.imdbId }),
+        ...(action.watchProviders !== undefined && { watchProviders: action.watchProviders })
       } : m);
       break;
     }
@@ -497,7 +502,10 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
         ...(action.year !== undefined && { year: action.year }),
         ...(action.posterUrl !== undefined && { posterUrl: action.posterUrl }),
         ...(action.overview !== undefined && { overview: action.overview }),
-        ...(action.tmdbId !== undefined && { tmdbId: action.tmdbId })
+        ...(action.tmdbId !== undefined && { tmdbId: action.tmdbId }),
+        ...(action.customUrl !== undefined && { customUrl: action.customUrl }),
+        ...(action.imdbId !== undefined && { imdbId: action.imdbId }),
+        ...(action.watchProviders !== undefined && { watchProviders: action.watchProviders })
       } : s);
       break;
     }
@@ -535,12 +543,12 @@ interface SeasonCompleteData { seriesTitle: string; season: number; }
 
 interface AppContextValue {
   data: ExtendedAppData;
-  addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number) => boolean;
+  addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[]) => boolean;
   deleteMovie: (id: string) => void;
   watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>) => void;
   unwatchMovie: (id: string) => void;
   updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>) => void;
-  addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string) => boolean;
+  addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string, imdbId?: string, watchProviders?: WatchProvider[]) => boolean;
   deleteSeries: (id: string) => void;
   addEpisodes: (sId: string, s: number, ec: number) => void;
   watchEpisode: (sId: string, eId: string, r: number, n: string, dr?: Record<string, number>) => void;
@@ -548,8 +556,8 @@ interface AppContextValue {
   unwatchEpisode: (sId: string, eId: string) => void;
   deleteEpisode: (sId: string, eId: string) => void;
   addGenre: (g: string) => void; deleteGenre: (g: string) => void; renameGenre: (o: string, n: string) => void;
-  editMovie: (i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent?: boolean) => void; 
-  editSeries: (i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent?: boolean) => void;
+  editMovie: (i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[]) => void; 
+  editSeries: (i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[]) => void;
   addCollection: (n: string) => string; deleteCollection: (i: string) => void; renameCollection: (i: string, n: string) => void; setMovieCollection: (i: string, c: string | null) => void;
   exportData: () => void; importData: (j: string) => boolean; resetData: () => void;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void;
@@ -562,6 +570,7 @@ interface AppContextValue {
   addCriterion: (criterion: RatingCriterion) => void;
   editCriterion: (id: string, criterion: RatingCriterion) => void;
   deleteCriterion: (id: string) => void;
+  updateAltWatchTemplate: (template: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -688,11 +697,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleLockedNames = useCallback(() => { dispatch({ type: 'TOGGLE_LOCKED_NAMES' }); }, []);
 
-  const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number): boolean => {
+  const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[]): boolean => {
       if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
       dispatch({ 
         type: 'ADD_MOVIE', 
-        movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, watched: false, rating: null, note: '', watchedAt: null, addedAt: new Date().toISOString() } 
+        movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders, watched: false, rating: null, note: '', watchedAt: null, addedAt: new Date().toISOString() } 
       });
       showToast('Film eklendi'); return true;
     }, [data.movies, showToast]
@@ -709,12 +718,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Puan güncellendi');
   }, [showToast]);
 
-  const addSeries = useCallback((title: string, genres: string[], seasons: number[], posterUrl?: string | null, overview?: string, tmdbId?: number, year?: string): boolean => {
+  const addSeries = useCallback((title: string, genres: string[], seasons: number[], posterUrl?: string | null, overview?: string, tmdbId?: number, year?: string, imdbId?: string, watchProviders?: WatchProvider[]): boolean => {
       if (data.removedSeriesTitles.some((t) => normalize(t) === normalize(title))) { showToast('Daha önce tamamlandı!', 'warning'); return false; }
       if (data.series.some((s) => normalize(s.title) === normalize(title))) { showToast('Bu dizi zaten listede var!', 'warning'); return false; }
       const episodes: Episode[] = [];
       seasons.forEach((epCount, s) => { for (let e = 1; e <= epCount; e++) { episodes.push({ id: uid(), season: s + 1, episode: e, watched: false, rating: null, note: '', watchedAt: null }); } });
-      dispatch({ type: 'ADD_SERIES', series: { id: uid(), title: title.trim(), genres, episodes, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, year, addedAt: new Date().toISOString() } });
+      dispatch({ type: 'ADD_SERIES', series: { id: uid(), title: title.trim(), genres, episodes, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, year, imdbId, watchProviders, addedAt: new Date().toISOString() } });
       showToast('Dizi eklendi'); return true;
     }, [data.series, data.removedSeriesTitles, showToast]
   );
@@ -757,13 +766,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteGenre = useCallback((g: string) => { dispatch({ type: 'DELETE_GENRE', genre: g }); }, []);
   const renameGenre = useCallback((o: string, n: string) => { if(!n.trim()) return; dispatch({ type: 'RENAME_GENRE', oldName: o, newName: n.trim() }); showToast('Tür güncellendi'); }, [showToast]);
   
-  const editMovie = useCallback((i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent = false) => { 
-    dispatch({ type: 'EDIT_MOVIE', id: i, title: t, year: y, genres: g, runtime: r, posterUrl: p || undefined, overview: o || undefined, tmdbId }); 
+  const editMovie = useCallback((i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[]) => { 
+    dispatch({ type: 'EDIT_MOVIE', id: i, title: t, year: y, genres: g, runtime: r, posterUrl: p || undefined, overview: o || undefined, tmdbId, customUrl, imdbId, watchProviders }); 
     if (!silent) showToast('Film güncellendi'); 
   }, [showToast]);
   
-  const editSeries = useCallback((i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent = false) => { 
-    dispatch({ type: 'EDIT_SERIES', id: i, title: t, genres: g, posterUrl: p || undefined, overview: o || undefined, tmdbId, year: y }); 
+  const editSeries = useCallback((i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[]) => { 
+    dispatch({ type: 'EDIT_SERIES', id: i, title: t, genres: g, posterUrl: p || undefined, overview: o || undefined, tmdbId, year: y, customUrl, imdbId, watchProviders }); 
     if (!silent) showToast('Dizi güncellendi'); 
   }, [showToast]);
 
@@ -791,6 +800,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Kriter Silindi');
   }, [showToast]);
 
+  const updateAltWatchTemplate = useCallback((template: string) => {
+    dispatch({ type: 'UPDATE_ALT_TEMPLATE', template });
+    showToast('Alternatif izleme şablonu güncellendi', 'success');
+  }, [showToast]);
+
   const exportData = useCallback(() => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `sinevia-yedek-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('Yedek alındı');
@@ -801,7 +815,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismissLevelUp = useCallback(() => setLevelUpData(null), []);
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
 
-  return <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate }}>{children}</AppContext.Provider>;
 }
 
 function updateStreak(data: ExtendedAppData): number {

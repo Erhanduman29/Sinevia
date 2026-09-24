@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Check } from 'lucide-react';
+import { X, Check, Link as LinkIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Series } from '../types';
 
@@ -12,6 +12,7 @@ export default function EditSeriesModal({ series, onClose }: Props) {
   const { data, editSeries } = useApp();
   const [title, setTitle] = useState(series.title);
   const [selectedGenres, setSelectedGenres] = useState<string[]>(series.genres);
+  const [customUrl, setCustomUrl] = useState<string>(series.customUrl || '');
 
   const toggleGenre = (g: string) => {
     setSelectedGenres((prev) =>
@@ -21,7 +22,23 @@ export default function EditSeriesModal({ series, onClose }: Props) {
 
   const handleSubmit = () => {
     if (!title.trim()) return;
-    editSeries(series.id, title.trim(), selectedGenres);
+    
+    // editSeries fonksiyonuna parametreleri eksiksiz geçiyoruz ki diğer veriler silinmesin
+    // (i, t, g, p, o, tmdbId, y, silent, customUrl, imdbId, watchProviders)
+    editSeries(
+      series.id, 
+      title.trim(), 
+      selectedGenres, 
+      series.posterUrl, 
+      series.overview, 
+      series.tmdbId, 
+      series.year, 
+      false, 
+      customUrl.trim() !== '' ? customUrl.trim() : undefined,
+      series.imdbId,
+      series.watchProviders
+    );
+    
     onClose();
   };
 
@@ -48,6 +65,24 @@ export default function EditSeriesModal({ series, onClose }: Props) {
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             />
           </div>
+
+          {/* YENİ: ÖZEL İZLEME LİNKİ (CUSTOM URL) */}
+          <div>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-ink-300 mb-1.5">
+              <LinkIcon size={16} className="text-azure-400" />
+              Özel İzleme Linki (İsteğe Bağlı)
+            </label>
+            <input
+              type="text"
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              placeholder="https://... (Kişisel arşiv linki)"
+              className="w-full bg-ink-800 border border-ink-700 rounded-lg px-4 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500 transition-colors"
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            />
+            <p className="text-[10px] text-ink-500 mt-1">Bu linki girerseniz, dizi kartındaki "Hemen İzle" butonu otomatik olarak buraya yönlenir.</p>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-ink-300 mb-2">Türler</label>
             <div className="flex flex-wrap gap-2">

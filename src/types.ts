@@ -6,6 +6,12 @@ export interface RatingCriterion {
   genres: string[]; // Boş ise tüm türlerde geçerli
 }
 
+export interface WatchProvider {
+  logoUrl: string;
+  providerName: string;
+  link?: string;
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -28,7 +34,12 @@ export interface Movie {
   directors?: string[];
   cast?: string[];
   studios?: string[];
-  originalLanguage?: string; // YENİ
+  originalLanguage?: string;
+  
+  // İzleme Merkezi (YENİ)
+  imdbId?: string;
+  watchProviders?: WatchProvider[];
+  customUrl?: string;
 }
 
 export interface Episode {
@@ -58,7 +69,12 @@ export interface Series {
   creators?: string[];
   cast?: string[];
   studios?: string[];
-  originalLanguage?: string; // YENİ
+  originalLanguage?: string;
+  
+  // İzleme Merkezi (YENİ)
+  imdbId?: string;
+  watchProviders?: WatchProvider[];
+  customUrl?: string;
 }
 
 export interface Collection {
@@ -130,4 +146,7 @@ export interface AppData {
   pendingToasts?: any[];
   pendingLevelUp?: any;
   pendingXpGain?: any;
+  
+  // İzleme Merkezi (YENİ)
+  altWatchTemplate?: string; // Alternatif izleme sitesinin URL şablonu (Örn: https://site.com/embed/{imdb})
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter, ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock, CalendarPlus, Image as ImageIcon, RefreshCw, Dna } from 'lucide-react';
+import { Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter, ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock, CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateShort } from '../lib/utils';
 import { searchTMDB } from '../lib/tmdb';
@@ -33,8 +33,7 @@ export default function MoviesPage() {
 
   const handleSyncTMDB = async () => {
     setIsSyncing(true);
-    // DÜZELTİLDİ: Sadece afişi eksik olanları değil, DNA'sı (keywords/directors) eksik olanları da bulur
-    const moviesToSync = data.movies.filter(m => !m.tmdbId || !m.posterUrl || !m.keywords || !m.directors);
+    const moviesToSync = data.movies.filter(m => !m.tmdbId || !m.posterUrl || !m.keywords || !m.directors || !m.imdbId);
     let syncedCount = 0;
     
     for (const movie of moviesToSync) {
@@ -53,7 +52,10 @@ export default function MoviesPage() {
             match.posterUrl, 
             match.overview, 
             match.id,
-            true 
+            true,
+            movie.customUrl,
+            match.imdbId,
+            match.watchProviders
           );
           syncedCount++;
         }
@@ -65,9 +67,9 @@ export default function MoviesPage() {
     
     setIsSyncing(false);
     if (syncedCount > 0) {
-      showToast(`${syncedCount} filme DNA ve eksik veriler eklendi!`, 'success');
+      showToast(`${syncedCount} filme DNA ve eksik linkler eklendi!`, 'success');
     } else {
-      showToast('Kütüphanenin DNA verileri tamamen güncel.', 'info');
+      showToast('Kütüphanenin tüm verileri güncel.', 'info');
     }
   };
 
@@ -161,7 +163,6 @@ export default function MoviesPage() {
   };
 
   const sortedStandalone = sortMovies(standaloneMovies);
-  
   const totalUnwatched = data.movies.filter((m) => !m.watched).length;
   const totalWatched = data.movies.filter((m) => m.watched).length;
 
@@ -175,7 +176,6 @@ export default function MoviesPage() {
           Filmler
         </h1>
         <div className="flex items-center gap-2">
-          {/* DNA Sentez Butonu */}
           <button
             onClick={() => setShowDna(true)}
             className="flex items-center gap-2 bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-400 border border-emerald-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm"
@@ -373,6 +373,7 @@ export default function MoviesPage() {
                         onRate={(movie) => setRatingTarget(movie)}
                         onUnwatch={unwatchMovie}
                         onEdit={(movie) => setEditTarget(movie)}
+                        altWatchTemplate={data.altWatchTemplate}
                       />
                     ))}
                   </div>
@@ -404,6 +405,7 @@ export default function MoviesPage() {
               onRate={(movie) => setRatingTarget(movie)}
               onUnwatch={unwatchMovie}
               onEdit={(movie) => setEditTarget(movie)}
+              altWatchTemplate={data.altWatchTemplate}
             />
           ))
         )}
@@ -422,7 +424,6 @@ export default function MoviesPage() {
         />
       )}
 
-      {/* YENİ EKLENEN DNA SENTEZLEYİCİ */}
       {showDna && <DnaSynthesizerModal onClose={() => setShowDna(false)} />}
 
       {pickedMovie && (
@@ -469,6 +470,7 @@ function MovieRow({
   onRate,
   onUnwatch,
   onEdit,
+  altWatchTemplate
 }: {
   movie: Movie;
   collectionName?: string;
@@ -476,9 +478,59 @@ function MovieRow({
   onRate: (movie: Movie) => void;
   onUnwatch: (id: string) => void;
   onEdit: (movie: Movie) => void;
+  altWatchTemplate?: string;
 }) {
+  
+  let watchLinks: {href: string; text: string; logo: string | null; icon: any}[] = [];
+
+  if (movie.customUrl) {
+    watchLinks.push({ href: movie.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
+  }
+
+  if (movie.watchProviders && movie.watchProviders.length > 0) {
+    movie.watchProviders.slice(0, 2).forEach(provider => {
+      let finalHref = provider.link || '';
+      const pName = provider.providerName.toLowerCase();
+      
+      if (pName.includes('netflix')) finalHref = `https://www.netflix.com/search?q=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('amazon') || pName.includes('prime')) finalHref = `https://www.primevideo.com/search/ref=atv_sr_sug_1?phrase=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('disney')) finalHref = `https://www.disneyplus.com/search?q=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('blutv')) finalHref = `https://www.blutv.com/arama?q=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('mubi')) finalHref = `https://mubi.com/tr/search?query=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('apple')) finalHref = `https://tv.apple.com/tr/search?q=${encodeURIComponent(movie.title)}`;
+
+      watchLinks.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle });
+    });
+  }
+
+  // Google'da Ara Butonu
+  const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} izle`);
+  watchLinks.push({ 
+    href: `https://www.google.com/search?q=${searchQuery}`, 
+    text: "Google'da Bul", 
+    logo: null, 
+    icon: Search 
+  });
+
+  // Alternatif Şablon Eklemesi (Sihirli DuckDuckGo uyumlu)
+  if (altWatchTemplate && (movie.imdbId || altWatchTemplate.includes('{slug}') || altWatchTemplate.includes('{title}'))) {
+    const charMap: Record<string, string> = { 'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u' };
+    const slug = movie.title.toLocaleLowerCase('tr-TR')
+      .replace(/[çğıöşü]/g, match => charMap[match])
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+      
+    let finalAltHref = altWatchTemplate
+      .replace('{imdb}', movie.imdbId || '')
+      .replace('{slug}', slug)
+      .replace('{title}', encodeURIComponent(movie.title))
+      .replace('{year}', movie.year || '');
+      
+    watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+  }
+
   return (
-    <div className="flex items-center gap-4 p-3 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0">
+    <div className="flex items-center gap-4 p-3 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
       <div className="w-12 sm:w-16 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50">
         {movie.posterUrl ? (
           <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
@@ -487,7 +539,7 @@ function MovieRow({
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 pr-16 md:pr-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`font-medium ${movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'}`}>
             {movie.title}
@@ -511,44 +563,48 @@ function MovieRow({
         {movie.genres.length > 0 && (
           <div className="text-xs text-ink-500 mt-0.5">{movie.genres.join(' · ')}</div>
         )}
-        {movie.watched && movie.rating !== null && (
-          <div className="flex items-center gap-1.5 mt-1">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${ratingBgClass(movie.rating)}`}>
-              {movie.rating}
-            </span>
-            <span className="text-xs text-ink-300">{formatDateShort(movie.watchedAt!)}</span>
+        
+        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+          {movie.watched && movie.rating !== null && (
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold ${ratingBgClass(movie.rating)}`}>
+                {movie.rating}
+              </span>
+              <span className="text-[10px] sm:text-xs text-ink-400">{formatDateShort(movie.watchedAt!)}</span>
+            </div>
+          )}
+          
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {watchLinks.map((link, idx) => {
+              const Icon = link.icon;
+              return (
+                <a 
+                  key={idx}
+                  href={link.href} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1.5 bg-ink-800/80 hover:bg-gold-900/30 text-gold-400 border border-gold-500/30 px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold transition-all hover:scale-105"
+                >
+                  {link.logo ? <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={12} />}
+                  {link.text}
+                </a>
+              )
+            })}
           </div>
-        )}
+        </div>
       </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+
+      <div className="flex items-center gap-1.5 flex-shrink-0 absolute right-3 top-3 md:static">
         {movie.watched ? (
-          <button
-            onClick={() => onUnwatch(movie.id)}
-            className="text-xs text-ink-500 hover:text-ink-300 px-2 py-1 rounded transition-colors"
-          >
-            Geri Al
-          </button>
+          <button onClick={() => onUnwatch(movie.id)} className="text-xs text-ink-500 hover:text-ink-300 px-2 py-1 rounded transition-colors">Geri Al</button>
         ) : (
-          <button
-            onClick={() => onRate(movie)}
-            className="flex items-center gap-1 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-2.5 py-1.5 rounded-lg transition-all shadow-sm"
-          >
-            <Star size={14} />
-            İzle
+          <button onClick={() => onRate(movie)} className="flex items-center gap-1 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-2.5 py-1.5 rounded-lg transition-all shadow-sm">
+            <Star size={14} /> İzle
           </button>
         )}
-        <button
-          onClick={() => onEdit(movie)}
-          className="text-ink-600 hover:text-gold-400 transition-colors p-1"
-        >
-          <Edit2 size={15} />
-        </button>
-        <button
-          onClick={() => onDelete(movie)}
-          className="text-ink-600 hover:text-red-400 transition-colors p-1"
-        >
-          <Trash2 size={16} />
-        </button>
+        <button onClick={() => onEdit(movie)} className="text-ink-600 hover:text-gold-400 transition-colors p-1"><Edit2 size={15} /></button>
+        <button onClick={() => onDelete(movie)} className="text-ink-600 hover:text-red-400 transition-colors p-1"><Trash2 size={16} /></button>
       </div>
     </div>
   );

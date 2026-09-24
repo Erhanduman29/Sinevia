@@ -61,7 +61,6 @@ export default function BulkAddModal({
 
   const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45'; 
 
-  // GERÇEK SCROLL LOCK
   useEffect(() => {
     const scrollEl = document.getElementById('main-scroll');
     if (scrollEl) scrollEl.style.overflow = 'hidden';
@@ -140,6 +139,20 @@ export default function BulkAddModal({
     }
   };
 
+  const processWatchProviders = (detailData: any) => {
+    const trProviders = detailData['watch/providers']?.results?.TR;
+    if (trProviders) {
+      const providersList = [...(trProviders.flatrate || []), ...(trProviders.rent || []), ...(trProviders.buy || [])];
+      const uniqueProviders = Array.from(new Map(providersList.map(p => [p.provider_id, p])).values());
+      return uniqueProviders.slice(0, 3).map((p: any) => ({
+        logoUrl: `https://image.tmdb.org/t/p/w200${p.logo_path}`,
+        providerName: p.provider_name,
+        link: trProviders.link
+      }));
+    }
+    return [];
+  };
+
   const handleImport = async () => {
     setStep('importing');
     let finalColId = selectedCollectionId;
@@ -152,21 +165,29 @@ export default function BulkAddModal({
       const item = cart[i];
       try {
         if (item.media_type === 'movie') {
-          const res = await fetch(`https://api.themoviedb.org/3/movie/${item.id}?api_key=${API_KEY}&language=tr-TR`);
+          const res = await fetch(`https://api.themoviedb.org/3/movie/${item.id}?api_key=${API_KEY}&language=tr-TR&append_to_response=watch/providers,external_ids`);
           const details = await res.json();
           const year = details.release_date ? details.release_date.substring(0, 4) : '';
           const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
           const runtime = details.runtime || 0;
           const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
-          addMovie(details.title || item.title || '', year, genres, finalColId, runtime, posterFullUrl, details.original_title, details.id);
+          
+          const imdbId = details.external_ids?.imdb_id || details.imdb_id;
+          const watchProviders = processWatchProviders(details);
+
+          addMovie(details.title || item.title || '', year, genres, finalColId, runtime, posterFullUrl, details.original_title, details.id, imdbId, watchProviders);
         } else if (item.media_type === 'tv') {
-          const res = await fetch(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${API_KEY}&language=tr-TR`);
+          const res = await fetch(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${API_KEY}&language=tr-TR&append_to_response=watch/providers,external_ids`);
           const details = await res.json();
           const year = details.first_air_date ? details.first_air_date.substring(0, 4) : '';
           const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
           const seasons = (details.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => s.episode_count);
           const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
-          addSeries(details.name || item.name || '', genres, seasons, posterFullUrl, details.original_name, details.id, year);
+          
+          const imdbId = details.external_ids?.imdb_id;
+          const watchProviders = processWatchProviders(details);
+
+          addSeries(details.name || item.name || '', genres, seasons, posterFullUrl, details.original_name, details.id, year, imdbId, watchProviders);
         }
       } catch (error) {
         console.error(`${item.title || item.name} eklenirken hata:`, error);
@@ -204,7 +225,6 @@ export default function BulkAddModal({
 
       <div className="relative z-10 w-full max-w-6xl h-[90svh] md:h-[90vh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
         
-        {/* ANA ÜST BAŞLIK (Sabit kalır) */}
         <div className="flex items-center justify-between p-4 md:p-6 border-b border-ink-800/50 bg-ink-900/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 flex items-center justify-center border border-gold-500/20">
@@ -222,10 +242,7 @@ export default function BulkAddModal({
 
         {step === 'browse' && (
           <>
-            {/* KAYDIRILABİLİR İÇERİK ALANI (Filtreler + Afişler) */}
             <div className="flex-1 overflow-y-auto overscroll-contain hide-scrollbar relative z-0 flex flex-col bg-ink-950/30">
-              
-              {/* YENİ: ARAMA VE FİLTRELER ARTIK İÇERİYLE BİRLİKTE KAYIYOR */}
               <div className="p-4 md:p-6 border-b border-ink-800/50 space-y-4 shrink-0 bg-ink-900/40">
                 <div className="flex flex-col md:flex-row gap-3 md:gap-4">
                   <div className="flex bg-ink-950 rounded-xl p-1.5 border border-ink-800/50 flex-shrink-0">
@@ -295,7 +312,6 @@ export default function BulkAddModal({
                 )}
               </div>
 
-              {/* FİLMLER VE DİZİLER LİSTESİ */}
               <div className="p-3 md:p-6 pb-24 md:pb-6 flex-1">
                 {isLoading && page === 1 ? (
                   <div className="flex flex-col items-center justify-center h-48 md:h-64 text-gold-500">
@@ -362,7 +378,6 @@ export default function BulkAddModal({
               </div>
             </div>
 
-            {/* YENİ: MİNİMİZE EDİLMİŞ ŞIK SEPET BARI */}
             {cart.length > 0 && (
               <div className="bg-ink-900 border-t border-ink-800/80 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] animate-fade-in-up flex flex-col absolute bottom-0 inset-x-0 md:relative z-20">
                 
@@ -393,7 +408,6 @@ export default function BulkAddModal({
                   </div>
                 )}
 
-                {/* YATAY (FLEX-ROW) MİNİMİZE SEPET BAR */}
                 <div className="p-2.5 md:p-4 px-3 md:px-6 flex flex-row items-center justify-between gap-3">
                   <button 
                     onClick={() => setIsCartExpanded(!isCartExpanded)}
@@ -411,7 +425,6 @@ export default function BulkAddModal({
                       <div className="font-bold text-xs md:text-base text-white flex items-center gap-1">
                         Sepet {isCartExpanded ? <ChevronDown size={14} className="text-ink-400"/> : <ChevronUp size={14} className="text-ink-400"/>}
                       </div>
-                      {/* Sadece Tablet ve Masaüstünde detay göster */}
                       <div className="hidden md:block text-[10px] md:text-xs font-medium text-ink-400">
                         {cart.filter(c => c.media_type === 'movie').length} Film, {cart.filter(c => c.media_type === 'tv').length} Dizi
                       </div>

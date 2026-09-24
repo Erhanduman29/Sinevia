@@ -1,5 +1,11 @@
 const TMDB_API_KEY = "a6230f08d495e326b7a89e52dc186a45";
 
+export interface WatchProvider {
+  logoUrl: string;
+  providerName: string;
+  link?: string;
+}
+
 export interface TMDBResult {
   id: number;
   title: string;
@@ -13,6 +19,8 @@ export interface TMDBResult {
   cast?: string[];
   studios?: string[];
   originalLanguage?: string;
+  imdbId?: string; // YENİ
+  watchProviders?: WatchProvider[]; // YENİ
 }
 
 export interface TMDBSeriesResult {
@@ -28,6 +36,8 @@ export interface TMDBSeriesResult {
   cast?: string[];
   studios?: string[];
   originalLanguage?: string;
+  imdbId?: string; // YENİ
+  watchProviders?: WatchProvider[]; // YENİ
 }
 
 const GENRE_MAP: Record<number, string> = {
@@ -50,34 +60,48 @@ export async function searchTMDB(query: string): Promise<TMDBResult[]> {
     
     const results = await Promise.all(data.results.slice(0, 8).map(async (item: any) => {
       let runtime, keywords: string[] = [], directors: string[] = [], cast: string[] = [], studios: string[] = [];
+      let imdbId = undefined;
+      let watchProviders: WatchProvider[] = [];
       
       try {
-        const detailRes = await fetch(`https://api.themoviedb.org/3/movie/${item.id}?api_key=${TMDB_API_KEY}&language=tr-TR&append_to_response=keywords,credits`);
+        // YENİ: watch/providers ve external_ids eklendi
+        const detailRes = await fetch(`https://api.themoviedb.org/3/movie/${item.id}?api_key=${TMDB_API_KEY}&language=tr-TR&append_to_response=keywords,credits,watch/providers,external_ids`);
         const detailData = await detailRes.json();
         
         runtime = detailData.runtime;
+        imdbId = detailData.external_ids?.imdb_id || detailData.imdb_id;
+        
+        // YENİ: Türkiye'deki Yasal Platformları Çek (Netflix, Prime vb.)
+        const trProviders = detailData['watch/providers']?.results?.TR;
+        if (trProviders) {
+          const providersList = [...(trProviders.flatrate || []), ...(trProviders.rent || []), ...(trProviders.buy || [])];
+          // Tekrar eden platformları engelle
+          const uniqueProviders = Array.from(new Map(providersList.map(p => [p.provider_id, p])).values());
+          watchProviders = uniqueProviders.slice(0, 3).map((p: any) => ({
+            logoUrl: `https://image.tmdb.org/t/p/w200${p.logo_path}`,
+            providerName: p.provider_name,
+            link: trProviders.link
+          }));
+        }
         
         if (detailData.production_companies) {
           studios = detailData.production_companies.slice(0, 3).map((c: any) => c.name);
         }
         
-        // Anahtar kelimeler (Hem film keywords objesi hem de dizi results yapısı kontrol edilir)
         const kwList = detailData.keywords?.keywords || detailData.keywords?.results || [];
         keywords = kwList.slice(0, 10).map((k: any) => k.name.toLocaleLowerCase('tr-TR').trim());
         
         if (detailData.credits) {
-          // Yönetmenleri güvenli şekilde topla
           directors = (detailData.credits.crew || [])
             .filter((c: any) => c.job === 'Director' || c.department === 'Directing')
             .map((d: any) => d.name.trim());
             
-          // En iyi 5 oyuncuyu al
           cast = (detailData.credits.cast || [])
             .slice(0, 5)
             .map((a: any) => a.name.trim());
         }
       } catch (e) {
-        console.error("Film DNA'sı çekilemedi:", e);
+        console.error("Film verileri çekilemedi:", e);
       }
 
       return {
@@ -92,7 +116,9 @@ export async function searchTMDB(query: string): Promise<TMDBResult[]> {
         directors: Array.from(new Set(directors)),
         cast: Array.from(new Set(cast)),
         studios: Array.from(new Set(studios)),
-        originalLanguage: item.original_language || ''
+        originalLanguage: item.original_language || '',
+        imdbId,
+        watchProviders
       };
     }));
     
@@ -115,10 +141,27 @@ export async function searchTMDBSeries(query: string): Promise<TMDBSeriesResult[
       let seasonsCount: number[] = [];
       let genres: string[] = [];
       let keywords: string[] = [], creators: string[] = [], cast: string[] = [], studios: string[] = [];
+      let imdbId = undefined;
+      let watchProviders: WatchProvider[] = [];
       
       try {
-        const detailRes = await fetch(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${TMDB_API_KEY}&language=tr-TR&append_to_response=keywords,credits`);
+        // YENİ: watch/providers ve external_ids eklendi
+        const detailRes = await fetch(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${TMDB_API_KEY}&language=tr-TR&append_to_response=keywords,credits,watch/providers,external_ids`);
         const detailData = await detailRes.json();
+        
+        imdbId = detailData.external_ids?.imdb_id;
+
+        // YENİ: Türkiye'deki Yasal Platformları Çek
+        const trProviders = detailData['watch/providers']?.results?.TR;
+        if (trProviders) {
+          const providersList = [...(trProviders.flatrate || []), ...(trProviders.rent || []), ...(trProviders.buy || [])];
+          const uniqueProviders = Array.from(new Map(providersList.map(p => [p.provider_id, p])).values());
+          watchProviders = uniqueProviders.slice(0, 3).map((p: any) => ({
+            logoUrl: `https://image.tmdb.org/t/p/w200${p.logo_path}`,
+            providerName: p.provider_name,
+            link: trProviders.link
+          }));
+        }
         
         seasonsCount = (detailData.seasons || [])
           .filter((s: any) => s.season_number > 0)
@@ -144,7 +187,7 @@ export async function searchTMDBSeries(query: string): Promise<TMDBSeriesResult[
         }
         
       } catch (e) {
-        console.error("Dizi DNA'sı çekilemedi:", e);
+        console.error("Dizi verileri çekilemedi:", e);
       }
 
       return {
@@ -159,7 +202,9 @@ export async function searchTMDBSeries(query: string): Promise<TMDBSeriesResult[
         creators: Array.from(new Set(creators)),
         cast: Array.from(new Set(cast)),
         studios: Array.from(new Set(studios)),
-        originalLanguage: item.original_language || ''
+        originalLanguage: item.original_language || '',
+        imdbId,
+        watchProviders
       };
     }));
     

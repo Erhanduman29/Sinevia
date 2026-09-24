@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X, AlertTriangle, Wrench, SlidersHorizontal, Smartphone } from 'lucide-react';
+import { Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X, AlertTriangle, Wrench, SlidersHorizontal, Smartphone, PlayCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { RatingCriterion } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -7,9 +7,8 @@ import { uid } from '../lib/utils';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 export default function SettingsPage() {
-  const { data, addGenre, deleteGenre, renameGenre, addCollection, deleteCollection, renameCollection, exportData, importData, resetData, toggleLockedNames, addCriterion, editCriterion, deleteCriterion } = useApp();
+  const { data, addGenre, deleteGenre, renameGenre, addCollection, deleteCollection, renameCollection, exportData, importData, resetData, toggleLockedNames, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate } = useApp();
   
-  // PWA Kurulum Hook'u
   const { isInstallable, installPWA } = usePWAInstall();
 
   const [newGenre, setNewGenre] = useState('');
@@ -24,7 +23,6 @@ export default function SettingsPage() {
   const [deleteGenreTarget, setDeleteGenreTarget] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Kriter Ekleme / Düzenleme State'leri
   const [critName, setCritName] = useState('');
   const [critWeight, setCritWeight] = useState(5);
   const [critAppliesTo, setCritAppliesTo] = useState<'movie' | 'series' | 'both'>('both');
@@ -32,6 +30,8 @@ export default function SettingsPage() {
   const [isAddingCrit, setIsAddingCrit] = useState(false);
   const [editingCritId, setEditingCritId] = useState<string | null>(null);
   const [deleteCritTarget, setDeleteCritTarget] = useState<string | null>(null);
+
+  const [altTemplate, setAltTemplate] = useState(data.altWatchTemplate || '');
 
   const handleAddGenre = () => {
     if (!newGenre.trim()) return;
@@ -107,7 +107,51 @@ export default function SettingsPage() {
         Ayarlar
       </h1>
 
-      {/* KRİTER YÖNETİMİ */}
+      {/* İZLEME KAYNAĞI ŞABLONU */}
+      <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl shadow-ink-950/30">
+        <h2 className="text-lg font-semibold text-ink-100 mb-1 flex items-center gap-2">
+          <PlayCircle size={18} className="text-azure-400" />
+          Alternatif İzleme Kaynağı
+        </h2>
+        <div className="text-sm text-ink-500 mb-4 space-y-1.5">
+          <p>Uygulama içinde filmleri yerli/yabancı alternatif sunuculardan izlemek istiyorsan bir şablon belirle.</p>
+          <div className="text-xs p-3 bg-ink-950 rounded-lg border border-ink-800 space-y-2">
+            <div>
+              <span className="font-bold text-ink-300 block mb-1">Parametreler:</span>
+              <span className="text-gold-400 font-mono">{"{imdb}"}</span> : IMDB Kodu (Örn: tt1375666) | 
+              <span className="text-gold-400 font-mono ml-2">{"{title}"}</span> : Film Adı | 
+              <span className="text-gold-400 font-mono ml-2">{"{year}"}</span> : Çıkış Yılı
+            </div>
+            
+            <div className="pt-2 border-t border-ink-800">
+              <span className="text-emerald-400 font-bold block mb-1 flex items-center gap-1.5">
+                🔥 KESİN ÇÖZÜM (Otomatik İlk Sonuca Gitme)
+              </span>
+              <p className="text-ink-400 mb-1">Sitelerin linkleri sürekli değiştiği için doğrudan sitenin içine yönlendirme yapar. (hdfilmcehennemi.nl kısmını istediğin siteyle değiştir)</p>
+              <code className="text-azure-300 bg-azure-900/20 px-2 py-1 rounded block select-all">
+                https://duckduckgo.com/?q=\site:hdfilmcehennemi.nl+{"{title}"}+{"{year}"}
+              </code>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={altTemplate}
+            onChange={(e) => setAltTemplate(e.target.value)}
+            placeholder="Örn: https://duckduckgo.com/?q=\site:hdfilmcehennemi.nl+{title}+{year}"
+            className="flex-1 bg-ink-800/80 border border-ink-700 rounded-lg px-4 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500/50 transition-all text-sm font-mono"
+          />
+          <button
+            onClick={() => updateAltWatchTemplate(altTemplate)}
+            className="flex items-center gap-1.5 bg-ink-700 hover:bg-azure-600 text-white px-4 py-2.5 rounded-lg font-medium transition-all"
+          >
+            <Check size={18} />
+            Kaydet
+          </button>
+        </div>
+      </div>
+
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl shadow-ink-950/30">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -431,7 +475,6 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* PWA (UYGULAMAYI YÜKLE) EKRANI */}
       {isInstallable && (
         <div className="bg-gradient-to-r from-azure-950/40 to-indigo-950/40 border border-azure-500/30 rounded-2xl p-5 shadow-xl shadow-ink-950/30 flex items-center justify-between flex-wrap gap-4">
           <div>
@@ -452,7 +495,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* YEDEKLE / GERİ YÜKLE */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl shadow-ink-950/30">
         <h2 className="text-lg font-semibold text-ink-100 mb-1 flex items-center gap-2">
           <Download size={18} className="text-emerald-400" />
@@ -497,7 +539,6 @@ export default function SettingsPage() {
         />
       )}
 
-      {/* GELİŞTİRİCİ AYARLARI */}
       <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-5 shadow-xl shadow-ink-950/30">
         <h2 className="text-lg font-semibold text-amber-500 mb-1 flex items-center gap-2">
           <Wrench size={18} />
@@ -517,7 +558,6 @@ export default function SettingsPage() {
         </button>
       </div>
 
-      {/* SIFIRLA */}
       <div className="bg-crimson-950/30 border border-crimson-800/40 rounded-2xl p-5 shadow-xl shadow-ink-950/30">
         <h2 className="text-lg font-semibold text-crimson-400 mb-1 flex items-center gap-2">
           <AlertTriangle size={18} className="text-crimson-400" />
@@ -542,6 +582,7 @@ export default function SettingsPage() {
               onClick={() => setConfirmReset(false)}
               className="flex items-center gap-1.5 bg-ink-700 hover:bg-ink-600 text-ink-200 px-4 py-2.5 rounded-lg font-medium transition-all"
             >
+              <X size={18} />
               İptal
             </button>
           </div>

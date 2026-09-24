@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Film, Tv, History, Trophy, Settings, BarChart3, Bot, Menu, X } from 'lucide-react';
+import { Film, Tv, History, Trophy, Settings, BarChart3, Bot, Menu, X, LayoutDashboard } from 'lucide-react';
 
 export type TabId = 'home' | 'movies' | 'series' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
 
@@ -12,8 +12,9 @@ interface LayoutProps {
 export default function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Ana sayfa hariç diğer menü elemanları
+  // Menü elemanlarına Ana Sayfa eklendi ve ikon LayoutDashboard yapıldı
   const navItems = [
+    { id: 'home', icon: LayoutDashboard, label: 'Ana Sayfa' },
     { id: 'movies', icon: Film, label: 'Filmler' },
     { id: 'series', icon: Tv, label: 'Diziler' },
     { id: 'history', icon: History, label: 'Geçmiş' },
@@ -69,7 +70,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
               return (
                 <button
                   key={item.id}
-                  onClick={() => handleMobileMenuClick(item.id)}
+                  onClick={() => handleMobileMenuClick(item.id as TabId)}
                   className={`flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${
                     isActive 
                       ? isAI
@@ -103,17 +104,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         </button>
         
         <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto hide-scrollbar">
-          {/* Masaüstünde "Ana Sayfa" butonunu da manuel ekleyelim (tercihe bağlı, logoya tıklandığı için gizlenebilir, ancak şimdilik logoya bağladık) */}
-          <button
-            onClick={() => onTabChange('home')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 font-bold text-sm group ${
-              activeTab === 'home' ? 'bg-ink-800/80 text-white shadow-sm border border-ink-700/80' : 'text-ink-400 hover:bg-ink-800/50 hover:text-white'
-            }`}
-          >
-            <Film size={18} className={`transition-transform duration-300 ${activeTab === 'home' ? 'scale-110' : 'group-hover:scale-110'}`} />
-            Ana Sayfa
-          </button>
-          
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             const isAI = item.id === 'ai';
@@ -121,7 +111,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             return (
               <button
                 key={item.id}
-                onClick={() => onTabChange(item.id)}
+                onClick={() => onTabChange(item.id as TabId)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 font-bold text-sm group ${
                   isActive
                     ? isAI 
@@ -155,12 +145,10 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       </aside>
 
       {/* ANA İÇERİK ALANI */}
-      {/* pt-14 sınıfı mobilde sabit üst barın altında kalmaması için içeriği aşağı iter */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-ink-950 relative pt-14 md:pt-0">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gold-500/5 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-azure-500/5 rounded-full blur-[120px] pointer-events-none" />
         
-        {/* YENİ: ID="main-scroll" EKLENDİ. Pencereler açılınca bu alan kilitlenecek! */}
         <div id="main-scroll" className="flex-1 overflow-y-auto p-4 md:p-8 hide-scrollbar relative z-10">
           <div className="max-w-7xl mx-auto pb-6 md:pb-0">
             {children}

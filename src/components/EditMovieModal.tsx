@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Check, Clock } from 'lucide-react';
+import { X, Check, Clock, Link as LinkIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Movie } from '../types';
 
@@ -15,6 +15,7 @@ export default function EditMovieModal({ movie, onClose }: Props) {
   // Mevcut bir süre varsa string olarak state'e atıyoruz, yoksa boş kalıyor
   const [runtime, setRuntime] = useState<string>(movie.runtime ? movie.runtime.toString() : '');
   const [selectedGenres, setSelectedGenres] = useState<string[]>(movie.genres);
+  const [customUrl, setCustomUrl] = useState<string>(movie.customUrl || '');
 
   const toggleGenre = (g: string) => {
     setSelectedGenres((prev) =>
@@ -28,8 +29,23 @@ export default function EditMovieModal({ movie, onClose }: Props) {
     // Süre girilmişse sayıya çeviriyoruz
     const runtimeNum = runtime ? parseInt(runtime, 10) : undefined;
     
-    // editMovie fonksiyonuna süreyi de 5. parametre olarak gönderiyoruz
-    editMovie(movie.id, title.trim(), year.trim(), selectedGenres, runtimeNum);
+    // editMovie fonksiyonuna parametreleri eksiksiz geçiyoruz
+    // (i, t, y, g, r, p, o, tmdbId, silent, customUrl, imdbId, watchProviders)
+    editMovie(
+      movie.id, 
+      title.trim(), 
+      year.trim(), 
+      selectedGenres, 
+      runtimeNum, 
+      movie.posterUrl, 
+      movie.overview, 
+      movie.tmdbId, 
+      false, 
+      customUrl.trim() !== '' ? customUrl.trim() : undefined,
+      movie.imdbId,
+      movie.watchProviders
+    );
+    
     onClose();
   };
 
@@ -82,6 +98,23 @@ export default function EditMovieModal({ movie, onClose }: Props) {
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               />
             </div>
+          </div>
+
+          {/* YENİ: ÖZEL İZLEME LİNKİ (CUSTOM URL) */}
+          <div>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-ink-300 mb-1.5">
+              <LinkIcon size={16} className="text-azure-400" />
+              Özel İzleme Linki (İsteğe Bağlı)
+            </label>
+            <input
+              type="text"
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              placeholder="https://... (Kişisel arşiv linki)"
+              className="w-full bg-ink-800 border border-ink-700 rounded-lg px-4 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500 transition-colors"
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            />
+            <p className="text-[10px] text-ink-500 mt-1">Bu linki girerseniz, film kartındaki "Hemen İzle" butonu otomatik olarak buraya yönlenir.</p>
           </div>
 
           <div>

@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import type { AIMessage } from '../context/AppContext';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''; 
-const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY || '';
+const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45';
 
 interface TMDBActionItem {
   tmdbData: any;
@@ -53,7 +53,7 @@ export default function AIPage() {
 
     return `Senin adın "Sinevia AI". Sen bir sinema/dizi uzmanı ve kişisel asistansın.
 Kullanıcının profil bilgileri:
-- Kütüphanesinde ${movieCount} film ve${seriesCount} dizi var.
+- Kütüphanesinde ${movieCount} film ve ${seriesCount} dizi var.
 - Favori filmleri şunlar: ${topMovies.join(', ')}. Bu tarzı sevdiğini unutma.
 
 GÖREVLERİN VE KURALLAR:
@@ -71,6 +71,20 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
   {"title": "Breaking Bad", "type": "tv", "action": "recommend"}
 ]
 \`\`\``;
+  };
+
+  const processWatchProviders = (detailData: any) => {
+    const trProviders = detailData['watch/providers']?.results?.TR;
+    if (trProviders) {
+      const providersList = [...(trProviders.flatrate || []), ...(trProviders.rent || []), ...(trProviders.buy || [])];
+      const uniqueProviders = Array.from(new Map(providersList.map(p => [p.provider_id, p])).values());
+      return uniqueProviders.slice(0, 3).map((p: any) => ({
+        logoUrl: `https://image.tmdb.org/t/p/w200${p.logo_path}`,
+        providerName: p.provider_name,
+        link: trProviders.link
+      }));
+    }
+    return [];
   };
 
   const processAIResponse = async (responseText: string): Promise<{ cleanText: string; actionItems: TMDBActionItem[] }> => {
@@ -94,18 +108,20 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
             const bestMatch = json.results[0]; 
             
             if (cmd.action === 'add') {
-              const fullDetailsRes = await fetch(`https://api.themoviedb.org/3/${type}/${bestMatch.id}?api_key=${TMDB_API_KEY}&language=tr-TR`);
+              const fullDetailsRes = await fetch(`https://api.themoviedb.org/3/${type}/${bestMatch.id}?api_key=${TMDB_API_KEY}&language=tr-TR&append_to_response=watch/providers,external_ids`);
               const details = await fullDetailsRes.json();
               const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
               const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
+              const watchProviders = processWatchProviders(details);
+              const imdbId = details.external_ids?.imdb_id || details.imdb_id;
               
               if (type === 'movie') {
                 const year = details.release_date ? details.release_date.substring(0, 4) : '';
-                addMovie(details.title || bestMatch.title, year, genres, null, details.runtime || 0, posterFullUrl, details.original_title, details.id);
+                addMovie(details.title || bestMatch.title, year, genres, null, details.runtime || 0, posterFullUrl, details.original_title, details.id, imdbId, watchProviders);
               } else {
                 const year = details.first_air_date ? details.first_air_date.substring(0, 4) : '';
                 const seasons = (details.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => s.episode_count);
-                addSeries(details.name || bestMatch.name, genres, seasons, posterFullUrl, details.original_name, details.id, year);
+                addSeries(details.name || bestMatch.name, genres, seasons, posterFullUrl, details.original_name, details.id, year, imdbId, watchProviders);
               }
             }
 
@@ -148,7 +164,6 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
           parts: [{ text: m.text }]
         }));
 
-      // BURASI DÜZELTİLDİ: Model gemini-3.6-flash olarak güncellendi
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -203,18 +218,20 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
   const handleManualAdd = async (item: TMDBActionItem, messageId: string) => {
     try {
         const type = item.type;
-        const fullDetailsRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.tmdbData.id}?api_key=${TMDB_API_KEY}&language=tr-TR`);
+        const fullDetailsRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.tmdbData.id}?api_key=${TMDB_API_KEY}&language=tr-TR&append_to_response=watch/providers,external_ids`);
         const details = await fullDetailsRes.json();
         const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
         const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
+        const watchProviders = processWatchProviders(details);
+        const imdbId = details.external_ids?.imdb_id || details.imdb_id;
         
         if (type === 'movie') {
           const year = details.release_date ? details.release_date.substring(0, 4) : '';
-          addMovie(details.title || item.tmdbData.title, year, genres, null, details.runtime || 0, posterFullUrl, details.original_title, details.id);
+          addMovie(details.title || item.tmdbData.title, year, genres, null, details.runtime || 0, posterFullUrl, details.original_title, details.id, imdbId, watchProviders);
         } else {
           const year = details.first_air_date ? details.first_air_date.substring(0, 4) : '';
           const seasons = (details.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => s.episode_count);
-          addSeries(details.name || item.tmdbData.name, genres, seasons, posterFullUrl, details.original_name, details.id, year);
+          addSeries(details.name || item.tmdbData.name, genres, seasons, posterFullUrl, details.original_name, details.id, year, imdbId, watchProviders);
         }
 
         setMessages(prev => prev.map(m => {

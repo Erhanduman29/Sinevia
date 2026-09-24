@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter, ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter, ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, Image as ImageIcon, RefreshCw, PlayCircle, ExternalLink } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, getNextUnwatchedEpisode } from '../lib/utils';
 import { searchTMDBSeries } from '../lib/tmdb';
@@ -21,7 +21,6 @@ export default function SeriesPage() {
   const [ratingTarget, setRatingTarget] = useState<{ series: Series; episode: Episode } | null>(null);
   const [editTarget, setEditTarget] = useState<Series | null>(null);
   
-  // DİZİ SİLME VE BÖLÜM SİLME STATE'LERİ
   const [deleteTarget, setDeleteTarget] = useState<Series | null>(null);
   const [deleteEpisodeTarget, setDeleteEpisodeTarget] = useState<{ series: Series; episode: Episode } | null>(null);
   
@@ -32,11 +31,9 @@ export default function SeriesPage() {
   
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // YENİ: Dizi Senkronizasyon (Eksikleri Bul) Fonksiyonu
   const handleSyncTMDBSeries = async () => {
     setIsSyncing(true);
-    // Eski/manuel eklenen ve afişi bulunmayan dizileri bul
-    const seriesToSync = data.series.filter(s => !s.tmdbId || !s.posterUrl);
+    const seriesToSync = data.series.filter(s => !s.tmdbId || !s.posterUrl || !s.imdbId || !s.watchProviders);
     let syncedCount = 0;
     
     for (const s of seriesToSync) {
@@ -54,21 +51,24 @@ export default function SeriesPage() {
             match.overview, 
             match.id, 
             match.year || s.year, 
-            true // Sessiz güncelle
+            true,
+            s.customUrl,
+            match.imdbId,
+            match.watchProviders
           );
           syncedCount++;
         }
       } catch (e) {
         console.error(`Senkronizasyon hatası (${s.title}):`, e);
       }
-      await new Promise(resolve => setTimeout(resolve, 250)); // Limit koruması
+      await new Promise(resolve => setTimeout(resolve, 250)); 
     }
     
     setIsSyncing(false);
     if (syncedCount > 0) {
-      showToast(`${syncedCount} dizi otomatik güncellendi!`, 'success');
+      showToast(`${syncedCount} diziye İzleme Linkleri ve güncel veriler eklendi!`, 'success');
     } else {
-      showToast('Güncellenecek eksik dizi bulunamadı.', 'info');
+      showToast('Kütüphanenin tüm dizi linkleri güncel.', 'info');
     }
   };
 
@@ -292,13 +292,61 @@ export default function SeriesPage() {
             const watchedCount = s.episodes.filter((e) => e.watched).length;
             const allWatched = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
 
+            let watchLinks: {href: string; text: string; logo: string | null; icon: any}[] = [];
+
+            if (s.customUrl) {
+              watchLinks.push({ href: s.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
+            }
+
+            if (s.watchProviders && s.watchProviders.length > 0) {
+              s.watchProviders.slice(0, 2).forEach(provider => {
+                let finalHref = provider.link || '';
+                const pName = provider.providerName.toLowerCase();
+                
+                if (pName.includes('netflix')) finalHref = `https://www.netflix.com/search?q=${encodeURIComponent(s.title)}`;
+                else if (pName.includes('amazon') || pName.includes('prime')) finalHref = `https://www.primevideo.com/search/ref=atv_sr_sug_1?phrase=${encodeURIComponent(s.title)}`;
+                else if (pName.includes('disney')) finalHref = `https://www.disneyplus.com/search?q=${encodeURIComponent(s.title)}`;
+                else if (pName.includes('blutv')) finalHref = `https://www.blutv.com/arama?q=${encodeURIComponent(s.title)}`;
+                else if (pName.includes('mubi')) finalHref = `https://mubi.com/tr/search?query=${encodeURIComponent(s.title)}`;
+                else if (pName.includes('apple')) finalHref = `https://tv.apple.com/tr/search?q=${encodeURIComponent(s.title)}`;
+
+                watchLinks.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle });
+              });
+            }
+
+            // Google'da Ara Butonu
+            const searchQuery = encodeURIComponent(`${s.title} ${s.year || ''} dizi izle`);
+            watchLinks.push({ 
+              href: `https://www.google.com/search?q=${searchQuery}`, 
+              text: "Google'da Bul", 
+              logo: null, 
+              icon: Search 
+            });
+
+            // Alternatif Şablon Eklemesi (Sihirli DuckDuckGo uyumlu)
+            if (data.altWatchTemplate && (s.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
+              const charMap: Record<string, string> = { 'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u' };
+              const slug = s.title.toLocaleLowerCase('tr-TR')
+                .replace(/[çğıöşü]/g, match => charMap[match])
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9-]/g, '');
+                
+              let finalAltHref = data.altWatchTemplate
+                .replace('{imdb}', s.imdbId || '')
+                .replace('{slug}', slug)
+                .replace('{title}', encodeURIComponent(s.title))
+                .replace('{year}', s.year || '');
+                
+              watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+            }
+
             return (
               <div key={s.id} className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50">
                 <button
                   onClick={() => toggleSeries(s.id)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-ink-800/40 transition-colors"
+                  className="w-full flex items-center justify-between p-4 hover:bg-ink-800/40 transition-colors relative"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 pr-16 sm:pr-24">
                     {isExpanded ? <ChevronDown size={18} className="text-ink-500 flex-shrink-0" /> : <ChevronRight size={18} className="text-ink-500 flex-shrink-0" />}
                     
                     <div className="w-10 sm:w-12 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50">
@@ -313,13 +361,32 @@ export default function SeriesPage() {
                       <div className={`font-semibold truncate ${allWatched ? 'text-ink-500' : 'text-ink-100'}`}>
                         {s.title}
                       </div>
-                      <div className="text-xs text-ink-500 truncate">
+                      <div className="text-[10px] sm:text-xs text-ink-500 truncate flex items-center gap-2 flex-wrap mt-0.5">
                         {s.genres.join(' · ') || 'Tür yok'} {s.year && ` · Çıkış: ${s.year}`}
+                        
+                        <div className="flex gap-1.5 flex-wrap ml-1">
+                          {watchLinks.map((link, idx) => {
+                            const Icon = link.icon;
+                            return (
+                              <a 
+                                key={idx}
+                                href={link.href} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 bg-ink-800/80 hover:bg-azure-900/40 text-azure-400 border border-azure-500/30 px-1.5 py-0.5 rounded text-[9px] font-semibold transition-all hover:scale-105"
+                              >
+                                {link.logo ? <img src={link.logo} alt="Platform" className="w-3 h-3 rounded-sm object-cover" /> : <Icon size={10} />}
+                                {link.text}
+                              </a>
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-ink-500 bg-ink-800/60 px-2 py-0.5 rounded-full hidden sm:inline">
+                  <div className="flex items-center gap-2 flex-shrink-0 absolute right-4 top-1/2 -translate-y-1/2 sm:static sm:translate-y-0">
+                    <span className="text-[10px] sm:text-xs text-ink-500 bg-ink-800/60 px-2 py-0.5 rounded-full hidden sm:inline">
                       {watchedCount}/{s.episodes.length} bölüm
                     </span>
                     <button
@@ -364,7 +431,7 @@ export default function SeriesPage() {
                                       else showToast('Önce önceki bölümleri izlemelisin!', 'warning');
                                     }}
                                     onUnwatch={() => unwatchEpisode(s.id, ep.id)}
-                                    onDelete={() => setDeleteEpisodeTarget({ series: s, episode: ep })} // Doğrudan silmek yerine onaya gönderir
+                                    onDelete={() => setDeleteEpisodeTarget({ series: s, episode: ep })} 
                                   />
                                 );
                               })}
@@ -419,7 +486,6 @@ export default function SeriesPage() {
       
       {editTarget && <EditSeriesModal series={editTarget} onClose={() => setEditTarget(null)} />}
       
-      {/* 1. ONAY KUTUSU: Tüm Diziyi Silme Onayı */}
       {deleteTarget && (
         <ConfirmDialog
           title="Dizi Sil"
@@ -432,7 +498,6 @@ export default function SeriesPage() {
         />
       )}
 
-      {/* 2. ONAY KUTUSU: Sadece Bölüm Silme Onayı */}
       {deleteEpisodeTarget && (
         <ConfirmDialog
           title="Bölümü Sil"

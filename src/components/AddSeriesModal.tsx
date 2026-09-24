@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Plus, Trash2, ChevronUp, ChevronDown, Search, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useApp, resolveTMDBGenres } from '../context/AppContext';
 import { searchTMDBSeries, type TMDBSeriesResult } from '../lib/tmdb';
+import type { WatchProvider } from '../types';
 
 interface Props {
   onClose: () => void;
@@ -20,6 +21,10 @@ export default function AddSeriesModal({ onClose }: Props) {
   const [overview, setOverview] = useState('');
   const [tmdbId, setTmdbId] = useState<number | undefined>();
   const [year, setYear] = useState('');
+  
+  // YENİ: İzleme linki verilerini hafızada tut
+  const [imdbId, setImdbId] = useState<string | undefined>();
+  const [watchProviders, setWatchProviders] = useState<WatchProvider[]>([]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -37,7 +42,10 @@ export default function AddSeriesModal({ onClose }: Props) {
     setTmdbId(series.id);
     setSeasons(series.seasons);
     
-    // YENİ: Esnek tür eşleştirmesi yaparak UI'ı güncelliyoruz
+    // İzleme Verilerini çek
+    setImdbId(series.imdbId);
+    setWatchProviders(series.watchProviders || []);
+    
     const mappedIncoming = resolveTMDBGenres(series.genres, data.genres);
     const newGenres = new Set([...selectedGenres, ...mappedIncoming]);
     setSelectedGenres(Array.from(newGenres));
@@ -79,7 +87,8 @@ export default function AddSeriesModal({ onClose }: Props) {
 
   const handleSubmit = () => {
     if (!title.trim() || seasons.length === 0) return;
-    const ok = addSeries(title, selectedGenres, seasons, posterUrl, overview, tmdbId, year);
+    // YENİ: addSeries'e imdbId ve watchProviders'ı gönderiyoruz
+    const ok = addSeries(title, selectedGenres, seasons, posterUrl, overview, tmdbId, year, imdbId, watchProviders);
     if (ok) onClose();
   };
 
@@ -170,10 +179,10 @@ export default function AddSeriesModal({ onClose }: Props) {
             <div className="flex items-center gap-3 p-3 bg-ink-800/30 rounded-lg border border-ink-700/50">
               <img src={posterUrl} alt="Afiş" className="w-10 h-14 rounded object-cover shadow-sm" />
               <div className="flex-1">
-                <div className="text-xs font-semibold text-azure-400 mb-0.5">Afiş ve Özet Eklendi</div>
+                <div className="text-xs font-semibold text-azure-400 mb-0.5">Afiş, Özet ve İzleme Linkleri Eklendi</div>
                 <div className="text-[11px] text-ink-400 line-clamp-1">{overview}</div>
               </div>
-              <button onClick={() => { setPosterUrl(null); setOverview(''); setTmdbId(undefined); }} className="text-xs text-red-400 hover:underline px-2">Kaldır</button>
+              <button onClick={() => { setPosterUrl(null); setOverview(''); setTmdbId(undefined); setImdbId(undefined); setWatchProviders([]); }} className="text-xs text-red-400 hover:underline px-2">Kaldır</button>
             </div>
           )}
 
