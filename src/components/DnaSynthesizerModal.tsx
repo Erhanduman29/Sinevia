@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, Dna, Search, Beaker, ChevronLeft, Sparkles, Image as ImageIcon, Plus, Clock, Star } from 'lucide-react';
+import { X, Dna, Search, Beaker, ChevronLeft, Sparkles, Image as ImageIcon, Plus, Clock, Star, PlayCircle, ExternalLink } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import RatingModal from './RatingModal';
 import type { Movie } from '../types';
@@ -82,7 +82,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         let sG = 0, sK = 0, sD = 0, sC = 0, sS = 0, sO = 0, sE = 0, sM = 0;
         let mG: string[] = [], mK: string[] = [], mD: string[] = [], mC: string[] = [], mS: string[] = [], mE: string[] = [], mL: string[] = [];
 
-        // 1. TÜR EŞLEŞMESİ
         candidate.genres.forEach(g => {
           const inA = movieA.genres.includes(g);
           const inB = movieB.genres.includes(g);
@@ -92,7 +91,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           }
         });
 
-        // 2. ANAHTAR KELİME EŞLEŞMESİ
         if (candidate.keywords) {
           candidate.keywords.forEach(k => {
             const inA = movieA.keywords?.includes(k);
@@ -104,7 +102,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           });
         }
 
-        // 3. YÖNETMEN EŞLEŞMESİ (Büyük puan verir)
         if (candidate.directors) {
           candidate.directors.forEach(d => {
             const cleanD = d.toLocaleLowerCase('tr-TR').trim();
@@ -117,7 +114,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           });
         }
 
-        // 4. OYUNCU EŞLEŞMESİ
         if (candidate.cast) {
           candidate.cast.forEach(c => {
             const cleanC = c.toLocaleLowerCase('tr-TR').trim();
@@ -130,7 +126,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           });
         }
 
-        // 5. STÜDYO EŞLEŞMESİ
         if (candidate.studios) {
           candidate.studios.forEach(s => {
             const cleanS = s.toLocaleLowerCase('tr-TR').trim();
@@ -143,7 +138,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           });
         }
 
-        // 6. KONU / HİKAYE EŞLEŞMESİ (Artık ham kelimeler ekranda listelenmez, sadece temiz tema skoru ekler)
         const wordsC = extractWords(candidate.overview);
         let matchCount = 0;
         wordsC.forEach(w => {
@@ -153,7 +147,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             sO += safeMode ? matchCount * 4 : matchCount * 3;
         }
 
-        // 7. DÖNEM VE DİL
         const decadeCand = Math.floor(parseInt(candidate.year || '0') / 10) * 10;
         if (decadeCand > 1900 && (decadeCand === decadeA || decadeCand === decadeB)) {
           sE += 5;
@@ -166,7 +159,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           }
         }
 
-        // 8. MUTASYON
         if (chaosMode) {
           sM += Math.random() * 30; 
         } else if (!safeMode) {
@@ -237,6 +229,57 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     setSearch('');
   };
 
+  // İZLEME LİNKLERİ OLUŞTURUCU (DNA SONUCU İÇİN)
+  const getWatchLinks = (movie: Movie) => {
+    let links: {href: string; text: string; logo: string | null; icon: any}[] = [];
+
+    if (movie.customUrl) {
+      links.push({ href: movie.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
+    }
+
+    if (movie.watchProviders && movie.watchProviders.length > 0) {
+      movie.watchProviders.slice(0, 2).forEach(provider => {
+        let finalHref = provider.link || '';
+        const pName = provider.providerName.toLowerCase();
+        
+        if (pName.includes('netflix')) finalHref = `https://www.netflix.com/search?q=${encodeURIComponent(movie.title)}`;
+        else if (pName.includes('amazon') || pName.includes('prime')) finalHref = `https://www.primevideo.com/search/ref=atv_sr_sug_1?phrase=${encodeURIComponent(movie.title)}`;
+        else if (pName.includes('disney')) finalHref = `https://www.disneyplus.com/search?q=${encodeURIComponent(movie.title)}`;
+        else if (pName.includes('blutv')) finalHref = `https://www.blutv.com/arama?q=${encodeURIComponent(movie.title)}`;
+        else if (pName.includes('mubi')) finalHref = `https://mubi.com/tr/search?query=${encodeURIComponent(movie.title)}`;
+        else if (pName.includes('apple')) finalHref = `https://tv.apple.com/tr/search?q=${encodeURIComponent(movie.title)}`;
+
+        links.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle });
+      });
+    }
+
+    const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} izle`);
+    links.push({ 
+      href: `https://www.google.com/search?q=${searchQuery}`, 
+      text: "Google'da Bul", 
+      logo: null, 
+      icon: Search 
+    });
+
+    if (data.altWatchTemplate && (movie.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
+      const charMap: Record<string, string> = { 'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u' };
+      const slug = movie.title.toLocaleLowerCase('tr-TR')
+        .replace(/[çğıöşü]/g, match => charMap[match])
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
+        
+      let finalAltHref = data.altWatchTemplate
+        .replace('{imdb}', movie.imdbId || '')
+        .replace('{slug}', slug)
+        .replace('{title}', encodeURIComponent(movie.title))
+        .replace('{year}', movie.year || '');
+        
+      links.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+    }
+
+    return links;
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-ink-950/90 backdrop-blur-md animate-fade-in">
       <div className="bg-ink-900 border border-emerald-500/30 rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl shadow-emerald-900/20 flex flex-col max-h-full">
@@ -266,7 +309,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         {/* İÇERİK BÖLÜMÜ */}
         <div className="flex-1 overflow-y-auto p-6">
           
-          {/* DURUM 1: YUVA SEÇİMİ (Arama & Geçmiş Ekranı) */}
+          {/* DURUM 1: YUVA SEÇİMİ */}
           {selectingSlot && (
             <div className="space-y-4 animate-fade-in">
               <div className="flex gap-2">
@@ -453,6 +496,25 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                 <div className="flex-1 flex flex-col justify-center w-full text-center md:text-left">
                   <h3 className="text-2xl font-black text-white mb-1">{result.movie.title}</h3>
                   <div className="text-sm text-ink-400 mb-4">{result.movie.genres.join(' · ')} {result.movie.year && ` · ${result.movie.year}`}</div>
+                  
+                  {/* YENİ: İZLEME LİNKLERİ ALANI */}
+                  <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap mb-4">
+                    {getWatchLinks(result.movie).map((link, idx) => {
+                      const Icon = link.icon;
+                      return (
+                        <a 
+                          key={idx}
+                          href={link.href} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 bg-ink-800/80 hover:bg-gold-900/30 text-gold-400 border border-gold-500/30 px-2 py-1 rounded-md text-[10px] sm:text-xs font-semibold transition-all hover:scale-105"
+                        >
+                          {link.logo ? <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-sm object-cover" /> : <Icon size={12} />}
+                          {link.text}
+                        </a>
+                      )
+                    })}
+                  </div>
                   
                   {/* %100 DNA İLERLEME BARLARI */}
                   <div className="space-y-3 bg-ink-900/40 p-4 rounded-xl border border-ink-800/80">

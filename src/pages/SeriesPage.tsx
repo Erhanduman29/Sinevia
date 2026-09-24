@@ -314,7 +314,6 @@ export default function SeriesPage() {
               });
             }
 
-            // Google'da Ara Butonu
             const searchQuery = encodeURIComponent(`${s.title} ${s.year || ''} dizi izle`);
             watchLinks.push({ 
               href: `https://www.google.com/search?q=${searchQuery}`, 
@@ -323,7 +322,6 @@ export default function SeriesPage() {
               icon: Search 
             });
 
-            // Alternatif Şablon Eklemesi (Sihirli DuckDuckGo uyumlu)
             if (data.altWatchTemplate && (s.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
               const charMap: Record<string, string> = { 'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u' };
               const slug = s.title.toLocaleLowerCase('tr-TR')
@@ -341,15 +339,17 @@ export default function SeriesPage() {
             }
 
             return (
-              <div key={s.id} className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50">
+              <div key={s.id} className="flex flex-col sm:flex-row bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50">
+                
+                {/* SOL: Başlık ve İçerik (Buton özelliği flex-1 olarak ayrıldı) */}
                 <button
                   onClick={() => toggleSeries(s.id)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-ink-800/40 transition-colors relative"
+                  className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 hover:bg-ink-800/40 transition-colors w-full"
                 >
-                  <div className="flex items-center gap-3 min-w-0 pr-16 sm:pr-24">
+                  <div className="flex items-center gap-3 w-full min-w-0 pr-0">
                     {isExpanded ? <ChevronDown size={18} className="text-ink-500 flex-shrink-0" /> : <ChevronRight size={18} className="text-ink-500 flex-shrink-0" />}
                     
-                    <div className="w-10 sm:w-12 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50">
+                    <div className="w-16 sm:w-16 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md">
                       {s.posterUrl ? (
                         <img src={s.posterUrl} alt={s.title} className="w-full h-full object-cover" />
                       ) : (
@@ -357,55 +357,61 @@ export default function SeriesPage() {
                       )}
                     </div>
                     
-                    <div className="text-left min-w-0">
-                      <div className={`font-semibold truncate ${allWatched ? 'text-ink-500' : 'text-ink-100'}`}>
+                    <div className="text-left min-w-0 flex flex-col justify-center h-full">
+                      <div className={`font-bold text-sm sm:text-base truncate mb-1 ${allWatched ? 'text-ink-500' : 'text-ink-100'}`}>
                         {s.title}
                       </div>
-                      <div className="text-[10px] sm:text-xs text-ink-500 truncate flex items-center gap-2 flex-wrap mt-0.5">
+                      
+                      <div className="text-[10px] sm:text-xs text-ink-500 truncate mb-2">
                         {s.genres.join(' · ') || 'Tür yok'} {s.year && ` · Çıkış: ${s.year}`}
-                        
-                        <div className="flex gap-1.5 flex-wrap ml-1">
-                          {watchLinks.map((link, idx) => {
-                            const Icon = link.icon;
-                            return (
-                              <a 
-                                key={idx}
-                                href={link.href} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 bg-ink-800/80 hover:bg-azure-900/40 text-azure-400 border border-azure-500/30 px-1.5 py-0.5 rounded text-[9px] font-semibold transition-all hover:scale-105"
-                              >
-                                {link.logo ? <img src={link.logo} alt="Platform" className="w-3 h-3 rounded-sm object-cover" /> : <Icon size={10} />}
-                                {link.text}
-                              </a>
-                            )
-                          })}
-                        </div>
+                      </div>
+                      
+                      {/* İzleme Butonları */}
+                      <div className="flex gap-2 flex-wrap">
+                        {watchLinks.map((link, idx) => {
+                          const Icon = link.icon;
+                          return (
+                            <a 
+                              key={idx}
+                              href={link.href} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1.5 bg-ink-800/80 hover:bg-azure-900/40 text-azure-400 border border-azure-500/30 px-2 py-1 sm:py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold transition-all hover:scale-105"
+                            >
+                              {link.logo ? <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={12} />}
+                              {link.text}
+                            </a>
+                          )
+                        })}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 absolute right-4 top-1/2 -translate-y-1/2 sm:static sm:translate-y-0">
-                    <span className="text-[10px] sm:text-xs text-ink-500 bg-ink-800/60 px-2 py-0.5 rounded-full hidden sm:inline">
-                      {watchedCount}/{s.episodes.length} bölüm
-                    </span>
+                </button>
+
+                {/* SAĞ (Mobilde Alt): Aksiyon Butonları */}
+                <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 p-3 sm:p-4 border-t border-ink-800/50 sm:border-t-0 sm:border-l shrink-0">
+                  <span className="text-[10px] sm:text-xs text-ink-500 bg-ink-800/60 px-2 py-0.5 rounded-full font-medium">
+                    {watchedCount}/{s.episodes.length} bölüm
+                  </span>
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditTarget(s); }}
-                      className="text-ink-600 hover:text-azure-400 transition-colors p-1"
+                      className="text-ink-500 hover:text-azure-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700"
                     >
                       <Edit2 size={15} />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(s); }}
-                      className="text-ink-600 hover:text-red-400 transition-colors p-1"
+                      className="text-ink-500 hover:text-red-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700"
                     >
                       <Trash2 size={16} />
                     </button>
                   </div>
-                </button>
+                </div>
 
                 {isExpanded && (
-                  <div className="border-t border-ink-700/40 bg-ink-950/20">
+                  <div className="w-full border-t border-ink-700/40 bg-ink-950/20 sm:col-span-2">
                     {seasons.length === 0 ? (
                       <div className="p-4 text-sm text-ink-500 text-center">Henüz bölüm eklenmedi.</div>
                     ) : (

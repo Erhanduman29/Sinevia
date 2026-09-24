@@ -503,7 +503,6 @@ function MovieRow({
     });
   }
 
-  // Google'da Ara Butonu
   const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} izle`);
   watchLinks.push({ 
     href: `https://www.google.com/search?q=${searchQuery}`, 
@@ -512,7 +511,6 @@ function MovieRow({
     icon: Search 
   });
 
-  // Alternatif Şablon Eklemesi (Sihirli DuckDuckGo uyumlu)
   if (altWatchTemplate && (movie.imdbId || altWatchTemplate.includes('{slug}') || altWatchTemplate.includes('{title}'))) {
     const charMap: Record<string, string> = { 'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u' };
     const slug = movie.title.toLocaleLowerCase('tr-TR')
@@ -529,52 +527,62 @@ function MovieRow({
     watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
   }
 
+  // YENİ DÜZEN: Mobilde eylemleri alta, bilgisayarda sağa alan tam uyumlu tasarım
   return (
-    <div className="flex items-center gap-4 p-3 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
-      <div className="w-12 sm:w-16 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50">
-        {movie.posterUrl ? (
-          <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
-        ) : (
-          <ImageIcon size={20} className="text-ink-600" />
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0 pr-16 md:pr-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`font-medium ${movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'}`}>
-            {movie.title}
-          </span>
-          {movie.year && (
-            <span className="text-xs text-ink-300 flex items-center gap-0.5">
-              <Calendar size={11} /> Çıkış Yılı: {movie.year}
-            </span>
-          )}
-          {movie.runtime && (
-            <span className="text-xs text-ink-300 flex items-center gap-0.5 ml-1">
-              <Clock size={11} /> Süre: {movie.runtime} dk
-            </span>
-          )}
-          {collectionName && (
-            <span className="text-xs text-gold-400/70 bg-gold-500/10 border border-gold-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
-              <Boxes size={10} /> {collectionName}
-            </span>
+    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
+      
+      {/* SOL: Resim ve Bilgiler Alanı */}
+      <div className="flex gap-3 sm:gap-4 flex-1 min-w-0">
+        <div className="w-16 sm:w-20 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md">
+          {movie.posterUrl ? (
+            <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
+          ) : (
+            <ImageIcon size={20} className="text-ink-600" />
           )}
         </div>
-        {movie.genres.length > 0 && (
-          <div className="text-xs text-ink-500 mt-0.5">{movie.genres.join(' · ')}</div>
-        )}
-        
-        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-          {movie.watched && movie.rating !== null && (
-            <div className="flex items-center gap-1.5">
-              <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold ${ratingBgClass(movie.rating)}`}>
-                {movie.rating}
+
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className={`font-bold text-sm sm:text-base truncate ${movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'}`}>
+              {movie.title}
+            </span>
+            {collectionName && (
+              <span className="text-[10px] text-gold-400/80 bg-gold-500/10 border border-gold-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 whitespace-nowrap">
+                <Boxes size={10} /> {collectionName}
               </span>
-              <span className="text-[10px] sm:text-xs text-ink-400">{formatDateShort(movie.watchedAt!)}</span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-[10px] sm:text-xs text-ink-400 mb-1">
+            {movie.year && (
+              <span className="flex items-center gap-1">
+                <Calendar size={12} /> {movie.year}
+              </span>
+            )}
+            {movie.runtime && (
+              <span className="flex items-center gap-1">
+                <Clock size={12} /> {movie.runtime} dk
+              </span>
+            )}
+          </div>
+          
+          {movie.genres.length > 0 && (
+            <div className="text-[10px] sm:text-xs text-ink-500 truncate mb-2">
+              {movie.genres.join(' · ')}
             </div>
           )}
           
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Puan ve İzleme Butonları (Mobilde Alt Alta Gelmesi Düzeltildi) */}
+          <div className="flex items-center gap-2 flex-wrap mt-auto">
+            {movie.watched && movie.rating !== null && (
+              <div className="flex items-center gap-1.5 mr-2">
+                <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold shadow-sm ${ratingBgClass(movie.rating)}`}>
+                  {movie.rating}
+                </span>
+                <span className="text-[10px] text-ink-500 hidden sm:inline">{formatDateShort(movie.watchedAt!)}</span>
+              </div>
+            )}
+            
             {watchLinks.map((link, idx) => {
               const Icon = link.icon;
               return (
@@ -584,7 +592,7 @@ function MovieRow({
                   target="_blank" 
                   rel="noopener noreferrer" 
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1.5 bg-ink-800/80 hover:bg-gold-900/30 text-gold-400 border border-gold-500/30 px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold transition-all hover:scale-105"
+                  className="inline-flex items-center gap-1.5 bg-ink-800/80 hover:bg-gold-900/30 text-gold-400 border border-gold-500/30 px-2 py-1 sm:py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold transition-all hover:scale-105"
                 >
                   {link.logo ? <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={12} />}
                   {link.text}
@@ -595,17 +603,23 @@ function MovieRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 flex-shrink-0 absolute right-3 top-3 md:static">
-        {movie.watched ? (
-          <button onClick={() => onUnwatch(movie.id)} className="text-xs text-ink-500 hover:text-ink-300 px-2 py-1 rounded transition-colors">Geri Al</button>
-        ) : (
-          <button onClick={() => onRate(movie)} className="flex items-center gap-1 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-2.5 py-1.5 rounded-lg transition-all shadow-sm">
-            <Star size={14} /> Puanla
-          </button>
-        )}
-        <button onClick={() => onEdit(movie)} className="text-ink-600 hover:text-gold-400 transition-colors p-1"><Edit2 size={15} /></button>
-        <button onClick={() => onDelete(movie)} className="text-ink-600 hover:text-red-400 transition-colors p-1"><Trash2 size={16} /></button>
+      {/* SAĞ (Veya Mobilde Alt): Aksiyon Butonları */}
+      <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 sm:gap-1.5 pt-3 sm:pt-0 mt-1 sm:mt-0 border-t border-ink-800/50 sm:border-0 flex-shrink-0">
+        <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+          {movie.watched ? (
+            <button onClick={() => onUnwatch(movie.id)} className="flex-1 sm:flex-none text-xs text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 rounded-lg transition-colors border border-ink-700/50">Geri Al</button>
+          ) : (
+            <button onClick={() => onRate(movie)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-4 py-1.5 rounded-lg transition-all shadow-md shadow-gold-500/10 font-bold">
+              <Star size={14} /> İzle
+            </button>
+          )}
+          <div className="flex items-center gap-1 ml-auto sm:ml-0">
+            <button onClick={() => onEdit(movie)} className="text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700"><Edit2 size={15} /></button>
+            <button onClick={() => onDelete(movie)} className="text-ink-500 hover:text-red-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700"><Trash2 size={16} /></button>
+          </div>
+        </div>
       </div>
+
     </div>
   );
 }
