@@ -504,7 +504,7 @@ function MovieRow({
   }
 
   // Google'da Ara Butonu
-  const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} puanla`);
+  const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} izle`);
   watchLinks.push({ 
     href: `https://www.google.com/search?q=${searchQuery}`, 
     text: "Google'da Bul", 
