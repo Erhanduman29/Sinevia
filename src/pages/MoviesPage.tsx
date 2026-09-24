@@ -362,6 +362,7 @@ export default function MoviesPage() {
                   </div>
                   <span className="text-xs text-ink-500 bg-ink-800/60 px-2 py-0.5 rounded-full">{visibleMovies.length} film</span>
                 </button>
+                
                 {isExpanded && (
                   <div className="border-t border-ink-700/40">
                     {visibleMovies.map((m) => (
@@ -378,9 +379,26 @@ export default function MoviesPage() {
                     ))}
                   </div>
                 )}
+                
+                {/* YENİ: KOLEKSİYON KAPALIYKEN AFİŞLER GÖZÜKÜR */}
                 {!isExpanded && (
-                  <div className="px-4 pb-3 text-xs text-ink-500">
-                    {visibleMovies.map((m) => m.title).join(' · ')}
+                  <div className="px-4 pb-4 flex items-center gap-2 overflow-x-auto hide-scrollbar pt-1">
+                    {visibleMovies.map((m) => (
+                      <div key={m.id} title={m.title} className="w-10 sm:w-12 aspect-[2/3] flex-shrink-0 rounded-md overflow-hidden border border-ink-700/50 shadow-sm relative group cursor-pointer" onClick={() => toggleCollection(collId)}>
+                        {m.posterUrl ? (
+                          <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                        ) : (
+                          <div className="w-full h-full bg-ink-800 flex items-center justify-center">
+                            <ImageIcon size={14} className="text-ink-600" />
+                          </div>
+                        )}
+                        {m.watched && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px]">
+                            <Check size={16} className="text-green-400 drop-shadow-md" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -527,7 +545,6 @@ function MovieRow({
     watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
   }
 
-  // YENİ DÜZEN: Mobilde eylemleri alta, bilgisayarda sağa alan tam uyumlu tasarım
   return (
     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
       
@@ -572,7 +589,6 @@ function MovieRow({
             </div>
           )}
           
-          {/* Puan ve İzleme Butonları (Mobilde Alt Alta Gelmesi Düzeltildi) */}
           <div className="flex items-center gap-2 flex-wrap mt-auto">
             {movie.watched && movie.rating !== null && (
               <div className="flex items-center gap-1.5 mr-2">
@@ -603,14 +619,13 @@ function MovieRow({
         </div>
       </div>
 
-      {/* SAĞ (Veya Mobilde Alt): Aksiyon Butonları */}
       <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 sm:gap-1.5 pt-3 sm:pt-0 mt-1 sm:mt-0 border-t border-ink-800/50 sm:border-0 flex-shrink-0">
         <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
           {movie.watched ? (
             <button onClick={() => onUnwatch(movie.id)} className="flex-1 sm:flex-none text-xs text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 rounded-lg transition-colors border border-ink-700/50">Geri Al</button>
           ) : (
             <button onClick={() => onRate(movie)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-4 py-1.5 rounded-lg transition-all shadow-md shadow-gold-500/10 font-bold">
-              <Star size={14} /> Puanla
+              <Star size={14} /> İzle
             </button>
           )}
           <div className="flex items-center gap-1 ml-auto sm:ml-0">
