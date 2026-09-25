@@ -216,16 +216,16 @@ export default function AchievementsPage() {
   const isTestMode = data.showLockedNames;
 
   return (
-    <div className="space-y-5 md:space-y-6 animate-fade-in">
+    <div className="space-y-4 md:space-y-6 animate-fade-in">
       {/* SAYFA BAŞLIĞI */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl md:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-amber-500/10 border border-gold-500/30 flex items-center justify-center shadow-lg">
-            <Icons.Trophy size={22} className="text-gold-400" />
+          <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-amber-500/10 border border-gold-500/30 flex items-center justify-center shadow-lg">
+            <Icons.Trophy size={20} className="text-gold-400" />
           </div>
           <div>
             <span>Başarımlar & Kupa Müzesi</span>
-            <span className="block text-xs font-medium text-ink-400 mt-0.5">
+            <span className="hidden sm:block text-xs font-medium text-ink-400 mt-0.5">
               Kazandığın kupalar, gizli rozetler ve prestij rütbe ilerlemen
             </span>
           </div>
@@ -233,19 +233,20 @@ export default function AchievementsPage() {
       </div>
 
       {/* =========================================================
-          GÖSTERİŞLİ SEVİYE, XP & KUPA KOLEKSİYON ARENASI
+          SEVİYE, XP & KUPA ARENASI (MOBİLDE MİNİMALİST, PC'DE GÖSTERİŞLİ)
           ========================================================= */}
       <div
-        className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-[2.2rem] p-5 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.75)] overflow-hidden`}
+        className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-3xl sm:rounded-[2.2rem] p-4 sm:p-7 shadow-2xl overflow-hidden`}
       >
+        {/* Arka Plan Dinamik Işık Küreleri */}
         <div
-          className={`absolute -top-24 -right-20 w-96 h-96 ${userPersona.bgGlow} rounded-full blur-[110px] pointer-events-none transition-all duration-1000`}
+          className={`absolute -top-24 -right-20 w-72 sm:w-96 h-72 sm:h-96 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
         />
         <div
-          className={`absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
+          className={`hidden sm:block absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
         />
         <div
-          className="absolute inset-0 opacity-[0.04] pointer-events-none"
+          className="hidden sm:block absolute inset-0 opacity-[0.04] pointer-events-none"
           style={{
             backgroundImage:
               'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)',
@@ -253,116 +254,130 @@ export default function AchievementsPage() {
           }}
         />
 
-        {/* ÜST BÖLÜM: 3D SVG HALKALI ARMA + XP MOTORU + KUPA KASASI ÖZETİ */}
-        <div className="relative z-10 flex flex-col xl:flex-row items-center gap-6 xl:gap-7">
-          {/* Sol: Dairesel SVG İlerleme Halkalı Rütbe Arması */}
-          <div className="flex flex-col sm:flex-row items-center gap-5 flex-shrink-0 w-full xl:w-auto justify-center sm:justify-start">
-            <div className="relative w-28 h-28 flex items-center justify-center flex-shrink-0">
-              <div
-                className={`absolute inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-xl animate-pulse`}
-              />
-
-              <svg className="w-28 h-28 -rotate-90 transform" viewBox="0 0 108 108">
-                <circle
-                  cx="54"
-                  cy="54"
-                  r={circleRadius}
-                  stroke="currentColor"
-                  strokeWidth="7"
-                  fill="transparent"
-                  className="text-ink-950"
+        {/* ÜST BÖLÜM: SVG HALKALI ARMA + XP MOTORU + KUPA KASASI (GİZLİ KUPALAR HARİÇ) */}
+        <div className="relative z-10 flex flex-col xl:flex-row items-center gap-4 sm:gap-6 xl:gap-7">
+          
+          {/* Sol: Mobilde Kompakt Satır, PC'de Geniş 3D SVG Halka */}
+          <div className="flex flex-row items-center justify-between sm:justify-start gap-3.5 sm:gap-5 flex-shrink-0 w-full xl:w-auto">
+            <div className="flex items-center gap-3.5 sm:gap-5">
+              <div className="relative w-16 h-16 sm:w-28 sm:h-28 flex items-center justify-center flex-shrink-0">
+                <div
+                  className={`absolute inset-1 sm:inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-lg sm:blur-xl animate-pulse`}
                 />
-                <circle
-                  cx="54"
-                  cy="54"
-                  r={circleRadius}
-                  stroke={userPersona.strokeColor}
-                  strokeWidth="7"
-                  strokeDasharray={circleCircumference}
-                  strokeDashoffset={circleOffset}
-                  strokeLinecap="round"
-                  fill="transparent"
-                  className="transition-all duration-1000 ease-out drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]"
-                />
-              </svg>
 
-              <div
-                className={`absolute inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}
-              >
-                <div className="w-full h-full bg-ink-950 rounded-full flex flex-col items-center justify-center">
-                  <PersonaIcon className={userPersona.color} size={30} />
-                  <span className="text-[10px] font-black text-ink-400 uppercase mt-0.5">
-                    %{Math.floor(lvl.progress)}
-                  </span>
+                <svg className="w-16 h-16 sm:w-28 sm:h-28 -rotate-90 transform" viewBox="0 0 108 108">
+                  <circle
+                    cx="54"
+                    cy="54"
+                    r={circleRadius}
+                    stroke="currentColor"
+                    strokeWidth="7"
+                    fill="transparent"
+                    className="text-ink-950"
+                  />
+                  <circle
+                    cx="54"
+                    cy="54"
+                    r={circleRadius}
+                    stroke={userPersona.strokeColor}
+                    strokeWidth="7"
+                    strokeDasharray={circleCircumference}
+                    strokeDashoffset={circleOffset}
+                    strokeLinecap="round"
+                    fill="transparent"
+                    className="transition-all duration-1000 ease-out"
+                  />
+                </svg>
+
+                <div
+                  className={`absolute inset-2.5 sm:inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}
+                >
+                  <div className="w-full h-full bg-ink-950 rounded-full flex flex-col items-center justify-center">
+                    <PersonaIcon className={`${userPersona.color} w-5 h-5 sm:w-[30px] sm:h-[30px]`} />
+                    <span className="hidden sm:block text-[10px] font-black text-ink-400 uppercase mt-0.5">
+                      %{Math.floor(lvl.progress)}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className={`hidden sm:block absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}
+                >
+                  SV. {lvl.level}
                 </div>
               </div>
 
-              <div
-                className={`absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}
-              >
-                SV. {lvl.level}
+              <div className="text-left">
+                <span
+                  className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border mb-1 ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}
+                >
+                  <Icons.Sparkles size={10} /> {userPersona.title}
+                </span>
+                <div className="text-2xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none">
+                  Seviye {lvl.level}
+                </div>
+                <p className="hidden sm:block text-xs text-ink-400 mt-1.5 max-w-[230px] leading-relaxed">
+                  {userPersona.subtitle}
+                </p>
               </div>
             </div>
 
-            <div className="text-center sm:text-left">
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border mb-1.5 ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}
-              >
-                <Icons.Sparkles size={11} /> {userPersona.title}
+            {/* Sadece Mobilde Sağ Üstte Görünen Kompakt Kupa Sayacı */}
+            <div className="flex sm:hidden flex-col items-end bg-ink-950/90 border border-gold-500/30 px-3 py-1.5 rounded-2xl">
+              <span className="text-[9px] font-black uppercase tracking-wider text-gold-400">
+                Kupalar
               </span>
-              <div className="text-3xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none">
-                Seviye {lvl.level}
+              <div className="text-base font-black text-white leading-tight">
+                {unlockedTiersCount}{' '}
+                <span className="text-xs font-bold text-ink-500">/ {totalPossibleTiers}</span>
               </div>
-              <p className="text-xs text-ink-400 mt-1.5 max-w-[230px] leading-relaxed">
-                {userPersona.subtitle}
-              </p>
             </div>
           </div>
 
-          {/* Orta: 20 Segmentli Lazer XP İlerleme Motoru */}
-          <div className="flex-1 w-full bg-ink-950/75 border border-ink-800/90 rounded-3xl p-4 sm:p-5 shadow-inner space-y-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+          {/* Orta: Lazer XP İlerleme Motoru */}
+          <div className="flex-1 w-full bg-ink-950/75 border border-ink-800/90 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-inner space-y-2 sm:space-y-3">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">
+                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">
                   Toplam Deneyim Puanı
                 </span>
-                <div className="text-lg sm:text-xl font-black text-ink-50 mt-0.5 flex items-baseline gap-1.5">
+                <div className="text-sm sm:text-xl font-black text-ink-50 flex items-baseline gap-1.5">
                   <span>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</span>
-                  <span className="text-xs font-bold text-ink-400">
-                    ({lvl.currentLevelXp.toLocaleString('tr-TR')} / {lvl.nextLevelXp.toLocaleString('tr-TR')} Seviye İçi)
+                  <span className="text-[10px] sm:text-xs font-bold text-ink-400">
+                    (%{Math.floor(lvl.progress)})
                   </span>
                 </div>
               </div>
 
               <div className="text-right">
-                <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">
+                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">
                   Seviye {lvl.level + 1} Hedefi
                 </span>
-                <span className={`text-sm font-black ${userPersona.color}`}>
+                <span className={`text-xs sm:text-sm font-black ${userPersona.color}`}>
                   {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı
                 </span>
               </div>
             </div>
 
-            {/* 20 Segmentli Kristal XP Barı */}
-            <div className="relative h-5 w-full bg-ink-900 rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
+            {/* Kristal XP Barı */}
+            <div className="relative h-3 sm:h-5 w-full bg-ink-900 rounded-lg sm:rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
               <div
-                className={`h-full rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`}
+                className={`h-full rounded-md sm:rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`}
                 style={{ width: `${Math.max(3, lvl.progress)}%` }}
               >
                 <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_25%,rgba(255,255,255,0.35)_50%,transparent_75%)] bg-[length:200%_100%] animate-pulse" />
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white shadow-[0_0_12px_#fff]" />
+                <div className="absolute right-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_#fff]" />
               </div>
 
-              <div className="absolute inset-0 grid grid-cols-10 sm:grid-cols-20 pointer-events-none">
+              <div className="hidden sm:grid absolute inset-0 grid-cols-20 pointer-events-none">
                 {Array.from({ length: 20 }).map((_, idx) => (
                   <div key={idx} className="border-r border-ink-950/40 last:border-0" />
                 ))}
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] font-bold text-ink-400 pt-0.5">
-              <span>Seviye İlerlemesi: %{Math.floor(lvl.progress)}</span>
+            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-ink-400 pt-0.5">
+              <span className="hidden sm:inline">Seviye İlerlemesi: %{Math.floor(lvl.progress)}</span>
               {nextRank ? (
                 <span className={userPersona.color}>
                   Sonraki Unvan: {nextRank.title} (Sv.{nextRank.minLevel})
@@ -373,9 +388,9 @@ export default function AchievementsPage() {
             </div>
           </div>
 
-          {/* Sağ: Kupa Koleksiyonu Kasası & Genel Tamamlanma Yüzdesi */}
-          <div className="w-full xl:w-64 bg-ink-950/80 border border-gold-500/30 rounded-3xl p-4 sm:p-5 flex flex-col justify-between gap-3 flex-shrink-0 shadow-xl">
-            <div className="flex items-center justify-between">
+          {/* Sağ: Kupa Koleksiyonu Kasası (Tam İsimli: Bronz, Gümüş, Altın, Elmas — Gizli Yok!) */}
+          <div className="w-full xl:w-80 bg-ink-950/80 border border-gold-500/30 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between gap-3 flex-shrink-0 shadow-xl">
+            <div className="hidden sm:flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-gold-400 block">
                   Toplanan Kupalar
@@ -385,52 +400,73 @@ export default function AchievementsPage() {
                   <span className="text-sm font-bold text-ink-500">/ {totalPossibleTiers}</span>
                 </div>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-gold-500/15 border border-gold-500/30 flex flex-col items-center justify-center">
-                <Icons.Trophy size={18} className="text-gold-400" />
+              <div className="w-11 h-11 rounded-2xl bg-gold-500/15 border border-gold-500/30 flex flex-col items-center justify-center">
+                <Icons.Trophy size={16} className="text-gold-400" />
                 <span className="text-[10px] font-black text-gold-300">%{trophyCompletionPct}</span>
               </div>
             </div>
 
-            <div className="h-2 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800">
+            <div className="hidden sm:block h-2 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800">
               <div
                 className="h-full bg-gradient-to-r from-amber-600 via-gold-500 to-yellow-300 rounded-full transition-all duration-700"
                 style={{ width: `${Math.max(2, trophyCompletionPct)}%` }}
               />
             </div>
 
-            {/* 5 Kademe Mini Cevher Sayaçları */}
-            <div className="grid grid-cols-5 gap-1 pt-1 border-t border-ink-800/80 text-center">
+            {/* Tam İsimli 4 Ana Kademe (Bronz, Gümüş, Altın, Elmas) */}
+            <div className="grid grid-cols-4 gap-1.5 sm:pt-1 sm:border-t border-ink-800/80 text-center">
               {[
-                { key: 'bronze', label: 'Brz', color: 'text-amber-500' },
-                { key: 'silver', label: 'Güm', color: 'text-slate-300' },
-                { key: 'gold', label: 'Alt', color: 'text-yellow-400' },
-                { key: 'diamond', label: 'Elm', color: 'text-cyan-300' },
-                { key: 'secret', label: 'Giz', color: 'text-fuchsia-400' },
+                {
+                  key: 'bronze',
+                  label: 'Bronz',
+                  color: 'text-amber-400',
+                  bg: 'bg-amber-500/10 border-amber-500/25',
+                },
+                {
+                  key: 'silver',
+                  label: 'Gümüş',
+                  color: 'text-slate-200',
+                  bg: 'bg-slate-400/10 border-slate-400/25',
+                },
+                {
+                  key: 'gold',
+                  label: 'Altın',
+                  color: 'text-yellow-300',
+                  bg: 'bg-yellow-500/10 border-yellow-500/25',
+                },
+                {
+                  key: 'diamond',
+                  label: 'Elmas',
+                  color: 'text-cyan-300',
+                  bg: 'bg-cyan-500/10 border-cyan-500/25',
+                },
               ].map((gem) => (
                 <button
                   key={gem.key}
                   type="button"
                   onClick={() => setActiveTier(activeTier === gem.key ? null : gem.key)}
-                  className={`rounded-lg py-1 transition-all ${
+                  className={`rounded-xl py-1.5 px-1 border transition-all ${gem.bg} ${
                     activeTier === gem.key
-                      ? 'bg-ink-800 ring-1 ring-gold-400'
-                      : 'hover:bg-ink-900'
+                      ? 'ring-2 ring-gold-400 scale-105'
+                      : 'hover:brightness-125'
                   }`}
                   title={`${gem.label} Kupalarını Filtrele`}
                 >
-                  <div className={`text-xs font-black ${gem.color}`}>
+                  <div className={`text-xs sm:text-sm font-black leading-none ${gem.color}`}>
                     {tierStats[gem.key]?.unlocked || 0}
                   </div>
-                  <div className="text-[9px] font-bold text-ink-500 uppercase">{gem.label}</div>
+                  <div className="text-[10px] font-bold text-ink-300 mt-1 truncate">
+                    {gem.label}
+                  </div>
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ALT BÖLÜM: 5 KADEMELİ UNVAN EVRİM HARİTASI */}
-        <div className="relative z-10 mt-5 pt-4 border-t border-ink-800/80">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        {/* ALT BÖLÜM: 5 KADEMELİ UNVAN EVRİM HARİTASI (SADECE PC'DE GÖRÜNÜR) */}
+        <div className="hidden sm:block relative z-10 mt-5 pt-4 border-t border-ink-800/80">
+          <div className="grid grid-cols-5 gap-2">
             {RANK_TIERS.map((tier, idx) => {
               const isUnlocked = lvl.level >= tier.minLevel;
               const isCurrent = idx === currentRankIndex;
@@ -601,13 +637,23 @@ export default function AchievementsPage() {
                 />
                 <span className="relative z-10">{tierInfo?.label}</span>
 
-                <span
-                  className={`relative z-10 ml-0.5 md:ml-1 px-1.5 py-0.5 rounded-md shadow-inner text-[9px] md:text-[10px] tracking-widest ${
-                    isActive ? 'bg-black/30 text-white' : 'bg-black/20 text-white/90'
-                  }`}
-                >
-                  {stats.unlocked}/{stats.total}
-                </span>
+                {tier !== 'secret' || isTestMode ? (
+                  <span
+                    className={`relative z-10 ml-0.5 md:ml-1 px-1.5 py-0.5 rounded-md shadow-inner text-[9px] md:text-[10px] tracking-widest ${
+                      isActive ? 'bg-black/30 text-white' : 'bg-black/20 text-white/90'
+                    }`}
+                  >
+                    {stats.unlocked}/{stats.total}
+                  </span>
+                ) : (
+                  <span
+                    className={`relative z-10 ml-0.5 md:ml-1 px-1.5 py-0.5 rounded-md shadow-inner text-[9px] md:text-[10px] tracking-widest ${
+                      isActive ? 'bg-black/30 text-white' : 'bg-black/20 text-white/90'
+                    }`}
+                  >
+                    {stats.unlocked}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -634,23 +680,28 @@ export default function AchievementsPage() {
                 </span>
               </div>
               <div className="text-base md:text-lg font-black text-ink-100">
-                {tierStats[activeTier].unlocked}{' '}
-                <span className="text-ink-500 font-bold">/ {tierStats[activeTier].total}</span>
+                {tierStats[activeTier].unlocked}
+                {(activeTier !== 'secret' || isTestMode) && (
+                  <span className="text-ink-500 font-bold"> / {tierStats[activeTier].total}</span>
+                )}
               </div>
             </div>
-            <div className="relative z-10 h-2 md:h-2.5 w-full bg-ink-950 rounded-full overflow-hidden shadow-inner border border-ink-800/80">
-              <div
-                className={`h-full rounded-full transition-all duration-1000 relative ${(TIER_COLORS as any)[activeTier].bg}`}
-                style={{
-                  width: `${Math.floor(
-                    (tierStats[activeTier].unlocked / Math.max(tierStats[activeTier].total, 1)) *
-                      100
-                  )}%`,
-                }}
-              >
-                <div className="absolute inset-0 bg-white/20 animate-pulse" />
+            {(activeTier !== 'secret' || isTestMode) && (
+              <div className="relative z-10 h-2 md:h-2.5 w-full bg-ink-950 rounded-full overflow-hidden shadow-inner border border-ink-800/80">
+                <div
+                  className={`h-full rounded-full transition-all duration-1000 relative ${(TIER_COLORS as any)[activeTier].bg}`}
+                  style={{
+                    width: `${Math.floor(
+                      (tierStats[activeTier].unlocked /
+                        Math.max(tierStats[activeTier].total, 1)) *
+                        100
+                    )}%`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>

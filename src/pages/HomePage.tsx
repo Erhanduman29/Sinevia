@@ -202,7 +202,6 @@ export default function HomePage() {
           ).toFixed(1)
         : '-';
 
-    // Kupa kademesi sayıları
     const tierCounts = { bronze: 0, silver: 0, gold: 0, diamond: 0, secret: 0, total: 0 };
     (data.achievements || []).forEach((a) => {
       (a.unlockedTiers || []).forEach((t) => {
@@ -275,10 +274,10 @@ export default function HomePage() {
   const nextRank = RANK_TIERS[currentRankIndex + 1] || null;
   const PersonaIcon = userPersona.icon;
 
-  // SVG Dairesel İlerleme Hesaplaması
   const circleRadius = 46;
   const circleCircumference = 2 * Math.PI * circleRadius;
-  const circleOffset = circleCircumference - (Math.min(100, Math.max(0, lvl.progress)) / 100) * circleCircumference;
+  const circleOffset =
+    circleCircumference - (Math.min(100, Math.max(0, lvl.progress)) / 100) * circleCircumference;
 
   type PickItem =
     | { kind: 'movie'; movie: Movie }
@@ -389,23 +388,23 @@ export default function HomePage() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       
       {/* =========================================================
-          1. YENİ NESİL SİNEMA PRESTİJ & RÜTBE ARENASI (LEVEL UP HERO)
+          1. SİNEMA PRESTİJ & RÜTBE ARENASI (MOBİLDE MİNİMALİST, PC'DE GÖSTERİŞLİ)
           ========================================================= */}
       <div
-        className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-[2.2rem] p-5 sm:p-8 shadow-[0_25px_70px_rgba(0,0,0,0.75)] overflow-hidden`}
+        className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-3xl sm:rounded-[2.2rem] p-4 sm:p-8 shadow-2xl overflow-hidden`}
       >
-        {/* Arka Plan Dinamik Işık Küreleri & Siber Izgara Dokusu */}
+        {/* Arka Plan Dinamik Işık Küreleri */}
         <div
-          className={`absolute -top-24 -right-20 w-96 h-96 ${userPersona.bgGlow} rounded-full blur-[110px] pointer-events-none transition-all duration-1000`}
+          className={`absolute -top-24 -right-20 w-72 sm:w-96 h-72 sm:h-96 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
         />
         <div
-          className={`absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
+          className={`hidden sm:block absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
         />
         <div
-          className="absolute inset-0 opacity-[0.04] pointer-events-none"
+          className="hidden sm:block absolute inset-0 opacity-[0.04] pointer-events-none"
           style={{
             backgroundImage:
               'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)',
@@ -413,66 +412,63 @@ export default function HomePage() {
           }}
         />
 
-        {/* Üst Rozet & Kupa Kasası Özeti */}
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 pb-5 mb-6 border-b border-ink-800/80">
-          <div className="flex items-center gap-2.5">
+        {/* Üst Rozet & Tam İsimli Kupa Kasası Özeti (Bronz, Gümüş, Altın, Elmas, Gizli) */}
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3 pb-3.5 sm:pb-5 mb-4 sm:mb-6 border-b border-ink-800/80">
+          <div className="flex items-center justify-between md:justify-start gap-2">
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest border ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-widest border ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}
             >
-              <Sparkles size={12} /> Rütbe Kademesi {currentRankIndex + 1} / {RANK_TIERS.length}
+              <Sparkles size={11} /> Rütbe {currentRankIndex + 1} / {RANK_TIERS.length}
             </span>
 
             {data.dailyStreak > 0 && (
-              <span className="inline-flex items-center gap-1.5 bg-orange-500/15 border border-orange-500/30 text-orange-300 px-3 py-1 rounded-full text-[11px] font-black">
-                <Flame size={13} className="text-orange-400 fill-current" /> {data.dailyStreak} Gün Seri
+              <span className="inline-flex items-center gap-1 bg-orange-500/15 border border-orange-500/30 text-orange-300 px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black">
+                <Flame size={12} className="text-orange-400 fill-current" /> {data.dailyStreak} Gün Seri
               </span>
             )}
           </div>
 
-          {/* Sağ Üst: Cevher Kupa Sayacı */}
+          {/* Sağ Üst: Tam İsimli Kupa Rozetleri (Bronz, Gümüş, Altın, Elmas, Gizli) */}
           <button
             type="button"
             onClick={() => navigateTo('achievements')}
-            className="flex items-center gap-2 bg-ink-950/80 hover:bg-ink-900 border border-ink-800 hover:border-gold-500/40 px-3.5 py-1.5 rounded-full transition-all group"
+            className="flex items-center justify-between md:justify-end gap-1.5 sm:gap-2 bg-ink-950/90 hover:bg-ink-900 border border-ink-800 hover:border-gold-500/40 px-2.5 sm:px-3.5 py-1.5 rounded-2xl transition-all group overflow-x-auto hide-scrollbar"
             title="Başarımlar ve Kupa Kasasına Git"
           >
-            <Trophy size={13} className="text-gold-400 group-hover:scale-110 transition-transform" />
-            <div className="flex items-center gap-2 text-[11px] font-black">
-              <span className="text-amber-500" title="Bronz Kupalar">
-                ● {quickMetrics.tierCounts.bronze}
+            <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-black whitespace-nowrap">
+              <span className="px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                Bronz: {quickMetrics.tierCounts.bronze}
               </span>
-              <span className="text-slate-300" title="Gümüş Kupalar">
-                ● {quickMetrics.tierCounts.silver}
+              <span className="px-2 py-0.5 rounded-lg bg-slate-400/15 text-slate-200 border border-slate-400/30">
+                Gümüş: {quickMetrics.tierCounts.silver}
               </span>
-              <span className="text-yellow-400" title="Altın Kupalar">
-                ● {quickMetrics.tierCounts.gold}
+              <span className="px-2 py-0.5 rounded-lg bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">
+                Altın: {quickMetrics.tierCounts.gold}
               </span>
-              <span className="text-cyan-300" title="Elmas Kupalar">
-                ◆ {quickMetrics.tierCounts.diamond}
+              <span className="px-2 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                Elmas: {quickMetrics.tierCounts.diamond}
               </span>
-              {quickMetrics.tierCounts.secret > 0 && (
-                <span className="text-purple-400" title="Gizli Kupalar">
-                  ★ {quickMetrics.tierCounts.secret}
+              {(quickMetrics.tierCounts.secret > 0 || data.showLockedNames) && (
+                <span className="px-2 py-0.5 rounded-lg bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30">
+                  Gizli: {quickMetrics.tierCounts.secret}
                 </span>
               )}
             </div>
-            <ChevronRight size={13} className="text-ink-500 group-hover:text-gold-400" />
+            <ChevronRight size={14} className="text-ink-500 group-hover:text-gold-400 flex-shrink-0" />
           </button>
         </div>
 
-        {/* ORTA BÖLÜM: 3D SVG HALKALI ARMA + DEV SEVİYE + LAZER XP BARI */}
-        <div className="relative z-10 flex flex-col lg:flex-row items-center gap-6 lg:gap-8">
+        {/* ORTA BÖLÜM: MOBİLDE YAN YANA KOMPAKT, PC'DE GENİŞ ARENA */}
+        <div className="relative z-10 flex flex-col lg:flex-row items-center gap-4 sm:gap-6 lg:gap-8">
           
           {/* Sol: Dairesel SVG İlerleme Halkalı Rütbe Arması */}
-          <div className="flex flex-col sm:flex-row items-center gap-5 flex-shrink-0 w-full sm:w-auto justify-center sm:justify-start">
-            <div className="relative w-28 h-28 flex items-center justify-center flex-shrink-0">
-              {/* Arka Aura */}
+          <div className="flex flex-row items-center gap-3.5 sm:gap-5 flex-shrink-0 w-full lg:w-auto justify-start">
+            <div className="relative w-16 h-16 sm:w-28 sm:h-28 flex items-center justify-center flex-shrink-0">
               <div
-                className={`absolute inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-xl animate-pulse`}
+                className={`absolute inset-1 sm:inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-lg sm:blur-xl animate-pulse`}
               />
 
-              {/* SVG İlerleme Çemberi */}
-              <svg className="w-28 h-28 -rotate-90 transform" viewBox="0 0 108 108">
+              <svg className="w-16 h-16 sm:w-28 sm:h-28 -rotate-90 transform" viewBox="0 0 108 108">
                 <circle
                   cx="54"
                   cy="54"
@@ -492,104 +488,99 @@ export default function HomePage() {
                   strokeDashoffset={circleOffset}
                   strokeLinecap="round"
                   fill="transparent"
-                  className="transition-all duration-1000 ease-out drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                  className="transition-all duration-1000 ease-out"
                 />
               </svg>
 
-              {/* Merkez İkon Rozeti */}
               <div
-                className={`absolute inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}
+                className={`absolute inset-2.5 sm:inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}
               >
                 <div className="w-full h-full bg-ink-950 rounded-full flex flex-col items-center justify-center">
-                  <PersonaIcon className={userPersona.color} size={30} />
-                  <span className="text-[10px] font-black text-ink-400 uppercase mt-0.5">
+                  <PersonaIcon className={`${userPersona.color} w-5 h-5 sm:w-[30px] sm:h-[30px]`} />
+                  <span className="hidden sm:block text-[10px] font-black text-ink-400 uppercase mt-0.5">
                     %{Math.floor(lvl.progress)}
                   </span>
                 </div>
               </div>
 
-              {/* Alt Seviye Hapı */}
               <div
-                className={`absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}
+                className={`hidden sm:block absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}
               >
                 SV. {lvl.level}
               </div>
             </div>
 
             {/* Rütbe Başlığı ve Kişisel İstatistik Özeti */}
-            <div className="text-center sm:text-left">
+            <div className="text-left flex-1 min-w-0">
               <div
-                className={`text-xs font-black uppercase tracking-widest mb-1 ${userPersona.color}`}
+                className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-0.5 sm:mb-1 truncate ${userPersona.color}`}
               >
                 {userPersona.title}
               </div>
-              <div className="text-3xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none">
+              <div className="text-2xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none">
                 Seviye {lvl.level}
               </div>
-              <p className="text-xs text-ink-400 mt-1.5 max-w-[240px] leading-relaxed">
+              <p className="hidden sm:block text-xs text-ink-400 mt-1.5 max-w-[240px] leading-relaxed">
                 {userPersona.subtitle}
               </p>
 
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-3">
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-ink-950/90 border border-ink-800 text-ink-200 px-2.5 py-1 rounded-lg">
-                  <Clock size={12} className="text-gold-400" /> {quickMetrics.totalHours} Saat Ekran
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2 sm:mt-3">
+                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-ink-950/90 border border-ink-800 text-ink-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg">
+                  <Clock size={11} className="text-gold-400" /> {quickMetrics.totalHours} Saat
                 </span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-ink-950/90 border border-ink-800 text-ink-200 px-2.5 py-1 rounded-lg">
-                  <Star size={12} className="text-gold-400 fill-current" /> Ort: {quickMetrics.avgRating}
+                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-ink-950/90 border border-ink-800 text-ink-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg">
+                  <Star size={11} className="text-gold-400 fill-current" /> Ort: {quickMetrics.avgRating}
                 </span>
               </div>
             </div>
           </div>
 
           {/* Sağ: Lazer Segmentli XP İlerleme Motoru */}
-          <div className="flex-1 w-full bg-ink-950/70 border border-ink-800/90 rounded-3xl p-4 sm:p-5 shadow-inner space-y-3.5">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex-1 w-full bg-ink-950/70 border border-ink-800/90 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-inner space-y-2.5 sm:space-y-3.5">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">
+                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">
                   Deneyim Puanı (XP) Havuzu
                 </span>
-                <div className="text-lg sm:text-xl font-black text-ink-50 mt-0.5 flex items-baseline gap-1.5">
+                <div className="text-sm sm:text-xl font-black text-ink-50 flex items-baseline gap-1.5">
                   <span>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</span>
-                  <span className="text-xs font-bold text-ink-400">
-                    ({lvl.currentLevelXp.toLocaleString('tr-TR')} / {lvl.nextLevelXp.toLocaleString('tr-TR')} Seviye İçi)
+                  <span className="text-[10px] sm:text-xs font-bold text-ink-400">
+                    (%{Math.floor(lvl.progress)})
                   </span>
                 </div>
               </div>
 
               <div className="text-right">
-                <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">
+                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">
                   Seviye {lvl.level + 1} Hedefi
                 </span>
-                <span className={`text-sm font-black ${userPersona.color}`}>
+                <span className={`text-xs sm:text-sm font-black ${userPersona.color}`}>
                   {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı
                 </span>
               </div>
             </div>
 
-            {/* 20 Segmentli Kristal XP Barı */}
-            <div className="relative h-5 w-full bg-ink-900 rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
+            {/* Kristal XP Barı */}
+            <div className="relative h-3 sm:h-5 w-full bg-ink-900 rounded-lg sm:rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
               <div
-                className={`h-full rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`}
+                className={`h-full rounded-md sm:rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`}
                 style={{ width: `${Math.max(3, lvl.progress)}%` }}
               >
-                {/* Parlama Efekti */}
                 <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_25%,rgba(255,255,255,0.35)_50%,transparent_75%)] bg-[length:200%_100%] animate-pulse" />
-                {/* Sağ Uç Lazer Çizgisi */}
-                <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white shadow-[0_0_12px_#fff]" />
+                <div className="absolute right-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_#fff]" />
               </div>
 
-              {/* 20 Bölmeli Segment Çizgileri */}
-              <div className="absolute inset-0 grid grid-cols-10 sm:grid-cols-20 pointer-events-none">
+              <div className="hidden sm:grid absolute inset-0 grid-cols-20 pointer-events-none">
                 {Array.from({ length: 20 }).map((_, idx) => (
                   <div key={idx} className="border-r border-ink-950/40 last:border-0" />
                 ))}
               </div>
             </div>
 
-            {/* RÜTBE YOL HARİTASI (5 KADEMELİ EVRİM ZİNCİRİ) */}
-            <div className="pt-2">
-              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-ink-400 mb-2">
-                <span>Unvan Evrim Haritası</span>
+            {/* RÜTBE YOL HARİTASI (Mobilde tek satır minimalist özet, PC'de 5'li Evrim Kartları) */}
+            <div className="pt-0.5 sm:pt-2">
+              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-ink-400 sm:mb-2">
+                <span className="hidden sm:inline">Unvan Evrim Haritası</span>
                 {nextRank ? (
                   <span className={userPersona.color}>
                     Sonraki Unvan: {nextRank.title} ({nextRank.minLevel - lvl.level} Seviye Kaldı)
@@ -599,7 +590,7 @@ export default function HomePage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <div className="hidden sm:grid sm:grid-cols-5 gap-2">
                 {RANK_TIERS.map((tier, idx) => {
                   const isUnlocked = lvl.level >= tier.minLevel;
                   const isCurrent = idx === currentRankIndex;
@@ -648,36 +639,36 @@ export default function HomePage() {
         </div>
 
         {/* Alt Bar: Hızlı Komut Butonları */}
-        <div className="relative z-10 mt-6 pt-5 border-t border-ink-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="relative z-10 mt-4 sm:mt-6 pt-3.5 sm:pt-5 border-t border-ink-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           <button
             onClick={() => setShowPick(true)}
-            className="flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-3.5 rounded-xl font-black text-xs sm:text-sm hover:from-gold-400 hover:to-gold-500 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-gold-500/20 group"
+            className="flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm hover:from-gold-400 hover:to-gold-500 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-gold-500/20 group"
           >
-            <Shuffle size={18} className="group-hover:rotate-180 transition-transform duration-500" />
+            <Shuffle size={16} className="group-hover:rotate-180 transition-transform duration-500" />
             <span>Ne İzlesem?</span>
           </button>
 
           <button
             onClick={() => setShowDnaModal(true)}
-            className="flex items-center justify-center gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-4 py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02]"
+            className="flex items-center justify-center gap-1.5 sm:gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02]"
           >
-            <Dna size={18} className="text-emerald-400" />
+            <Dna size={16} className="text-emerald-400" />
             <span>DNA Sentezle</span>
           </button>
 
           <button
             onClick={() => setShowBulkAdd('movie')}
-            className="flex items-center justify-center gap-2 bg-ink-800/90 hover:bg-ink-700 text-ink-100 border border-ink-700 px-4 py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02]"
+            className="flex items-center justify-center gap-1.5 sm:gap-2 bg-ink-800/90 hover:bg-ink-700 text-ink-100 border border-ink-700 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02]"
           >
-            <Search size={18} className="text-gold-400" />
+            <Search size={16} className="text-gold-400" />
             <span>Katalogdan Ekle</span>
           </button>
 
           <button
             onClick={() => navigateTo('ai')}
-            className="flex items-center justify-center gap-2 bg-azure-500/15 hover:bg-azure-500/25 text-azure-300 border border-azure-500/30 px-4 py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02]"
+            className="flex items-center justify-center gap-1.5 sm:gap-2 bg-azure-500/15 hover:bg-azure-500/25 text-azure-300 border border-azure-500/30 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02]"
           >
-            <Bot size={18} className="text-azure-400" />
+            <Bot size={16} className="text-azure-400" />
             <span>AI Asistan</span>
           </button>
         </div>
