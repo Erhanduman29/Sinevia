@@ -474,8 +474,8 @@ export default function MoviesPage() {
         <RatingModal
           title={pickedMovie.title}
           subtitle={pickedMovie.year ? `Çıkış Yılı: ${pickedMovie.year}` : 'Film'}
-          onRate={(rating, note, detailedRating) => {
-            watchMovie(pickedMovie.id, rating, note, detailedRating);
+          onRate={(rating, note, detailedRating, reviewTags) => {
+            watchMovie(pickedMovie.id, rating, note, detailedRating, reviewTags);
             setPickedMovie(null);
           }}
           onClose={() => setPickedMovie(null)}
@@ -487,7 +487,9 @@ export default function MoviesPage() {
         <RatingModal
           title={ratingTarget.title}
           subtitle={ratingTarget.year ? `Çıkış Yılı: ${ratingTarget.year}` : 'Film'}
-          onRate={(rating, note, detailedRating) => watchMovie(ratingTarget.id, rating, note, detailedRating)}
+          onRate={(rating, note, detailedRating, reviewTags) =>
+            watchMovie(ratingTarget.id, rating, note, detailedRating, reviewTags)
+          }
           onClose={() => setRatingTarget(null)}
         />
       )}
@@ -582,7 +584,6 @@ function MovieRow({
   return (
     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
       
-      {/* SOL: Tıklanabilir Poster ve Bilgiler Alanı */}
       <div className="flex gap-3 sm:gap-4 flex-1 min-w-0">
         <button
           type="button"

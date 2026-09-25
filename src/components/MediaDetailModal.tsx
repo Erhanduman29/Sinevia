@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search, User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers, Building2, Tag, Edit2, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
@@ -16,19 +16,21 @@ interface MediaDetailModalProps {
 
 export default function MediaDetailModal({ target, onClose }: MediaDetailModalProps) {
   const { data: appData, watchMovie, watchEpisode, updateHistoryRating } = useApp();
+  const [isMainNoteExpanded, setIsMainNoteExpanded] = useState(false);
+  const [expandedEpNotes, setExpandedEpNotes] = useState<Set<string>>(new Set());
 
-  // Puanlama Modalı State'i
   const [ratingModalConfig, setRatingModalConfig] = useState<{
     title: string;
     subtitle: string;
     initialRating?: number | null;
     initialNote?: string;
-    onSubmit: (rating: number, note: string, detailedRating?: Record<string, number>) => void;
+    initialDetailedRating?: Record<string, number>;
+    initialReviewTags?: string[];
+    onSubmit: (rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => void;
   } | null>(null);
 
   const isMovie = target.type === 'movie';
   
-  // AppContext üzerinden canlı veriyi çekiyoruz ki kart açıkken puan verildiğinde anında güncellensin!
   const liveMovie = isMovie 
     ? (appData.movies.find(m => m.id === target.data.id) || (target.data as Movie)) 
     : null;
@@ -53,10 +55,8 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
   const studios = isMovie ? liveMovie!.studios : liveSeries!.studios;
   const keywords = isMovie ? liveMovie!.keywords : liveSeries!.keywords;
 
-  // Dizi için sıradaki izlenmemiş bölüm
   const nextEpisodeToWatch = !isMovie && liveSeries ? getNextUnwatchedEpisode(liveSeries.episodes) : null;
 
-  // Puan ve Not Hesaplamaları
   const displayRating = liveHistoryItem
     ? liveHistoryItem.rating
     : isMovie
@@ -80,18 +80,31 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
     ? liveMovie!.detailedRating
     : undefined;
 
+  const reviewTags = liveHistoryItem
+    ? liveHistoryItem.reviewTags
+    : isMovie
+    ? liveMovie!.reviewTags
+    : undefined;
+
   const watchedAt = liveHistoryItem
     ? liveHistoryItem.watchedAt
     : isMovie
     ? liveMovie!.watchedAt
     : null;
 
-  // Koleksiyon Adı (Film ise)
   const collectionName = isMovie && liveMovie!.collectionId
     ? appData.collections.find((c) => c.id === liveMovie!.collectionId)?.name
     : undefined;
 
-  // FİLM PUANLAMA TETİKLEYİCİSİ
+  const toggleEpNote = (epId: string) => {
+    setExpandedEpNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(epId)) next.delete(epId);
+      else next.add(epId);
+      return next;
+    });
+  };
+
   const handleOpenMovieRating = () => {
     if (!liveMovie) return;
     setRatingModalConfig({
@@ -99,22 +112,23 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
       subtitle: liveMovie.year ? `Çıkış Yılı: ${liveMovie.year}` : 'Film',
       initialRating: liveHistoryItem ? liveHistoryItem.rating : liveMovie.rating,
       initialNote: liveHistoryItem ? liveHistoryItem.note : liveMovie.note,
-      onSubmit: (r, n, dr) => {
+      initialDetailedRating: liveHistoryItem ? liveHistoryItem.detailedRating : liveMovie.detailedRating,
+      initialReviewTags: liveHistoryItem ? liveHistoryItem.reviewTags : liveMovie.reviewTags,
+      onSubmit: (r, n, dr, tags) => {
         if (liveHistoryItem) {
-          updateHistoryRating(liveHistoryItem.id, r, n, dr);
+          updateHistoryRating(liveHistoryItem.id, r, n, dr, tags);
         } else if (liveMovie.watched) {
           const hist = appData.history.find(h => (h.itemId === liveMovie.id || h.id === liveMovie.id) && (h.kind === 'movie' || h.type === 'movie'));
-          if (hist) updateHistoryRating(hist.id, r, n, dr);
-          else watchMovie(liveMovie.id, r, n, dr);
+          if (hist) updateHistoryRating(hist.id, r, n, dr, tags);
+          else watchMovie(liveMovie.id, r, n, dr, tags);
         } else {
-          watchMovie(liveMovie.id, r, n, dr);
+          watchMovie(liveMovie.id, r, n, dr, tags);
         }
         setRatingModalConfig(null);
       }
     });
   };
 
-  // DİZİ BÖLÜMÜ PUANLAMA TETİKLEYİCİSİ
   const handleOpenEpisodeRating = (ep: Episode, isAlreadyWatched: boolean) => {
     if (!liveSeries) return;
     setRatingModalConfig({
@@ -122,20 +136,21 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
       subtitle: `${ep.season}. Sezon ${ep.episode}. Bölüm ${isAlreadyWatched ? '(Puanı Düzenle)' : ''}`,
       initialRating: ep.rating,
       initialNote: ep.note,
-      onSubmit: (r, n, dr) => {
+      initialDetailedRating: ep.detailedRating,
+      initialReviewTags: ep.reviewTags,
+      onSubmit: (r, n, dr, tags) => {
         if (isAlreadyWatched) {
           const hist = appData.history.find(h => h.itemId === ep.id || h.id === ep.id);
-          if (hist) updateHistoryRating(hist.id, r, n, dr);
-          else watchEpisode(liveSeries.id, ep.id, r, n, dr);
+          if (hist) updateHistoryRating(hist.id, r, n, dr, tags);
+          else watchEpisode(liveSeries.id, ep.id, r, n, dr, tags);
         } else {
-          watchEpisode(liveSeries.id, ep.id, r, n, dr);
+          watchEpisode(liveSeries.id, ep.id, r, n, dr, tags);
         }
         setRatingModalConfig(null);
       }
     });
   };
 
-  // GEÇMİŞTEKİ ÖZEL DİZİ BÖLÜMÜNÜ DÜZENLEME
   const handleOpenHistoryItemRating = () => {
     if (!liveHistoryItem) return;
     setRatingModalConfig({
@@ -145,18 +160,18 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
         : 'Puanı Düzenle',
       initialRating: liveHistoryItem.rating,
       initialNote: liveHistoryItem.note,
-      onSubmit: (r, n, dr) => {
-        updateHistoryRating(liveHistoryItem.id, r, n, dr);
+      initialDetailedRating: liveHistoryItem.detailedRating,
+      initialReviewTags: liveHistoryItem.reviewTags,
+      onSubmit: (r, n, dr, tags) => {
+        updateHistoryRating(liveHistoryItem.id, r, n, dr, tags);
         setRatingModalConfig(null);
       }
     });
   };
 
-  // İzleme Linklerini Oluşturma
   const getWatchLinks = () => {
     const links: { href: string; text: string; logo: string | null; icon: any; isTrailer?: boolean }[] = [];
 
-    // 1. YouTube Fragman Butonu
     const trailerQuery = encodeURIComponent(`${title} ${year || ''} official trailer fragman`);
     links.push({
       href: `https://www.youtube.com/results?search_query=${trailerQuery}`,
@@ -221,7 +236,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
 
   const watchLinks = getWatchLinks();
 
-  // Dizi ise izlenen bölümlerin listesi
   const watchedEpisodes = !isMovie && liveSeries
     ? [...liveSeries.episodes]
         .filter((e) => e.watched)
@@ -237,7 +251,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-4xl bg-ink-900/95 border border-ink-700/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-fade-in-up"
       >
-        {/* SİNEMATİK FLU POSTER ARKA PLANI */}
         {posterUrl && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
             <img
@@ -249,7 +262,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
           </div>
         )}
 
-        {/* KAPATMA BUTONU */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-ink-950/80 hover:bg-ink-800 text-ink-300 hover:text-white border border-ink-700/60 flex items-center justify-center transition-all hover:scale-110 shadow-lg"
@@ -258,13 +270,9 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
           <X size={20} />
         </button>
 
-        {/* İÇERİK SCROLL ALANI */}
         <div className="relative z-10 flex-1 overflow-y-auto p-5 sm:p-8 space-y-6 custom-scrollbar">
           
-          {/* ÜST KISIM: POSTER VE ANA BİLGİLER */}
           <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-            
-            {/* Sol: Dev Poster */}
             <div className="w-40 sm:w-52 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-ink-700/60 shadow-2xl relative group">
               {posterUrl ? (
                 <img src={posterUrl} alt={title} className="w-full h-full object-cover" />
@@ -275,16 +283,13 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 </div>
               )}
               
-              {/* Tür Etiketi (Sol Üst) */}
               <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-white/10 flex items-center gap-1">
                 {isMovie ? <Film size={11} className="text-gold-400" /> : <Tv size={11} className="text-azure-400" />}
                 {isMovie ? 'Film' : 'Dizi'}
               </div>
             </div>
 
-            {/* Sağ: Başlık, Rozetler, Puanlama Butonları, Konu ve Linkler */}
             <div className="flex-1 min-w-0 flex flex-col text-center md:text-left w-full">
-              
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pr-0 md:pr-10">
                 <div>
                   {collectionName && (
@@ -303,7 +308,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                   )}
                 </div>
 
-                {/* SAĞ ÜST: PUAN ROZETİ VE KART İÇİ PUANLAMA BUTONLARI */}
                 <div className="flex flex-col items-center md:items-end gap-2 flex-shrink-0 mx-auto md:mx-0">
                   {displayRating !== null && displayRating !== undefined && (
                     <div className="flex flex-col items-center md:items-end">
@@ -318,7 +322,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                     </div>
                   )}
 
-                  {/* FİLM İSE: Puanla veya Puanı Düzenle Butonu */}
                   {isMovie && liveMovie && (
                     <button
                       type="button"
@@ -341,7 +344,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                     </button>
                   )}
 
-                  {/* DİZİ İSE (Geçmişten açıldıysa): O Bölümün Puanını Düzenle */}
                   {!isMovie && liveHistoryItem && (
                     <button
                       type="button"
@@ -352,7 +354,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                     </button>
                   )}
 
-                  {/* DİZİ İSE: Sıradaki Bölümü Puanla Butonu */}
                   {!isMovie && liveSeries && nextEpisodeToWatch && (
                     <button
                       type="button"
@@ -372,7 +373,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 </div>
               </div>
 
-              {/* Meta Bilgiler (Yıl, Süre, İzlenme Tarihi) */}
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-3 text-xs text-ink-300 font-medium">
                 {year && (
                   <span className="flex items-center gap-1.5 bg-ink-800/70 px-2.5 py-1 rounded-lg border border-ink-700/50">
@@ -396,7 +396,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 )}
               </div>
 
-              {/* Türler */}
               {genres && genres.length > 0 && (
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 mt-3">
                   {genres.map((g) => (
@@ -410,7 +409,20 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 </div>
               )}
 
-              {/* Konu / Özet (TMDB) */}
+              {/* Seçilen Değerlendirme Başlıkları */}
+              {reviewTags && reviewTags.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 mt-3">
+                  {reviewTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs font-black px-3 py-1 rounded-xl bg-gold-500/20 text-gold-300 border border-gold-500/40 shadow-sm"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-5 bg-ink-950/60 border border-ink-800/80 rounded-2xl p-4 text-left shadow-inner">
                 <div className="text-[10px] font-black uppercase tracking-widest text-ink-400 mb-1.5">
                   Konu & Özet
@@ -426,7 +438,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 )}
               </div>
 
-              {/* Fragman ve İzleme Linkleri */}
               <div className="mt-4 flex flex-wrap items-center justify-center md:justify-start gap-2">
                 {watchLinks.map((link, idx) => {
                   const Icon = link.icon;
@@ -469,21 +480,32 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
           {(displayNote || (detailedRating && Object.keys(detailedRating).length > 0)) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-ink-800/60">
               
-              {/* Kişisel Not */}
               {displayNote && (
-                <div className="bg-ink-950/70 border border-gold-500/30 rounded-2xl p-4 flex flex-col justify-between">
+                <div
+                  onClick={() => setIsMainNoteExpanded(!isMainNoteExpanded)}
+                  title={isMainNoteExpanded ? 'Küçültmek için tıkla' : 'Tamamını okumak için tıkla'}
+                  className="bg-ink-950/70 hover:bg-ink-950 border border-gold-500/30 rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-colors"
+                >
                   <div>
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gold-400 mb-2">
-                      <StickyNote size={14} /> Kişisel İnceleme & Notun
+                    <div className="flex items-center justify-between text-xs font-black uppercase tracking-widest text-gold-400 mb-2">
+                      <span className="flex items-center gap-2">
+                        <StickyNote size={14} /> Kişisel İnceleme & Notun
+                      </span>
+                      <span className="text-[10px] text-ink-500 font-semibold">
+                        {isMainNoteExpanded ? 'Küçült' : 'Tıkla & Büyüt'}
+                      </span>
                     </div>
-                    <p className="text-sm text-ink-100 italic whitespace-pre-wrap leading-relaxed">
+                    <p
+                      className={`text-sm text-ink-100 italic leading-relaxed ${
+                        isMainNoteExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-1'
+                      }`}
+                    >
                       "{displayNote}"
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* Detaylı Kriter Puanları */}
               {detailedRating && Object.keys(detailedRating).length > 0 && (
                 <div className="bg-ink-950/70 border border-ink-800 rounded-2xl p-4">
                   <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-azure-400 mb-3">
@@ -584,50 +606,73 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
             </div>
           )}
 
-          {/* DİZİ İSE: İZLENEN BÖLÜMLERİN NOT VE PUAN GEÇMİŞİ (Her biri düzenlenebilir!) */}
+          {/* DİZİ İSE: İZLENEN BÖLÜMLERİN NOT, BAŞLIK VE PUAN GEÇMİŞİ */}
           {!isMovie && watchedEpisodes.length > 0 && (
             <div className="pt-2 border-t border-ink-800/60">
               <div className="text-xs font-black uppercase tracking-widest text-azure-400 mb-3 flex items-center gap-2">
                 <Tv size={14} /> İzlenen Bölümler & Notların ({watchedEpisodes.length})
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                {watchedEpisodes.map((ep) => (
-                  <div
-                    key={ep.id}
-                    className="bg-ink-950/60 border border-ink-800/80 rounded-xl p-3 flex flex-col justify-between gap-2 hover:border-azure-500/40 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-ink-100">
-                        {ep.season}. Sezon {ep.episode}. Bölüm
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        {ep.rating !== null && (
-                          <span className={`text-[11px] px-2 py-0.5 rounded-md font-bold ${ratingBgClass(ep.rating)}`}>
-                            {ep.rating}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEpisodeRating(ep, true)}
-                          className="p-1 text-ink-500 hover:text-azure-400 bg-ink-900 rounded-md transition-colors"
-                          title="Bu Bölümün Puanını / Notunu Düzenle"
+                {watchedEpisodes.map((ep) => {
+                  const isEpExpanded = expandedEpNotes.has(ep.id);
+                  return (
+                    <div
+                      key={ep.id}
+                      className="bg-ink-950/60 border border-ink-800/80 rounded-xl p-3 flex flex-col justify-between gap-2 hover:border-azure-500/40 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-ink-100">
+                          {ep.season}. Sezon {ep.episode}. Bölüm
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {ep.rating !== null && (
+                            <span className={`text-[11px] px-2 py-0.5 rounded-md font-bold ${ratingBgClass(ep.rating)}`}>
+                              {ep.rating}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEpisodeRating(ep, true)}
+                            className="p-1 text-ink-500 hover:text-azure-400 bg-ink-900 rounded-md transition-colors"
+                            title="Bu Bölümün Puanını / Notunu Düzenle"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {ep.reviewTags && ep.reviewTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {ep.reviewTags.map((t) => (
+                            <span
+                              key={t}
+                              className="text-[10px] font-bold bg-azure-500/15 text-azure-300 border border-azure-500/30 px-2 py-0.5 rounded-md"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {ep.note && (
+                        <p
+                          onClick={() => toggleEpNote(ep.id)}
+                          title={isEpExpanded ? 'Küçültmek için tıkla' : 'Tamamını okumak için tıkla'}
+                          className={`text-xs text-ink-300 italic bg-ink-900/60 hover:bg-ink-900 p-2 rounded-lg border-l-2 border-azure-500/40 cursor-pointer ${
+                            isEpExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-1'
+                          }`}
                         >
-                          <Edit2 size={12} />
-                        </button>
-                      </div>
+                          "{ep.note}"
+                        </p>
+                      )}
+                      {ep.watchedAt && (
+                        <div className="text-[10px] text-ink-500 text-right">
+                          {formatDateShort(ep.watchedAt)}
+                        </div>
+                      )}
                     </div>
-                    {ep.note && (
-                      <p className="text-xs text-ink-300 italic bg-ink-900/60 p-2 rounded-lg border-l-2 border-azure-500/40">
-                        "{ep.note}"
-                      </p>
-                    )}
-                    {ep.watchedAt && (
-                      <div className="text-[10px] text-ink-500 text-right">
-                        {formatDateShort(ep.watchedAt)}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -643,8 +688,10 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
             subtitle={ratingModalConfig.subtitle}
             initialRating={ratingModalConfig.initialRating}
             initialNote={ratingModalConfig.initialNote}
-            onRate={(rating, note, detailedRating) => {
-              ratingModalConfig.onSubmit(rating, note, detailedRating);
+            initialDetailedRating={ratingModalConfig.initialDetailedRating}
+            initialReviewTags={ratingModalConfig.initialReviewTags}
+            onRate={(rating, note, detailedRating, reviewTags) => {
+              ratingModalConfig.onSubmit(rating, note, detailedRating, reviewTags);
             }}
             onClose={() => setRatingModalConfig(null)}
           />

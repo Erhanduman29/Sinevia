@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus, Tag } from 'lucide-react';
+import { useApp, DEFAULT_REVIEW_TAGS } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
 
 interface RatingModalProps {
@@ -9,23 +9,12 @@ interface RatingModalProps {
   initialRating?: number | null;
   initialNote?: string;
   initialDetailedRating?: Record<string, number>;
-  onRate: (rating: number, note: string, detailedRating?: Record<string, number>) => void;
+  initialReviewTags?: string[];
+  onRate: (rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => void;
   onClose: () => void;
 }
 
-const QUICK_TAGS = [
-  '🔥 Başyapıt',
-  '🎭 Oyunculuk Muazzam',
-  '🤯 Ters Köşe Final',
-  '🎵 Müzikler Efsane',
-  '🎬 Görsellik Şahane',
-  '🍿 Akıcı & Keyifli',
-  '💤 Tempo Yavaştı',
-  '📉 Beklentimin Altında'
-];
-
 const STAR_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-// 1'den 10'a kadar sıralı tam ve buçuklu puan dizisi
 const SEQUENTIAL_SCORES = [
   1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10
 ];
@@ -36,11 +25,13 @@ export default function RatingModal({
   initialRating,
   initialNote = '',
   initialDetailedRating,
+  initialReviewTags = [],
   onRate,
   onClose,
 }: RatingModalProps) {
   const { data } = useApp();
   const criteriaList = data.criteria || [];
+  const availableTags = data.reviewTags && data.reviewTags.length > 0 ? data.reviewTags : DEFAULT_REVIEW_TAGS;
 
   // Her film/bölüm için benzersiz taslak (draft) anahtarı
   const draftKey = useMemo(() => {
@@ -68,6 +59,12 @@ export default function RatingModal({
   const [note, setNote] = useState<string>(() => {
     if (savedDraft && typeof savedDraft.note === 'string') return savedDraft.note;
     return initialNote;
+  });
+
+  // Seçilebilir Değerlendirme Başlıkları (Notlara yazılmaz, rozet olarak seçilir)
+  const [selectedTags, setSelectedTags] = useState<string[]>(() => {
+    if (savedDraft && Array.isArray(savedDraft.selectedTags)) return savedDraft.selectedTags;
+    return initialReviewTags || [];
   });
 
   const [showCriteria, setShowCriteria] = useState<boolean>(() => {
@@ -104,7 +101,7 @@ export default function RatingModal({
     return map;
   });
 
-  // Kullanıcı ne yazarsa veya hangi puanı verirse anında taslak olarak kaydet (Yanlışlıkla çıkınca silinmez)
+  // Kullanıcı ne yazarsa veya hangi puanı/başlığı seçerse anında taslak olarak kaydet
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -112,12 +109,13 @@ export default function RatingModal({
         JSON.stringify({
           rating,
           note,
+          selectedTags,
           showCriteria,
           critScores,
         })
       );
     } catch {}
-  }, [draftKey, rating, note, showCriteria, critScores]);
+  }, [draftKey, rating, note, selectedTags, showCriteria, critScores]);
 
   // Taslağı sıfırlama fonksiyonu
   const handleResetDraft = () => {
@@ -127,6 +125,7 @@ export default function RatingModal({
     const defRating = initialRating ?? 8;
     setRating(defRating);
     setNote(initialNote);
+    setSelectedTags(initialReviewTags || []);
     const defShow = Boolean(initialDetailedRating && Object.keys(initialDetailedRating).length > 0);
     setShowCriteria(defShow);
 
@@ -144,7 +143,6 @@ export default function RatingModal({
 
   const activeScore = hoverRating !== null ? hoverRating : rating;
 
-  // Puana göre unvan ve ikon (Renkler orijinal ratingBgClass ile gelir)
   const scoreMeta = useMemo(() => {
     if (activeScore >= 9.5) {
       return {
@@ -201,12 +199,11 @@ export default function RatingModal({
     });
 
     if (totalWeight > 0) {
-      const avg = Math.round((weightedSum / totalWeight) * 2) / 2; // 0.5'lik yuvarlama
+      const avg = Math.round((weightedSum / totalWeight) * 2) / 2;
       setRating(Math.max(1, Math.min(10, avg)));
     }
   };
 
-  // Kriter sayı kutusuna yazıldığında çalışan fonksiyon
   const handleCriterionInputChange = (critId: string, rawVal: string) => {
     const normalized = rawVal.replace(',', '.');
     setCritInputs((prev) => ({ ...prev, [critId]: normalized }));
@@ -222,7 +219,6 @@ export default function RatingModal({
     }
   };
 
-  // Kutu dışına çıkıldığında (blur) geçersiz/boş bırakılmışsa 1-10 arasına sabitle
   const handleCriterionInputBlur = (critId: string) => {
     const raw = critInputs[critId];
     let parsed = parseFloat(raw);
@@ -236,7 +232,6 @@ export default function RatingModal({
     recalculateWeightedAverage(updated);
   };
 
-  // + / - Butonları ile hızlı artırma/azaltma
   const stepCriterionScore = (critId: string, delta: number) => {
     const current = critScores[critId] ?? rating;
     const next = Math.max(1, Math.min(10, Math.round((current + delta) * 2) / 2));
@@ -246,20 +241,25 @@ export default function RatingModal({
     recalculateWeightedAverage(updated);
   };
 
-  const handleAddTag = (tag: string) => {
-    setNote((prev) => {
-      const trimmed = prev.trim();
-      if (trimmed.includes(tag)) return prev;
-      return trimmed ? `${trimmed} • ${tag}` : tag;
-    });
+  // Başlık Seç / Kaldır (Notlara yazmaz, seçili diziyi günceller)
+  const toggleReviewTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
   };
+
+  // Varsa önceden seçilmiş ama ayarlardan silinmiş başlıkları da listede göster
+  const displayedTags = useMemo(() => {
+    return Array.from(new Set([...availableTags, ...selectedTags]));
+  }, [availableTags, selectedTags]);
 
   const handleSubmit = () => {
     const finalDetailed = showCriteria && criteriaList.length > 0 ? critScores : undefined;
+    const finalTags = selectedTags.length > 0 ? selectedTags : undefined;
     try {
       localStorage.removeItem(draftKey);
     } catch {}
-    onRate(rating, note.trim(), finalDetailed);
+    onRate(rating, note.trim(), finalDetailed, finalTags);
     onClose();
   };
 
@@ -272,7 +272,6 @@ export default function RatingModal({
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-xl bg-ink-950/95 border border-ink-700/80 rounded-[2rem] overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-[92vh] animate-fade-in-up"
       >
-        {/* ORİJİNAL SİNEMATİK ARKA PLAN IŞIĞI */}
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-64 bg-gold-500/15 rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute -bottom-24 right-0 w-72 h-72 bg-azure-500/10 rounded-full blur-[110px] pointer-events-none" />
 
@@ -306,13 +305,12 @@ export default function RatingModal({
           </button>
         </div>
 
-        {/* İÇERİK GÖVDESİ (SCROLLABLE) */}
+        {/* İÇERİK GÖVDESİ */}
         <div className="relative z-10 flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar">
           
-          {/* MERKEZİ PUAN KADRANI (ORİJİNAL ratingBgClass RENKLERİYLE) */}
+          {/* MERKEZİ PUAN KADRANI */}
           <div className="flex flex-col items-center text-center bg-ink-900/50 border border-ink-800/80 rounded-3xl p-5 relative overflow-hidden shadow-inner">
             <div className="flex items-center gap-4 mb-3">
-              {/* Orijinal Puan Rozeti Rengi */}
               <div
                 className={`px-5 py-3 rounded-2xl font-black text-3xl sm:text-4xl shadow-lg flex items-center gap-2 transition-all duration-300 ${ratingBgClass(activeScore)}`}
               >
@@ -362,7 +360,7 @@ export default function RatingModal({
               })}
             </div>
 
-            {/* 1'DEN 10'A SIRALI PUAN BUTONLARI (1, 1.5, 2, 2.5 ... 9.5, 10) */}
+            {/* 1'DEN 10'A SIRALI PUAN BUTONLARI */}
             <div className="w-full space-y-2.5 pt-3 border-t border-ink-800/60">
               <div className="flex items-center justify-between text-[11px] font-bold text-ink-400 px-1">
                 <span>Puan Seçimi (1 - 10 Sıralı)</span>
@@ -398,7 +396,7 @@ export default function RatingModal({
             </div>
           </div>
 
-          {/* AĞIRLIKLI DETAYLI KRİTER HESAPLAYICI (SAYI İLE YAZMA YERİ) */}
+          {/* AĞIRLIKLI DETAYLI KRİTER HESAPLAYICI */}
           {criteriaList.length > 0 && (
             <div className="bg-ink-900/40 border border-ink-800/80 rounded-2xl overflow-hidden">
               <button
@@ -448,7 +446,6 @@ export default function RatingModal({
                           </div>
                         </div>
 
-                        {/* SAYIYLA YAZMA KUTUSU VE +/- TUŞLARI */}
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <button
                             type="button"
@@ -493,27 +490,48 @@ export default function RatingModal({
             </div>
           )}
 
-          {/* KİŞİSEL İNCELEME DEFTERİ VE HIZLI ETİKETLER */}
+          {/* SEÇİLEBİLİR DEĞERLENDİRME BAŞLIKLARI (NOTLARA YAZILMAZ, ROZET OLARAK SEÇİLİR) */}
           <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black uppercase tracking-wider text-ink-300 flex items-center gap-1.5">
+                <Tag size={14} className="text-gold-400" /> Değerlendirme Başlıkları (Seçilebilir)
+              </label>
+              {selectedTags.length > 0 && (
+                <span className="text-[10px] font-bold text-gold-400 bg-gold-500/15 px-2 py-0.5 rounded-full border border-gold-500/30">
+                  {selectedTags.length} Başlık Seçildi
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {displayedTags.map((tag) => {
+                const isSelected = selectedTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleReviewTag(tag)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-gold-500 text-ink-950 border-gold-400 shadow-md shadow-gold-500/20 scale-[1.03]'
+                        : 'bg-ink-900/90 hover:bg-ink-800 text-ink-300 hover:text-ink-100 border-ink-800 hover:border-ink-700'
+                    }`}
+                  >
+                    {isSelected && <Check size={12} strokeWidth={3} />}
+                    <span>{tag}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* KİŞİSEL İNCELEME DEFTERİ */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-black uppercase tracking-wider text-ink-300 flex items-center gap-1.5">
                 <StickyNote size={14} className="text-gold-400" /> Eleştirmen Notun / Günlük
               </label>
               <span className="text-[10px] text-ink-500 font-mono">{note.length} karakter</span>
-            </div>
-
-            {/* Hızlı Etiket Çipleri */}
-            <div className="flex flex-wrap gap-1.5 pb-1">
-              {QUICK_TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => handleAddTag(tag)}
-                  className="text-[11px] font-semibold bg-ink-900 hover:bg-ink-800 text-ink-300 hover:text-gold-300 px-2.5 py-1 rounded-lg border border-ink-800 hover:border-gold-500/30 transition-all"
-                >
-                  + {tag}
-                </button>
-              ))}
             </div>
 
             <textarea

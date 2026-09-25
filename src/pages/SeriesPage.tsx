@@ -21,7 +21,7 @@ export default function SeriesPage() {
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [ratingTarget, setRatingTarget] = useState<{ series: Series; episode: Episode } | null>(null);
   const [editTarget, setEditTarget] = useState<Series | null>(null);
-  const [detailSeries, setDetailSeries] = useState<Series | null>(null);
+  const [detailSeriesId, setDetailSeriesId] = useState<string | null>(null);
   
   const [deleteTarget, setDeleteTarget] = useState<Series | null>(null);
   const [deleteEpisodeTarget, setDeleteEpisodeTarget] = useState<{ series: Series; episode: Episode } | null>(null);
@@ -32,6 +32,11 @@ export default function SeriesPage() {
   const [search, setSearch] = useState('');
   
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const detailSeries = useMemo(
+    () => (detailSeriesId ? data.series.find((s) => s.id === detailSeriesId) || null : null),
+    [data.series, detailSeriesId]
+  );
 
   const handleSyncTMDBSeries = async () => {
     setIsSyncing(true);
@@ -352,7 +357,6 @@ export default function SeriesPage() {
             return (
               <div key={s.id} className="flex flex-col sm:flex-row bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50 flex-wrap">
                 
-                {/* SOL: Başlık ve İçerik */}
                 <div
                   onClick={() => toggleSeries(s.id)}
                   className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 hover:bg-ink-800/40 transition-colors w-full cursor-pointer"
@@ -364,7 +368,7 @@ export default function SeriesPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDetailSeries(s);
+                        setDetailSeriesId(s.id);
                       }}
                       title="Dizi Sinema Kartını Gör"
                       className="w-16 sm:w-16 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-md overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-azure-500"
@@ -413,7 +417,6 @@ export default function SeriesPage() {
                   </div>
                 </div>
 
-                {/* SAĞ (Mobilde Alt): Aksiyon Butonları */}
                 <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 p-3 sm:p-4 border-t border-ink-800/50 sm:border-t-0 sm:border-l shrink-0">
                   <span className="text-[10px] sm:text-xs text-ink-500 bg-ink-800/60 px-2 py-0.5 rounded-full font-medium">
                     {watchedCount}/{s.episodes.length} bölüm
@@ -495,8 +498,8 @@ export default function SeriesPage() {
         <RatingModal
           title={pickedSeriesItem.series.title}
           subtitle={`${pickedSeriesItem.episode.season}. Sezon ${pickedSeriesItem.episode.episode}. Bölüm`}
-          onRate={(rating, note) => {
-            watchEpisode(pickedSeriesItem.series.id, pickedSeriesItem.episode.id, rating, note);
+          onRate={(rating, note, detailedRating, reviewTags) => {
+            watchEpisode(pickedSeriesItem.series.id, pickedSeriesItem.episode.id, rating, note, detailedRating, reviewTags);
             setPickedSeriesItem(null);
           }}
           onClose={() => setPickedSeriesItem(null)}
@@ -509,7 +512,9 @@ export default function SeriesPage() {
         <RatingModal
           title={ratingTarget.series.title}
           subtitle={`${ratingTarget.episode.season}. Sezon ${ratingTarget.episode.episode}. Bölüm`}
-          onRate={(rating, note) => watchEpisode(ratingTarget.series.id, ratingTarget.episode.id, rating, note)}
+          onRate={(rating, note, detailedRating, reviewTags) =>
+            watchEpisode(ratingTarget.series.id, ratingTarget.episode.id, rating, note, detailedRating, reviewTags)
+          }
           onClose={() => setRatingTarget(null)}
         />
       )}
@@ -543,7 +548,7 @@ export default function SeriesPage() {
       {detailSeries && (
         <MediaDetailModal
           target={{ type: 'series', data: detailSeries }}
-          onClose={() => setDetailSeries(null)}
+          onClose={() => setDetailSeriesId(null)}
         />
       )}
     </div>

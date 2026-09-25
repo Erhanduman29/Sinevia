@@ -1,15 +1,15 @@
+export interface WatchProvider {
+  logoUrl: string;
+  providerName: string;
+  link?: string;
+}
+
 export interface RatingCriterion {
   id: string;
   name: string;
   weight: number;
   appliesTo: 'movie' | 'series' | 'both';
-  genres: string[]; // Boş ise tüm türlerde geçerli
-}
-
-export interface WatchProvider {
-  logoUrl: string;
-  providerName: string;
-  link?: string;
+  genres: string[];
 }
 
 export interface Movie {
@@ -22,24 +22,21 @@ export interface Movie {
   posterUrl?: string;
   overview?: string;
   tmdbId?: number;
-  watched: boolean;
-  rating: number | null;
-  detailedRating?: Record<string, number>;
-  note: string;
-  watchedAt: string | null;
-  addedAt: string;
-  
-  // DNA Sentezleyici için Genetik Veriler
+  customUrl?: string;
+  imdbId?: string;
+  watchProviders?: WatchProvider[];
   keywords?: string[];
   directors?: string[];
   cast?: string[];
   studios?: string[];
   originalLanguage?: string;
-  
-  // İzleme Merkezi (YENİ)
-  imdbId?: string;
-  watchProviders?: WatchProvider[];
-  customUrl?: string;
+  watched: boolean;
+  rating: number | null;
+  detailedRating?: Record<string, number>;
+  reviewTags?: string[];
+  note: string;
+  watchedAt: string | null;
+  addedAt: string;
 }
 
 export interface Episode {
@@ -49,6 +46,7 @@ export interface Episode {
   watched: boolean;
   rating: number | null;
   detailedRating?: Record<string, number>;
+  reviewTags?: string[];
   note: string;
   watchedAt: string | null;
 }
@@ -62,19 +60,15 @@ export interface Series {
   posterUrl?: string;
   overview?: string;
   tmdbId?: number;
-  addedAt: string;
-  
-  // DNA Sentezleyici için Genetik Veriler
+  customUrl?: string;
+  imdbId?: string;
+  watchProviders?: WatchProvider[];
   keywords?: string[];
   creators?: string[];
   cast?: string[];
   studios?: string[];
   originalLanguage?: string;
-  
-  // İzleme Merkezi (YENİ)
-  imdbId?: string;
-  watchProviders?: WatchProvider[];
-  customUrl?: string;
+  addedAt: string;
 }
 
 export interface Collection {
@@ -82,49 +76,33 @@ export interface Collection {
   name: string;
 }
 
-export type WatchHistoryItem = {
+export interface WatchHistoryItem {
   id: string;
+  itemId?: string;
+  seriesId?: string;
   kind: 'movie' | 'series';
+  type?: 'movie' | 'series';
   title: string;
   rating: number | null;
   detailedRating?: Record<string, number>;
+  reviewTags?: string[];
   note: string;
   watchedAt: string;
   genres: string[];
+  year?: string;
   season?: number;
   episode?: number;
-  seriesId?: string;
-  year?: string;
-  itemId?: string;
-  type?: string;
-};
-
-export interface AchievementTier {
-  bronze: number;
-  silver: number;
-  gold: number;
-  platinum: number;
-  diamond: number;
 }
 
-export interface AchievementDef {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  hidden: boolean;
-  secret: boolean;
-  tiers: { threshold: number; xp: number; tier: string; name?: string }[];
-  category: string;
-}
+export type TierName = 'bronze' | 'silver' | 'gold' | 'diamond' | 'secret';
 
 export interface AchievementProgress {
   achievementId: string;
   current: number;
   unlockedTiers: string[];
   lastNotifiedTier: string | null;
-  tierDates?: Record<string, string>;
   unlockedAt?: string;
+  tierDates?: Record<string, string>;
 }
 
 export interface AppData {
@@ -133,6 +111,7 @@ export interface AppData {
   removedSeriesTitles: string[];
   collections: Collection[];
   genres: string[];
+  reviewTags?: string[];
   history: WatchHistoryItem[];
   achievements: AchievementProgress[];
   criteria?: RatingCriterion[];
@@ -143,10 +122,15 @@ export interface AppData {
   dailyStreak: number;
   dailyStreakDate: string | null;
   showLockedNames?: boolean;
-  pendingToasts?: any[];
-  pendingLevelUp?: any;
-  pendingXpGain?: any;
-  
-  // İzleme Merkezi (YENİ)
-  altWatchTemplate?: string; // Alternatif izleme sitesinin URL şablonu (Örn: https://site.com/embed/{imdb})
+  altWatchTemplate?: string;
+  pendingToasts?: {
+    achievementId: string;
+    tier: string;
+    xp: number;
+    name: string;
+    icon: string;
+    description: string;
+  }[];
+  pendingLevelUp?: { newLevel: number };
+  pendingXpGain?: { gained: number; oldTotal: number; newTotal: number };
 }
