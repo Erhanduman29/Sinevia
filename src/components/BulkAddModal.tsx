@@ -165,29 +165,114 @@ export default function BulkAddModal({
       const item = cart[i];
       try {
         if (item.media_type === 'movie') {
-          const res = await fetch(`https://api.themoviedb.org/3/movie/${item.id}?api_key=${API_KEY}&language=tr-TR&append_to_response=watch/providers,external_ids`);
+          // credits ve keywords dahil edilerek tüm Sinema Kartı ve DNA verileri çekiliyor
+          const res = await fetch(
+            `https://api.themoviedb.org/3/movie/${item.id}?api_key=${API_KEY}&language=tr-TR&append_to_response=credits,keywords,watch/providers,external_ids`
+          );
           const details = await res.json();
+
           const year = details.release_date ? details.release_date.substring(0, 4) : '';
           const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
-          const runtime = details.runtime || 0;
-          const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
-          
+          const runtime = details.runtime || undefined;
+          const posterFullUrl = details.poster_path
+            ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
+            : null;
+          const overview = details.overview || '';
+
           const imdbId = details.external_ids?.imdb_id || details.imdb_id;
           const watchProviders = processWatchProviders(details);
 
-          addMovie(details.title || item.title || '', year, genres, finalColId, runtime, posterFullUrl, details.original_title, details.id, imdbId, watchProviders);
+          const directors = (details.credits?.crew || [])
+            .filter((c: any) => c.job === 'Director')
+            .map((c: any) => c.name)
+            .slice(0, 3);
+          const cast = (details.credits?.cast || [])
+            .slice(0, 6)
+            .map((c: any) => c.name);
+          const studios = (details.production_companies || [])
+            .slice(0, 3)
+            .map((s: any) => s.name);
+          const keywords = (details.keywords?.keywords || []).map((k: any) => k.name);
+          const originalLanguage = details.original_language || undefined;
+
+          addMovie(
+            details.title || item.title || '',
+            year,
+            genres,
+            finalColId,
+            runtime,
+            posterFullUrl,
+            overview,
+            details.id,
+            imdbId,
+            watchProviders,
+            {
+              directors,
+              cast,
+              studios,
+              keywords,
+              originalLanguage,
+            }
+          );
         } else if (item.media_type === 'tv') {
-          const res = await fetch(`https://api.themoviedb.org/3/tv/${item.id}?api_key=${API_KEY}&language=tr-TR&append_to_response=watch/providers,external_ids`);
+          // Dizi için de credits ve keywords dahil edilerek tüm künye verileri çekiliyor
+          const res = await fetch(
+            `https://api.themoviedb.org/3/tv/${item.id}?api_key=${API_KEY}&language=tr-TR&append_to_response=credits,keywords,watch/providers,external_ids`
+          );
           const details = await res.json();
+
           const year = details.first_air_date ? details.first_air_date.substring(0, 4) : '';
           const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
-          const seasons = (details.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => s.episode_count);
-          const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
-          
+          const seasons = (details.seasons || [])
+            .filter((s: any) => s.season_number > 0)
+            .map((s: any) => s.episode_count);
+          const posterFullUrl = details.poster_path
+            ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
+            : null;
+          const overview = details.overview || '';
+
           const imdbId = details.external_ids?.imdb_id;
           const watchProviders = processWatchProviders(details);
 
-          addSeries(details.name || item.name || '', genres, seasons, posterFullUrl, details.original_name, details.id, year, imdbId, watchProviders);
+          const rawCreators = [
+            ...(details.created_by || []).map((c: any) => c.name),
+            ...(details.credits?.crew || [])
+              .filter((c: any) => c.job === 'Director' || c.job === 'Executive Producer')
+              .map((c: any) => c.name),
+          ];
+          const creators = Array.from(new Set(rawCreators)).slice(0, 3);
+
+          const cast = (details.credits?.cast || [])
+            .slice(0, 6)
+            .map((c: any) => c.name);
+
+          const rawStudios = [
+            ...(details.networks || []).map((n: any) => n.name),
+            ...(details.production_companies || []).map((s: any) => s.name),
+          ];
+          const studios = Array.from(new Set(rawStudios)).slice(0, 3);
+
+          const keywords = (details.keywords?.results || []).map((k: any) => k.name);
+          const originalLanguage = details.original_language || undefined;
+
+          addSeries(
+            details.name || item.name || '',
+            genres,
+            seasons,
+            posterFullUrl,
+            overview,
+            details.id,
+            year,
+            imdbId,
+            watchProviders,
+            {
+              creators,
+              cast,
+              studios,
+              keywords,
+              originalLanguage,
+            }
+          );
         }
       } catch (error) {
         console.error(`${item.title || item.name} eklenirken hata:`, error);
@@ -232,7 +317,7 @@ export default function BulkAddModal({
             </div>
             <div>
               <h2 className="text-base md:text-xl font-black text-white tracking-wide">Kütüphaneyi Genişlet</h2>
-              <p className="text-[10px] md:text-xs text-ink-400 font-medium">Toplu ekleme ve keşif modu</p>
+              <p className="text-[10px] md:text-xs text-ink-400 font-medium">Toplu ekleme ve tam künye keşif modu</p>
             </div>
           </div>
           <button onClick={handleSafeClose} className="text-ink-400 hover:text-white transition-colors bg-ink-800/50 hover:bg-ink-700 p-2 rounded-full">
@@ -532,8 +617,8 @@ export default function BulkAddModal({
               </div>
             </div>
             
-            <h3 className="text-xl md:text-2xl font-black text-white mb-2">Veriler Çekiliyor...</h3>
-            <p className="text-xs md:text-sm text-ink-400 mb-6 md:mb-8 max-w-md">Özellikle dizilerin detayları işlenirken bu işlem biraz sürebilir. Lütfen bekleyin.</p>
+            <h3 className="text-xl md:text-2xl font-black text-white mb-2">Sinema Kartları & DNA Künyeleri Çekiliyor...</h3>
+            <p className="text-xs md:text-sm text-ink-400 mb-6 md:mb-8 max-w-md">Yönetmen, oyuncu kadrosu, özet ve izleme platformları kütüphanene işleniyor.</p>
             
             <div className="w-full max-w-sm">
               <div className="flex justify-between text-[10px] md:text-xs font-bold text-ink-300 mb-2 uppercase tracking-widest">
