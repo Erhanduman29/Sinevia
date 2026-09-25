@@ -9,7 +9,6 @@ const STORAGE_KEY = 'sinevia-v1';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
 export const DEFAULT_REVIEW_TAGS = ['🔥 Başyapıt', '🎭 Oyunculuk Muazzam', '🤯 Ters Köşe Final', '🎵 Müzikler Efsane', '🎬 Görsellik Şahane', '🍿 Akıcı & Keyifli', '💤 Tempo Yavaştı', '📉 Beklentimin Altında'];
 
-// ⚙️ BAŞARIM VE XP BARI EKRANDA KALMA SÜRESİ (3500 = 3.5 sn | 4000 = 4 sn | 5000 = 5 sn)
 export const DISPLAY_DURATION_MS = 4000;
 export const QUEUE_STEP_DURATION_MS = 4300;
 
@@ -80,7 +79,8 @@ type Action =
   | { type: 'EDIT_MOVIE'; id: string; title: string; year: string; genres: string[]; runtime?: number; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[]; extra?: MovieExtraData }
   | { type: 'EDIT_SERIES'; id: string; title: string; genres: string[]; year?: string; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[]; extra?: SeriesExtraData }
   | { type: 'ADD_COLLECTION'; collection: Collection } | { type: 'DELETE_COLLECTION'; id: string } | { type: 'RENAME_COLLECTION'; id: string; name: string } | { type: 'SET_MOVIE_COLLECTION'; id: string; collectionId: string | null }
-  | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
+  | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'MERGE_SHARED_LIST'; movies: Movie[]; series: Series[]; collections: Collection[]; genres: string[] }
+  | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
   | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'SYNC_ACHIEVEMENTS' }
   | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }
   | { type: 'ADD_CRITERION'; criterion: RatingCriterion } | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion } | { type: 'DELETE_CRITERION'; id: string }
@@ -346,6 +346,13 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
       const newTotalXp = state.totalXp + action.xp, oldLevel = levelFromXp(state.totalXp).level, levelData = levelFromXp(newTotalXp);
       return { ...state, totalXp: newTotalXp, xp: levelData.currentLevelXp, level: levelData.level, pendingXpGain: { gained: action.xp, oldTotal: state.totalXp, newTotal: newTotalXp }, pendingLevelUp: levelData.level > oldLevel ? { newLevel: levelData.level } : state.pendingLevelUp };
     }
+    case 'MERGE_SHARED_LIST': {
+      nextState.genres = addNewGenres(state.genres, action.genres);
+      nextState.collections = [...state.collections, ...action.collections];
+      nextState.movies = [...state.movies, ...action.movies];
+      nextState.series = [...state.series, ...action.series];
+      break;
+    }
     case 'ADD_MOVIE': {
       const resolved = resolveTMDBGenres(action.movie.genres, state.genres);
       action.movie.genres = resolved; nextState.genres = addNewGenres(state.genres, resolved); nextState.movies = [...state.movies, action.movie]; break;
@@ -452,6 +459,7 @@ interface AppContextValue {
   editSeries: (i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => void;
   addCollection: (n: string) => string; deleteCollection: (i: string) => void; renameCollection: (i: string, n: string) => void; setMovieCollection: (i: string, c: string | null) => void;
   exportData: () => void; importData: (j: string) => boolean; resetData: () => void;
+  exportShareList: () => void; importShareList: (j: string) => boolean;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void; achievementToasts: AchievementToastItem[];
   levelUpData: LevelUpData | null; seasonCompleteData: SeasonCompleteData | null; dismissLevelUp: () => void; dismissSeasonComplete: () => void;
   toggleLockedNames: () => void; xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
@@ -639,13 +647,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `sinevia-yedek-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('Yedek alındı');
   }, [data, showToast]);
+
   const importData = useCallback((json: string) => { try { dispatch({ type: 'IMPORT_DATA', data: { ...defaultData(), ...JSON.parse(json) } }); showToast('Veriler geri yüklendi'); return true; } catch { showToast('Hata', 'error'); return false; } }, [showToast]);
   const resetData = useCallback(() => { dispatch({ type: 'IMPORT_DATA', data: defaultData() }); showToast('Sıfırlandı'); }, [showToast]);
+
+  const exportShareList = useCallback(() => {
+    const sharePayload = {
+      isShareList: true,
+      exportedAt: new Date().toISOString(),
+      collections: data.collections.map((c) => ({ id: c.id, name: c.name })),
+      movies: data.movies.map((m) => ({
+        title: m.title, year: m.year, genres: m.genres, collectionId: m.collectionId, runtime: m.runtime,
+        posterUrl: m.posterUrl, overview: m.overview, tmdbId: m.tmdbId, imdbId: m.imdbId, watchProviders: m.watchProviders,
+        directors: m.directors, cast: m.cast, studios: m.studios, keywords: m.keywords, originalLanguage: m.originalLanguage, customUrl: m.customUrl
+      })),
+      series: data.series.map((s) => ({
+        title: s.title, year: s.year, genres: s.genres, posterUrl: s.posterUrl, overview: s.overview,
+        tmdbId: s.tmdbId, imdbId: s.imdbId, watchProviders: s.watchProviders, creators: s.creators,
+        cast: s.cast, studios: s.studios, keywords: s.keywords, originalLanguage: s.originalLanguage, customUrl: s.customUrl,
+        episodes: (s.episodes || []).map((e) => ({ season: e.season, episode: e.episode }))
+      }))
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(sharePayload, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = `sinevia-liste-paylasimi-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url);
+    showToast('Paylaşım listesi indirildi!', 'success');
+  }, [data.collections, data.movies, data.series, showToast]);
+
+  const importShareList = useCallback((json: string): boolean => {
+    try {
+      const parsed = JSON.parse(json);
+      const incMovies: any[] = Array.isArray(parsed.movies) ? parsed.movies : [];
+      const incSeries: any[] = Array.isArray(parsed.series) ? parsed.series : [];
+      const incCols: any[] = Array.isArray(parsed.collections) ? parsed.collections : [];
+
+      const colIdMap = new Map<string, string>();
+      const newCollections: Collection[] = [];
+      const tempCols = [...data.collections];
+
+      incCols.forEach((ic) => {
+        if (!ic || !ic.name) return;
+        const ex = tempCols.find((c) => normalize(c.name) === normalize(ic.name));
+        if (ex) {
+          colIdMap.set(ic.id, ex.id);
+        } else {
+          const nid = uid();
+          const nc = { id: nid, name: ic.name.trim() };
+          newCollections.push(nc);
+          tempCols.push(nc);
+          colIdMap.set(ic.id, nid);
+        }
+      });
+
+      let tempGenres = [...data.genres];
+      const newMovies: Movie[] = [];
+      const existingMovieTitles = new Set(data.movies.map((m) => normalize(m.title)));
+
+      incMovies.forEach((im) => {
+        if (!im || !im.title) return;
+        const normTitle = normalize(im.title);
+        if (existingMovieTitles.has(normTitle)) return;
+        existingMovieTitles.add(normTitle);
+
+        const resolvedGenres = resolveTMDBGenres(Array.isArray(im.genres) ? im.genres : [], tempGenres);
+        tempGenres = addNewGenres(tempGenres, resolvedGenres);
+
+        newMovies.push({
+          id: uid(), title: im.title.trim(), year: im.year ? String(im.year).trim() : '',
+          genres: resolvedGenres, collectionId: im.collectionId && colIdMap.has(im.collectionId) ? colIdMap.get(im.collectionId)! : null,
+          runtime: im.runtime, posterUrl: im.posterUrl || undefined, overview: im.overview || undefined,
+          tmdbId: im.tmdbId, imdbId: im.imdbId, watchProviders: im.watchProviders,
+          directors: im.directors, cast: im.cast, studios: im.studios, keywords: im.keywords,
+          originalLanguage: im.originalLanguage, customUrl: im.customUrl,
+          watched: false, rating: null, note: '', watchedAt: null, addedAt: new Date().toISOString()
+        });
+      });
+
+      const newSeries: Series[] = [];
+      const existingSeriesTitles = new Set([...data.series.map((s) => normalize(s.title)), ...data.removedSeriesTitles.map((t) => normalize(t))]);
+
+      incSeries.forEach((is) => {
+        if (!is || !is.title) return;
+        const normTitle = normalize(is.title);
+        if (existingSeriesTitles.has(normTitle)) return;
+        existingSeriesTitles.add(normTitle);
+
+        const resolvedGenres = resolveTMDBGenres(Array.isArray(is.genres) ? is.genres : [], tempGenres);
+        tempGenres = addNewGenres(tempGenres, resolvedGenres);
+
+        const episodes: Episode[] = Array.isArray(is.episodes)
+          ? is.episodes.map((ep: any) => ({ id: uid(), season: Number(ep.season) || 1, episode: Number(ep.episode) || 1, watched: false, rating: null, note: '', watchedAt: null }))
+          : [];
+
+        newSeries.push({
+          id: uid(), title: is.title.trim(), year: is.year ? String(is.year).trim() : undefined,
+          genres: resolvedGenres, episodes, posterUrl: is.posterUrl || undefined, overview: is.overview || undefined,
+          tmdbId: is.tmdbId, imdbId: is.imdbId, watchProviders: is.watchProviders,
+          creators: is.creators, cast: is.cast, studios: is.studios, keywords: is.keywords,
+          originalLanguage: is.originalLanguage, customUrl: is.customUrl, addedAt: new Date().toISOString()
+        });
+      });
+
+      if (newMovies.length === 0 && newSeries.length === 0 && newCollections.length === 0) {
+        showToast('Listendeki tüm film ve diziler zaten mevcut!', 'info');
+        return true;
+      }
+
+      dispatch({ type: 'MERGE_SHARED_LIST', movies: newMovies, series: newSeries, collections: newCollections, genres: tempGenres });
+      showToast(`${newMovies.length} yeni film ve ${newSeries.length} yeni dizi eklendi!`, 'success');
+      return true;
+    } catch {
+      showToast('Geçersiz paylaşım dosyası!', 'error');
+      return false;
+    }
+  }, [data.collections, data.genres, data.movies, data.removedSeriesTitles, data.series, showToast]);
+
   const dismissLevelUp = useCallback(() => setLevelUpData(null), []);
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
 
   return (
-    <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme }}>
+    <AppContext.Provider value={{ data, addMovie, deleteMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme }}>
       {children}
     </AppContext.Provider>
   );
