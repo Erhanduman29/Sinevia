@@ -16,10 +16,14 @@ import {
   Eye,
   Youtube,
   User,
+  Users,
   Calendar,
+  RefreshCw,
+  Calculator,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
+import { searchTMDB } from '../lib/tmdb';
 import RatingModal from './RatingModal';
 import MediaDetailModal from './MediaDetailModal';
 import type { Movie } from '../types';
@@ -32,12 +36,19 @@ type Step = 'select' | 'synthesizing' | 'result';
 type Slot = 'A' | 'B' | null;
 type SelectionTab = 'library' | 'history';
 
+interface SynthTrait {
+  category: string;
+  label: string;
+  addedPct: number;
+  source: 'both' | 'A' | 'B' | 'hybrid';
+}
+
 interface SynthVariant {
   movie: Movie;
   matchScore: number;
   parentAPct: number;
   parentBPct: number;
-  composition: { label: string; pct: number }[];
+  traits: SynthTrait[];
 }
 
 const STOP_WORDS = new Set([
@@ -47,30 +58,62 @@ const STOP_WORDS = new Set([
   'film', 'filmi', 'filmde', 'hikaye', 'hikayesi', 'hayat', 'hayatı', 'yaşam', 'insan',
   'dünya', 'zaman', 'yılında', 'birlikte', 'ancak', 'karşı', 'arasında', 'üzerine',
   'başlar', 'olaylar', 'anlatıyor', 'anlatır', 'konu', 'ediyor', 'sonunda', 'içinde',
-  'tarafından', 'বüyük', 'küçük', 'yeni', 'eski', 'genç', 'adam', 'kadın', 'çocuk',
+  'tarafından', 'büyük', 'küçük', 'yeni', 'eski', 'genç', 'adam', 'kadın', 'çocuk',
 ]);
 
-function norm(str?: string): string {
-  return (str || '').toLocaleLowerCase('tr-TR').trim();
+// Yabancı ve Türkçe oyuncu/yönetmen isimlerinin (I/ı, İ/i farkı olmadan) %100 doğru eşleşmesi için normalize fonksiyonu
+function normKey(str?: string): string {
+  return (str || '')
+    .toLowerCase()
+    .replace(/ı/g, 'i')
+    .replace(/i̇/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProps) {
-  const { data, watchMovie } = useApp();
+  const { data, watchMovie, editMovie, showToast } = useApp();
   const [step, setStep] = useState<Step>('select');
-  const [movieA, setMovieA] = useState<Movie | null>(null);
-  const [movieB, setMovieB] = useState<Movie | null>(null);
+  const [movieAId, setMovieAId] = useState<string | null>(null);
+  const [movieBId, setMovieBId] = useState<string | null>(null);
   const [selectingSlot, setSelectingSlot] = useState<Slot>(null);
   const [selectionTab, setSelectionTab] = useState<SelectionTab>('library');
   const [search, setSearch] = useState('');
 
   const [showRating, setShowRating] = useState(false);
   const [detailMovie, setDetailMovie] = useState<Movie | null>(null);
+  const [showFormulaTable, setShowFormulaTable] = useState(false);
 
   const [variants, setVariants] = useState<SynthVariant[]>([]);
   const [activeVariantIdx, setActiveVariantIdx] = useState(0);
   const [mutationRate, setMutationRate] = useState<number>(1);
 
-  // KOLEKSİYON KURALI: Koleksiyonlardaki filmlerden sadece izlenmemiş EN ESKİ (sıradaki ilk) film sentezlenebilir
+  const [isSyncingDna, setIsSyncingDna] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
+
+  // Seçili filmleri her zaman güncel state'ten al (künye senkronize edildiğinde anında güncellensin)
+  const movieA = useMemo(
+    () => (movieAId ? data.movies.find((m) => m.id === movieAId) || null : null),
+    [data.movies, movieAId]
+  );
+  const movieB = useMemo(
+    () => (movieBId ? data.movies.find((m) => m.id === movieBId) || null : null),
+    [data.movies, movieBId]
+  );
+
+  // Oyuncu veya yönetmen bilgisi eksik olan filmlerin sayısı
+  const moviesMissingCredits = useMemo(() => {
+    return data.movies.filter(
+      (m) => !m.cast || m.cast.length === 0 || !m.directors || m.directors.length === 0
+    );
+  }, [data.movies]);
+
+  // KOLEKSİYON KURALI: Koleksiyondaki filmlerden sadece izlenmemiş EN ESKİ (sıradaki ilk) film sentezlenebilir
   const eligibleUnwatchedMovies = useMemo(() => {
     const unwatched = data.movies.filter((m) => !m.watched);
     const standalone = unwatched.filter((m) => !m.collectionId);
@@ -105,39 +148,115 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
   const filteredMovies = useMemo(() => {
     const sourceList = selectionTab === 'history' ? historyMovies : data.movies;
     if (!search.trim()) return sourceList;
-    const q = norm(search);
+    const q = normKey(search);
     return sourceList.filter(
       (m) =>
-        norm(m.title).includes(q) ||
-        (m.directors && m.directors.some((d) => norm(d).includes(q))) ||
-        (m.cast && m.cast.some((c) => norm(c).includes(q)))
+        normKey(m.title).includes(q) ||
+        (m.directors && m.directors.some((d) => normKey(d).includes(q))) ||
+        (m.cast && m.cast.some((c) => normKey(c).includes(q)))
     );
   }, [data.movies, historyMovies, selectionTab, search]);
+
+  // Eksik oyuncu/yönetmen verilerini TMDB'den çekip tamamlayan fonksiyon
+  const syncMoviesList = async (listToSync: Movie[]): Promise<Map<string, Movie>> => {
+    const updatedMap = new Map<string, Movie>();
+    if (listToSync.length === 0) return updatedMap;
+
+    setIsSyncingDna(true);
+    setSyncProgress({ current: 0, total: listToSync.length });
+
+    for (let i = 0; i < listToSync.length; i++) {
+      const m = listToSync[i];
+      setSyncProgress({ current: i + 1, total: listToSync.length });
+      try {
+        const results = await searchTMDB(m.title);
+        if (results.length > 0) {
+          const match = results.find((r) => r.year === m.year) || results[0];
+          const mergedGenres = Array.from(new Set([...m.genres, ...match.genres]));
+          const extra = {
+            directors: match.directors && match.directors.length > 0 ? match.directors : m.directors,
+            cast: match.cast && match.cast.length > 0 ? match.cast : m.cast,
+            studios: match.studios && match.studios.length > 0 ? match.studios : m.studios,
+            keywords: match.keywords && match.keywords.length > 0 ? match.keywords : m.keywords,
+            originalLanguage: match.originalLanguage || m.originalLanguage,
+          };
+
+          editMovie(
+            m.id,
+            m.title,
+            match.year || m.year,
+            mergedGenres,
+            match.runtime || m.runtime,
+            match.posterUrl || m.posterUrl,
+            match.overview || m.overview,
+            match.id,
+            true,
+            m.customUrl,
+            match.imdbId || m.imdbId,
+            match.watchProviders && match.watchProviders.length > 0
+              ? match.watchProviders
+              : m.watchProviders,
+            extra
+          );
+
+          updatedMap.set(m.id, {
+            ...m,
+            year: match.year || m.year,
+            genres: mergedGenres,
+            runtime: match.runtime || m.runtime,
+            posterUrl: match.posterUrl || m.posterUrl || undefined,
+            overview: match.overview || m.overview,
+            tmdbId: match.id,
+            ...extra,
+          });
+        }
+      } catch (err) {
+        console.error('DNA künye tamamlama hatası:', m.title, err);
+      }
+      await new Promise((r) => setTimeout(r, 180));
+    }
+
+    setIsSyncingDna(false);
+    return updatedMap;
+  };
+
+  const handleSyncAllMissing = async () => {
+    if (moviesMissingCredits.length === 0) return;
+    const synced = await syncMoviesList(moviesMissingCredits);
+    showToast(`${synced.size} filmin oyuncu ve yönetmen DNA'sı tamamlandı!`, 'success');
+  };
 
   const handleRandomPair = () => {
     const highRated = historyMovies.filter((m) => (m.rating || 0) >= 8);
     const pool = highRated.length >= 2 ? highRated : data.movies;
     if (pool.length < 2) return;
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    setMovieA(shuffled[0]);
-    setMovieB(shuffled[1]);
+    setMovieAId(shuffled[0].id);
+    setMovieBId(shuffled[1].id);
   };
 
   // =========================================================
-  // GERÇEK ÇAPRAZLAMA (A × B MELEZLEME) MOTORU
+  // SABİT ORANLI MATEMATİKSEL SENTEZ MOTORU
   // =========================================================
-  const handleSynthesize = () => {
+  const handleSynthesize = async () => {
     if (!movieA || !movieB || eligibleUnwatchedMovies.length === 0) return;
     setStep('synthesizing');
 
-    setTimeout(() => {
-      const safeMode = mutationRate === 0;
-      const chaosMode = mutationRate === 2;
+    // Eğer seçilen 2 ebeveyn filmin veya adayların oyuncu/yönetmen verisi eksikse önce hızlıca tamamla
+    const parentsMissing = [movieA, movieB].filter(
+      (m) => !m.cast || m.cast.length === 0 || !m.directors || m.directors.length === 0
+    );
+    const syncedOverrides =
+      parentsMissing.length > 0 ? await syncMoviesList(parentsMissing) : new Map<string, Movie>();
 
+    const activeA = syncedOverrides.get(movieA.id) || movieA;
+    const activeB = syncedOverrides.get(movieB.id) || movieB;
+
+    setTimeout(() => {
       const extractKeywordsFromText = (text?: string) => {
-        const map = new Map<string, string>(); // stem -> original word
+        const map = new Map<string, string>();
         if (!text) return map;
-        const clean = norm(text).replace(/[.,/#!$%^&*;:{}=\-_`~()'"?<>]/g, ' ');
+        const clean = normKey(text).replace(/[.,/#!$%^&*;:{}=\-_`~()'"?<>]/g, ' ');
         clean.split(/\s+/).forEach((w) => {
           if (w.length >= 5 && !STOP_WORDS.has(w)) {
             const stem = w.slice(0, 5);
@@ -147,133 +266,159 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         return map;
       };
 
-      const stemsA = extractKeywordsFromText(`${movieA.overview || ''} ${movieA.note || ''}`);
-      const stemsB = extractKeywordsFromText(`${movieB.overview || ''} ${movieB.note || ''}`);
+      const stemsA = extractKeywordsFromText(`${activeA.overview || ''} ${activeA.note || ''}`);
+      const stemsB = extractKeywordsFromText(`${activeB.overview || ''} ${activeB.note || ''}`);
 
-      const yearA = parseInt(movieA.year || '0', 10);
-      const yearB = parseInt(movieB.year || '0', 10);
-      const avgParentYear =
-        yearA > 1900 && yearB > 1900
-          ? Math.round((yearA + yearB) / 2)
-          : yearA > 1900
-          ? yearA
-          : yearB > 1900
-          ? yearB
-          : 0;
+      const yearA = parseInt(activeA.year || '0', 10);
+      const yearB = parseInt(activeB.year || '0', 10);
+      const decadeA = yearA > 1900 ? Math.floor(yearA / 10) * 10 : 0;
+      const decadeB = yearB > 1900 ? Math.floor(yearB / 10) * 10 : 0;
 
-      const rtA = movieA.runtime || 0;
-      const rtB = movieB.runtime || 0;
+      const rtA = activeA.runtime || 0;
+      const rtB = activeB.runtime || 0;
       const avgParentRuntime =
         rtA > 0 && rtB > 0 ? Math.round((rtA + rtB) / 2) : rtA > 0 ? rtA : rtB > 0 ? rtB : 0;
 
-      const dirsA = new Set((movieA.directors || []).map(norm).filter(Boolean));
-      const dirsB = new Set((movieB.directors || []).map(norm).filter(Boolean));
+      // Ebeveynlerin Yönetmen, Oyuncu, Tür, Anahtar Kelime ve Stüdyo kümeleri
+      const dirsA = new Set((activeA.directors || []).map(normKey).filter(Boolean));
+      const dirsB = new Set((activeB.directors || []).map(normKey).filter(Boolean));
 
-      const castA = new Set((movieA.cast || []).map(norm).filter(Boolean));
-      const castB = new Set((movieB.cast || []).map(norm).filter(Boolean));
+      const castA = new Set((activeA.cast || []).map(normKey).filter(Boolean));
+      const castB = new Set((activeB.cast || []).map(normKey).filter(Boolean));
 
-      const studiosA = new Set((movieA.studios || []).map(norm).filter(Boolean));
-      const studiosB = new Set((movieB.studios || []).map(norm).filter(Boolean));
+      const genresA = new Set((activeA.genres || []).map(normKey).filter(Boolean));
+      const genresB = new Set((activeB.genres || []).map(normKey).filter(Boolean));
 
-      const kwA = new Set((movieA.keywords || []).map(norm).filter(Boolean));
-      const kwB = new Set((movieB.keywords || []).map(norm).filter(Boolean));
+      const kwA = new Set((activeA.keywords || []).map(normKey).filter(Boolean));
+      const kwB = new Set((activeB.keywords || []).map(normKey).filter(Boolean));
 
-      const genresA = new Set((movieA.genres || []).map(norm).filter(Boolean));
-      const genresB = new Set((movieB.genres || []).map(norm).filter(Boolean));
+      const studiosA = new Set((activeA.studios || []).map(normKey).filter(Boolean));
+      const studiosB = new Set((activeB.studios || []).map(normKey).filter(Boolean));
 
-      const scoredCandidates: (SynthVariant & { rawScore: number })[] = [];
+      const scoredCandidates: (SynthVariant & { sortRank: number })[] = [];
 
-      eligibleUnwatchedMovies.forEach((candidate) => {
-        if (candidate.id === movieA.id || candidate.id === movieB.id) return;
+      eligibleUnwatchedMovies.forEach((rawCand) => {
+        const candidate = syncedOverrides.get(rawCand.id) || rawCand;
+        if (candidate.id === activeA.id || candidate.id === activeB.id) return;
 
-        let affinityA = 0;
-        let affinityB = 0;
+        let pctFromA = 0;
+        let pctFromB = 0;
+        const traits: SynthTrait[] = [];
 
-        const traits: { label: string; points: number }[] = [];
-
-        // 1. YÖNETMEN EŞLEŞMESİ (Gerçek kontrol)
-        const candDirs = (candidate.directors || []).filter((d) => norm(d).length > 0);
-        const sharedDirsBoth: string[] = [];
-        const dirsFromA: string[] = [];
-        const dirsFromB: string[] = [];
+        // ---------------------------------------------------------
+        // 1. YÖNETMEN KARŞILAŞTIRMASI (Sabit Oran: +%25, İki Ebeveynde de Varsa +%30)
+        // ---------------------------------------------------------
+        const candDirs = (candidate.directors || []).filter((d) => normKey(d).length > 0);
+        const dirsBoth: string[] = [];
+        const dirsOnlyA: string[] = [];
+        const dirsOnlyB: string[] = [];
 
         candDirs.forEach((d) => {
-          const nd = norm(d);
+          const nd = normKey(d);
           const inA = dirsA.has(nd);
           const inB = dirsB.has(nd);
-          if (inA && inB) sharedDirsBoth.push(d);
-          else if (inA) dirsFromA.push(d);
-          else if (inB) dirsFromB.push(d);
+          if (inA && inB) dirsBoth.push(d);
+          else if (inA) dirsOnlyA.push(d);
+          else if (inB) dirsOnlyB.push(d);
         });
 
-        if (sharedDirsBoth.length > 0) {
-          const pts = 45;
-          affinityA += pts / 2;
-          affinityB += pts / 2;
-          traits.push({ label: `Ortak Yönetmen (${sharedDirsBoth.join(', ')})`, points: pts });
+        if (dirsBoth.length > 0) {
+          const pct = 30;
+          pctFromA += 15;
+          pctFromB += 15;
+          traits.push({
+            category: 'Yönetmen',
+            label: `Ortak Yönetmen: ${dirsBoth.join(', ')}`,
+            addedPct: pct,
+            source: 'both',
+          });
         } else {
-          if (dirsFromA.length > 0) {
-            const pts = 28;
-            affinityA += pts;
+          if (dirsOnlyA.length > 0) {
+            const pct = 25;
+            pctFromA += pct;
             traits.push({
-              label: `${movieA.title} Yönetmeni (${dirsFromA.join(', ')})`,
-              points: pts,
+              category: 'Yönetmen',
+              label: `Aynı Yönetmen (${activeA.title}): ${dirsOnlyA.join(', ')}`,
+              addedPct: pct,
+              source: 'A',
             });
           }
-          if (dirsFromB.length > 0) {
-            const pts = 28;
-            affinityB += pts;
+          if (dirsOnlyB.length > 0) {
+            const pct = 25;
+            pctFromB += pct;
             traits.push({
-              label: `${movieB.title} Yönetmeni (${dirsFromB.join(', ')})`,
-              points: pts,
+              category: 'Yönetmen',
+              label: `Aynı Yönetmen (${activeB.title}): ${dirsOnlyB.join(', ')}`,
+              addedPct: pct,
+              source: 'B',
             });
           }
         }
 
-        // 2. OYUNCU KADROSU EŞLEŞMESİ
-        const candCast = (candidate.cast || []).filter((c) => norm(c).length > 0);
-        const castBoth: string[] = [];
-        const castOnlyA: string[] = [];
-        const castOnlyB: string[] = [];
+        // ---------------------------------------------------------
+        // 2. OYUNCU KADROSU KARŞILAŞTIRMASI (Sabit Oran: Her Ortak Oyuncu +%10, İki Ebeveynde de Varsa +%15, Maks +%30)
+        // ---------------------------------------------------------
+        const candCast = (candidate.cast || []).filter((c) => normKey(c).length > 0);
+        const actorsBoth: string[] = [];
+        const actorsOnlyA: string[] = [];
+        const actorsOnlyB: string[] = [];
 
         candCast.forEach((actor) => {
-          const na = norm(actor);
+          const na = normKey(actor);
           const inA = castA.has(na);
           const inB = castB.has(na);
-          if (inA && inB) castBoth.push(actor);
-          else if (inA) castOnlyA.push(actor);
-          else if (inB) castOnlyB.push(actor);
+          if (inA && inB) actorsBoth.push(actor);
+          else if (inA) actorsOnlyA.push(actor);
+          else if (inB) actorsOnlyB.push(actor);
         });
 
-        if (castBoth.length > 0) {
-          const pts = Math.min(40, castBoth.length * 24);
-          affinityA += pts / 2;
-          affinityB += pts / 2;
-          traits.push({
-            label: `Her İki Filmle Ortak Oyuncu (${castBoth.slice(0, 2).join(', ')})`,
-            points: pts,
-          });
+        let castPctTotal = 0;
+        if (actorsBoth.length > 0) {
+          const pct = Math.min(30, actorsBoth.length * 15);
+          castPctTotal += pct;
+          pctFromA += pct / 2;
+          pctFromB += pct / 2;
         }
-        if (castOnlyA.length > 0 || castOnlyB.length > 0) {
-          const ptsA = Math.min(28, castOnlyA.length * 16);
-          const ptsB = Math.min(28, castOnlyB.length * 16);
-          affinityA += ptsA;
-          affinityB += ptsB;
-          const allMatchedCast = [...castOnlyA, ...castOnlyB];
+        if (actorsOnlyA.length > 0) {
+          const pct = Math.min(30 - castPctTotal, actorsOnlyA.length * 10);
+          if (pct > 0) {
+            castPctTotal += pct;
+            pctFromA += pct;
+          }
+        }
+        if (actorsOnlyB.length > 0) {
+          const pct = Math.min(30 - castPctTotal, actorsOnlyB.length * 10);
+          if (pct > 0) {
+            castPctTotal += pct;
+            pctFromB += pct;
+          }
+        }
+
+        if (castPctTotal > 0) {
+          const allMatchedActors = [...actorsBoth, ...actorsOnlyA, ...actorsOnlyB];
           traits.push({
-            label: `Oyuncu Mirası (${allMatchedCast.slice(0, 3).join(', ')})`,
-            points: ptsA + ptsB,
+            category: 'Oyuncu',
+            label: `Ortak Oyuncu (${allMatchedActors.length}): ${allMatchedActors.join(', ')}`,
+            addedPct: castPctTotal,
+            source:
+              actorsBoth.length > 0 || (actorsOnlyA.length > 0 && actorsOnlyB.length > 0)
+                ? 'both'
+                : actorsOnlyA.length > 0
+                ? 'A'
+                : 'B',
           });
         }
 
-        // 3. TÜR SENTEZİ & ÇAPRAZLAMA
-        const candGenres = (candidate.genres || []).filter((g) => norm(g).length > 0);
+        // ---------------------------------------------------------
+        // 3. TÜR KARŞILAŞTIRMASI (Sabit Oran: Tek Ebeveynle Aynı Tür +%5, İkisiyle de Aynı Tür +%8, Çapraz Tür Bonusu +%5, Maks +%25)
+        // ---------------------------------------------------------
+        const candGenres = (candidate.genres || []).filter((g) => normKey(g).length > 0);
         const genresBoth: string[] = [];
         const genresOnlyA: string[] = [];
         const genresOnlyB: string[] = [];
 
         candGenres.forEach((g) => {
-          const ng = norm(g);
+          const ng = normKey(g);
           const inA = genresA.has(ng);
           const inB = genresB.has(ng);
           if (inA && inB) genresBoth.push(g);
@@ -281,289 +426,328 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           else if (inB) genresOnlyB.push(g);
         });
 
+        let genrePctTotal = 0;
         if (genresBoth.length > 0) {
-          const pts = genresBoth.length * (chaosMode ? 12 : 18);
-          affinityA += pts / 2;
-          affinityB += pts / 2;
+          const pct = Math.min(24, genresBoth.length * 8);
+          genrePctTotal += pct;
+          pctFromA += pct / 2;
+          pctFromB += pct / 2;
           traits.push({
-            label: `Ortak Ana Tür (${genresBoth.join(', ')})`,
-            points: pts,
+            category: 'Tür',
+            label: `Her İki Ebeveynde Ortak Tür (${genresBoth.length}): ${genresBoth.join(', ')}`,
+            addedPct: pct,
+            source: 'both',
           });
         }
 
-        // Eğer aday film 1. filmden bir tür, 2. filmden başka bir tür aldıysa gerçek Tür Melezlemesi!
         if (genresOnlyA.length > 0 && genresOnlyB.length > 0) {
-          const ptsA = genresOnlyA.length * 12 + 8;
-          const ptsB = genresOnlyB.length * 12 + 8;
-          affinityA += ptsA;
-          affinityB += ptsB;
-          traits.push({
-            label: `Tür Çaprazlaması (${genresOnlyA[0]} + ${genresOnlyB[0]})`,
-            points: ptsA + ptsB,
-          });
+          // Aday film 1. Filmden bir tür, 2. Filmden başka bir tür birleştirdiyse: Tür başına %5 + %5 Melez Tür Bonusu
+          const rawCrossPct = (genresOnlyA.length + genresOnlyB.length) * 5 + 5;
+          const pct = Math.min(25 - genrePctTotal, rawCrossPct);
+          if (pct > 0) {
+            genrePctTotal += pct;
+            pctFromA += pct / 2;
+            pctFromB += pct / 2;
+            traits.push({
+              category: 'Tür',
+              label: `Çapraz Tür Sentezi: ${genresOnlyA.join(', ')} × ${genresOnlyB.join(', ')}`,
+              addedPct: pct,
+              source: 'hybrid',
+            });
+          }
         } else if (genresOnlyA.length > 0) {
-          const pts = genresOnlyA.length * 9;
-          affinityA += pts;
-          traits.push({
-            label: `${movieA.title} Türü (${genresOnlyA.join(', ')})`,
-            points: pts,
-          });
+          const pct = Math.min(20 - genrePctTotal, genresOnlyA.length * 5);
+          if (pct > 0) {
+            genrePctTotal += pct;
+            pctFromA += pct;
+            traits.push({
+              category: 'Tür',
+              label: `Aynı Tür (${genresOnlyA.length}): ${genresOnlyA.join(', ')}`,
+              addedPct: pct,
+              source: 'A',
+            });
+          }
         } else if (genresOnlyB.length > 0) {
-          const pts = genresOnlyB.length * 9;
-          affinityB += pts;
-          traits.push({
-            label: `${movieB.title} Türü (${genresOnlyB.join(', ')})`,
-            points: pts,
-          });
+          const pct = Math.min(20 - genrePctTotal, genresOnlyB.length * 5);
+          if (pct > 0) {
+            genrePctTotal += pct;
+            pctFromB += pct;
+            traits.push({
+              category: 'Tür',
+              label: `Aynı Tür (${genresOnlyB.length}): ${genresOnlyB.join(', ')}`,
+              addedPct: pct,
+              source: 'B',
+            });
+          }
         }
 
-        // 4. TEMA VE ANAHTAR KELİMELER (TMDB Keywords)
-        const candKws = (candidate.keywords || []).filter((k) => norm(k).length > 0);
-        const matchedKws: string[] = [];
-        let kwPtsA = 0;
-        let kwPtsB = 0;
+        // ---------------------------------------------------------
+        // 4. TEMA / ANAHTAR KELİME (Sabit Oran: Her Ortak Tema +%4, İki Ebeveynde Varsa +%6, Maks +%20)
+        // ---------------------------------------------------------
+        const candKws = (candidate.keywords || []).filter((k) => normKey(k).length > 0);
+        const kwsBoth: string[] = [];
+        const kwsOnlyA: string[] = [];
+        const kwsOnlyB: string[] = [];
 
         candKws.forEach((k) => {
-          const nk = norm(k);
+          const nk = normKey(k);
           const inA = kwA.has(nk);
           const inB = kwB.has(nk);
-          if (inA && inB) {
-            matchedKws.push(k);
-            kwPtsA += chaosMode ? 14 : 10;
-            kwPtsB += chaosMode ? 14 : 10;
-          } else if (inA) {
-            matchedKws.push(k);
-            kwPtsA += chaosMode ? 12 : 8;
-          } else if (inB) {
-            matchedKws.push(k);
-            kwPtsB += chaosMode ? 12 : 8;
-          }
+          if (inA && inB) kwsBoth.push(k);
+          else if (inA) kwsOnlyA.push(k);
+          else if (inB) kwsOnlyB.push(k);
         });
 
-        if (matchedKws.length > 0) {
-          const cappedA = Math.min(26, kwPtsA);
-          const cappedB = Math.min(26, kwPtsB);
-          affinityA += cappedA;
-          affinityB += cappedB;
+        const rawKwPct = kwsBoth.length * 6 + (kwsOnlyA.length + kwsOnlyB.length) * 4;
+        const kwPct = Math.min(20, rawKwPct);
+        if (kwPct > 0) {
+          const allKws = [...kwsBoth, ...kwsOnlyA, ...kwsOnlyB];
+          const shareA = kwsBoth.length * 3 + kwsOnlyA.length * 4;
+          const shareB = kwsBoth.length * 3 + kwsOnlyB.length * 4;
+          const sumShare = shareA + shareB || 1;
+          pctFromA += Math.round(kwPct * (shareA / sumShare));
+          pctFromB += kwPct - Math.round(kwPct * (shareA / sumShare));
+
           traits.push({
-            label: `Tema & Anahtar Kelime (${matchedKws.slice(0, 3).join(', ')})`,
-            points: cappedA + cappedB,
+            category: 'Tema',
+            label: `Ortak Anahtar Kelime (${allKws.length}): ${allKws.slice(0, 3).join(', ')}`,
+            addedPct: kwPct,
+            source: kwsBoth.length > 0 ? 'both' : kwsOnlyA.length > 0 ? 'A' : 'B',
           });
         }
 
-        // 5. KONU ÖZETİ & HİKAYE MOTİFLERİ (Üst Sınırlı & Doğrulanmış Kelimeler)
+        // ---------------------------------------------------------
+        // 5. KONU ÖZETİ KELİME KESİŞİMİ (Sabit Oran: Her Ortak Kavram +%3, Maks +%12)
+        // ---------------------------------------------------------
         const candStems = extractKeywordsFromText(candidate.overview);
-        const storyWords: string[] = [];
-        let storyPtsA = 0;
-        let storyPtsB = 0;
+        const matchedWords: string[] = [];
+        let wA = 0;
+        let wB = 0;
 
         candStems.forEach((origWord, stem) => {
           const inA = stemsA.has(stem);
           const inB = stemsB.has(stem);
-          if (inA && inB) {
-            storyWords.push(origWord);
-            storyPtsA += 4.5;
-            storyPtsB += 4.5;
-          } else if (inA) {
-            storyWords.push(origWord);
-            storyPtsA += 3;
-          } else if (inB) {
-            storyWords.push(origWord);
-            storyPtsB += 3;
+          if (inA || inB) {
+            matchedWords.push(origWord);
+            if (inA) wA++;
+            if (inB) wB++;
           }
         });
 
-        if (storyWords.length > 0) {
-          // Uzun özetlerin haksız üstünlük kurmasını önlemek için puanı maksimum 18 ile sınırlıyoruz
-          const cappedStoryA = Math.min(10, storyPtsA);
-          const cappedStoryB = Math.min(10, storyPtsB);
-          affinityA += cappedStoryA;
-          affinityB += cappedStoryB;
+        if (matchedWords.length > 0) {
+          const storyPct = Math.min(12, matchedWords.length * 3);
+          const wSum = wA + wB || 1;
+          pctFromA += Math.round(storyPct * (wA / wSum));
+          pctFromB += storyPct - Math.round(storyPct * (wA / wSum));
+
           traits.push({
-            label: `Hikaye & Konu Kesişimi (${storyWords.slice(0, 3).join(', ')})`,
-            points: Math.round(cappedStoryA + cappedStoryB),
+            category: 'Konu',
+            label: `Konu Kesişimi (${matchedWords.slice(0, 3).join(', ')})`,
+            addedPct: storyPct,
+            source: wA > 0 && wB > 0 ? 'both' : wA > 0 ? 'A' : 'B',
           });
         }
 
-        // 6. YAPIMCI STÜDYO EŞLEŞMESİ
-        const candStudios = (candidate.studios || []).filter((s) => norm(s).length > 0);
+        // ---------------------------------------------------------
+        // 6. KOLEKSİYON / SERİ BAĞI (Sabit Oran: +%15)
+        // ---------------------------------------------------------
+        if (candidate.collectionId) {
+          const inColA = candidate.collectionId === activeA.collectionId;
+          const inColB = candidate.collectionId === activeB.collectionId;
+          if (inColA || inColB) {
+            const colPct = 15;
+            if (inColA && inColB) {
+              pctFromA += 7.5;
+              pctFromB += 7.5;
+            } else if (inColA) {
+              pctFromA += colPct;
+            } else {
+              pctFromB += colPct;
+            }
+            traits.push({
+              category: 'Koleksiyon',
+              label: `Aynı Film Serisi (Sıradaki İlk Film)`,
+              addedPct: colPct,
+              source: inColA && inColB ? 'both' : inColA ? 'A' : 'B',
+            });
+          }
+        }
+
+        // ---------------------------------------------------------
+        // 7. YAPIMCI STÜDYO (Sabit Oran: 1 Stüdyo +%5, 2+ Stüdyo +%8)
+        // ---------------------------------------------------------
+        const candStudios = (candidate.studios || []).filter((s) => normKey(s).length > 0);
         const matchedStudios: string[] = [];
-        let stPtsA = 0;
-        let stPtsB = 0;
+        let stInA = false;
+        let stInB = false;
 
         candStudios.forEach((s) => {
-          const ns = norm(s);
+          const ns = normKey(s);
           if (studiosA.has(ns)) {
             matchedStudios.push(s);
-            stPtsA += 12;
+            stInA = true;
           }
           if (studiosB.has(ns)) {
             if (!matchedStudios.includes(s)) matchedStudios.push(s);
-            stPtsB += 12;
+            stInB = true;
           }
         });
 
         if (matchedStudios.length > 0) {
-          const cA = Math.min(14, stPtsA);
-          const cB = Math.min(14, stPtsB);
-          affinityA += cA;
-          affinityB += cB;
+          const stPct = matchedStudios.length >= 2 ? 8 : 5;
+          if (stInA && stInB) {
+            pctFromA += stPct / 2;
+            pctFromB += stPct / 2;
+          } else if (stInA) {
+            pctFromA += stPct;
+          } else {
+            pctFromB += stPct;
+          }
           traits.push({
-            label: `Yapımcı Stüdyo (${matchedStudios.slice(0, 2).join(', ')})`,
-            points: cA + cB,
+            category: 'Stüdyo',
+            label: `Aynı Stüdyo: ${matchedStudios.slice(0, 2).join(', ')}`,
+            addedPct: stPct,
+            source: stInA && stInB ? 'both' : stInA ? 'A' : 'B',
           });
         }
 
-        // 7. SÜRE & TEMPO ORTALAMASI
-        if (avgParentRuntime > 0 && candidate.runtime && candidate.runtime > 0) {
-          const diffAvg = Math.abs(candidate.runtime - avgParentRuntime);
-          if (diffAvg <= 15) {
-            const pts = 10;
-            affinityA += pts / 2;
-            affinityB += pts / 2;
-            traits.push({
-              label: `Süre & Tempo Ortalaması (${candidate.runtime} dk)`,
-              points: pts,
-            });
-          }
-        }
-
-        // 8. DÖNEM (YIL) VE ÜLKE/DİL SİNEMASI UYUMU
+        // ---------------------------------------------------------
+        // 8. DÖNEM (ON YIL) UYUMU (Sabit Oran: +%5)
+        // ---------------------------------------------------------
         const candYear = parseInt(candidate.year || '0', 10);
-        if (candYear > 1900 && avgParentYear > 1900) {
-          const diffYear = Math.abs(candYear - avgParentYear);
-          const betweenParents =
-            yearA > 1900 &&
-            yearB > 1900 &&
-            candYear >= Math.min(yearA, yearB) &&
-            candYear <= Math.max(yearA, yearB);
+        const candDecade = candYear > 1900 ? Math.floor(candYear / 10) * 10 : 0;
+        if (candDecade > 0 && (candDecade === decadeA || candDecade === decadeB)) {
+          const decPct = 5;
+          if (candDecade === decadeA && candDecade === decadeB) {
+            pctFromA += 2.5;
+            pctFromB += 2.5;
+          } else if (candDecade === decadeA) {
+            pctFromA += decPct;
+          } else {
+            pctFromB += decPct;
+          }
+          traits.push({
+            category: 'Dönem',
+            label: `Aynı Dönem (${candDecade}'ler Sineması)`,
+            addedPct: decPct,
+            source: candDecade === decadeA && candDecade === decadeB ? 'both' : candDecade === decadeA ? 'A' : 'B',
+          });
+        }
 
-          if (diffYear <= 5 || betweenParents) {
-            const pts = 8;
-            affinityA += pts / 2;
-            affinityB += pts / 2;
+        // ---------------------------------------------------------
+        // 9. SÜRE & TEMPO UYUMU (Sabit Oran: ±15 dk içindeyse +%5)
+        // ---------------------------------------------------------
+        if (candidate.runtime && candidate.runtime > 0 && avgParentRuntime > 0) {
+          const diffAvg = Math.abs(candidate.runtime - avgParentRuntime);
+          const diffA = rtA > 0 ? Math.abs(candidate.runtime - rtA) : 999;
+          const diffB = rtB > 0 ? Math.abs(candidate.runtime - rtB) : 999;
+
+          if (diffAvg <= 15 || diffA <= 10 || diffB <= 10) {
+            const rtPct = 5;
+            pctFromA += 2.5;
+            pctFromB += 2.5;
             traits.push({
-              label: `Dönem Sentezi (${candYear} Yapımı)`,
-              points: pts,
+              category: 'Süre',
+              label: `Süre & Tempo Uyumu (${candidate.runtime} dk)`,
+              addedPct: rtPct,
+              source: 'both',
             });
           }
         }
 
-        if (candidate.originalLanguage && candidate.originalLanguage !== 'en') {
-          const inA = candidate.originalLanguage === movieA.originalLanguage;
-          const inB = candidate.originalLanguage === movieB.originalLanguage;
-          if (inA || inB) {
-            const pts = 14;
-            if (inA) affinityA += pts;
-            if (inB) affinityB += pts;
+        // ---------------------------------------------------------
+        // 10. ORİJİNAL DİL / ÜLKE SİNEMASI (Sabit Oran: +%5, İngilizce ise +%3)
+        // ---------------------------------------------------------
+        if (candidate.originalLanguage) {
+          const langInA = candidate.originalLanguage === activeA.originalLanguage;
+          const langInB = candidate.originalLanguage === activeB.originalLanguage;
+          if (langInA || langInB) {
+            const langPct = candidate.originalLanguage !== 'en' ? 5 : 3;
+            if (langInA && langInB) {
+              pctFromA += langPct / 2;
+              pctFromB += langPct / 2;
+            } else if (langInA) {
+              pctFromA += langPct;
+            } else {
+              pctFromB += langPct;
+            }
             traits.push({
-              label: `Ülke / Dil Sineması (${candidate.originalLanguage.toUpperCase()})`,
-              points: pts,
+              category: 'Dil',
+              label: `Aynı Orijinal Dil (${candidate.originalLanguage.toUpperCase()})`,
+              addedPct: langPct,
+              source: langInA && langInB ? 'both' : langInA ? 'A' : 'B',
             });
           }
         }
 
-        // 9. KOLEKSİYON / EVREN BAĞI
-        if (candidate.collectionId) {
-          const inColA = candidate.collectionId === movieA.collectionId;
-          const inColB = candidate.collectionId === movieB.collectionId;
-          if (inColA || inColB) {
-            const pts = 24;
-            if (inColA) affinityA += pts;
-            if (inColB) affinityB += pts;
-            traits.push({
-              label: `Aynı Seri / Sinematik Evren Bağı`,
-              points: pts,
-            });
-          }
+        // ---------------------------------------------------------
+        // 11. GERÇEK MELEZ (A × B) SENTEZ BONUSU (Sabit Oran: +%5)
+        // Aday film hem 1. Filmden hem 2. Filmden en az %5'lik özellik aldıysa
+        // ---------------------------------------------------------
+        const isTrueHybrid = pctFromA >= 5 && pctFromB >= 5;
+        if (isTrueHybrid) {
+          pctFromA += 2.5;
+          pctFromB += 2.5;
+          traits.push({
+            category: 'Melez',
+            label: `Çift Ebeveyn Melez Sentezi (1. ve 2. Filmden Ortak Gen)`,
+            addedPct: 5,
+            source: 'hybrid',
+          });
         }
 
-        const basePoints = affinityA + affinityB;
-        if (basePoints <= 0) return;
-
-        // MELEZLEME SİNERJİ ÇARPANI:
-        // Aday film hem 1. Filmden hem 2. Filmden özellik taşıyorsa (gerçek melezse) ödüllendirilir,
-        // sadece tek bir filme benziyor ve diğer filmle hiç bağı yoksa puanı kırpılır.
-        let synergyMultiplier = 1;
-        if (affinityA > 0 && affinityB > 0) {
-          const balanceRatio = Math.min(affinityA, affinityB) / Math.max(affinityA, affinityB);
-          synergyMultiplier = 1.15 + balanceRatio * 0.35; // 1.15x ile 1.50x arası melezlik bonusu
-        } else {
-          synergyMultiplier = 0.6; // Sadece tek ebeveyne benzeyenleri geri plana at
+        // Kaos Modu seçiliyse deneysel mutasyon ekle (Safkan ve Dengeli modda %0 rastgelelik!)
+        if (mutationRate === 2) {
+          const chaosBonus = Math.floor(Math.random() * 8) + 3; // +%3 ile +%10 arası
+          pctFromA += chaosBonus / 2;
+          pctFromB += chaosBonus / 2;
+          traits.push({
+            category: 'Mutasyon',
+            label: `Kaos Modu Genetik Mutasyonu`,
+            addedPct: chaosBonus,
+            source: 'hybrid',
+          });
         }
 
-        // Mutasyon / Varyasyon Etkisi
-        let mutationNoise = 0;
-        if (chaosMode) {
-          mutationNoise = Math.random() * 14;
-          if (mutationNoise > 4) {
-            traits.push({ label: 'Deneysel Kaos Mutasyonu', points: Math.round(mutationNoise) });
-          }
-        } else if (!safeMode) {
-          mutationNoise = Math.random() * 3.5;
-        }
+        // GERÇEK TOPLAM UYUM = Tüm kazanılan sabit yüzdelerin birebir toplamı!
+        const exactSumPct = traits.reduce((sum, t) => sum + t.addedPct, 0);
+        if (exactSumPct <= 0) return;
 
-        const finalRawScore = basePoints * synergyMultiplier + mutationNoise;
+        const matchScore = Math.min(100, exactSumPct);
 
-        // Yüzdelik dağılımı gerçek eşleşen özelliklerden oluştur
-        const sortedTraits = traits.filter((t) => t.points > 0).sort((a, b) => b.points - a.points).slice(0, 5);
-        const totalTraitPoints = sortedTraits.reduce((sum, t) => sum + t.points, 0) || 1;
-
-        const composition = sortedTraits.map((t) => ({
-          label: t.label,
-          pct: Math.max(1, Math.round((t.points / totalTraitPoints) * 100)),
-        }));
-
-        const compSum = composition.reduce((sum, c) => sum + c.pct, 0);
-        if (compSum !== 100 && composition.length > 0) {
-          composition[0].pct += 100 - compSum;
-        }
-
-        const totalAffinity = affinityA + affinityB || 1;
-        const parentAPct = Math.round((affinityA / totalAffinity) * 100);
+        // Ebeveyn A ve B kalıtım oranı
+        const totalParentShare = pctFromA + pctFromB || 1;
+        const parentAPct = Math.round((pctFromA / totalParentShare) * 100);
         const parentBPct = 100 - parentAPct;
 
-        // Uyum yüzdesi
-        const matchScore = Math.min(99, Math.max(54, Math.round(48 + Math.min(51, finalRawScore * 0.68))));
+        // Sıralama puanı: Dengeli modda her iki ebeveynden de gen alan melezler önceliklendirilir
+        const hybridRankBonus = isTrueHybrid && mutationRate === 1 ? 6 : 0;
+        const sortRank = matchScore + hybridRankBonus;
+
+        // Özellikleri en yüksek yüzdeliden en düşüğe sırala
+        const sortedTraits = [...traits].sort((a, b) => b.addedPct - a.addedPct);
 
         scoredCandidates.push({
           movie: candidate,
-          rawScore: finalRawScore,
           matchScore,
           parentAPct,
           parentBPct,
-          composition,
+          traits: sortedTraits,
+          sortRank,
         });
       });
 
-      scoredCandidates.sort((a, b) => b.rawScore - a.rawScore);
+      scoredCandidates.sort((a, b) => b.sortRank - a.sortRank || b.matchScore - a.matchScore);
 
-      // Eğer hiç ortak nokta bulunamadıysa (çok nadir), en azından rastgele 3 aday göster
-      if (scoredCandidates.length === 0 && eligibleUnwatchedMovies.length > 0) {
-        const fallback = eligibleUnwatchedMovies
-          .filter((m) => m.id !== movieA.id && m.id !== movieB.id)
-          .slice(0, 3)
-          .map((m) => ({
-            movie: m,
-            rawScore: 10,
-            matchScore: 55,
-            parentAPct: 50,
-            parentBPct: 50,
-            composition: [{ label: 'Bağımsız Genetik Keşif Önerisi', pct: 100 }],
-          }));
-        setVariants(fallback);
-      } else {
-        setVariants(scoredCandidates.slice(0, 3));
-      }
-
+      setVariants(scoredCandidates.slice(0, 3));
       setActiveVariantIdx(0);
       setStep('result');
-    }, 1400);
+    }, 800);
   };
 
   const handleSelectMovie = (movie: Movie) => {
-    if (selectingSlot === 'A') setMovieA(movie);
-    else if (selectingSlot === 'B') setMovieB(movie);
+    if (selectingSlot === 'A') setMovieAId(movie.id);
+    else if (selectingSlot === 'B') setMovieBId(movie.id);
     setSelectingSlot(null);
     setSearch('');
   };
@@ -643,7 +827,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         className="bg-ink-900 border border-emerald-500/30 rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl shadow-emerald-900/20 flex flex-col max-h-[92vh]"
       >
         {/* HEADER */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-ink-800/50 bg-gradient-to-r from-emerald-950/40 to-ink-900">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-ink-800/50 bg-gradient-to-r from-emerald-950/40 to-ink-900">
           <div className="flex items-center gap-3">
             {selectingSlot ? (
               <button
@@ -659,19 +843,89 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             )}
             <div>
               <h2 className="text-lg sm:text-xl font-black text-white">Film DNA Sentezleyici</h2>
-              <p className="text-xs text-emerald-400/80">Çapraz Genetik Eşleştirme Laboratuvarı</p>
+              <p className="text-xs text-emerald-400/80">Sabit Oranlı Matematiksel Eşleştirme Motoru</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-ink-400 hover:text-white transition-colors bg-ink-800/50 hover:bg-ink-800 p-2 rounded-full"
-          >
-            <X size={20} />
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowFormulaTable(!showFormulaTable)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                showFormulaTable
+                  ? 'bg-emerald-500 text-ink-950 border-emerald-400'
+                  : 'bg-ink-800/80 text-emerald-300 border-emerald-500/30 hover:bg-ink-800'
+              }`}
+              title="Sabit Oran Tablosunu Gör"
+            >
+              <Calculator size={14} /> <span className="hidden sm:inline">Oran Tablosu</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="text-ink-400 hover:text-white transition-colors bg-ink-800/50 hover:bg-ink-800 p-2 rounded-full"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
+
+        {/* SABİT MATEMATİKSEL ORAN TABLOSU (AÇILIR/KAPANIR BİLGİ PANELİ) */}
+        {showFormulaTable && (
+          <div className="bg-ink-950/95 border-b border-emerald-500/30 px-6 py-4 text-xs space-y-2 animate-fade-in">
+            <div className="font-black text-emerald-400 uppercase tracking-wider flex items-center justify-between">
+              <span>📐 Sabit Genetik Uyum Oranları (Toplam = % Uyum)</span>
+              <button onClick={() => setShowFormulaTable(false)} className="text-ink-400 hover:text-white">
+                Gizle
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-ink-300">
+              <div className="bg-ink-900/80 p-2 rounded-lg border border-ink-800">
+                🎬 <strong>Aynı Yönetmen:</strong> <span className="text-emerald-400 font-bold">+%25</span> (İkisinde de: +%30)
+              </div>
+              <div className="bg-ink-900/80 p-2 rounded-lg border border-ink-800">
+                🎭 <strong>Aynı Oyuncu:</strong> Oyuncu başı <span className="text-emerald-400 font-bold">+%10</span> (Maks +%30)
+              </div>
+              <div className="bg-ink-900/80 p-2 rounded-lg border border-ink-800">
+                🏷️ <strong>Aynı Tür:</strong> Tür başı <span className="text-emerald-400 font-bold">+%5</span> (İkisinde de: +%8)
+              </div>
+              <div className="bg-ink-900/80 p-2 rounded-lg border border-ink-800">
+                🔑 <strong>Ortak Tema:</strong> Kelime başı <span className="text-emerald-400 font-bold">+%4</span> (Maks +%20)
+              </div>
+              <div className="bg-ink-900/80 p-2 rounded-lg border border-ink-800">
+                📦 <strong>Aynı Seri/Koleksiyon:</strong> <span className="text-emerald-400 font-bold">+%15</span> (En eski film)
+              </div>
+              <div className="bg-ink-900/80 p-2 rounded-lg border border-ink-800">
+                ⏱️ <strong>Stüdyo / Dönem / Süre:</strong> Her biri <span className="text-emerald-400 font-bold">+%5</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* İÇERİK BÖLÜMÜ */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 custom-scrollbar">
+          {/* EKSİK OYUNCU / YÖNETMEN VERİSİ UYARISI VE TEK TIKLA TAMAMLAMA */}
+          {moviesMissingCredits.length > 0 && !selectingSlot && step === 'select' && (
+            <div className="mb-5 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs text-amber-200 text-center sm:text-left">
+                <strong className="text-amber-400 block mb-0.5">
+                  🔍 {moviesMissingCredits.length} Filmin Oyuncu & Yönetmen Verisi Eksik!
+                </strong>
+                Oyuncu ve yönetmenlerin eksiksiz karşılaştırılması için TMDB künyelerini tamamlayabilirsin.
+              </div>
+              <button
+                type="button"
+                disabled={isSyncingDna}
+                onClick={handleSyncAllMissing}
+                className="flex-shrink-0 inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-ink-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={isSyncingDna ? 'animate-spin' : ''} />
+                {isSyncingDna
+                  ? `Tamamlanıyor (${syncProgress.current}/${syncProgress.total})`
+                  : 'Oyuncu Verilerini Tamamla'}
+              </button>
+            </div>
+          )}
+
           {/* DURUM 1: YUVA SEÇİMİ */}
           {selectingSlot && (
             <div className="space-y-4 animate-fade-in">
@@ -734,9 +988,14 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         {m.title}
                       </div>
                       <div className="text-[11px] text-ink-400 truncate mt-0.5">
-                        {m.directors && m.directors.length > 0 ? m.directors[0] : m.genres.slice(0, 2).join(', ')}
+                        {m.directors && m.directors.length > 0 ? `🎬 ${m.directors[0]}` : m.genres.slice(0, 2).join(', ')}
                         {m.year && ` · ${m.year}`}
                       </div>
+                      {m.cast && m.cast.length > 0 && (
+                        <div className="text-[10px] text-ink-500 truncate mt-0.5">
+                          🎭 {m.cast.slice(0, 2).join(', ')}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ))}
@@ -751,7 +1010,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
           {/* DURUM 2: SENTEZ BEKLEME EKRANI */}
           {!selectingSlot && step === 'select' && (
-            <div className="space-y-6 animate-fade-in flex flex-col items-center">
+            <div className="space-y-5 animate-fade-in flex flex-col items-center">
               {eligibleUnwatchedMovies.length === 0 ? (
                 <div className="text-center py-8">
                   <Beaker size={48} className="mx-auto text-ink-600 mb-4" />
@@ -764,7 +1023,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                 <>
                   <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3 bg-ink-950/50 border border-ink-800 rounded-2xl p-3.5">
                     <p className="text-ink-300 text-xs leading-relaxed text-center sm:text-left">
-                      Seçtiğin iki filmin <strong>tür, yönetmen, oyuncu, anahtar kelime, konu ve dönem</strong> verileri çaprazlanarak her ikisinden de izler taşıyan melez film bulunur.
+                      Seçtiğin iki filmin <strong>yönetmen (+%25), oyuncu (+%10), tür (+%5), tema (+%4) ve dönem (+%5)</strong> oranları toplanarak gerçek uyum yüzdesi hesaplanır.
                     </p>
                     {data.movies.length >= 2 && (
                       <button
@@ -777,7 +1036,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     )}
                   </div>
 
-                  {/* YUVA A VE YUVA B */}
+                  {/* YUVA A VE YUVA B (OYUNCU VE YÖNETMEN BİLGİLERİYLE) */}
                   <div className="grid grid-cols-2 gap-4 w-full">
                     {[
                       { slot: 'A' as const, movie: movieA, label: '1. Ebeveyn DNA' },
@@ -787,7 +1046,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         key={slot}
                         type="button"
                         onClick={() => setSelectingSlot(slot)}
-                        className={`relative rounded-2xl border-2 border-dashed p-3 flex flex-col items-center justify-between min-h-[220px] transition-all overflow-hidden group ${
+                        className={`relative rounded-2xl border-2 border-dashed p-3.5 flex flex-col items-center justify-between min-h-[230px] transition-all overflow-hidden group ${
                           movie
                             ? 'border-emerald-500/60 bg-ink-950/70 shadow-lg'
                             : 'border-ink-700 bg-ink-950/30 hover:border-emerald-500/40 hover:bg-ink-800/40'
@@ -799,7 +1058,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                               <img
                                 src={movie.posterUrl}
                                 alt={movie.title}
-                                className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:opacity-20 transition-opacity"
+                                className="absolute inset-0 w-full h-full object-cover opacity-25 group-hover:opacity-15 transition-opacity"
                               />
                             )}
                             <div className="relative z-10 w-full flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-emerald-400">
@@ -811,21 +1070,30 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                               )}
                             </div>
 
-                            <div className="relative z-10 my-2 text-center">
+                            <div className="relative z-10 my-2 text-center w-full space-y-1">
                               <div className="font-black text-white text-sm sm:text-base drop-shadow-md line-clamp-2">
                                 {movie.title}
                               </div>
-                              <div className="text-[11px] text-ink-300 mt-1">
+                              <div className="text-[11px] text-ink-300">
                                 {movie.year} {movie.runtime ? `· ${movie.runtime} dk` : ''}
                               </div>
-                              {movie.directors && movie.directors.length > 0 && (
-                                <div className="text-[10px] text-emerald-300 font-bold mt-1 truncate">
+                              {movie.directors && movie.directors.length > 0 ? (
+                                <div className="text-[11px] text-emerald-300 font-bold truncate">
                                   🎬 {movie.directors[0]}
                                 </div>
+                              ) : (
+                                <div className="text-[10px] text-amber-400/80">🎬 Yönetmen verisi yok</div>
+                              )}
+                              {movie.cast && movie.cast.length > 0 ? (
+                                <div className="text-[10px] text-ink-200 truncate px-1">
+                                  🎭 {movie.cast.slice(0, 3).join(', ')}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-amber-400/80">🎭 Oyuncu verisi yok</div>
                               )}
                               {movie.genres.length > 0 && (
-                                <div className="text-[10px] text-ink-400 mt-1 truncate">
-                                  {movie.genres.slice(0, 2).join(' · ')}
+                                <div className="text-[10px] text-ink-400 truncate">
+                                  {movie.genres.slice(0, 3).join(' · ')}
                                 </div>
                               )}
                             </div>
@@ -848,19 +1116,23 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     ))}
                   </div>
 
-                  {/* MUTASYON AYARI */}
+                  {/* SENTEZ MODU SEÇİMİ */}
                   <div className="w-full bg-ink-950/50 border border-ink-800 rounded-2xl p-4 space-y-2.5">
                     <div className="flex justify-between text-xs font-bold text-ink-400 uppercase tracking-wider">
-                      <span>Genetik Sentez Modu</span>
+                      <span>Sentezleme Modu</span>
                       <span className="text-emerald-400">
-                        {mutationRate === 0 ? 'Safkan (Tam Eşleşme)' : mutationRate === 1 ? 'Dengeli Melez' : 'Kaos (Deneysel)'}
+                        {mutationRate === 0
+                          ? 'Safkan Matematik (%0 Rastgelelik)'
+                          : mutationRate === 1
+                          ? 'Melez Öncelikli (%0 Rastgelelik)'
+                          : 'Kaos (+%3-10 Mutasyon)'}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { val: 0, title: '🛡️ Safkan', sub: 'Sıfır rastgelelik, net bağlar' },
-                        { val: 1, title: '⚖️ Dengeli', sub: 'İki ebeveynden eşit sentez' },
-                        { val: 2, title: '⚡ Kaos Modu', sub: 'Gizli tema & sürpriz bağlar' },
+                        { val: 0, title: '🛡️ Safkan', sub: 'Saf toplam yüzde sırası' },
+                        { val: 1, title: '⚖️ Melez (A×B)', sub: 'İki filmden ortak gen alanlar' },
+                        { val: 2, title: '⚡ Kaos Modu', sub: '+%3 ile +%10 sürpriz mutasyon' },
                       ].map((m) => (
                         <button
                           key={m.val}
@@ -880,7 +1152,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                   </div>
 
                   <button
-                    disabled={!movieA || !movieB}
+                    disabled={!movieA || !movieB || isSyncingDna}
                     onClick={handleSynthesize}
                     className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black px-8 py-4 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
                   >
@@ -899,212 +1171,247 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                 <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
               </div>
               <div className="text-center space-y-2">
-                <h3 className="text-xl font-black text-white tracking-widest">EBEVEYN GENLERİ ÇAPRAZLANIYOR...</h3>
+                <h3 className="text-xl font-black text-white tracking-widest">
+                  {isSyncingDna ? 'EKSİK OYUNCU VERİLERİ ÇEKİLİYOR...' : 'MATEMATİKSEL UYUM HESAPLANIYOR...'}
+                </h3>
                 <p className="text-sm text-emerald-400/80 animate-pulse">
-                  {movieA?.title} × {movieB?.title} ortak özellikleri taranıyor...
+                  {movieA?.title} × {movieB?.title} yönetmen, oyuncu, tür ve tema oranları toplanıyor...
                 </p>
               </div>
             </div>
           )}
 
-          {/* DURUM 4: SONUÇ EKRANI (TOP 3 VARYANT SEÇENEĞİ İLE) */}
-          {!selectingSlot && step === 'result' && currentResult && (
+          {/* DURUM 4: SONUÇ EKRANI */}
+          {!selectingSlot && step === 'result' && (
             <div className="animate-fade-in-up space-y-4">
-              {/* Üst Varyant Seçici Sekmeler */}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
-                  <Sparkles size={14} /> Sentez Başarılı
+              {!currentResult ? (
+                <div className="text-center py-10 space-y-3">
+                  <Beaker size={44} className="mx-auto text-ink-500" />
+                  <h3 className="text-lg font-bold text-white">Ortak Genetik Özellik Bulunamadı</h3>
+                  <p className="text-xs text-ink-400 max-w-md mx-auto">
+                    Seçtiğin iki filmle bekleyen filmlerin arasında ortak yönetmen, oyuncu, tür veya tema kesişimi çıkmadı.
+                  </p>
+                  <button
+                    onClick={() => setStep('select')}
+                    className="bg-emerald-500 text-ink-950 font-black px-5 py-2.5 rounded-xl text-xs"
+                  >
+                    Farklı Filmler Dene
+                  </button>
                 </div>
+              ) : (
+                <>
+                  {/* Üst Varyant Seçici Sekmeler */}
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
+                      <Sparkles size={14} /> Net Uyum: %{currentResult.matchScore}
+                    </div>
 
-                {variants.length > 1 && (
-                  <div className="flex items-center gap-1.5 bg-ink-950 p-1 rounded-xl border border-ink-800">
-                    {variants.map((v, idx) => (
-                      <button
-                        key={v.movie.id}
-                        type="button"
-                        onClick={() => setActiveVariantIdx(idx)}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                          activeVariantIdx === idx
-                            ? 'bg-emerald-500 text-ink-950 font-black shadow-sm'
-                            : 'text-ink-400 hover:text-ink-200'
-                        }`}
-                      >
-                        {idx === 0 ? '1. Varyant' : `${idx + 1}. Varyant`} (%{v.matchScore})
-                      </button>
-                    ))}
+                    {variants.length > 1 && (
+                      <div className="flex items-center gap-1.5 bg-ink-950 p-1 rounded-xl border border-ink-800">
+                        {variants.map((v, idx) => (
+                          <button
+                            key={v.movie.id}
+                            type="button"
+                            onClick={() => setActiveVariantIdx(idx)}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              activeVariantIdx === idx
+                                ? 'bg-emerald-500 text-ink-950 font-black shadow-sm'
+                                : 'text-ink-400 hover:text-ink-200'
+                            }`}
+                          >
+                            {idx + 1}. Varyant (%{v.matchScore})
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Ebeveyn Kalıtım Oranı Çubuğu (Film A vs Film B) */}
-              {movieA && movieB && (
-                <div className="bg-ink-950/70 border border-ink-800 rounded-xl p-3 space-y-1.5">
-                  <div className="flex justify-between text-[11px] font-bold">
-                    <span className="text-emerald-400 truncate max-w-[45%]">
-                      🧬 %{currentResult.parentAPct} {movieA.title}
-                    </span>
-                    <span className="text-cyan-400 truncate max-w-[45%] text-right">
-                      {movieB.title} %{currentResult.parentBPct} 🧬
-                    </span>
-                  </div>
-                  <div className="h-2 w-full bg-ink-900 rounded-full overflow-hidden flex">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-500"
-                      style={{ width: `${currentResult.parentAPct}%` }}
-                    />
-                    <div
-                      className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-500"
-                      style={{ width: `${currentResult.parentBPct}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col md:flex-row gap-5 items-center md:items-stretch bg-ink-950/60 border border-emerald-500/30 rounded-2xl p-4 sm:p-5 w-full">
-                {/* Sol: Tıklanabilir Poster */}
-                <button
-                  type="button"
-                  onClick={() => setDetailMovie(currentResult.movie)}
-                  title="Sinema Kartını Gör"
-                  className="w-36 md:w-44 flex-shrink-0 aspect-[2/3] bg-ink-900 rounded-xl overflow-hidden shadow-xl border-2 border-emerald-500/40 relative group cursor-pointer"
-                >
-                  {currentResult.movie.posterUrl ? (
-                    <img
-                      src={currentResult.movie.posterUrl}
-                      alt={currentResult.movie.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="text-ink-700" size={32} />
+                  {/* Ebeveyn Kalıtım Oranı Çubuğu (Film A vs Film B) */}
+                  {movieA && movieB && (
+                    <div className="bg-ink-950/70 border border-ink-800 rounded-xl p-3 space-y-1.5">
+                      <div className="flex justify-between text-[11px] font-bold">
+                        <span className="text-emerald-400 truncate max-w-[45%]">
+                          🧬 %{currentResult.parentAPct} {movieA.title}
+                        </span>
+                        <span className="text-cyan-400 truncate max-w-[45%] text-right">
+                          {movieB.title} %{currentResult.parentBPct} 🧬
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-ink-900 rounded-full overflow-hidden flex">
+                        <div
+                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-500"
+                          style={{ width: `${currentResult.parentAPct}%` }}
+                        />
+                        <div
+                          className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-500"
+                          style={{ width: `${currentResult.parentBPct}%` }}
+                        />
+                      </div>
                     </div>
                   )}
-                  <div className="absolute top-2 right-2 bg-emerald-500 text-ink-950 font-black text-xs px-2.5 py-1 rounded-lg shadow-lg">
-                    %{currentResult.matchScore} Uyum
-                  </div>
-                  <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                    <Eye size={20} className="text-emerald-400" />
-                    <span className="text-[10px] font-black text-white uppercase">Sinema Kartı</span>
-                  </div>
-                </button>
 
-                {/* Sağ: Künye, DNA Barları ve İzleme Linkleri */}
-                <div className="flex-1 flex flex-col justify-between w-full text-center md:text-left min-w-0">
-                  <div>
-                    <h3 className="text-xl sm:text-2xl font-black text-white leading-tight">
-                      {currentResult.movie.title}
-                    </h3>
-
-                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 text-xs text-ink-300 font-semibold mt-2">
-                      {currentResult.movie.year && (
-                        <span className="flex items-center gap-1">
-                          <Calendar size={12} className="text-emerald-400" /> {currentResult.movie.year}
-                        </span>
-                      )}
-                      {currentResult.movie.runtime && (
-                        <span className="flex items-center gap-1">
-                          <Clock size={12} className="text-emerald-400" /> {currentResult.movie.runtime} dk
-                        </span>
-                      )}
-                      {currentResult.movie.directors && currentResult.movie.directors.length > 0 && (
-                        <span className="flex items-center gap-1 text-emerald-300">
-                          <User size={12} /> {currentResult.movie.directors[0]}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-xs text-ink-400 mt-1">
-                      {currentResult.movie.genres.join(' · ')}
-                    </div>
-
-                    {/* İzleme ve Fragman Linkleri */}
-                    <div className="flex items-center justify-center md:justify-start gap-1.5 flex-wrap my-3.5">
-                      {getWatchLinks(currentResult.movie).map((link, idx) => {
-                        const Icon = link.icon;
-                        if (link.isTrailer) {
-                          return (
-                            <a
-                              key={idx}
-                              href={link.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-500 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shadow"
-                            >
-                              <Icon size={12} /> {link.text}
-                            </a>
-                          );
-                        }
-                        return (
-                          <a
-                            key={idx}
-                            href={link.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all"
-                          >
-                            {link.logo ? (
-                              <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 rounded-sm object-cover" />
-                            ) : (
-                              <Icon size={12} />
-                            )}
-                            {link.text}
-                          </a>
-                        );
-                      })}
-                    </div>
-
-                    {/* %100 DOĞRULANMIŞ DNA İLERLEME BARLARI */}
-                    <div className="space-y-2.5 bg-ink-900/60 p-3.5 rounded-xl border border-ink-800 text-left">
-                      <div className="text-[10px] font-black text-ink-400 uppercase tracking-widest flex justify-between">
-                        <span>Eşleşen Genetik Özellikler</span>
-                        <span className="text-emerald-400">%100</span>
-                      </div>
-                      {currentResult.composition.map((c, i) => (
-                        <div key={i} className="space-y-1">
-                          <div className="flex justify-between text-xs font-semibold text-emerald-100 gap-2">
-                            <span className="flex items-center gap-1.5 truncate">
-                              <Dna size={12} className="text-emerald-400 flex-shrink-0" />
-                              <span className="truncate">{c.label}</span>
-                            </span>
-                            <span className="text-emerald-400 font-black flex-shrink-0">%{c.pct}</span>
-                          </div>
-                          <div className="w-full h-1.5 bg-ink-950 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
-                              style={{ width: `${c.pct}%` }}
-                            />
-                          </div>
+                  <div className="flex flex-col md:flex-row gap-5 items-center md:items-stretch bg-ink-950/60 border border-emerald-500/30 rounded-2xl p-4 sm:p-5 w-full">
+                    {/* Sol: Tıklanabilir Poster */}
+                    <button
+                      type="button"
+                      onClick={() => setDetailMovie(currentResult.movie)}
+                      title="Sinema Kartını Gör"
+                      className="w-36 md:w-44 flex-shrink-0 aspect-[2/3] bg-ink-900 rounded-xl overflow-hidden shadow-xl border-2 border-emerald-500/40 relative group cursor-pointer"
+                    >
+                      {currentResult.movie.posterUrl ? (
+                        <img
+                          src={currentResult.movie.posterUrl}
+                          alt={currentResult.movie.title}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ImageIcon className="text-ink-700" size={32} />
                         </div>
-                      ))}
+                      )}
+                      <div className="absolute top-2 right-2 bg-emerald-500 text-ink-950 font-black text-xs px-2.5 py-1 rounded-lg shadow-lg">
+                        %{currentResult.matchScore} Uyum
+                      </div>
+                      <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                        <Eye size={20} className="text-emerald-400" />
+                        <span className="text-[10px] font-black text-white uppercase">Sinema Kartı</span>
+                      </div>
+                    </button>
+
+                    {/* Sağ: Künye, Oyuncular, Sabit Matematiksel Kırılım ve Linkler */}
+                    <div className="flex-1 flex flex-col justify-between w-full text-center md:text-left min-w-0">
+                      <div>
+                        <h3 className="text-xl sm:text-2xl font-black text-white leading-tight">
+                          {currentResult.movie.title}
+                        </h3>
+
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 text-xs text-ink-300 font-semibold mt-2">
+                          {currentResult.movie.year && (
+                            <span className="flex items-center gap-1">
+                              <Calendar size={12} className="text-emerald-400" /> {currentResult.movie.year}
+                            </span>
+                          )}
+                          {currentResult.movie.runtime && (
+                            <span className="flex items-center gap-1">
+                              <Clock size={12} className="text-emerald-400" /> {currentResult.movie.runtime} dk
+                            </span>
+                          )}
+                          {currentResult.movie.directors && currentResult.movie.directors.length > 0 && (
+                            <span className="flex items-center gap-1 text-emerald-300">
+                              <User size={12} /> {currentResult.movie.directors.join(', ')}
+                            </span>
+                          )}
+                        </div>
+
+                        {currentResult.movie.cast && currentResult.movie.cast.length > 0 && (
+                          <div className="flex items-center justify-center md:justify-start gap-1.5 text-[11px] text-ink-300 mt-1.5">
+                            <Users size={12} className="text-gold-400 flex-shrink-0" />
+                            <span className="truncate">
+                              <strong>Oyuncular:</strong> {currentResult.movie.cast.slice(0, 4).join(', ')}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="text-xs text-ink-400 mt-1">
+                          {currentResult.movie.genres.join(' · ')}
+                        </div>
+
+                        {/* İzleme ve Fragman Linkleri */}
+                        <div className="flex items-center justify-center md:justify-start gap-1.5 flex-wrap my-3">
+                          {getWatchLinks(currentResult.movie).map((link, idx) => {
+                            const Icon = link.icon;
+                            if (link.isTrailer) {
+                              return (
+                                <a
+                                  key={idx}
+                                  href={link.href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-500 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shadow"
+                                >
+                                  <Icon size={12} /> {link.text}
+                                </a>
+                              );
+                            }
+                            return (
+                              <a
+                                key={idx}
+                                href={link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all"
+                              >
+                                {link.logo ? (
+                                  <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 rounded-sm object-cover" />
+                                ) : (
+                                  <Icon size={12} />
+                                )}
+                                {link.text}
+                              </a>
+                            );
+                          })}
+                        </div>
+
+                        {/* SABİT ORANLI MATEMATİKSEL TABLO (TOPLAMI = % UYUM) */}
+                        <div className="space-y-2 bg-ink-900/70 p-3.5 rounded-xl border border-ink-800 text-left">
+                          <div className="text-[10px] font-black text-ink-400 uppercase tracking-widest flex justify-between border-b border-ink-800 pb-1.5">
+                            <span>Kazanılan Sabit Kriter Puanları</span>
+                            <span className="text-emerald-400 font-mono">
+                              Toplam = %{currentResult.matchScore} Uyum
+                            </span>
+                          </div>
+                          {currentResult.traits.map((t, i) => (
+                            <div key={i} className="space-y-1">
+                              <div className="flex justify-between text-xs font-semibold text-emerald-100 gap-2">
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                  <Dna size={12} className="text-emerald-400 flex-shrink-0" />
+                                  <span className="truncate" title={t.label}>
+                                    {t.label}
+                                  </span>
+                                </span>
+                                <span className="text-emerald-400 font-black font-mono flex-shrink-0">
+                                  +%{t.addedPct}
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-ink-950 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+                                  style={{ width: `${Math.min(100, t.addedPct * 3.5)}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* ALT AKSİYON BUTONLARI */}
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-1 w-full">
-                <button
-                  onClick={() => setShowRating(true)}
-                  className="flex-1 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black py-3.5 rounded-xl shadow-lg shadow-gold-500/20 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm"
-                >
-                  <Star size={17} className="fill-current" /> Puanla
-                </button>
-                <button
-                  onClick={() => setDetailMovie(currentResult.movie)}
-                  className="sm:w-auto px-5 bg-ink-800 hover:bg-ink-700 text-emerald-400 border border-emerald-500/30 font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-xs sm:text-sm"
-                >
-                  <Eye size={16} /> Sinema Kartı
-                </button>
-                <button
-                  onClick={() => {
-                    setStep('select');
-                    setVariants([]);
-                  }}
-                  className="sm:w-auto px-5 bg-ink-800 hover:bg-ink-700 text-white font-bold py-3.5 rounded-xl transition-colors border border-ink-700 flex items-center justify-center text-xs sm:text-sm"
-                >
-                  Yeni Sentez
-                </button>
-              </div>
+                  {/* ALT AKSİYON BUTONLARI */}
+                  <div className="flex flex-col sm:flex-row gap-2.5 pt-1 w-full">
+                    <button
+                      onClick={() => setShowRating(true)}
+                      className="flex-1 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black py-3.5 rounded-xl shadow-lg shadow-gold-500/20 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm"
+                    >
+                      <Star size={17} className="fill-current" /> Puanla
+                    </button>
+                    <button
+                      onClick={() => setDetailMovie(currentResult.movie)}
+                      className="sm:w-auto px-5 bg-ink-800 hover:bg-ink-700 text-emerald-400 border border-emerald-500/30 font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+                    >
+                      <Eye size={16} /> Sinema Kartı
+                    </button>
+                    <button
+                      onClick={() => {
+                        setStep('select');
+                        setVariants([]);
+                      }}
+                      className="sm:w-auto px-5 bg-ink-800 hover:bg-ink-700 text-white font-bold py-3.5 rounded-xl transition-colors border border-ink-700 flex items-center justify-center text-xs sm:text-sm"
+                    >
+                      Yeni Sentez
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
