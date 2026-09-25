@@ -25,6 +25,11 @@ import {
   Film,
   RefreshCw,
   User,
+  Shield,
+  Award,
+  Gem,
+  Lock,
+  CheckCircle2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { levelFromXp } from '../lib/xp';
@@ -37,6 +42,79 @@ import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
+
+const RANK_TIERS = [
+  {
+    minLevel: 1,
+    maxLevel: 4,
+    title: 'Çaylak İzleyici',
+    subtitle: 'Sinema yolculuğunun ilk adımları',
+    color: 'text-slate-300',
+    border: 'border-slate-500/40',
+    badgeBg: 'bg-slate-500/15',
+    bgGlow: 'bg-slate-500/15',
+    gradient: 'from-slate-500 via-slate-400 to-zinc-300',
+    barGradient: 'from-slate-600 via-slate-400 to-white',
+    strokeColor: '#94a3b8',
+    icon: Film,
+  },
+  {
+    minLevel: 5,
+    maxLevel: 9,
+    title: 'Film Meraklısı',
+    subtitle: 'Kült yapımların ve seçkin hikayelerin kaşifi',
+    color: 'text-sky-400',
+    border: 'border-sky-500/40',
+    badgeBg: 'bg-sky-500/15',
+    bgGlow: 'bg-sky-500/20',
+    gradient: 'from-blue-600 via-sky-500 to-cyan-300',
+    barGradient: 'from-blue-700 via-sky-500 to-cyan-300',
+    strokeColor: '#38bdf8',
+    icon: Award,
+  },
+  {
+    minLevel: 10,
+    maxLevel: 19,
+    title: 'Tutkulu Sinefil',
+    subtitle: 'Yönetmen imzalarını ve alt metinleri okuyan göz',
+    color: 'text-violet-400',
+    border: 'border-violet-500/40',
+    badgeBg: 'bg-violet-500/15',
+    bgGlow: 'bg-violet-500/20',
+    gradient: 'from-violet-600 via-purple-500 to-fuchsia-400',
+    barGradient: 'from-violet-700 via-purple-500 to-fuchsia-300',
+    strokeColor: '#a78bfa',
+    icon: Shield,
+  },
+  {
+    minLevel: 20,
+    maxLevel: 39,
+    title: 'Sinema Otoritesi',
+    subtitle: 'Eleştirileri ve arşiviyle referans noktası',
+    color: 'text-gold-400',
+    border: 'border-gold-500/50',
+    badgeBg: 'bg-gold-500/15',
+    bgGlow: 'bg-gold-500/25',
+    gradient: 'from-amber-600 via-gold-500 to-yellow-300',
+    barGradient: 'from-amber-600 via-gold-500 to-yellow-200',
+    strokeColor: '#f59e0b',
+    icon: Crown,
+  },
+  {
+    minLevel: 40,
+    maxLevel: 999,
+    title: 'Sinevia Efsanesi',
+    subtitle: 'Yedinci sanatın zirvesine ulaşmış ölümsüz otorite',
+    color: 'text-cyan-300',
+    border: 'border-cyan-400/50',
+    badgeBg: 'bg-cyan-500/15',
+    bgGlow: 'bg-cyan-500/25',
+    gradient: 'from-cyan-500 via-teal-400 to-emerald-300',
+    barGradient: 'from-cyan-600 via-teal-400 to-emerald-200',
+    strokeColor: '#22d3ee',
+    icon: Gem,
+  },
+];
 
 export default function HomePage() {
   const { data, watchMovie, watchEpisode } = useApp();
@@ -124,8 +202,17 @@ export default function HomePage() {
           ).toFixed(1)
         : '-';
 
-    return { totalHours, avgRating, watchedEpsCount };
-  }, [data.movies, data.series, data.history]);
+    // Kupa kademesi sayıları
+    const tierCounts = { bronze: 0, silver: 0, gold: 0, diamond: 0, secret: 0, total: 0 };
+    (data.achievements || []).forEach((a) => {
+      (a.unlockedTiers || []).forEach((t) => {
+        if (t in tierCounts) (tierCounts as any)[t]++;
+        tierCounts.total++;
+      });
+    });
+
+    return { totalHours, avgRating, watchedEpsCount, tierCounts };
+  }, [data.movies, data.series, data.history, data.achievements]);
 
   const closestAchievements = useMemo(() => {
     const progMap = new Map((data.achievements || []).map((a) => [a.achievementId, a]));
@@ -177,49 +264,21 @@ export default function HomePage() {
 
   const lvl = levelFromXp(data.totalXp);
 
-  const getLevelTitle = (level: number) => {
-    if (level < 5)
-      return {
-        title: 'Çaylak İzleyici',
-        color: 'text-ink-300',
-        bgGlow: 'bg-ink-500/10',
-        gradient: 'from-ink-600 to-ink-400',
-        barGradient: 'from-ink-600 to-ink-400',
-      };
-    if (level < 10)
-      return {
-        title: 'Film Meraklısı',
-        color: 'text-blue-400',
-        bgGlow: 'bg-blue-500/15',
-        gradient: 'from-blue-600 to-blue-400',
-        barGradient: 'from-blue-700 via-blue-500 to-cyan-400',
-      };
-    if (level < 20)
-      return {
-        title: 'Tutkulu Sinefil',
-        color: 'text-violet-400',
-        bgGlow: 'bg-violet-500/15',
-        gradient: 'from-violet-600 to-violet-400',
-        barGradient: 'from-violet-700 via-violet-500 to-fuchsia-400',
-      };
-    if (level < 40)
-      return {
-        title: 'Sinema Otoritesi',
-        color: 'text-gold-400',
-        bgGlow: 'bg-gold-500/15',
-        gradient: 'from-gold-600 to-gold-400',
-        barGradient: 'from-gold-700 via-gold-500 to-yellow-300',
-      };
-    return {
-      title: 'Sinevia Efsanesi',
-      color: 'text-cyan-400',
-      bgGlow: 'bg-cyan-500/15',
-      gradient: 'from-cyan-600 to-cyan-400',
-      barGradient: 'from-cyan-700 via-cyan-500 to-teal-300',
-    };
-  };
+  const currentRankIndex = useMemo(() => {
+    for (let i = RANK_TIERS.length - 1; i >= 0; i--) {
+      if (lvl.level >= RANK_TIERS[i].minLevel) return i;
+    }
+    return 0;
+  }, [lvl.level]);
 
-  const userPersona = getLevelTitle(lvl.level);
+  const userPersona = RANK_TIERS[currentRankIndex];
+  const nextRank = RANK_TIERS[currentRankIndex + 1] || null;
+  const PersonaIcon = userPersona.icon;
+
+  // SVG Dairesel İlerleme Hesaplaması
+  const circleRadius = 46;
+  const circleCircumference = 2 * Math.PI * circleRadius;
+  const circleOffset = circleCircumference - (Math.min(100, Math.max(0, lvl.progress)) / 100) * circleCircumference;
 
   type PickItem =
     | { kind: 'movie'; movie: Movie }
@@ -333,82 +392,263 @@ export default function HomePage() {
     <div className="space-y-8 animate-fade-in">
       
       {/* =========================================================
-          1. ÜST PROFİL, SEVİYE & HIZLI KOMUTA MERKEZİ
+          1. YENİ NESİL SİNEMA PRESTİJ & RÜTBE ARENASI (LEVEL UP HERO)
           ========================================================= */}
-      <div className="relative bg-gradient-to-br from-ink-950 to-ink-900 border border-ink-800/80 rounded-[2rem] p-5 sm:p-7 shadow-2xl overflow-hidden">
+      <div
+        className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-[2.2rem] p-5 sm:p-8 shadow-[0_25px_70px_rgba(0,0,0,0.75)] overflow-hidden`}
+      >
+        {/* Arka Plan Dinamik Işık Küreleri & Siber Izgara Dokusu */}
         <div
-          className={`absolute top-0 right-0 w-72 h-72 ${userPersona.bgGlow} rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none transition-all duration-1000`}
+          className={`absolute -top-24 -right-20 w-96 h-96 ${userPersona.bgGlow} rounded-full blur-[110px] pointer-events-none transition-all duration-1000`}
+        />
+        <div
+          className={`absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.04] pointer-events-none"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)',
+            backgroundSize: '24px 24px',
+          }}
         />
 
-        <div className="relative z-10 flex flex-col lg:flex-row gap-6 lg:items-center">
-          <div className="flex items-center justify-between sm:justify-start gap-5 flex-shrink-0">
-            <div className="flex items-center gap-4 sm:gap-5">
-              <div
-                className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-lg rotate-3 transition-colors duration-1000`}
-              >
-                <div className="w-full h-full bg-ink-950 rounded-[14px] flex items-center justify-center -rotate-3">
-                  <Crown className={userPersona.color} size={32} />
-                </div>
-              </div>
-              <div>
-                <div
-                  className={`text-xs font-black uppercase tracking-widest mb-1 transition-colors duration-1000 ${userPersona.color}`}
-                >
-                  {userPersona.title}
-                </div>
-                <div className="text-2xl sm:text-3xl font-black text-ink-50 leading-none">
-                  Seviye {lvl.level}
-                </div>
-                <div className="flex items-center gap-3 mt-2 text-[11px] font-bold text-ink-400">
-                  <span className="flex items-center gap-1">
-                    <Clock size={12} className="text-gold-400" /> {quickMetrics.totalHours} Saat Ekran
-                  </span>
-                  <span>·</span>
-                  <span className="flex items-center gap-1">
-                    <Star size={12} className="text-gold-400 fill-current" /> Ort: {quickMetrics.avgRating}
-                  </span>
-                </div>
-              </div>
-            </div>
+        {/* Üst Rozet & Kupa Kasası Özeti */}
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 pb-5 mb-6 border-b border-ink-800/80">
+          <div className="flex items-center gap-2.5">
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest border ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}
+            >
+              <Sparkles size={12} /> Rütbe Kademesi {currentRankIndex + 1} / {RANK_TIERS.length}
+            </span>
 
             {data.dailyStreak > 0 && (
-              <div className="flex sm:hidden flex-col items-center bg-orange-500/15 border border-orange-500/30 px-3 py-1.5 rounded-xl">
-                <Flame size={16} className="text-orange-400 fill-current" />
-                <span className="text-xs font-black text-orange-300">{data.dailyStreak} Gün</span>
-              </div>
+              <span className="inline-flex items-center gap-1.5 bg-orange-500/15 border border-orange-500/30 text-orange-300 px-3 py-1 rounded-full text-[11px] font-black">
+                <Flame size={13} className="text-orange-400 fill-current" /> {data.dailyStreak} Gün Seri
+              </span>
             )}
           </div>
 
-          <div className="flex-1 w-full lg:border-l border-ink-800/80 lg:pl-7">
-            <div className="flex justify-between text-xs sm:text-sm font-black text-ink-200 mb-2 uppercase tracking-widest">
-              <span>Seviye İlerlemesi</span>
-              <span className={userPersona.color}>% {Math.floor(lvl.progress)}</span>
+          {/* Sağ Üst: Cevher Kupa Sayacı */}
+          <button
+            type="button"
+            onClick={() => navigateTo('achievements')}
+            className="flex items-center gap-2 bg-ink-950/80 hover:bg-ink-900 border border-ink-800 hover:border-gold-500/40 px-3.5 py-1.5 rounded-full transition-all group"
+            title="Başarımlar ve Kupa Kasasına Git"
+          >
+            <Trophy size={13} className="text-gold-400 group-hover:scale-110 transition-transform" />
+            <div className="flex items-center gap-2 text-[11px] font-black">
+              <span className="text-amber-500" title="Bronz Kupalar">
+                ● {quickMetrics.tierCounts.bronze}
+              </span>
+              <span className="text-slate-300" title="Gümüş Kupalar">
+                ● {quickMetrics.tierCounts.silver}
+              </span>
+              <span className="text-yellow-400" title="Altın Kupalar">
+                ● {quickMetrics.tierCounts.gold}
+              </span>
+              <span className="text-cyan-300" title="Elmas Kupalar">
+                ◆ {quickMetrics.tierCounts.diamond}
+              </span>
+              {quickMetrics.tierCounts.secret > 0 && (
+                <span className="text-purple-400" title="Gizli Kupalar">
+                  ★ {quickMetrics.tierCounts.secret}
+                </span>
+              )}
             </div>
+            <ChevronRight size={13} className="text-ink-500 group-hover:text-gold-400" />
+          </button>
+        </div>
 
-            <div className="h-4 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800/80 shadow-inner relative">
+        {/* ORTA BÖLÜM: 3D SVG HALKALI ARMA + DEV SEVİYE + LAZER XP BARI */}
+        <div className="relative z-10 flex flex-col lg:flex-row items-center gap-6 lg:gap-8">
+          
+          {/* Sol: Dairesel SVG İlerleme Halkalı Rütbe Arması */}
+          <div className="flex flex-col sm:flex-row items-center gap-5 flex-shrink-0 w-full sm:w-auto justify-center sm:justify-start">
+            <div className="relative w-28 h-28 flex items-center justify-center flex-shrink-0">
+              {/* Arka Aura */}
               <div
-                className={`h-full bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative`}
-                style={{ width: `${Math.max(2, lvl.progress)}%` }}
+                className={`absolute inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-xl animate-pulse`}
+              />
+
+              {/* SVG İlerleme Çemberi */}
+              <svg className="w-28 h-28 -rotate-90 transform" viewBox="0 0 108 108">
+                <circle
+                  cx="54"
+                  cy="54"
+                  r={circleRadius}
+                  stroke="currentColor"
+                  strokeWidth="7"
+                  fill="transparent"
+                  className="text-ink-950"
+                />
+                <circle
+                  cx="54"
+                  cy="54"
+                  r={circleRadius}
+                  stroke={userPersona.strokeColor}
+                  strokeWidth="7"
+                  strokeDasharray={circleCircumference}
+                  strokeDashoffset={circleOffset}
+                  strokeLinecap="round"
+                  fill="transparent"
+                  className="transition-all duration-1000 ease-out drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                />
+              </svg>
+
+              {/* Merkez İkon Rozeti */}
+              <div
+                className={`absolute inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}
               >
-                <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                <div className="w-full h-full bg-ink-950 rounded-full flex flex-col items-center justify-center">
+                  <PersonaIcon className={userPersona.color} size={30} />
+                  <span className="text-[10px] font-black text-ink-400 uppercase mt-0.5">
+                    %{Math.floor(lvl.progress)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Alt Seviye Hapı */}
+              <div
+                className={`absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}
+              >
+                SV. {lvl.level}
               </div>
             </div>
 
-            <div className="flex justify-between items-center text-[11px] sm:text-xs text-ink-400 mt-2.5 font-bold uppercase tracking-widest">
-              <span>
-                Toplam <span className="text-ink-50">{(data.totalXp || 0).toLocaleString()} XP</span>
-              </span>
-              <span>
-                Sonraki Seviyeye{' '}
-                <span className={userPersona.color}>
-                  {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString()} XP
+            {/* Rütbe Başlığı ve Kişisel İstatistik Özeti */}
+            <div className="text-center sm:text-left">
+              <div
+                className={`text-xs font-black uppercase tracking-widest mb-1 ${userPersona.color}`}
+              >
+                {userPersona.title}
+              </div>
+              <div className="text-3xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none">
+                Seviye {lvl.level}
+              </div>
+              <p className="text-xs text-ink-400 mt-1.5 max-w-[240px] leading-relaxed">
+                {userPersona.subtitle}
+              </p>
+
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-3">
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-ink-950/90 border border-ink-800 text-ink-200 px-2.5 py-1 rounded-lg">
+                  <Clock size={12} className="text-gold-400" /> {quickMetrics.totalHours} Saat Ekran
                 </span>
-              </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-ink-950/90 border border-ink-800 text-ink-200 px-2.5 py-1 rounded-lg">
+                  <Star size={12} className="text-gold-400 fill-current" /> Ort: {quickMetrics.avgRating}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sağ: Lazer Segmentli XP İlerleme Motoru */}
+          <div className="flex-1 w-full bg-ink-950/70 border border-ink-800/90 rounded-3xl p-4 sm:p-5 shadow-inner space-y-3.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">
+                  Deneyim Puanı (XP) Havuzu
+                </span>
+                <div className="text-lg sm:text-xl font-black text-ink-50 mt-0.5 flex items-baseline gap-1.5">
+                  <span>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</span>
+                  <span className="text-xs font-bold text-ink-400">
+                    ({lvl.currentLevelXp.toLocaleString('tr-TR')} / {lvl.nextLevelXp.toLocaleString('tr-TR')} Seviye İçi)
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">
+                  Seviye {lvl.level + 1} Hedefi
+                </span>
+                <span className={`text-sm font-black ${userPersona.color}`}>
+                  {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı
+                </span>
+              </div>
+            </div>
+
+            {/* 20 Segmentli Kristal XP Barı */}
+            <div className="relative h-5 w-full bg-ink-900 rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
+              <div
+                className={`h-full rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`}
+                style={{ width: `${Math.max(3, lvl.progress)}%` }}
+              >
+                {/* Parlama Efekti */}
+                <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_25%,rgba(255,255,255,0.35)_50%,transparent_75%)] bg-[length:200%_100%] animate-pulse" />
+                {/* Sağ Uç Lazer Çizgisi */}
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white shadow-[0_0_12px_#fff]" />
+              </div>
+
+              {/* 20 Bölmeli Segment Çizgileri */}
+              <div className="absolute inset-0 grid grid-cols-10 sm:grid-cols-20 pointer-events-none">
+                {Array.from({ length: 20 }).map((_, idx) => (
+                  <div key={idx} className="border-r border-ink-950/40 last:border-0" />
+                ))}
+              </div>
+            </div>
+
+            {/* RÜTBE YOL HARİTASI (5 KADEMELİ EVRİM ZİNCİRİ) */}
+            <div className="pt-2">
+              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-ink-400 mb-2">
+                <span>Unvan Evrim Haritası</span>
+                {nextRank ? (
+                  <span className={userPersona.color}>
+                    Sonraki Unvan: {nextRank.title} ({nextRank.minLevel - lvl.level} Seviye Kaldı)
+                  </span>
+                ) : (
+                  <span className="text-cyan-300">Maksimum Unvana Ulaşıldı! 👑</span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {RANK_TIERS.map((tier, idx) => {
+                  const isUnlocked = lvl.level >= tier.minLevel;
+                  const isCurrent = idx === currentRankIndex;
+                  const TierIcon = tier.icon;
+                  return (
+                    <div
+                      key={tier.title}
+                      className={`relative rounded-xl p-2 border transition-all flex items-center gap-2 ${
+                        isCurrent
+                          ? `${tier.badgeBg} ${tier.border} shadow-md scale-[1.02]`
+                          : isUnlocked
+                          ? 'bg-ink-900/70 border-ink-800/90 opacity-90'
+                          : 'bg-ink-950/40 border-ink-800/40 opacity-45'
+                      }`}
+                    >
+                      <div
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          isUnlocked ? tier.badgeBg : 'bg-ink-900'
+                        }`}
+                      >
+                        {isUnlocked ? (
+                          <TierIcon size={13} className={tier.color} />
+                        ) : (
+                          <Lock size={11} className="text-ink-500" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className={`text-[10px] font-black truncate ${
+                            isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'
+                          }`}
+                        >
+                          {tier.title}
+                        </div>
+                        <div className="text-[9px] font-bold text-ink-500 flex items-center gap-1">
+                          <span>Sv.{tier.minLevel}+</span>
+                          {isUnlocked && <CheckCircle2 size={9} className="text-emerald-400" />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="relative z-10 mt-6 pt-5 border-t border-ink-800/70 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        {/* Alt Bar: Hızlı Komut Butonları */}
+        <div className="relative z-10 mt-6 pt-5 border-t border-ink-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
           <button
             onClick={() => setShowPick(true)}
             className="flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-3.5 rounded-xl font-black text-xs sm:text-sm hover:from-gold-400 hover:to-gold-500 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-gold-500/20 group"
@@ -762,7 +1002,7 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <Trophy size={26} className="text-emerald-400 mb-2 group-hover:scale-110 transition-transform duration-300" />
           <div className="text-3xl font-black text-ink-100">
-            {data.achievements.reduce((s, a) => s + a.unlockedTiers.length, 0)}
+            {quickMetrics.tierCounts.total}
           </div>
           <div className="text-xs font-semibold text-ink-500 tracking-wider uppercase mt-1 group-hover:text-emerald-400/80 transition-colors">
             Başarımlar
