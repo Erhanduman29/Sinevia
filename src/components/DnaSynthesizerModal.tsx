@@ -17,7 +17,6 @@ import {
   Youtube,
   User,
   Calendar,
-  Tag,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
@@ -33,10 +32,26 @@ type Step = 'select' | 'synthesizing' | 'result';
 type Slot = 'A' | 'B' | null;
 type SelectionTab = 'library' | 'history';
 
-interface SynthCandidate {
+interface SynthVariant {
   movie: Movie;
   matchScore: number;
+  parentAPct: number;
+  parentBPct: number;
   composition: { label: string; pct: number }[];
+}
+
+const STOP_WORDS = new Set([
+  'bir', 've', 'ile', 'için', 'bu', 'da', 'de', 'çok', 'daha', 'en', 'gibi', 'kadar',
+  'olan', 'olarak', 'sonra', 'önce', 'kendi', 'ise', 'ya', 'veya', 'ama', 'fakat',
+  'göre', 'tüm', 'bütün', 'her', 'hiç', 'bazı', 'biraz', 'şu', 'onu', 'bunu', 'ona',
+  'film', 'filmi', 'filmde', 'hikaye', 'hikayesi', 'hayat', 'hayatı', 'yaşam', 'insan',
+  'dünya', 'zaman', 'yılında', 'birlikte', 'ancak', 'karşı', 'arasında', 'üzerine',
+  'başlar', 'olaylar', 'anlatıyor', 'anlatır', 'konu', 'ediyor', 'sonunda', 'içinde',
+  'tarafından', 'বüyük', 'küçük', 'yeni', 'eski', 'genç', 'adam', 'kadın', 'çocuk',
+]);
+
+function norm(str?: string): string {
+  return (str || '').toLocaleLowerCase('tr-TR').trim();
 }
 
 export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProps) {
@@ -51,51 +66,54 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
   const [showRating, setShowRating] = useState(false);
   const [detailMovie, setDetailMovie] = useState<Movie | null>(null);
 
-  // En iyi 3 sentez varyantını tutuyoruz
-  const [variants, setVariants] = useState<
-    {
-      movie: Movie;
-      matchScore: number;
-      composition: { label: string; pct: number }[];
-    }[]
-  >([]);
+  const [variants, setVariants] = useState<SynthVariant[]>([]);
   const [activeVariantIdx, setActiveVariantIdx] = useState(0);
-
   const [mutationRate, setMutationRate] = useState<number>(1);
 
-  const unwatchedMovies = useMemo(() => data.movies.filter((m) => !m.watched), [data.movies]);
+  // KOLEKSİYON KURALI: Koleksiyonlardaki filmlerden sadece izlenmemiş EN ESKİ (sıradaki ilk) film sentezlenebilir
+  const eligibleUnwatchedMovies = useMemo(() => {
+    const unwatched = data.movies.filter((m) => !m.watched);
+    const standalone = unwatched.filter((m) => !m.collectionId);
+
+    const collectionGroups = new Map<string, Movie[]>();
+    unwatched
+      .filter((m) => m.collectionId)
+      .forEach((m) => {
+        const arr = collectionGroups.get(m.collectionId!) || [];
+        arr.push(m);
+        collectionGroups.set(m.collectionId!, arr);
+      });
+
+    const sequentialCollectionMovies: Movie[] = [];
+    collectionGroups.forEach((movies) => {
+      const sorted = [...movies].sort((a, b) => {
+        const yearA = parseInt(a.year || '9999', 10);
+        const yearB = parseInt(b.year || '9999', 10);
+        if (yearA !== yearB) return yearA - yearB;
+        return new Date(a.addedAt).getTime() - new Date(b.addedAt).getTime();
+      });
+      if (sorted.length > 0) {
+        sequentialCollectionMovies.push(sorted[0]);
+      }
+    });
+
+    return [...standalone, ...sequentialCollectionMovies];
+  }, [data.movies]);
+
   const historyMovies = useMemo(() => data.movies.filter((m) => m.watched), [data.movies]);
 
   const filteredMovies = useMemo(() => {
     const sourceList = selectionTab === 'history' ? historyMovies : data.movies;
     if (!search.trim()) return sourceList;
-    const q = search.toLocaleLowerCase('tr-TR');
+    const q = norm(search);
     return sourceList.filter(
       (m) =>
-        m.title.toLocaleLowerCase('tr-TR').includes(q) ||
-        (m.directors && m.directors.some((d) => d.toLocaleLowerCase('tr-TR').includes(q))) ||
-        (m.cast && m.cast.some((c) => c.toLocaleLowerCase('tr-TR').includes(q)))
+        norm(m.title).includes(q) ||
+        (m.directors && m.directors.some((d) => norm(d).includes(q))) ||
+        (m.cast && m.cast.some((c) => norm(c).includes(q)))
     );
   }, [data.movies, historyMovies, selectionTab, search]);
 
-  // Kullanıcının geçmişte yüksek puan (8.0+) verdiği favori yönetmen ve oyuncuları çıkar (Kişisel İzleyici DNA'sı)
-  const userFavoriteGenome = useMemo(() => {
-    const favDirectors = new Set<string>();
-    const favActors = new Set<string>();
-    const favStudios = new Set<string>();
-
-    historyMovies.forEach((m) => {
-      if (m.rating !== null && m.rating >= 8) {
-        (m.directors || []).forEach((d) => favDirectors.add(d.toLocaleLowerCase('tr-TR').trim()));
-        (m.cast || []).forEach((a) => favActors.add(a.toLocaleLowerCase('tr-TR').trim()));
-        (m.studios || []).forEach((s) => favStudios.add(s.toLocaleLowerCase('tr-TR').trim()));
-      }
-    });
-
-    return { favDirectors, favActors, favStudios };
-  }, [historyMovies]);
-
-  // Tek tıkla favorilerden veya kütüphaneden rastgele 2 denek seçme
   const handleRandomPair = () => {
     const highRated = historyMovies.filter((m) => (m.rating || 0) >= 8);
     const pool = highRated.length >= 2 ? highRated : data.movies;
@@ -106,309 +124,441 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
   };
 
   // =========================================================
-  // 12 KATMANLI GELİŞMİŞ DNA SENTEZ MOTORU
+  // GERÇEK ÇAPRAZLAMA (A × B MELEZLEME) MOTORU
   // =========================================================
   const handleSynthesize = () => {
-    if (!movieA || !movieB || unwatchedMovies.length === 0) return;
+    if (!movieA || !movieB || eligibleUnwatchedMovies.length === 0) return;
     setStep('synthesizing');
 
     setTimeout(() => {
       const safeMode = mutationRate === 0;
       const chaosMode = mutationRate === 2;
 
-      const stopWords = new Set([
-        'bir', 've', 'ile', 'için', 'bu', 'da', 'de', 'çok', 'daha', 'en', 'gibi', 'kadar',
-        'olan', 'olarak', 'sonra', 'önce', 'kendi', 'ise', 'ya', 'veya', 'ama', 'fakat',
-        'göre', 'tüm', 'bütün', 'her', 'hiç', 'bazı', 'biraz', 'şu', 'onu', 'bunu', 'ona',
-      ]);
-
-      const extractWords = (text?: string) => {
-        if (!text) return new Set<string>();
-        const clean = text.toLocaleLowerCase('tr-TR').replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, ' ');
-        return new Set(clean.split(/\s+/).filter((w) => w.length > 4 && !stopWords.has(w)));
+      const extractKeywordsFromText = (text?: string) => {
+        const map = new Map<string, string>(); // stem -> original word
+        if (!text) return map;
+        const clean = norm(text).replace(/[.,/#!$%^&*;:{}=\-_`~()'"?<>]/g, ' ');
+        clean.split(/\s+/).forEach((w) => {
+          if (w.length >= 5 && !STOP_WORDS.has(w)) {
+            const stem = w.slice(0, 5);
+            if (!map.has(stem)) map.set(stem, w);
+          }
+        });
+        return map;
       };
 
-      // Hem filmin kendi özetini hem de kullanıcının o filme yazdığı kişisel inceleme notunu tarıyoruz!
-      const wordsA = extractWords(`${movieA.overview || ''} ${movieA.note || ''}`);
-      const wordsB = extractWords(`${movieB.overview || ''} ${movieB.note || ''}`);
+      const stemsA = extractKeywordsFromText(`${movieA.overview || ''} ${movieA.note || ''}`);
+      const stemsB = extractKeywordsFromText(`${movieB.overview || ''} ${movieB.note || ''}`);
 
-      const decadeA = Math.floor(parseInt(movieA.year || '0') / 10) * 10;
-      const decadeB = Math.floor(parseInt(movieB.year || '0') / 10) * 10;
+      const yearA = parseInt(movieA.year || '0', 10);
+      const yearB = parseInt(movieB.year || '0', 10);
+      const avgParentYear =
+        yearA > 1900 && yearB > 1900
+          ? Math.round((yearA + yearB) / 2)
+          : yearA > 1900
+          ? yearA
+          : yearB > 1900
+          ? yearB
+          : 0;
 
-      // Ebeveyn filmlerin süre (tempo) ortalaması
       const rtA = movieA.runtime || 0;
       const rtB = movieB.runtime || 0;
       const avgParentRuntime =
         rtA > 0 && rtB > 0 ? Math.round((rtA + rtB) / 2) : rtA > 0 ? rtA : rtB > 0 ? rtB : 0;
 
-      // Ebeveyn filmlerde seçilen Değerlendirme Başlıkları (🔥 Başyapıt, 🎭 Oyunculuk Muazzam vb.) ve Detaylı Kriter çarpanları
-      const parentTags = new Set([
-        ...(movieA.reviewTags || []),
-        ...(movieB.reviewTags || []),
-      ]);
-      const hasActingTag = Array.from(parentTags).some((t) =>
-        t.toLocaleLowerCase('tr-TR').includes('oyunculuk')
-      );
-      const hasVisualOrDirectorTag = Array.from(parentTags).some(
-        (t) =>
-          t.toLocaleLowerCase('tr-TR').includes('görsel') ||
-          t.toLocaleLowerCase('tr-TR').includes('başyapıt')
-      );
+      const dirsA = new Set((movieA.directors || []).map(norm).filter(Boolean));
+      const dirsB = new Set((movieB.directors || []).map(norm).filter(Boolean));
 
-      // Ebeveynlerin kullanıcının verdiği puana göre ağırlık bonusu
-      const parentRatingBoost =
-        ((movieA.rating || 7.5) + (movieB.rating || 7.5)) / 15; // ~0.8 - 1.33 arası çarpan
+      const castA = new Set((movieA.cast || []).map(norm).filter(Boolean));
+      const castB = new Set((movieB.cast || []).map(norm).filter(Boolean));
 
-      const scoredCandidates: {
-        movie: Movie;
-        totalScore: number;
-        matchScore: number;
-        composition: { label: string; pct: number }[];
-      }[] = [];
+      const studiosA = new Set((movieA.studios || []).map(norm).filter(Boolean));
+      const studiosB = new Set((movieB.studios || []).map(norm).filter(Boolean));
 
-      unwatchedMovies.forEach((candidate) => {
+      const kwA = new Set((movieA.keywords || []).map(norm).filter(Boolean));
+      const kwB = new Set((movieB.keywords || []).map(norm).filter(Boolean));
+
+      const genresA = new Set((movieA.genres || []).map(norm).filter(Boolean));
+      const genresB = new Set((movieB.genres || []).map(norm).filter(Boolean));
+
+      const scoredCandidates: (SynthVariant & { rawScore: number })[] = [];
+
+      eligibleUnwatchedMovies.forEach((candidate) => {
         if (candidate.id === movieA.id || candidate.id === movieB.id) return;
 
-        let sG = 0, // Tür
-          sK = 0, // Tema / Keywords
-          sD = 0, // Yönetmen
-          sC = 0, // Oyuncu Kadrosu
-          sS = 0, // Stüdyo
-          sO = 0, // Hikaye & Not Kelimeleri
-          sE = 0, // Dönem & Dil
-          sR = 0, // Süre & Tempo Uyumu
-          sCol = 0, // Koleksiyon / Evren Bağı
-          sFav = 0, // Kullanıcının Favori Yönetmen/Oyuncu Geçmişi
-          sM = 0; // Genetik Mutasyon
+        let affinityA = 0;
+        let affinityB = 0;
 
-        const mG: string[] = [],
-          mK: string[] = [],
-          mD: string[] = [],
-          mC: string[] = [],
-          mS: string[] = [],
-          mE: string[] = [],
-          mL: string[] = [],
-          mFav: string[] = [];
+        const traits: { label: string; points: number }[] = [];
 
-        // 1. Tür Eşleşmesi
-        candidate.genres.forEach((g) => {
-          const inA = movieA.genres.includes(g);
-          const inB = movieB.genres.includes(g);
-          if (inA || inB) {
-            mG.push(g);
-            sG += inA && inB ? (chaosMode ? 8 : 22) : chaosMode ? 4 : 11;
-          }
+        // 1. YÖNETMEN EŞLEŞMESİ (Gerçek kontrol)
+        const candDirs = (candidate.directors || []).filter((d) => norm(d).length > 0);
+        const sharedDirsBoth: string[] = [];
+        const dirsFromA: string[] = [];
+        const dirsFromB: string[] = [];
+
+        candDirs.forEach((d) => {
+          const nd = norm(d);
+          const inA = dirsA.has(nd);
+          const inB = dirsB.has(nd);
+          if (inA && inB) sharedDirsBoth.push(d);
+          else if (inA) dirsFromA.push(d);
+          else if (inB) dirsFromB.push(d);
         });
 
-        // 2. TMDB DNA Etiketleri (Keywords)
-        if (candidate.keywords) {
-          candidate.keywords.forEach((k) => {
-            const cleanK = k.toLocaleLowerCase('tr-TR').trim();
-            const inA = movieA.keywords?.some((ka) => ka.toLocaleLowerCase('tr-TR').trim() === cleanK);
-            const inB = movieB.keywords?.some((kb) => kb.toLocaleLowerCase('tr-TR').trim() === cleanK);
-            if (inA || inB) {
-              mK.push(k);
-              sK += inA && inB ? (chaosMode ? 35 : 18) : chaosMode ? 15 : 9;
-            }
-          });
-        }
-
-        // 3. Yönetmen İmzası (Başyapıt / Görsel etiketi varsa ekstra güçlü)
-        if (candidate.directors) {
-          candidate.directors.forEach((d) => {
-            const cleanD = d.toLocaleLowerCase('tr-TR').trim();
-            const inA = movieA.directors?.some((dir) => dir.toLocaleLowerCase('tr-TR').trim() === cleanD);
-            const inB = movieB.directors?.some((dir) => dir.toLocaleLowerCase('tr-TR').trim() === cleanD);
-            if (inA || inB) {
-              mD.push(d);
-              sD += hasVisualOrDirectorTag ? 45 : 35;
-            } else if (userFavoriteGenome.favDirectors.has(cleanD)) {
-              mFav.push(d);
-              sFav += 16;
-            }
-          });
-        }
-
-        // 4. Başrol Oyuncuları (Oyunculuk etiketi varsa ekstra güçlü)
-        if (candidate.cast) {
-          candidate.cast.forEach((c) => {
-            const cleanC = c.toLocaleLowerCase('tr-TR').trim();
-            const inA = movieA.cast?.some((actor) => actor.toLocaleLowerCase('tr-TR').trim() === cleanC);
-            const inB = movieB.cast?.some((actor) => actor.toLocaleLowerCase('tr-TR').trim() === cleanC);
-            if (inA || inB) {
-              mC.push(c);
-              sC += hasActingTag ? 28 : 20;
-            } else if (userFavoriteGenome.favActors.has(cleanC)) {
-              mFav.push(c);
-              sFav += 10;
-            }
-          });
-        }
-
-        // 5. Yapımcı Stüdyo
-        if (candidate.studios) {
-          candidate.studios.forEach((s) => {
-            const cleanS = s.toLocaleLowerCase('tr-TR').trim();
-            const inA = movieA.studios?.some((st) => st.toLocaleLowerCase('tr-TR').trim() === cleanS);
-            const inB = movieB.studios?.some((st) => st.toLocaleLowerCase('tr-TR').trim() === cleanS);
-            if (inA || inB) {
-              mS.push(s);
-              sS += safeMode ? 16 : 8;
-            }
-          });
-        }
-
-        // 6. Konu & Kişisel İnceleme Notu Kelime Kesişimi
-        const wordsC = extractWords(candidate.overview);
-        let matchCount = 0;
-        wordsC.forEach((w) => {
-          if (wordsA.has(w) || wordsB.has(w)) matchCount++;
-        });
-        if (matchCount > 0) {
-          sO += safeMode ? matchCount * 5 : matchCount * 3.5;
-        }
-
-        // 7. Dönem (On Yıl) ve Orijinal Dil / Ülke Sineması Uyumu
-        const decadeCand = Math.floor(parseInt(candidate.year || '0') / 10) * 10;
-        if (decadeCand > 1900 && (decadeCand === decadeA || decadeCand === decadeB)) {
-          sE += 7;
-          mE.push(`${decadeCand}'ler Dönemi`);
-        }
-        if (candidate.originalLanguage) {
-          if (
-            candidate.originalLanguage === movieA.originalLanguage ||
-            candidate.originalLanguage === movieB.originalLanguage
-          ) {
-            const langBonus = candidate.originalLanguage !== 'en' ? 14 : 5;
-            sE += langBonus;
-            mL.push(`Dil/Ülke (${candidate.originalLanguage.toUpperCase()})`);
-          }
-        }
-
-        // 8. YENİ: Süre & Tempo Uyumu (Runtime)
-        if (avgParentRuntime > 0 && candidate.runtime && candidate.runtime > 0) {
-          const diff = Math.abs(candidate.runtime - avgParentRuntime);
-          if (diff <= 15) {
-            sR += 12;
-          } else if (diff <= 25) {
-            sR += 6;
-          }
-        }
-
-        // 9. YENİ: Koleksiyon & Evren Bağı
-        if (
-          candidate.collectionId &&
-          (candidate.collectionId === movieA.collectionId ||
-            candidate.collectionId === movieB.collectionId)
-        ) {
-          sCol += 25;
-        }
-
-        // 10. Mutasyon Faktörü
-        if (chaosMode) {
-          sM += Math.random() * 28;
-        } else if (!safeMode) {
-          sM += Math.random() * 9;
-        }
-
-        const rawTotal = (sG + sK + sD + sC + sS + sO + sE + sR + sCol + sFav) * parentRatingBoost + sM;
-        const totalPoints = sG + sK + sD + sC + sS + sO + sE + sR + sCol + sFav + sM;
-
-        const comp: { label: string; pct: number }[] = [];
-        if (totalPoints > 0) {
-          if (sD > 0 && mD.length > 0) {
-            comp.push({
-              label: `Ortak Yönetmen İmzası (${Array.from(new Set(mD)).join(', ')})`,
-              pct: Math.round((sD / totalPoints) * 100),
-            });
-          }
-          if (sC > 0 && mC.length > 0) {
-            comp.push({
-              label: `Ortak Oyuncu Kadrosu (${Array.from(new Set(mC)).slice(0, 2).join(', ')})`,
-              pct: Math.round((sC / totalPoints) * 100),
-            });
-          }
-          if (sCol > 0) {
-            comp.push({
-              label: `Aynı Sinematik Evren / Koleksiyon Bağı`,
-              pct: Math.round((sCol / totalPoints) * 100),
-            });
-          }
-          if (sG > 0 && mG.length > 0) {
-            comp.push({
-              label: `Tür Genetiği (${Array.from(new Set(mG)).slice(0, 3).join(', ')})`,
-              pct: Math.round((sG / totalPoints) * 100),
-            });
-          }
-          if (sK > 0 && mK.length > 0) {
-            comp.push({
-              label: `Ortak Tema DNA'sı (${Array.from(new Set(mK)).slice(0, 2).join(', ')})`,
-              pct: Math.round((sK / totalPoints) * 100),
-            });
-          }
-          if (sFav > 0 && mFav.length > 0) {
-            comp.push({
-              label: `Kişisel Favori Genetiğin (${Array.from(new Set(mFav)).slice(0, 2).join(', ')})`,
-              pct: Math.round((sFav / totalPoints) * 100),
-            });
-          }
-          if (sR > 0 && candidate.runtime) {
-            comp.push({
-              label: `Süre & Tempo Uyumu (${candidate.runtime} dk)`,
-              pct: Math.round((sR / totalPoints) * 100),
-            });
-          }
-          if (sO > 0) {
-            comp.push({
-              label: `Hikaye Örgüsü & İnceleme Notu Uyumu`,
-              pct: Math.round((sO / totalPoints) * 100),
-            });
-          }
-          if (sS > 0 && mS.length > 0) {
-            comp.push({
-              label: `Yapımcı Stüdyo (${mS[0]})`,
-              pct: Math.round((sS / totalPoints) * 100),
-            });
-          }
-          if (sE > 0 && (mE.length > 0 || mL.length > 0)) {
-            comp.push({
-              label: [...mE, ...mL].join(' · '),
-              pct: Math.round((sE / totalPoints) * 100),
-            });
-          }
-          if (sM > 0) {
-            comp.push({
-              label: 'Genetik Mutasyon & Sürpriz Faktörü',
-              pct: Math.round((sM / totalPoints) * 100),
-            });
-          }
+        if (sharedDirsBoth.length > 0) {
+          const pts = 45;
+          affinityA += pts / 2;
+          affinityB += pts / 2;
+          traits.push({ label: `Ortak Yönetmen (${sharedDirsBoth.join(', ')})`, points: pts });
         } else {
-          comp.push({ label: 'Saf Genetik Mutasyon Çıktısı', pct: 100 });
+          if (dirsFromA.length > 0) {
+            const pts = 28;
+            affinityA += pts;
+            traits.push({
+              label: `${movieA.title} Yönetmeni (${dirsFromA.join(', ')})`,
+              points: pts,
+            });
+          }
+          if (dirsFromB.length > 0) {
+            const pts = 28;
+            affinityB += pts;
+            traits.push({
+              label: `${movieB.title} Yönetmeni (${dirsFromB.join(', ')})`,
+              points: pts,
+            });
+          }
         }
 
-        const filteredComp = comp.filter((c) => c.pct > 0).sort((a, b) => b.pct - a.pct);
-        const currentSum = filteredComp.reduce((acc, c) => acc + c.pct, 0);
-        if (currentSum !== 100 && filteredComp.length > 0) {
-          filteredComp[0].pct += 100 - currentSum;
+        // 2. OYUNCU KADROSU EŞLEŞMESİ
+        const candCast = (candidate.cast || []).filter((c) => norm(c).length > 0);
+        const castBoth: string[] = [];
+        const castOnlyA: string[] = [];
+        const castOnlyB: string[] = [];
+
+        candCast.forEach((actor) => {
+          const na = norm(actor);
+          const inA = castA.has(na);
+          const inB = castB.has(na);
+          if (inA && inB) castBoth.push(actor);
+          else if (inA) castOnlyA.push(actor);
+          else if (inB) castOnlyB.push(actor);
+        });
+
+        if (castBoth.length > 0) {
+          const pts = Math.min(40, castBoth.length * 24);
+          affinityA += pts / 2;
+          affinityB += pts / 2;
+          traits.push({
+            label: `Her İki Filmle Ortak Oyuncu (${castBoth.slice(0, 2).join(', ')})`,
+            points: pts,
+          });
+        }
+        if (castOnlyA.length > 0 || castOnlyB.length > 0) {
+          const ptsA = Math.min(28, castOnlyA.length * 16);
+          const ptsB = Math.min(28, castOnlyB.length * 16);
+          affinityA += ptsA;
+          affinityB += ptsB;
+          const allMatchedCast = [...castOnlyA, ...castOnlyB];
+          traits.push({
+            label: `Oyuncu Mirası (${allMatchedCast.slice(0, 3).join(', ')})`,
+            points: ptsA + ptsB,
+          });
         }
 
-        const matchScore = Math.min(99, Math.max(52, Math.floor(48 + rawTotal * 0.85)));
+        // 3. TÜR SENTEZİ & ÇAPRAZLAMA
+        const candGenres = (candidate.genres || []).filter((g) => norm(g).length > 0);
+        const genresBoth: string[] = [];
+        const genresOnlyA: string[] = [];
+        const genresOnlyB: string[] = [];
+
+        candGenres.forEach((g) => {
+          const ng = norm(g);
+          const inA = genresA.has(ng);
+          const inB = genresB.has(ng);
+          if (inA && inB) genresBoth.push(g);
+          else if (inA) genresOnlyA.push(g);
+          else if (inB) genresOnlyB.push(g);
+        });
+
+        if (genresBoth.length > 0) {
+          const pts = genresBoth.length * (chaosMode ? 12 : 18);
+          affinityA += pts / 2;
+          affinityB += pts / 2;
+          traits.push({
+            label: `Ortak Ana Tür (${genresBoth.join(', ')})`,
+            points: pts,
+          });
+        }
+
+        // Eğer aday film 1. filmden bir tür, 2. filmden başka bir tür aldıysa gerçek Tür Melezlemesi!
+        if (genresOnlyA.length > 0 && genresOnlyB.length > 0) {
+          const ptsA = genresOnlyA.length * 12 + 8;
+          const ptsB = genresOnlyB.length * 12 + 8;
+          affinityA += ptsA;
+          affinityB += ptsB;
+          traits.push({
+            label: `Tür Çaprazlaması (${genresOnlyA[0]} + ${genresOnlyB[0]})`,
+            points: ptsA + ptsB,
+          });
+        } else if (genresOnlyA.length > 0) {
+          const pts = genresOnlyA.length * 9;
+          affinityA += pts;
+          traits.push({
+            label: `${movieA.title} Türü (${genresOnlyA.join(', ')})`,
+            points: pts,
+          });
+        } else if (genresOnlyB.length > 0) {
+          const pts = genresOnlyB.length * 9;
+          affinityB += pts;
+          traits.push({
+            label: `${movieB.title} Türü (${genresOnlyB.join(', ')})`,
+            points: pts,
+          });
+        }
+
+        // 4. TEMA VE ANAHTAR KELİMELER (TMDB Keywords)
+        const candKws = (candidate.keywords || []).filter((k) => norm(k).length > 0);
+        const matchedKws: string[] = [];
+        let kwPtsA = 0;
+        let kwPtsB = 0;
+
+        candKws.forEach((k) => {
+          const nk = norm(k);
+          const inA = kwA.has(nk);
+          const inB = kwB.has(nk);
+          if (inA && inB) {
+            matchedKws.push(k);
+            kwPtsA += chaosMode ? 14 : 10;
+            kwPtsB += chaosMode ? 14 : 10;
+          } else if (inA) {
+            matchedKws.push(k);
+            kwPtsA += chaosMode ? 12 : 8;
+          } else if (inB) {
+            matchedKws.push(k);
+            kwPtsB += chaosMode ? 12 : 8;
+          }
+        });
+
+        if (matchedKws.length > 0) {
+          const cappedA = Math.min(26, kwPtsA);
+          const cappedB = Math.min(26, kwPtsB);
+          affinityA += cappedA;
+          affinityB += cappedB;
+          traits.push({
+            label: `Tema & Anahtar Kelime (${matchedKws.slice(0, 3).join(', ')})`,
+            points: cappedA + cappedB,
+          });
+        }
+
+        // 5. KONU ÖZETİ & HİKAYE MOTİFLERİ (Üst Sınırlı & Doğrulanmış Kelimeler)
+        const candStems = extractKeywordsFromText(candidate.overview);
+        const storyWords: string[] = [];
+        let storyPtsA = 0;
+        let storyPtsB = 0;
+
+        candStems.forEach((origWord, stem) => {
+          const inA = stemsA.has(stem);
+          const inB = stemsB.has(stem);
+          if (inA && inB) {
+            storyWords.push(origWord);
+            storyPtsA += 4.5;
+            storyPtsB += 4.5;
+          } else if (inA) {
+            storyWords.push(origWord);
+            storyPtsA += 3;
+          } else if (inB) {
+            storyWords.push(origWord);
+            storyPtsB += 3;
+          }
+        });
+
+        if (storyWords.length > 0) {
+          // Uzun özetlerin haksız üstünlük kurmasını önlemek için puanı maksimum 18 ile sınırlıyoruz
+          const cappedStoryA = Math.min(10, storyPtsA);
+          const cappedStoryB = Math.min(10, storyPtsB);
+          affinityA += cappedStoryA;
+          affinityB += cappedStoryB;
+          traits.push({
+            label: `Hikaye & Konu Kesişimi (${storyWords.slice(0, 3).join(', ')})`,
+            points: Math.round(cappedStoryA + cappedStoryB),
+          });
+        }
+
+        // 6. YAPIMCI STÜDYO EŞLEŞMESİ
+        const candStudios = (candidate.studios || []).filter((s) => norm(s).length > 0);
+        const matchedStudios: string[] = [];
+        let stPtsA = 0;
+        let stPtsB = 0;
+
+        candStudios.forEach((s) => {
+          const ns = norm(s);
+          if (studiosA.has(ns)) {
+            matchedStudios.push(s);
+            stPtsA += 12;
+          }
+          if (studiosB.has(ns)) {
+            if (!matchedStudios.includes(s)) matchedStudios.push(s);
+            stPtsB += 12;
+          }
+        });
+
+        if (matchedStudios.length > 0) {
+          const cA = Math.min(14, stPtsA);
+          const cB = Math.min(14, stPtsB);
+          affinityA += cA;
+          affinityB += cB;
+          traits.push({
+            label: `Yapımcı Stüdyo (${matchedStudios.slice(0, 2).join(', ')})`,
+            points: cA + cB,
+          });
+        }
+
+        // 7. SÜRE & TEMPO ORTALAMASI
+        if (avgParentRuntime > 0 && candidate.runtime && candidate.runtime > 0) {
+          const diffAvg = Math.abs(candidate.runtime - avgParentRuntime);
+          if (diffAvg <= 15) {
+            const pts = 10;
+            affinityA += pts / 2;
+            affinityB += pts / 2;
+            traits.push({
+              label: `Süre & Tempo Ortalaması (${candidate.runtime} dk)`,
+              points: pts,
+            });
+          }
+        }
+
+        // 8. DÖNEM (YIL) VE ÜLKE/DİL SİNEMASI UYUMU
+        const candYear = parseInt(candidate.year || '0', 10);
+        if (candYear > 1900 && avgParentYear > 1900) {
+          const diffYear = Math.abs(candYear - avgParentYear);
+          const betweenParents =
+            yearA > 1900 &&
+            yearB > 1900 &&
+            candYear >= Math.min(yearA, yearB) &&
+            candYear <= Math.max(yearA, yearB);
+
+          if (diffYear <= 5 || betweenParents) {
+            const pts = 8;
+            affinityA += pts / 2;
+            affinityB += pts / 2;
+            traits.push({
+              label: `Dönem Sentezi (${candYear} Yapımı)`,
+              points: pts,
+            });
+          }
+        }
+
+        if (candidate.originalLanguage && candidate.originalLanguage !== 'en') {
+          const inA = candidate.originalLanguage === movieA.originalLanguage;
+          const inB = candidate.originalLanguage === movieB.originalLanguage;
+          if (inA || inB) {
+            const pts = 14;
+            if (inA) affinityA += pts;
+            if (inB) affinityB += pts;
+            traits.push({
+              label: `Ülke / Dil Sineması (${candidate.originalLanguage.toUpperCase()})`,
+              points: pts,
+            });
+          }
+        }
+
+        // 9. KOLEKSİYON / EVREN BAĞI
+        if (candidate.collectionId) {
+          const inColA = candidate.collectionId === movieA.collectionId;
+          const inColB = candidate.collectionId === movieB.collectionId;
+          if (inColA || inColB) {
+            const pts = 24;
+            if (inColA) affinityA += pts;
+            if (inColB) affinityB += pts;
+            traits.push({
+              label: `Aynı Seri / Sinematik Evren Bağı`,
+              points: pts,
+            });
+          }
+        }
+
+        const basePoints = affinityA + affinityB;
+        if (basePoints <= 0) return;
+
+        // MELEZLEME SİNERJİ ÇARPANI:
+        // Aday film hem 1. Filmden hem 2. Filmden özellik taşıyorsa (gerçek melezse) ödüllendirilir,
+        // sadece tek bir filme benziyor ve diğer filmle hiç bağı yoksa puanı kırpılır.
+        let synergyMultiplier = 1;
+        if (affinityA > 0 && affinityB > 0) {
+          const balanceRatio = Math.min(affinityA, affinityB) / Math.max(affinityA, affinityB);
+          synergyMultiplier = 1.15 + balanceRatio * 0.35; // 1.15x ile 1.50x arası melezlik bonusu
+        } else {
+          synergyMultiplier = 0.6; // Sadece tek ebeveyne benzeyenleri geri plana at
+        }
+
+        // Mutasyon / Varyasyon Etkisi
+        let mutationNoise = 0;
+        if (chaosMode) {
+          mutationNoise = Math.random() * 14;
+          if (mutationNoise > 4) {
+            traits.push({ label: 'Deneysel Kaos Mutasyonu', points: Math.round(mutationNoise) });
+          }
+        } else if (!safeMode) {
+          mutationNoise = Math.random() * 3.5;
+        }
+
+        const finalRawScore = basePoints * synergyMultiplier + mutationNoise;
+
+        // Yüzdelik dağılımı gerçek eşleşen özelliklerden oluştur
+        const sortedTraits = traits.filter((t) => t.points > 0).sort((a, b) => b.points - a.points).slice(0, 5);
+        const totalTraitPoints = sortedTraits.reduce((sum, t) => sum + t.points, 0) || 1;
+
+        const composition = sortedTraits.map((t) => ({
+          label: t.label,
+          pct: Math.max(1, Math.round((t.points / totalTraitPoints) * 100)),
+        }));
+
+        const compSum = composition.reduce((sum, c) => sum + c.pct, 0);
+        if (compSum !== 100 && composition.length > 0) {
+          composition[0].pct += 100 - compSum;
+        }
+
+        const totalAffinity = affinityA + affinityB || 1;
+        const parentAPct = Math.round((affinityA / totalAffinity) * 100);
+        const parentBPct = 100 - parentAPct;
+
+        // Uyum yüzdesi
+        const matchScore = Math.min(99, Math.max(54, Math.round(48 + Math.min(51, finalRawScore * 0.68))));
 
         scoredCandidates.push({
           movie: candidate,
-          totalScore: rawTotal,
+          rawScore: finalRawScore,
           matchScore,
-          composition: filteredComp,
+          parentAPct,
+          parentBPct,
+          composition,
         });
       });
 
-      scoredCandidates.sort((a, b) => b.totalScore - a.totalScore);
-      const topVariants = scoredCandidates.slice(0, 3);
+      scoredCandidates.sort((a, b) => b.rawScore - a.rawScore);
 
-      setVariants(topVariants);
+      // Eğer hiç ortak nokta bulunamadıysa (çok nadir), en azından rastgele 3 aday göster
+      if (scoredCandidates.length === 0 && eligibleUnwatchedMovies.length > 0) {
+        const fallback = eligibleUnwatchedMovies
+          .filter((m) => m.id !== movieA.id && m.id !== movieB.id)
+          .slice(0, 3)
+          .map((m) => ({
+            movie: m,
+            rawScore: 10,
+            matchScore: 55,
+            parentAPct: 50,
+            parentBPct: 50,
+            composition: [{ label: 'Bağımsız Genetik Keşif Önerisi', pct: 100 }],
+          }));
+        setVariants(fallback);
+      } else {
+        setVariants(scoredCandidates.slice(0, 3));
+      }
+
       setActiveVariantIdx(0);
       setStep('result');
-    }, 1800);
+    }, 1400);
   };
 
   const handleSelectMovie = (movie: Movie) => {
@@ -509,7 +659,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             )}
             <div>
               <h2 className="text-lg sm:text-xl font-black text-white">Film DNA Sentezleyici</h2>
-              <p className="text-xs text-emerald-400/80">12 Katmanlı Genetik Çaprazlama Laboratuvarı</p>
+              <p className="text-xs text-emerald-400/80">Çapraz Genetik Eşleştirme Laboratuvarı</p>
             </div>
           </div>
           <button
@@ -587,11 +737,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         {m.directors && m.directors.length > 0 ? m.directors[0] : m.genres.slice(0, 2).join(', ')}
                         {m.year && ` · ${m.year}`}
                       </div>
-                      {m.reviewTags && m.reviewTags.length > 0 && (
-                        <div className="text-[10px] text-emerald-400 truncate mt-0.5 font-semibold">
-                          {m.reviewTags[0]}
-                        </div>
-                      )}
                     </div>
                   </button>
                 ))}
@@ -607,7 +752,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           {/* DURUM 2: SENTEZ BEKLEME EKRANI */}
           {!selectingSlot && step === 'select' && (
             <div className="space-y-6 animate-fade-in flex flex-col items-center">
-              {unwatchedMovies.length === 0 ? (
+              {eligibleUnwatchedMovies.length === 0 ? (
                 <div className="text-center py-8">
                   <Beaker size={48} className="mx-auto text-ink-600 mb-4" />
                   <h3 className="text-lg font-bold text-ink-200">Denek Bulunamadı</h3>
@@ -619,7 +764,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                 <>
                   <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3 bg-ink-950/50 border border-ink-800 rounded-2xl p-3.5">
                     <p className="text-ink-300 text-xs leading-relaxed text-center sm:text-left">
-                      İki filmi çaprazla; <strong>yönetmen, oyuncu, tema, süre, dönem ve senin değerlendirme başlıkların</strong> analiz edilerek en uyumlu film sentezlensin.
+                      Seçtiğin iki filmin <strong>tür, yönetmen, oyuncu, anahtar kelime, konu ve dönem</strong> verileri çaprazlanarak her ikisinden de izler taşıyan melez film bulunur.
                     </p>
                     {data.movies.length >= 2 && (
                       <button
@@ -627,7 +772,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         onClick={handleRandomPair}
                         className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded-xl transition-all"
                       >
-                        <Shuffle size={13} /> Favorilerden Doldur
+                        <Shuffle size={13} /> Favorilerden Seç
                       </button>
                     )}
                   </div>
@@ -678,9 +823,9 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                                   🎬 {movie.directors[0]}
                                 </div>
                               )}
-                              {movie.reviewTags && movie.reviewTags.length > 0 && (
-                                <div className="inline-block text-[10px] bg-gold-500/20 text-gold-300 border border-gold-500/30 px-2 py-0.5 rounded-md mt-1.5 font-bold">
-                                  {movie.reviewTags[0]}
+                              {movie.genres.length > 0 && (
+                                <div className="text-[10px] text-ink-400 mt-1 truncate">
+                                  {movie.genres.slice(0, 2).join(' · ')}
                                 </div>
                               )}
                             </div>
@@ -703,19 +848,19 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     ))}
                   </div>
 
-                  {/* MUTASYON AYARI (3 SEÇENEKLİ MODERN BUTONLAR) */}
+                  {/* MUTASYON AYARI */}
                   <div className="w-full bg-ink-950/50 border border-ink-800 rounded-2xl p-4 space-y-2.5">
                     <div className="flex justify-between text-xs font-bold text-ink-400 uppercase tracking-wider">
-                      <span>Genetik Mutasyon Oranı</span>
+                      <span>Genetik Sentez Modu</span>
                       <span className="text-emerald-400">
-                        {mutationRate === 0 ? 'Safkan (Güvenli)' : mutationRate === 1 ? 'Dengeli Sentez' : 'Kaos (Deneysel)'}
+                        {mutationRate === 0 ? 'Safkan (Tam Eşleşme)' : mutationRate === 1 ? 'Dengeli Melez' : 'Kaos (Deneysel)'}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { val: 0, title: '🛡️ Güvenli', sub: 'Yönetmen & Tür odaklı' },
-                        { val: 1, title: '⚖️ Dengeli', sub: 'Tüm DNA katmanları' },
-                        { val: 2, title: '⚡ Kaos Modu', sub: 'Gizli temalar & Sürpriz' },
+                        { val: 0, title: '🛡️ Safkan', sub: 'Sıfır rastgelelik, net bağlar' },
+                        { val: 1, title: '⚖️ Dengeli', sub: 'İki ebeveynden eşit sentez' },
+                        { val: 2, title: '⚡ Kaos Modu', sub: 'Gizli tema & sürpriz bağlar' },
                       ].map((m) => (
                         <button
                           key={m.val}
@@ -739,7 +884,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     onClick={handleSynthesize}
                     className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black px-8 py-4 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
                   >
-                    <Beaker size={20} /> DNA Sentezini Başlat ({unwatchedMovies.length} Aday)
+                    <Beaker size={20} /> DNA Sentezini Başlat ({eligibleUnwatchedMovies.length} Uygun Aday)
                   </button>
                 </>
               )}
@@ -754,9 +899,9 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                 <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
               </div>
               <div className="text-center space-y-2">
-                <h3 className="text-xl font-black text-white tracking-widest">12 GENETİK KATMAN TARANIYOR...</h3>
+                <h3 className="text-xl font-black text-white tracking-widest">EBEVEYN GENLERİ ÇAPRAZLANIYOR...</h3>
                 <p className="text-sm text-emerald-400/80 animate-pulse">
-                  Yönetmenler, oyuncular, temalar, süre temposu ve kişisel zevk genomun çaprazlanıyor...
+                  {movieA?.title} × {movieB?.title} ortak özellikleri taranıyor...
                 </p>
               </div>
             </div>
@@ -764,11 +909,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
           {/* DURUM 4: SONUÇ EKRANI (TOP 3 VARYANT SEÇENEĞİ İLE) */}
           {!selectingSlot && step === 'result' && currentResult && (
-            <div className="animate-fade-in-up space-y-5">
+            <div className="animate-fade-in-up space-y-4">
               {/* Üst Varyant Seçici Sekmeler */}
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
-                  <Sparkles size={14} /> Sentez Tamamlandı
+                  <Sparkles size={14} /> Sentez Başarılı
                 </div>
 
                 {variants.length > 1 && (
@@ -784,12 +929,36 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                             : 'text-ink-400 hover:text-ink-200'
                         }`}
                       >
-                        {idx === 0 ? '1. Ana Sentez' : `${idx + 1}. Varyant`} (%{v.matchScore})
+                        {idx === 0 ? '1. Varyant' : `${idx + 1}. Varyant`} (%{v.matchScore})
                       </button>
                     ))}
                   </div>
                 )}
               </div>
+
+              {/* Ebeveyn Kalıtım Oranı Çubuğu (Film A vs Film B) */}
+              {movieA && movieB && (
+                <div className="bg-ink-950/70 border border-ink-800 rounded-xl p-3 space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-bold">
+                    <span className="text-emerald-400 truncate max-w-[45%]">
+                      🧬 %{currentResult.parentAPct} {movieA.title}
+                    </span>
+                    <span className="text-cyan-400 truncate max-w-[45%] text-right">
+                      {movieB.title} %{currentResult.parentBPct} 🧬
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-ink-900 rounded-full overflow-hidden flex">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-500"
+                      style={{ width: `${currentResult.parentAPct}%` }}
+                    />
+                    <div
+                      className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-500"
+                      style={{ width: `${currentResult.parentBPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col md:flex-row gap-5 items-center md:items-stretch bg-ink-950/60 border border-emerald-500/30 rounded-2xl p-4 sm:p-5 w-full">
                 {/* Sol: Tıklanabilir Poster */}
@@ -884,10 +1053,10 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                       })}
                     </div>
 
-                    {/* %100 DNA İLERLEME BARLARI */}
+                    {/* %100 DOĞRULANMIŞ DNA İLERLEME BARLARI */}
                     <div className="space-y-2.5 bg-ink-900/60 p-3.5 rounded-xl border border-ink-800 text-left">
                       <div className="text-[10px] font-black text-ink-400 uppercase tracking-widest flex justify-between">
-                        <span>Genetik Uyum Kırılımı (Neden Seçildi?)</span>
+                        <span>Eşleşen Genetik Özellikler</span>
                         <span className="text-emerald-400">%100</span>
                       </div>
                       {currentResult.composition.map((c, i) => (
@@ -941,7 +1110,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         </div>
       </div>
 
-      {/* PUANLAMA MODALI (Detaylı Kriter & Değerlendirme Başlıkları Desteğiyle) */}
+      {/* PUANLAMA MODALI */}
       {showRating && currentResult && (
         <RatingModal
           title={currentResult.movie.title}
