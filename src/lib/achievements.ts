@@ -1,4 +1,20 @@
-import type { AchievementDef } from '../types';
+export interface AchievementTierDef {
+  threshold: number;
+  xp: number;
+  tier: string;
+  name?: string;
+}
+
+export interface AchievementDef {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  hidden?: boolean;
+  secret?: boolean;
+  category?: string;
+  tiers: AchievementTierDef[];
+}
 
 export const ACHIEVEMENT_DEFS: AchievementDef[] = [
   // --- TEMEL BAŞARIMLAR ---
@@ -93,7 +109,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     { threshold: 15, xp: 120, tier: 'platinum', name: 'Boyut Atlayan' }
   ]},
 
-  // --- GENEL Puanlama ve Devamlılık Başarımları ---
+  // --- GENEL PUANLAMA VE DEVAMLILIK BAŞARIMLARI ---
   { id: 'perfect_rating', name: 'Mükemmellikçi', description: 'İzlediğin {threshold} farklı yapıma 10 tam puan ver.', icon: 'Crown', hidden: false, secret: false, category: 'Puanlama', tiers: [
     { threshold: 1, xp: 10, tier: 'bronze', name: 'İlk Başyapıt' }, 
     { threshold: 5, xp: 25, tier: 'silver', name: 'Seçkin Zevk' }, 

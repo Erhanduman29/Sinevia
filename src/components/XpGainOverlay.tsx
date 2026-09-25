@@ -53,7 +53,7 @@ export default function XpGainOverlay() {
     // 3500ms'lik toplam sürenin 3100. milisaniyesinde yukarı doğru çıkış animasyonunu başlat
     const exitTimer = setTimeout(() => {
       setIsExiting(true);
-    }, 3100);
+    }, 4700);
 
     return () => {
       cancelAnimationFrame(rafId);

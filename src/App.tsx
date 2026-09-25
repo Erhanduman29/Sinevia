@@ -9,7 +9,7 @@ import HistoryPage from './pages/HistoryPage';
 import AchievementsPage from './pages/AchievementsPage';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage';
-import AIPage from './pages/AIPage'; 
+import AIPage from './pages/AIPage';
 import Toasts from './components/Toasts';
 import AchievementToasts from './components/AchievementToasts';
 import LevelUpModal from './components/LevelUpModal';
@@ -18,7 +18,15 @@ import XpGainOverlay from './components/XpGainOverlay';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>('home');
-  const { toasts, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, xpGainData } = useApp();
+  const {
+    toasts,
+    achievementToasts,
+    levelUpData,
+    seasonCompleteData,
+    dismissLevelUp,
+    dismissSeasonComplete,
+    xpGainData,
+  } = useApp();
 
   useEffect(() => {
     const handleNavigation = (e: any) => {
@@ -39,28 +47,27 @@ function AppContent() {
       {activeTab === 'settings' && <SettingsPage />}
       {activeTab === 'ai' && <AIPage />}
 
-      {/* Her yeni başarımda XP barının sıfırdan animasyona girmesi için benzersiz key ile koşullu render */}
-      {xpGainData && (
-        <XpGainOverlay key={`${xpGainData.oldTotal}-${xpGainData.newTotal}`} />
-      )}
-      
-      <Toasts toasts={toasts} />
-      <AchievementToasts toasts={achievementToasts} />
-      
-      {levelUpData && (
-        <LevelUpModal 
-          newLevel={levelUpData.newLevel} 
-          onDismiss={dismissLevelUp} 
-        />
-      )}
-      
-      {seasonCompleteData && (
-        <SeasonCompleteModal
-          seriesTitle={seasonCompleteData.seriesTitle}
-          season={seasonCompleteData.season}
-          onDismiss={dismissSeasonComplete}
-        />
-      )}
+      {/* Tüm bildirim, başarım ve XP animasyonları z-[200] ile her zaman tüm pencerelerin üstünde görünür */}
+      <div className="relative z-[200]">
+        {xpGainData && (
+          <XpGainOverlay key={`${xpGainData.oldTotal}-${xpGainData.newTotal}`} />
+        )}
+
+        <Toasts toasts={toasts} />
+        <AchievementToasts toasts={achievementToasts} />
+
+        {levelUpData && (
+          <LevelUpModal newLevel={levelUpData.newLevel} onDismiss={dismissLevelUp} />
+        )}
+
+        {seasonCompleteData && (
+          <SeasonCompleteModal
+            seriesTitle={seasonCompleteData.seriesTitle}
+            season={seasonCompleteData.season}
+            onDismiss={dismissSeasonComplete}
+          />
+        )}
+      </div>
     </Layout>
   );
 }
