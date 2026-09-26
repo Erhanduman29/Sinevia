@@ -3,6 +3,7 @@ import { Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X, 
 import { useApp, DEFAULT_REVIEW_TAGS } from '../context/AppContext';
 import type { RatingCriterion } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
+import ShareImportModal from '../components/ShareImportModal';
 import { uid } from '../lib/utils';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
@@ -10,7 +11,7 @@ export default function SettingsPage() {
   const {
     data, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag,
     addCollection, deleteCollection, renameCollection, exportData, importData, resetData,
-    exportShareList, importShareList, toggleLockedNames, addCriterion, editCriterion,
+    exportShareList, toggleLockedNames, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme,
   } = useApp();
 
@@ -34,6 +35,7 @@ export default function SettingsPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const shareFileRef = useRef<HTMLInputElement>(null);
+  const [shareImportJson, setShareImportJson] = useState<string | null>(null);
 
   const [critName, setCritName] = useState('');
   const [critWeight, setCritWeight] = useState(5);
@@ -70,7 +72,7 @@ export default function SettingsPage() {
   const handleShareFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => importShareList(reader.result as string);
+    reader.onload = () => setShareImportJson(reader.result as string);
     reader.readAsText(file);
     e.target.value = '';
   };
@@ -487,18 +489,18 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* YENİ: ARKADAŞLA LİSTE PAYLAŞ / EKSİKLERİ EKLE */}
+      {/* ARKADAŞLA LİSTE PAYLAŞ / EKSİKLERİ SEÇ & EKLE */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-azure-500/30 rounded-2xl p-5 shadow-xl">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
           <h2 className="text-lg font-semibold text-ink-100 flex items-center gap-2">
-            <Share2 size={18} className="text-azure-400" /> Arkadaşla Liste Paylaş / Eksikleri Ekle
+            <Share2 size={18} className="text-azure-400" /> Arkadaşla Liste Paylaş / Seçerek Ekle
           </h2>
           <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-azure-500/20 text-azure-300 border border-azure-500/30">
-            Geçmiş & Başarımlar Korunur
+            Seçmeli & Başarım Destekli
           </span>
         </div>
         <p className="text-sm text-ink-400 mb-4">
-          Kendi puanların, geçmişin ve başarımların silinmeden arkadaşına film/dizi listeni gönderebilir veya onun listesindeki sende olmayan yapımları tek tıkla kütüphanene ekleyebilirsin. Eklenen yapımlar başarım kazandırır!
+          Arkadaşına film/dizi listeni gönderebilir veya onun listesindeki sende olmayan yapımları inceleyip sadece beğendiklerini seçerek kendi kütüphanene ekleyebilirsin!
         </p>
 
         <div className="flex flex-wrap gap-3">
@@ -512,7 +514,7 @@ export default function SettingsPage() {
             onClick={() => shareFileRef.current?.click()}
             className="flex items-center gap-2 bg-ink-800 hover:bg-ink-700 text-azure-300 border border-azure-500/40 px-4 py-2.5 rounded-lg font-bold transition-all"
           >
-            <FolderPlus size={18} /> Arkadaş Listesi Yükle (Eksikleri Ekle)
+            <FolderPlus size={18} /> Arkadaş Listesi Yükle (Eksikleri Seç & Ekle)
           </button>
           <input
             ref={shareFileRef}
@@ -524,7 +526,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* YEDEKLE / GERİ YÜKLE */}
+      {/* TAM YEDEKLE / GERİ YÜKLE */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl">
         <h2 className="text-lg font-semibold text-ink-100 mb-1 flex items-center gap-2">
           <Download size={18} className="text-emerald-400" /> Tam Yedekle / Geri Yükle
@@ -592,6 +594,10 @@ export default function SettingsPage() {
           </button>
         )}
       </div>
+
+      {shareImportJson && (
+        <ShareImportModal rawJson={shareImportJson} onClose={() => setShareImportJson(null)} />
+      )}
     </div>
   );
 }

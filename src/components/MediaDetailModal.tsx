@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search, User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers, Building2, Tag, Edit2, CheckCircle2 } from 'lucide-react';
+import { X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search, User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers, Building2, Tag, Edit2, CheckCircle2, Play, Timer, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
 import RatingModal from './RatingModal';
@@ -15,7 +15,7 @@ interface MediaDetailModalProps {
 }
 
 export default function MediaDetailModal({ target, onClose }: MediaDetailModalProps) {
-  const { data: appData, watchMovie, watchEpisode, updateHistoryRating } = useApp();
+  const { data: appData, startWatchingMovie, cancelWatchingMovie, watchMovie, watchEpisode, updateHistoryRating } = useApp();
   const [isMainNoteExpanded, setIsMainNoteExpanded] = useState(false);
   const [expandedEpNotes, setExpandedEpNotes] = useState<Set<string>>(new Set());
 
@@ -40,6 +40,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
   const overview = isMovie ? liveMovie!.overview : liveSeries!.overview;
   const genres = isMovie ? liveMovie!.genres : liveSeries!.genres;
   const runtime = isMovie ? liveMovie!.runtime : undefined;
+  const actualRuntime = isMovie ? (liveHistoryItem?.actualRuntime ?? liveMovie!.actualRuntime) : undefined;
   const directorsOrCreators = isMovie ? liveMovie!.directors : liveSeries!.creators;
   const cast = isMovie ? liveMovie!.cast : liveSeries!.cast;
   const studios = isMovie ? liveMovie!.studios : liveSeries!.studios;
@@ -63,6 +64,10 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
   const reviewTags = liveHistoryItem ? liveHistoryItem.reviewTags : isMovie ? liveMovie!.reviewTags : undefined;
   const watchedAt = liveHistoryItem ? liveHistoryItem.watchedAt : isMovie ? liveMovie!.watchedAt : null;
   const collectionName = isMovie && liveMovie!.collectionId ? appData.collections.find((c) => c.id === liveMovie!.collectionId)?.name : undefined;
+
+  const startedTimeText = isMovie && liveMovie?.startedAt
+    ? new Date(liveMovie.startedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   const toggleEpNote = (epId: string) => {
     setExpandedEpNotes((prev) => {
@@ -251,21 +256,48 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                   )}
 
                   {isMovie && liveMovie && (
-                    <button
-                      type="button"
-                      onClick={handleOpenMovieRating}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105 ${
-                        liveMovie.watched || liveHistoryItem
-                          ? 'bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30'
-                          : 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black shadow-gold-500/20'
-                      }`}
-                    >
-                      {liveMovie.watched || liveHistoryItem ? (
-                        <><Edit2 size={13} /> Puanı / Notu Düzenle</>
-                      ) : (
-                        <><Star size={14} className="fill-current" /> Puanla</>
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                      {!liveMovie.watched && !liveHistoryItem && (
+                        startedTimeText ? (
+                          <div className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3 py-2 rounded-xl text-xs font-bold">
+                            <Timer size={14} className="animate-pulse text-emerald-400" />
+                            <span>İzleniyor ({startedTimeText})</span>
+                            <button
+                              type="button"
+                              onClick={() => cancelWatchingMovie(liveMovie.id)}
+                              title="Sayacı İptal Et"
+                              className="ml-1 text-ink-400 hover:text-red-400"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startWatchingMovie(liveMovie.id, false)}
+                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border border-emerald-500/30 transition-all"
+                          >
+                            <Play size={13} className="fill-current" /> İzlemeye Başla
+                          </button>
+                        )
                       )}
-                    </button>
+
+                      <button
+                        type="button"
+                        onClick={handleOpenMovieRating}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105 ${
+                          liveMovie.watched || liveHistoryItem
+                            ? 'bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30'
+                            : 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black shadow-gold-500/20'
+                        }`}
+                      >
+                        {liveMovie.watched || liveHistoryItem ? (
+                          <><Edit2 size={13} /> Puanı / Notu Düzenle</>
+                        ) : (
+                          <><Star size={14} className="fill-current" /> Puanla</>
+                        )}
+                      </button>
+                    </div>
                   )}
 
                   {!isMovie && liveHistoryItem && (
@@ -306,6 +338,11 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 {runtime && (
                   <span className="flex items-center gap-1.5 bg-ink-800/70 px-2.5 py-1 rounded-lg border border-ink-700/50">
                     <Clock size={13} className="text-gold-400" /> {runtime} dakika
+                  </span>
+                )}
+                {isMovie && actualRuntime && runtime && actualRuntime < runtime && (
+                  <span className="flex items-center gap-1.5 bg-emerald-500/15 text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-500/30 font-bold">
+                    <Zap size={13} className="text-emerald-400" /> {actualRuntime} dk'da bitti ({runtime - actualRuntime} dk tasarruf)
                   </span>
                 )}
                 {!isMovie && liveSeries && (
@@ -358,7 +395,16 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                     );
                   }
                   return (
-                    <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-105">
+                    <a
+                      key={idx}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        if (isMovie && liveMovie && !liveMovie.watched) startWatchingMovie(liveMovie.id, true);
+                      }}
+                      className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-105"
+                    >
                       {link.logo ? <img src={link.logo} alt={link.text} className="w-4 h-4 rounded-sm object-cover" /> : <Icon size={14} />}
                       {link.text}
                     </a>

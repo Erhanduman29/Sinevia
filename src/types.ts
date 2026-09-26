@@ -19,6 +19,8 @@ export interface Movie {
   genres: string[];
   collectionId: string | null;
   runtime?: number;
+  startedAt?: string | null;
+  actualRuntime?: number | null;
   posterUrl?: string;
   overview?: string;
   tmdbId?: number;
@@ -88,6 +90,9 @@ export interface WatchHistoryItem {
   reviewTags?: string[];
   note: string;
   watchedAt: string;
+  startedAt?: string | null;
+  actualRuntime?: number | null;
+  originalRuntime?: number | null;
   genres: string[];
   year?: string;
   season?: number;

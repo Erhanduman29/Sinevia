@@ -9,74 +9,34 @@ type FilterMode = 'all' | 'unlocked' | 'locked';
 
 const RANK_TIERS = [
   {
-    minLevel: 1,
-    maxLevel: 4,
-    title: 'Çaylak İzleyici',
-    subtitle: 'Sinema yolculuğunun ilk adımları',
-    color: 'text-slate-300',
-    border: 'border-slate-500/40',
-    badgeBg: 'bg-slate-500/15',
-    bgGlow: 'bg-slate-500/15',
-    gradient: 'from-slate-500 via-slate-400 to-zinc-300',
-    barGradient: 'from-slate-600 via-slate-400 to-white',
-    strokeColor: '#94a3b8',
-    icon: Icons.Film,
+    minLevel: 1, maxLevel: 4, title: 'Çaylak İzleyici', subtitle: 'Sinema yolculuğunun ilk adımları',
+    color: 'text-slate-300', border: 'border-slate-500/40', badgeBg: 'bg-slate-500/15', bgGlow: 'bg-slate-500/15',
+    gradient: 'from-slate-500 via-slate-400 to-zinc-300', barGradient: 'from-slate-600 via-slate-400 to-white',
+    strokeColor: '#94a3b8', icon: Icons.Film,
   },
   {
-    minLevel: 5,
-    maxLevel: 9,
-    title: 'Film Meraklısı',
-    subtitle: 'Kült yapımların ve seçkin hikayelerin kaşifi',
-    color: 'text-sky-400',
-    border: 'border-sky-500/40',
-    badgeBg: 'bg-sky-500/15',
-    bgGlow: 'bg-sky-500/20',
-    gradient: 'from-blue-600 via-sky-500 to-cyan-300',
-    barGradient: 'from-blue-700 via-sky-500 to-cyan-300',
-    strokeColor: '#38bdf8',
-    icon: Icons.Award,
+    minLevel: 5, maxLevel: 9, title: 'Film Meraklısı', subtitle: 'Kült yapımların ve seçkin hikayelerin kaşifi',
+    color: 'text-sky-400', border: 'border-sky-500/40', badgeBg: 'bg-sky-500/15', bgGlow: 'bg-sky-500/20',
+    gradient: 'from-blue-600 via-sky-500 to-cyan-300', barGradient: 'from-blue-700 via-sky-500 to-cyan-300',
+    strokeColor: '#38bdf8', icon: Icons.Award,
   },
   {
-    minLevel: 10,
-    maxLevel: 19,
-    title: 'Tutkulu Sinefil',
-    subtitle: 'Yönetmen imzalarını ve alt metinleri okuyan göz',
-    color: 'text-violet-400',
-    border: 'border-violet-500/40',
-    badgeBg: 'bg-violet-500/15',
-    bgGlow: 'bg-violet-500/20',
-    gradient: 'from-violet-600 via-purple-500 to-fuchsia-400',
-    barGradient: 'from-violet-700 via-purple-500 to-fuchsia-300',
-    strokeColor: '#a78bfa',
-    icon: Icons.Shield,
+    minLevel: 10, maxLevel: 19, title: 'Tutkulu Sinefil', subtitle: 'Yönetmen imzalarını ve alt metinleri okuyan göz',
+    color: 'text-violet-400', border: 'border-violet-500/40', badgeBg: 'bg-violet-500/15', bgGlow: 'bg-violet-500/20',
+    gradient: 'from-violet-600 via-purple-500 to-fuchsia-400', barGradient: 'from-violet-700 via-purple-500 to-fuchsia-300',
+    strokeColor: '#a78bfa', icon: Icons.Shield,
   },
   {
-    minLevel: 20,
-    maxLevel: 39,
-    title: 'Sinema Otoritesi',
-    subtitle: 'Eleştirileri ve arşiviyle referans noktası',
-    color: 'text-gold-400',
-    border: 'border-gold-500/50',
-    badgeBg: 'bg-gold-500/15',
-    bgGlow: 'bg-gold-500/25',
-    gradient: 'from-amber-600 via-gold-500 to-yellow-300',
-    barGradient: 'from-amber-600 via-gold-500 to-yellow-200',
-    strokeColor: '#f59e0b',
-    icon: Icons.Crown,
+    minLevel: 20, maxLevel: 39, title: 'Sinema Otoritesi', subtitle: 'Eleştirileri ve arşiviyle referans noktası',
+    color: 'text-gold-400', border: 'border-gold-500/50', badgeBg: 'bg-gold-500/15', bgGlow: 'bg-gold-500/25',
+    gradient: 'from-amber-600 via-gold-500 to-yellow-300', barGradient: 'from-amber-600 via-gold-500 to-yellow-200',
+    strokeColor: '#f59e0b', icon: Icons.Crown,
   },
   {
-    minLevel: 40,
-    maxLevel: 999,
-    title: 'Sinevia Efsanesi',
-    subtitle: 'Yedinci sanatın zirvesine ulaşmış ölümsüz otorite',
-    color: 'text-cyan-300',
-    border: 'border-cyan-400/50',
-    badgeBg: 'bg-cyan-500/15',
-    bgGlow: 'bg-cyan-500/25',
-    gradient: 'from-cyan-500 via-teal-400 to-emerald-300',
-    barGradient: 'from-cyan-600 via-teal-400 to-emerald-200',
-    strokeColor: '#22d3ee',
-    icon: Icons.Gem,
+    minLevel: 40, maxLevel: 999, title: 'Sinevia Efsanesi', subtitle: 'Yedinci sanatın zirvesine ulaşmış ölümsüz otorite',
+    color: 'text-cyan-300', border: 'border-cyan-400/50', badgeBg: 'bg-cyan-500/15', bgGlow: 'bg-cyan-500/25',
+    gradient: 'from-cyan-500 via-teal-400 to-emerald-300', barGradient: 'from-cyan-600 via-teal-400 to-emerald-200',
+    strokeColor: '#22d3ee', icon: Icons.Gem,
   },
 ];
 
@@ -103,8 +63,7 @@ export default function AchievementsPage() {
 
   const circleRadius = 46;
   const circleCircumference = 2 * Math.PI * circleRadius;
-  const circleOffset =
-    circleCircumference - (Math.min(100, Math.max(0, lvl.progress)) / 100) * circleCircumference;
+  const circleOffset = circleCircumference - (Math.min(100, Math.max(0, lvl.progress)) / 100) * circleCircumference;
 
   const displayAchievements: any[] = [];
   const tierStats: Record<string, { total: number; unlocked: number }> = {};
@@ -126,25 +85,16 @@ export default function AchievementsPage() {
       }
 
       if (unlockedTiers.includes(tier.tier)) {
-        const unlockedAt =
-          prog?.tierDates?.[tier.tier] || prog?.unlockedAt || '2000-01-01T00:00:00.000Z';
+        const unlockedAt = prog?.tierDates?.[tier.tier] || prog?.unlockedAt || '2000-01-01T00:00:00.000Z';
         displayAchievements.push({
           id: `${def.id}_${tier.tier}`,
-          def,
-          tier,
-          isUnlocked: true,
-          unlockedAt,
-          current: prog?.current || 0,
+          def, tier, isUnlocked: true, unlockedAt, current: prog?.current || 0,
         });
       } else {
         if (!def.secret || data.showLockedNames) {
           displayAchievements.push({
             id: `${def.id}_${tier.tier}_locked`,
-            def,
-            tier,
-            isUnlocked: false,
-            unlockedAt: null,
-            current: prog?.current || 0,
+            def, tier, isUnlocked: false, unlockedAt: null, current: prog?.current || 0,
           });
         }
       }
@@ -168,7 +118,6 @@ export default function AchievementsPage() {
     const bIsUnlockedSecret = b.isUnlocked && b.def.secret;
     if (aIsUnlockedSecret && !bIsUnlockedSecret) return -1;
     if (!aIsUnlockedSecret && bIsUnlockedSecret) return 1;
-
     if (a.isUnlocked && !b.isUnlocked) return -1;
     if (!a.isUnlocked && b.isUnlocked) return 1;
 
@@ -195,11 +144,7 @@ export default function AchievementsPage() {
   const formatDateTime = (dateString: string) => {
     try {
       return new Intl.DateTimeFormat('tr-TR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
       }).format(new Date(dateString));
     } catch {
       return '';
@@ -211,13 +156,11 @@ export default function AchievementsPage() {
     0
   );
   const unlockedTiersCount = displayAchievements.filter((a) => a.isUnlocked).length;
-  const trophyCompletionPct =
-    totalPossibleTiers > 0 ? Math.round((unlockedTiersCount / totalPossibleTiers) * 100) : 0;
+  const trophyCompletionPct = totalPossibleTiers > 0 ? Math.round((unlockedTiersCount / totalPossibleTiers) * 100) : 0;
   const isTestMode = data.showLockedNames;
 
   return (
     <div className="space-y-4 md:space-y-6 animate-fade-in">
-      {/* SAYFA BAŞLIĞI */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl md:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
           <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-amber-500/10 border border-gold-500/30 flex items-center justify-center shadow-lg">
@@ -232,66 +175,34 @@ export default function AchievementsPage() {
         </h1>
       </div>
 
-      {/* =========================================================
-          SEVİYE, XP & KUPA ARENASI (MOBİLDE MİNİMALİST, PC'DE GÖSTERİŞLİ)
-          ========================================================= */}
-      <div
-        className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-3xl sm:rounded-[2.2rem] p-4 sm:p-7 shadow-2xl overflow-hidden`}
-      >
-        {/* Arka Plan Dinamik Işık Küreleri */}
-        <div
-          className={`absolute -top-24 -right-20 w-72 sm:w-96 h-72 sm:h-96 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
-        />
-        <div
-          className={`hidden sm:block absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`}
-        />
+      {/* SEVİYE, XP & KUPA ARENASI */}
+      <div className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-3xl sm:rounded-[2.2rem] p-4 sm:p-7 shadow-2xl overflow-hidden`}>
+        <div className={`absolute -top-24 -right-20 w-72 sm:w-96 h-72 sm:h-96 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`} />
+        <div className={`hidden sm:block absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`} />
         <div
           className="hidden sm:block absolute inset-0 opacity-[0.04] pointer-events-none"
           style={{
-            backgroundImage:
-              'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)',
+            backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)',
             backgroundSize: '24px 24px',
           }}
         />
 
-        {/* ÜST BÖLÜM: SVG HALKALI ARMA + XP MOTORU + KUPA KASASI (GİZLİ KUPALAR HARİÇ) */}
         <div className="relative z-10 flex flex-col xl:flex-row items-center gap-4 sm:gap-6 xl:gap-7">
-          
-          {/* Sol: Mobilde Kompakt Satır, PC'de Geniş 3D SVG Halka */}
           <div className="flex flex-row items-center justify-between sm:justify-start gap-3.5 sm:gap-5 flex-shrink-0 w-full xl:w-auto">
             <div className="flex items-center gap-3.5 sm:gap-5">
               <div className="relative w-16 h-16 sm:w-28 sm:h-28 flex items-center justify-center flex-shrink-0">
-                <div
-                  className={`absolute inset-1 sm:inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-lg sm:blur-xl animate-pulse`}
-                />
+                <div className={`absolute inset-1 sm:inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-lg sm:blur-xl animate-pulse`} />
 
                 <svg className="w-16 h-16 sm:w-28 sm:h-28 -rotate-90 transform" viewBox="0 0 108 108">
+                  <circle cx="54" cy="54" r={circleRadius} stroke="currentColor" strokeWidth="7" fill="transparent" className="text-ink-950" />
                   <circle
-                    cx="54"
-                    cy="54"
-                    r={circleRadius}
-                    stroke="currentColor"
-                    strokeWidth="7"
-                    fill="transparent"
-                    className="text-ink-950"
-                  />
-                  <circle
-                    cx="54"
-                    cy="54"
-                    r={circleRadius}
-                    stroke={userPersona.strokeColor}
-                    strokeWidth="7"
-                    strokeDasharray={circleCircumference}
-                    strokeDashoffset={circleOffset}
-                    strokeLinecap="round"
-                    fill="transparent"
-                    className="transition-all duration-1000 ease-out"
+                    cx="54" cy="54" r={circleRadius} stroke={userPersona.strokeColor} strokeWidth="7"
+                    strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round"
+                    fill="transparent" className="transition-all duration-1000 ease-out"
                   />
                 </svg>
 
-                <div
-                  className={`absolute inset-2.5 sm:inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}
-                >
+                <div className={`absolute inset-2.5 sm:inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}>
                   <div className="w-full h-full bg-ink-950 rounded-full flex flex-col items-center justify-center">
                     <PersonaIcon className={`${userPersona.color} w-5 h-5 sm:w-[30px] sm:h-[30px]`} />
                     <span className="hidden sm:block text-[10px] font-black text-ink-400 uppercase mt-0.5">
@@ -300,17 +211,13 @@ export default function AchievementsPage() {
                   </div>
                 </div>
 
-                <div
-                  className={`hidden sm:block absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}
-                >
+                <div className={`hidden sm:block absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}>
                   SV. {lvl.level}
                 </div>
               </div>
 
               <div className="text-left">
-                <span
-                  className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border mb-1 ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}
-                >
+                <span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border mb-1 ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}>
                   <Icons.Sparkles size={10} /> {userPersona.title}
                 </span>
                 <div className="text-2xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none">
@@ -322,49 +229,34 @@ export default function AchievementsPage() {
               </div>
             </div>
 
-            {/* Sadece Mobilde Sağ Üstte Görünen Kompakt Kupa Sayacı */}
             <div className="flex sm:hidden flex-col items-end bg-ink-950/90 border border-gold-500/30 px-3 py-1.5 rounded-2xl">
-              <span className="text-[9px] font-black uppercase tracking-wider text-gold-400">
-                Kupalar
-              </span>
+              <span className="text-[9px] font-black uppercase tracking-wider text-gold-400">Kupalar</span>
               <div className="text-base font-black text-white leading-tight">
-                {unlockedTiersCount}{' '}
-                <span className="text-xs font-bold text-ink-500">/ {totalPossibleTiers}</span>
+                {unlockedTiersCount} <span className="text-xs font-bold text-ink-500">/ {totalPossibleTiers}</span>
               </div>
             </div>
           </div>
 
-          {/* Orta: Lazer XP İlerleme Motoru */}
           <div className="flex-1 w-full bg-ink-950/75 border border-ink-800/90 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-inner space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">
-                  Toplam Deneyim Puanı
-                </span>
+                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">Toplam Deneyim Puanı</span>
                 <div className="text-sm sm:text-xl font-black text-ink-50 flex items-baseline gap-1.5">
                   <span>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</span>
-                  <span className="text-[10px] sm:text-xs font-bold text-ink-400">
-                    (%{Math.floor(lvl.progress)})
-                  </span>
+                  <span className="text-[10px] sm:text-xs font-bold text-ink-400">(%{Math.floor(lvl.progress)})</span>
                 </div>
               </div>
 
               <div className="text-right">
-                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">
-                  Seviye {lvl.level + 1} Hedefi
-                </span>
+                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">Seviye {lvl.level + 1} Hedefi</span>
                 <span className={`text-xs sm:text-sm font-black ${userPersona.color}`}>
                   {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı
                 </span>
               </div>
             </div>
 
-            {/* Kristal XP Barı */}
             <div className="relative h-3 sm:h-5 w-full bg-ink-900 rounded-lg sm:rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
-              <div
-                className={`h-full rounded-md sm:rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`}
-                style={{ width: `${Math.max(3, lvl.progress)}%` }}
-              >
+              <div className={`h-full rounded-md sm:rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`} style={{ width: `${Math.max(3, lvl.progress)}%` }}>
                 <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_25%,rgba(255,255,255,0.35)_50%,transparent_75%)] bg-[length:200%_100%] animate-pulse" />
                 <div className="absolute right-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_#fff]" />
               </div>
@@ -379,25 +271,20 @@ export default function AchievementsPage() {
             <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-ink-400 pt-0.5">
               <span className="hidden sm:inline">Seviye İlerlemesi: %{Math.floor(lvl.progress)}</span>
               {nextRank ? (
-                <span className={userPersona.color}>
-                  Sonraki Unvan: {nextRank.title} (Sv.{nextRank.minLevel})
-                </span>
+                <span className={userPersona.color}>Sonraki Unvan: {nextRank.title} (Sv.{nextRank.minLevel})</span>
               ) : (
                 <span className="text-cyan-300">Maksimum Unvana Ulaşıldı! 👑</span>
               )}
             </div>
           </div>
 
-          {/* Sağ: Kupa Koleksiyonu Kasası (Tam İsimli: Bronz, Gümüş, Altın, Elmas — Gizli Yok!) */}
+          {/* Sağ: Kupa Koleksiyonu Kasası (5 Ana Kademe: Bronz, Gümüş, Altın, Platin, Elmas) */}
           <div className="w-full xl:w-80 bg-ink-950/80 border border-gold-500/30 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between gap-3 flex-shrink-0 shadow-xl">
             <div className="hidden sm:flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-gold-400 block">
-                  Toplanan Kupalar
-                </span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-gold-400 block">Toplanan Kupalar</span>
                 <div className="text-2xl sm:text-3xl font-black text-ink-50 mt-0.5 leading-none">
-                  {unlockedTiersCount}{' '}
-                  <span className="text-sm font-bold text-ink-500">/ {totalPossibleTiers}</span>
+                  {unlockedTiersCount} <span className="text-sm font-bold text-ink-500">/ {totalPossibleTiers}</span>
                 </div>
               </div>
               <div className="w-11 h-11 rounded-2xl bg-gold-500/15 border border-gold-500/30 flex flex-col items-center justify-center">
@@ -407,64 +294,33 @@ export default function AchievementsPage() {
             </div>
 
             <div className="hidden sm:block h-2 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800">
-              <div
-                className="h-full bg-gradient-to-r from-amber-600 via-gold-500 to-yellow-300 rounded-full transition-all duration-700"
-                style={{ width: `${Math.max(2, trophyCompletionPct)}%` }}
-              />
+              <div className="h-full bg-gradient-to-r from-amber-600 via-gold-500 to-yellow-300 rounded-full transition-all duration-700" style={{ width: `${Math.max(2, trophyCompletionPct)}%` }} />
             </div>
 
-            {/* Tam İsimli 4 Ana Kademe (Bronz, Gümüş, Altın, Elmas) */}
-            <div className="grid grid-cols-4 gap-1.5 sm:pt-1 sm:border-t border-ink-800/80 text-center">
+            <div className="grid grid-cols-5 gap-1.5 sm:pt-1 sm:border-t border-ink-800/80 text-center">
               {[
-                {
-                  key: 'bronze',
-                  label: 'Bronz',
-                  color: 'text-amber-400',
-                  bg: 'bg-amber-500/10 border-amber-500/25',
-                },
-                {
-                  key: 'silver',
-                  label: 'Gümüş',
-                  color: 'text-slate-200',
-                  bg: 'bg-slate-400/10 border-slate-400/25',
-                },
-                {
-                  key: 'gold',
-                  label: 'Altın',
-                  color: 'text-yellow-300',
-                  bg: 'bg-yellow-500/10 border-yellow-500/25',
-                },
-                {
-                  key: 'diamond',
-                  label: 'Elmas',
-                  color: 'text-cyan-300',
-                  bg: 'bg-cyan-500/10 border-cyan-500/25',
-                },
+                { key: 'bronze', label: 'Bronz', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/25' },
+                { key: 'silver', label: 'Gümüş', color: 'text-slate-200', bg: 'bg-slate-400/10 border-slate-400/25' },
+                { key: 'gold', label: 'Altın', color: 'text-yellow-300', bg: 'bg-yellow-500/10 border-yellow-500/25' },
+                { key: 'platinum', label: 'Platin', color: 'text-cyan-200', bg: 'bg-cyan-400/10 border-cyan-400/25' },
+                { key: 'diamond', label: 'Elmas', color: 'text-sky-300', bg: 'bg-sky-500/10 border-sky-500/25' },
               ].map((gem) => (
                 <button
                   key={gem.key}
                   type="button"
                   onClick={() => setActiveTier(activeTier === gem.key ? null : gem.key)}
-                  className={`rounded-xl py-1.5 px-1 border transition-all ${gem.bg} ${
-                    activeTier === gem.key
-                      ? 'ring-2 ring-gold-400 scale-105'
-                      : 'hover:brightness-125'
-                  }`}
+                  className={`rounded-xl py-1.5 px-1 border transition-all ${gem.bg} ${activeTier === gem.key ? 'ring-2 ring-gold-400 scale-105' : 'hover:brightness-125'}`}
                   title={`${gem.label} Kupalarını Filtrele`}
                 >
-                  <div className={`text-xs sm:text-sm font-black leading-none ${gem.color}`}>
-                    {tierStats[gem.key]?.unlocked || 0}
-                  </div>
-                  <div className="text-[10px] font-bold text-ink-300 mt-1 truncate">
-                    {gem.label}
-                  </div>
+                  <div className={`text-xs sm:text-sm font-black leading-none ${gem.color}`}>{tierStats[gem.key]?.unlocked || 0}</div>
+                  <div className="text-[9px] sm:text-[10px] font-bold text-ink-300 mt-1 truncate">{gem.label}</div>
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ALT BÖLÜM: 5 KADEMELİ UNVAN EVRİM HARİTASI (SADECE PC'DE GÖRÜNÜR) */}
+        {/* 5 KADEMELİ UNVAN EVRİM HARİTASI */}
         <div className="hidden sm:block relative z-10 mt-5 pt-4 border-t border-ink-800/80">
           <div className="grid grid-cols-5 gap-2">
             {RANK_TIERS.map((tier, idx) => {
@@ -475,32 +331,14 @@ export default function AchievementsPage() {
                 <div
                   key={tier.title}
                   className={`relative rounded-xl p-2.5 border transition-all flex items-center gap-2.5 ${
-                    isCurrent
-                      ? `${tier.badgeBg}${tier.border} shadow-md scale-[1.02]`
-                      : isUnlocked
-                      ? 'bg-ink-900/70 border-ink-800/90 opacity-90'
-                      : 'bg-ink-950/40 border-ink-800/40 opacity-45'
+                    isCurrent ? `${tier.badgeBg}${tier.border} shadow-md scale-[1.02]` : isUnlocked ? 'bg-ink-900/70 border-ink-800/90 opacity-90' : 'bg-ink-950/40 border-ink-800/40 opacity-45'
                   }`}
                 >
-                  <div
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      isUnlocked ? tier.badgeBg : 'bg-ink-900'
-                    }`}
-                  >
-                    {isUnlocked ? (
-                      <TierIcon size={14} className={tier.color} />
-                    ) : (
-                      <Icons.Lock size={12} className="text-ink-500" />
-                    )}
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
+                    {isUnlocked ? <TierIcon size={14} className={tier.color} /> : <Icons.Lock size={12} className="text-ink-500" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div
-                      className={`text-[11px] font-black truncate ${
-                        isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'
-                      }`}
-                    >
-                      {tier.title}
-                    </div>
+                    <div className={`text-[11px] font-black truncate ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>{tier.title}</div>
                     <div className="text-[9px] font-bold text-ink-500 flex items-center gap-1">
                       <span>Seviye {tier.minLevel}+</span>
                       {isUnlocked && <Icons.CheckCircle2 size={10} className="text-emerald-400" />}
@@ -513,16 +351,11 @@ export default function AchievementsPage() {
         </div>
       </div>
 
-      {/* =========================================================
-          ARAMA, SIRALAMA VE KADEME FİLTRELERİ
-          ========================================================= */}
+      {/* ARAMA, SIRALAMA VE KADEME FİLTRELERİ */}
       <div className="space-y-3 md:space-y-4">
         <div className="flex flex-col md:flex-row gap-2 md:gap-3">
           <div className="relative flex-1">
-            <Icons.Search
-              size={16}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500 md:w-[18px] md:h-[18px]"
-            />
+            <Icons.Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500 md:w-[18px] md:h-[18px]" />
             <input
               type="text"
               value={search}
@@ -534,66 +367,16 @@ export default function AchievementsPage() {
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
             <div className="flex flex-shrink-0 bg-ink-800/50 rounded-xl p-1 md:p-1.5 border border-ink-700/50">
-              <button
-                onClick={() => setFilterMode('all')}
-                className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all ${
-                  filterMode === 'all'
-                    ? 'bg-ink-700 text-white shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'
-                }`}
-              >
-                Tümü
-              </button>
-              <button
-                onClick={() => setFilterMode('unlocked')}
-                className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all ${
-                  filterMode === 'unlocked'
-                    ? 'bg-gold-500/20 text-gold-400 shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'
-                }`}
-              >
-                Açıklar
-              </button>
-              <button
-                onClick={() => setFilterMode('locked')}
-                className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all ${
-                  filterMode === 'locked'
-                    ? 'bg-ink-700 text-white shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'
-                }`}
-              >
-                Kilitliler
-              </button>
+              <button onClick={() => setFilterMode('all')} className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all ${filterMode === 'all' ? 'bg-ink-700 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'}`}>Tümü</button>
+              <button onClick={() => setFilterMode('unlocked')} className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all ${filterMode === 'unlocked' ? 'bg-gold-500/20 text-gold-400 shadow-sm' : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'}`}>Açıklar</button>
+              <button onClick={() => setFilterMode('locked')} className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all ${filterMode === 'locked' ? 'bg-ink-700 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'}`}>Kilitliler</button>
             </div>
             <div className="flex flex-shrink-0 bg-ink-800/50 rounded-xl p-1 md:p-1.5 border border-ink-700/50">
-              <button
-                onClick={() => setSortMode('newest')}
-                className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all flex items-center gap-1 md:gap-1.5 ${
-                  sortMode === 'newest'
-                    ? 'bg-ink-700 text-white shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'
-                }`}
-              >
+              <button onClick={() => setSortMode('newest')} className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all flex items-center gap-1 md:gap-1.5 ${sortMode === 'newest' ? 'bg-ink-700 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'}`}>
                 <Icons.Clock size={12} className="md:w-3.5 md:h-3.5" /> Yeni
               </button>
-              <button
-                onClick={() => setSortMode('oldest')}
-                className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all flex items-center gap-1 md:gap-1.5 ${
-                  sortMode === 'oldest'
-                    ? 'bg-ink-700 text-white shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'
-                }`}
-              >
-                Eski
-              </button>
-              <button
-                onClick={() => setSortMode('az')}
-                className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all flex items-center gap-1 md:gap-1.5 ${
-                  sortMode === 'az'
-                    ? 'bg-ink-700 text-white shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'
-                }`}
-              >
+              <button onClick={() => setSortMode('oldest')} className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all flex items-center gap-1 md:gap-1.5 ${sortMode === 'oldest' ? 'bg-ink-700 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'}`}>Eski</button>
+              <button onClick={() => setSortMode('az')} className={`px-2.5 py-1.5 md:px-3 md:py-1.5 text-[11px] md:text-xs font-bold rounded-lg transition-all flex items-center gap-1 md:gap-1.5 ${sortMode === 'az' ? 'bg-ink-700 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200 hover:bg-ink-700/50'}`}>
                 <Icons.ArrowDownAZ size={12} className="md:w-3.5 md:h-3.5" /> A-Z
               </button>
             </div>
@@ -604,9 +387,7 @@ export default function AchievementsPage() {
           <button
             onClick={() => setActiveTier(null)}
             className={`flex-shrink-0 px-3 py-2 md:px-4 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 border ${
-              activeTier === null
-                ? 'bg-ink-700 border-ink-500 text-white shadow-md'
-                : 'bg-ink-800/60 border-ink-700/50 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
+              activeTier === null ? 'bg-ink-700 border-ink-500 text-white shadow-md' : 'bg-ink-800/60 border-ink-700/50 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
             }`}
           >
             Tüm Kademeler
@@ -622,81 +403,44 @@ export default function AchievementsPage() {
               <button
                 key={tier}
                 onClick={() => setActiveTier(isActive ? null : tier)}
-                className={`group flex-shrink-0 relative flex items-center gap-1.5 md:gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 border overflow-hidden ${
-                  tierInfo?.bg
-                } ${
-                  isActive
-                    ? `border-white/30 text-white shadow-[0_0_15px_rgba(0,0,0,0.3)] md:scale-105`
-                    : `border-transparent ${tierInfo?.text} md:hover:scale-105 opacity-80 hover:opacity-100`
+                className={`group flex-shrink-0 relative flex items-center gap-1.5 md:gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 border overflow-hidden ${tierInfo?.bg} ${
+                  isActive ? 'border-white/30 text-white shadow-[0_0_15px_rgba(0,0,0,0.3)] md:scale-105' : `border-transparent ${tierInfo?.text} md:hover:scale-105 opacity-80 hover:opacity-100`
                 }`}
               >
                 {isActive && <div className="absolute inset-0 bg-white/15" />}
-                <LegendIcon
-                  size={14}
-                  className={isActive ? 'text-white md:w-4 md:h-4' : 'md:w-4 md:h-4'}
-                />
+                <LegendIcon size={14} className={isActive ? 'text-white md:w-4 md:h-4' : 'md:w-4 md:h-4'} />
                 <span className="relative z-10">{tierInfo?.label}</span>
-
-                {tier !== 'secret' || isTestMode ? (
-                  <span
-                    className={`relative z-10 ml-0.5 md:ml-1 px-1.5 py-0.5 rounded-md shadow-inner text-[9px] md:text-[10px] tracking-widest ${
-                      isActive ? 'bg-black/30 text-white' : 'bg-black/20 text-white/90'
-                    }`}
-                  >
-                    {stats.unlocked}/{stats.total}
-                  </span>
-                ) : (
-                  <span
-                    className={`relative z-10 ml-0.5 md:ml-1 px-1.5 py-0.5 rounded-md shadow-inner text-[9px] md:text-[10px] tracking-widest ${
-                      isActive ? 'bg-black/30 text-white' : 'bg-black/20 text-white/90'
-                    }`}
-                  >
-                    {stats.unlocked}
-                  </span>
-                )}
+                <span className={`relative z-10 ml-0.5 md:ml-1 px-1.5 py-0.5 rounded-md shadow-inner text-[9px] md:text-[10px] tracking-widest ${isActive ? 'bg-black/30 text-white' : 'bg-black/20 text-white/90'}`}>
+                  {tier !== 'secret' || isTestMode ? `${stats.unlocked}/${stats.total}` : stats.unlocked}
+                </span>
               </button>
             );
           })}
         </div>
 
         {activeTier && (
-          <div
-            className={`mt-2 md:mt-4 border border-ink-700/50 rounded-xl p-4 md:p-5 flex flex-col gap-2 md:gap-3 animate-fade-in-up shadow-lg relative overflow-hidden bg-ink-900/40`}
-          >
+          <div className="mt-2 md:mt-4 border border-ink-700/50 rounded-xl p-4 md:p-5 flex flex-col gap-2 md:gap-3 animate-fade-in-up shadow-lg relative overflow-hidden bg-ink-900/40">
             <div className={`absolute inset-0 opacity-10 ${(TIER_COLORS as any)[activeTier].bg}`} />
             <div className="relative z-10 flex items-center justify-between">
               <div className="flex items-center gap-2 md:gap-2.5">
-                {React.createElement(
-                  (Icons as any)[(TIER_COLORS as any)[activeTier].icon] || Icons.Award,
-                  {
-                    size: 18,
-                    className: `${(TIER_COLORS as any)[activeTier].text} md:w-5 md:h-5`,
-                  }
-                )}
-                <span
-                  className={`text-sm md:text-base font-bold uppercase tracking-widest ${(TIER_COLORS as any)[activeTier].text}`}
-                >
+                {React.createElement((Icons as any)[(TIER_COLORS as any)[activeTier].icon] || Icons.Award, {
+                  size: 18,
+                  className: `${(TIER_COLORS as any)[activeTier].text} md:w-5 md:h-5`,
+                })}
+                <span className={`text-sm md:text-base font-bold uppercase tracking-widest ${(TIER_COLORS as any)[activeTier].text}`}>
                   {(TIER_COLORS as any)[activeTier].label} SERÜVENİ
                 </span>
               </div>
               <div className="text-base md:text-lg font-black text-ink-100">
                 {tierStats[activeTier].unlocked}
-                {(activeTier !== 'secret' || isTestMode) && (
-                  <span className="text-ink-500 font-bold"> / {tierStats[activeTier].total}</span>
-                )}
+                {(activeTier !== 'secret' || isTestMode) && <span className="text-ink-500 font-bold"> / {tierStats[activeTier].total}</span>}
               </div>
             </div>
             {(activeTier !== 'secret' || isTestMode) && (
               <div className="relative z-10 h-2 md:h-2.5 w-full bg-ink-950 rounded-full overflow-hidden shadow-inner border border-ink-800/80">
                 <div
                   className={`h-full rounded-full transition-all duration-1000 relative ${(TIER_COLORS as any)[activeTier].bg}`}
-                  style={{
-                    width: `${Math.floor(
-                      (tierStats[activeTier].unlocked /
-                        Math.max(tierStats[activeTier].total, 1)) *
-                        100
-                    )}%`,
-                  }}
+                  style={{ width: `${Math.floor((tierStats[activeTier].unlocked / Math.max(tierStats[activeTier].total, 1)) * 100)}%` }}
                 >
                   <div className="absolute inset-0 bg-white/20 animate-pulse" />
                 </div>
@@ -706,47 +450,26 @@ export default function AchievementsPage() {
         )}
       </div>
 
-      {/* =========================================================
-          BAŞARIM KARTLARI LİSTESİ
-          ========================================================= */}
+      {/* BAŞARIM KARTLARI LİSTESİ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 pb-8 pt-2 md:pt-4">
         {filteredAchievements.map((a) => {
           const tierInfo = (TIER_COLORS as any)[a.tier.tier];
-          const Icon =
-            a.isUnlocked && tierInfo
-              ? (Icons as any)[tierInfo.icon] || Icons.Award
-              : (Icons as any)[a.def.icon] || Icons.HelpCircle;
-
+          const Icon = a.isUnlocked && tierInfo ? (Icons as any)[tierInfo.icon] || Icons.Award : (Icons as any)[a.def.icon] || Icons.HelpCircle;
           const displayName = a.tier.name || a.def.name;
           const parsedDesc = a.def.description.replace('{threshold}', String(a.tier.threshold));
-
           const isLocked = !a.isUnlocked;
           const isSecretUnlocked = a.isUnlocked && a.def.secret;
 
-          let containerClass =
-            'relative rounded-xl md:rounded-2xl p-3 md:p-4 flex gap-3 md:gap-4 items-start transition-all duration-300 shadow-lg border flex-row ';
-          if (isLocked) {
-            containerClass += 'bg-ink-900/60 border-ink-800/50 hover:bg-ink-800/60 ';
-          } else if (isSecretUnlocked) {
-            containerClass +=
-              'bg-gradient-to-br from-fuchsia-900/40 to-purple-900/20 border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.15)] overflow-hidden';
-          } else {
-            containerClass += `bg-gradient-to-br from-ink-800/90 to-ink-900 hover:shadow-xl ${
-              tierInfo?.border || 'border-ink-700'
-            }`;
-          }
+          let containerClass = 'relative rounded-xl md:rounded-2xl p-3 md:p-4 flex gap-3 md:gap-4 items-start transition-all duration-300 shadow-lg border flex-row ';
+          if (isLocked) containerClass += 'bg-ink-900/60 border-ink-800/50 hover:bg-ink-800/60 ';
+          else if (isSecretUnlocked) containerClass += 'bg-gradient-to-br from-fuchsia-900/40 to-purple-900/20 border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.15)] overflow-hidden';
+          else containerClass += `bg-gradient-to-br from-ink-800/90 to-ink-900 hover:shadow-xl ${tierInfo?.border || 'border-ink-700'}`;
 
-          let iconWrapperClass = `w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner `;
+          let iconWrapperClass = 'w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner ';
           if (isLocked) iconWrapperClass += 'bg-ink-950 border border-ink-800/50';
           else iconWrapperClass += tierInfo?.bg;
 
-          const iconColorClass =
-            isLocked && !isTestMode
-              ? 'text-ink-600'
-              : isSecretUnlocked
-              ? tierInfo?.text
-              : tierInfo?.text;
-
+          const iconColorClass = isLocked && !isTestMode ? 'text-ink-600' : tierInfo?.text;
           const current = Math.min(a.current, a.tier.threshold);
           const target = a.tier.threshold;
           const percentage = Math.floor((current / target) * 100);
@@ -767,23 +490,12 @@ export default function AchievementsPage() {
                 <div className="flex-1">
                   <div className="flex items-start justify-between mb-1.5 md:mb-2">
                     <div className="flex items-center gap-1.5 md:gap-2 flex-wrap pr-2">
-                      <span
-                        className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 md:px-2 md:py-0.5 rounded shadow-sm ${tierInfo?.bg} ${tierInfo?.text}`}
-                      >
+                      <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 md:px-2 md:py-0.5 rounded shadow-sm ${tierInfo?.bg} ${tierInfo?.text}`}>
                         {tierInfo?.label}
                       </span>
 
-                      <span
-                        className={`text-[9px] md:text-[10px] font-black px-1.5 py-0.5 md:px-2 md:py-0.5 rounded flex items-center gap-1 bg-ink-950/50 border border-ink-800 ${
-                          isLocked ? 'text-gold-500/70' : 'text-gold-400'
-                        }`}
-                      >
-                        <Icons.Star
-                          size={8}
-                          className={`md:w-2.5 md:h-2.5 ${
-                            isLocked ? 'text-gold-500/50' : 'text-gold-500'
-                          }`}
-                        />
+                      <span className={`text-[9px] md:text-[10px] font-black px-1.5 py-0.5 md:px-2 md:py-0.5 rounded flex items-center gap-1 bg-ink-950/50 border border-ink-800 ${isLocked ? 'text-gold-500/70' : 'text-gold-400'}`}>
+                        <Icons.Star size={8} className={`md:w-2.5 md:h-2.5 ${isLocked ? 'text-gold-500/50' : 'text-gold-500'}`} />
                         +{a.tier.xp} XP
                       </span>
 
@@ -794,42 +506,24 @@ export default function AchievementsPage() {
                       )}
 
                       {!isLocked && (
-                        <span
-                          className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                            isSecretUnlocked ? 'text-fuchsia-300' : 'text-green-500'
-                          }`}
-                        >
+                        <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${isSecretUnlocked ? 'text-fuchsia-300' : 'text-green-500'}`}>
                           <Icons.CheckCircle2 size={10} className="md:w-3 md:h-3" /> Tamamlandı
                         </span>
                       )}
                     </div>
 
                     {!isLocked && a.unlockedAt && (
-                      <div
-                        className={`text-[10px] md:text-xs font-semibold mt-0.5 flex-shrink-0 ${
-                          isSecretUnlocked ? 'text-fuchsia-400/70' : 'text-ink-400'
-                        }`}
-                      >
+                      <div className={`text-[10px] md:text-xs font-semibold mt-0.5 flex-shrink-0 ${isSecretUnlocked ? 'text-fuchsia-400/70' : 'text-ink-400'}`}>
                         {formatDateTime(a.unlockedAt)}
                       </div>
                     )}
                   </div>
 
-                  <h3
-                    className={`text-sm md:text-base font-black truncate tracking-tight mb-0.5 md:mb-1 ${
-                      isSecretUnlocked ? 'text-fuchsia-100' : 'text-white'
-                    }`}
-                  >
+                  <h3 className={`text-sm md:text-base font-black truncate tracking-tight mb-0.5 md:mb-1 ${isSecretUnlocked ? 'text-fuchsia-100' : 'text-white'}`}>
                     {displayName}
                   </h3>
-                  <p
-                    className={`text-xs md:text-sm leading-relaxed ${
-                      isSecretUnlocked ? 'text-fuchsia-200/80' : 'text-ink-300'
-                    }`}
-                  >
-                    {isLocked && !isTestMode
-                      ? 'Bu kupanın sırrını çözmek için izlemeye devam et.'
-                      : parsedDesc}
+                  <p className={`text-xs md:text-sm leading-relaxed ${isSecretUnlocked ? 'text-fuchsia-200/80' : 'text-ink-300'}`}>
+                    {isLocked && !isTestMode ? 'Bu kupanın sırrını çözmek için izlemeye devam et.' : parsedDesc}
                   </p>
                 </div>
 
@@ -844,10 +538,7 @@ export default function AchievementsPage() {
                       </span>
                     </div>
                     <div className="h-1.5 md:h-2 w-full bg-ink-950 rounded-full overflow-hidden shadow-inner border border-ink-800">
-                      <div
-                        className={`h-full rounded-full transition-all duration-1000 ${tierInfo?.bg}`}
-                        style={{ width: `${percentage}%` }}
-                      />
+                      <div className={`h-full rounded-full transition-all duration-1000 ${tierInfo?.bg}`} style={{ width: `${percentage}%` }} />
                     </div>
                   </div>
                 )}

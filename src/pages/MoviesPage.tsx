@@ -1,31 +1,9 @@
 import { useState, useMemo } from 'react';
 import {
-  Plus,
-  Projector,
-  Trash2,
-  Boxes,
-  ChevronDown,
-  ChevronRight,
-  Star,
-  Calendar,
-  Filter,
-  ArrowDownAZ,
-  CalendarDays,
-  Star as StarIcon,
-  Check,
-  Search,
-  Edit2,
-  Shuffle,
-  Clock,
-  CalendarPlus,
-  Image as ImageIcon,
-  RefreshCw,
-  Dna,
-  PlayCircle,
-  ExternalLink,
-  Eye,
-  FolderPlus,
-  X,
+  Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter,
+  ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock,
+  CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye,
+  FolderPlus, X, Play, Timer, Zap,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateShort } from '../lib/utils';
@@ -43,14 +21,8 @@ type SortMode = 'az' | 'year' | 'rating' | 'added';
 
 export default function MoviesPage() {
   const {
-    data,
-    editMovie,
-    deleteMovie,
-    watchMovie,
-    unwatchMovie,
-    setMovieCollection,
-    addCollection,
-    showToast,
+    data, editMovie, deleteMovie, startWatchingMovie, cancelWatchingMovie,
+    watchMovie, unwatchMovie, setMovieCollection, addCollection, showToast,
   } = useApp();
 
   const [showAdd, setShowAdd] = useState(false);
@@ -63,7 +35,6 @@ export default function MoviesPage() {
   const [detailMovieId, setDetailMovieId] = useState<string | null>(null);
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
 
-  // Hızlı Koleksiyon Atama State'leri
   const [collectionTargetMovie, setCollectionTargetMovie] = useState<Movie | null>(null);
   const [newCollectionName, setNewCollectionName] = useState('');
   const [addMoviesToCollectionId, setAddMoviesToCollectionId] = useState<string | null>(null);
@@ -73,7 +44,6 @@ export default function MoviesPage() {
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('added');
   const [search, setSearch] = useState('');
-
   const [isSyncing, setIsSyncing] = useState(false);
 
   const detailMovie = useMemo(
@@ -84,16 +54,7 @@ export default function MoviesPage() {
   const handleSyncTMDB = async () => {
     setIsSyncing(true);
     const moviesToSync = data.movies.filter(
-      (m) =>
-        !m.tmdbId ||
-        !m.posterUrl ||
-        !m.keywords ||
-        m.keywords.length === 0 ||
-        !m.directors ||
-        m.directors.length === 0 ||
-        !m.cast ||
-        m.cast.length === 0 ||
-        !m.imdbId
+      (m) => !m.tmdbId || !m.posterUrl || !m.keywords || m.keywords.length === 0 || !m.directors || m.directors.length === 0 || !m.cast || m.cast.length === 0 || !m.imdbId
     );
     let syncedCount = 0;
 
@@ -103,32 +64,16 @@ export default function MoviesPage() {
         if (results.length > 0) {
           const match = results.find((r) => r.year === movie.year) || results[0];
           const newGenres = Array.from(new Set([...movie.genres, ...match.genres]));
-
           editMovie(
-            movie.id,
-            movie.title,
-            match.year || movie.year,
-            newGenres,
-            match.runtime || movie.runtime,
-            match.posterUrl || movie.posterUrl,
-            match.overview || movie.overview,
-            match.id,
-            true,
-            movie.customUrl,
-            match.imdbId || movie.imdbId,
-            match.watchProviders && match.watchProviders.length > 0
-              ? match.watchProviders
-              : movie.watchProviders,
+            movie.id, movie.title, match.year || movie.year, newGenres, match.runtime || movie.runtime,
+            match.posterUrl || movie.posterUrl, match.overview || movie.overview, match.id, true,
+            movie.customUrl, match.imdbId || movie.imdbId,
+            match.watchProviders && match.watchProviders.length > 0 ? match.watchProviders : movie.watchProviders,
             {
-              directors:
-                match.directors && match.directors.length > 0
-                  ? match.directors
-                  : movie.directors,
+              directors: match.directors && match.directors.length > 0 ? match.directors : movie.directors,
               cast: match.cast && match.cast.length > 0 ? match.cast : movie.cast,
-              studios:
-                match.studios && match.studios.length > 0 ? match.studios : movie.studios,
-              keywords:
-                match.keywords && match.keywords.length > 0 ? match.keywords : movie.keywords,
+              studios: match.studios && match.studios.length > 0 ? match.studios : movie.studios,
+              keywords: match.keywords && match.keywords.length > 0 ? match.keywords : movie.keywords,
               originalLanguage: match.originalLanguage || movie.originalLanguage,
             }
           );
@@ -141,11 +86,8 @@ export default function MoviesPage() {
     }
 
     setIsSyncing(false);
-    if (syncedCount > 0) {
-      showToast(`${syncedCount} filme Sinema Kartı, DNA ve izleme bilgileri eklendi!`, 'success');
-    } else {
-      showToast('Kütüphanenin tüm film künyeleri güncel.', 'info');
-    }
+    if (syncedCount > 0) showToast(`${syncedCount} filme Sinema Kartı, DNA ve izleme bilgileri eklendi!`, 'success');
+    else showToast('Kütüphanenin tüm film künyeleri güncel.', 'info');
   };
 
   const allGenres = useMemo(() => {
@@ -157,26 +99,17 @@ export default function MoviesPage() {
   const eligibleMovies = useMemo(() => {
     const unwatched = data.movies.filter((m) => !m.watched);
     const standalone = unwatched.filter((m) => !m.collectionId);
-
     const collectionGroups = new Map<string, Movie[]>();
-    unwatched
-      .filter((m) => m.collectionId)
-      .forEach((m) => {
-        const arr = collectionGroups.get(m.collectionId!) || [];
-        arr.push(m);
-        collectionGroups.set(m.collectionId!, arr);
-      });
-
+    unwatched.filter((m) => m.collectionId).forEach((m) => {
+      const arr = collectionGroups.get(m.collectionId!) || [];
+      arr.push(m);
+      collectionGroups.set(m.collectionId!, arr);
+    });
     const sequentialCollectionMovies: Movie[] = [];
     collectionGroups.forEach((movies) => {
-      const sorted = [...movies].sort((a, b) => {
-        const yearA = parseInt(a.year || '9999', 10);
-        const yearB = parseInt(b.year || '9999', 10);
-        return yearA - yearB;
-      });
+      const sorted = [...movies].sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10));
       if (sorted.length > 0) sequentialCollectionMovies.push(sorted[0]);
     });
-
     return [...standalone, ...sequentialCollectionMovies];
   }, [data.movies]);
 
@@ -190,33 +123,18 @@ export default function MoviesPage() {
   };
 
   const clearGenres = () => setSelectedGenres(new Set());
-
-  const searchMatches = (m: Movie) => {
-    if (!search.trim()) return true;
-    const q = search.toLocaleLowerCase('tr-TR');
-    return m.title.toLocaleLowerCase('tr-TR').includes(q);
-  };
+  const searchMatches = (m: Movie) => !search.trim() || m.title.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR'));
 
   const sortMovies = (movies: Movie[]): Movie[] => {
     let filtered = movies;
-
-    if (watchedFilter !== null) {
-      filtered = filtered.filter((m) => m.watched === watchedFilter);
-    }
-
-    if (selectedGenres.size > 0) {
-      filtered = filtered.filter((m) =>
-        Array.from(selectedGenres).every((g) => m.genres.includes(g))
-      );
-    }
-
+    if (watchedFilter !== null) filtered = filtered.filter((m) => m.watched === watchedFilter);
+    if (selectedGenres.size > 0) filtered = filtered.filter((m) => Array.from(selectedGenres).every((g) => m.genres.includes(g)));
     filtered = filtered.filter(searchMatches);
 
     return [...filtered].sort((a, b) => {
       if (sortMode === 'az') return a.title.localeCompare(b.title, 'tr');
       if (sortMode === 'year') return (a.year || '9999').localeCompare(b.year || '9999');
-      if (sortMode === 'added')
-        return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
+      if (sortMode === 'added') return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
       const ra = a.watched ? (a.rating ?? -1) : -1;
       const rb = b.watched ? (b.rating ?? -1) : -1;
       return rb - ra;
@@ -225,7 +143,6 @@ export default function MoviesPage() {
 
   const standaloneMovies = data.movies.filter((m) => !m.collectionId);
   const collectionMovies = data.movies.filter((m) => m.collectionId);
-
   const collectionMap = new Map<string, Movie[]>();
   collectionMovies.forEach((m) => {
     const arr = collectionMap.get(m.collectionId!) || [];
@@ -258,10 +175,7 @@ export default function MoviesPage() {
     if (!collectionTargetMovie || !newCollectionName.trim()) return;
     const newId = addCollection(newCollectionName.trim());
     setMovieCollection(collectionTargetMovie.id, newId);
-    showToast(
-      `"${collectionTargetMovie.title}" ➔ ${newCollectionName.trim()} koleksiyonuna eklendi`,
-      'success'
-    );
+    showToast(`"${collectionTargetMovie.title}" ➔ ${newCollectionName.trim()} koleksiyonuna eklendi`, 'success');
     setNewCollectionName('');
     setCollectionTargetMovie(null);
   };
@@ -280,81 +194,39 @@ export default function MoviesPage() {
           Filmler
         </h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowDna(true)}
-            className="flex items-center gap-2 bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-400 border border-emerald-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm"
-          >
+          <button onClick={() => setShowDna(true)} className="flex items-center gap-2 bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-400 border border-emerald-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm">
             <Dna size={18} />
             <span className="hidden sm:inline">DNA Sentezle</span>
           </button>
-
-          <button
-            onClick={handleSyncTMDB}
-            disabled={isSyncing}
-            className="flex items-center gap-2 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm disabled:opacity-50"
-          >
+          <button onClick={handleSyncTMDB} disabled={isSyncing} className="flex items-center gap-2 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm disabled:opacity-50">
             <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">
-              {isSyncing ? 'Taranıyor...' : 'Eksikleri Bul'}
-            </span>
+            <span className="hidden sm:inline">{isSyncing ? 'Taranıyor...' : 'Eksikleri Bul'}</span>
           </button>
-
-          <button
-            onClick={() => setShowPick(true)}
-            className="flex items-center gap-2 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm"
-          >
+          <button onClick={() => setShowPick(true)} className="flex items-center gap-2 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm">
             <Shuffle size={18} />
             <span className="hidden sm:inline">Bugün Ne İzlesem</span>
           </button>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-2.5 rounded-lg font-semibold hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg shadow-gold-500/20"
-          >
-            <Plus size={20} />
-            Film Ekle
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-2.5 rounded-lg font-semibold hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg shadow-gold-500/20">
+            <Plus size={20} /> Film Ekle
           </button>
         </div>
       </div>
 
       <div className="space-y-3">
         <div className="flex bg-ink-800/50 rounded-lg p-1 border border-ink-700/50 w-fit">
-          <button
-            onClick={() => setWatchedFilter(null)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-              watchedFilter === null
-                ? 'bg-ink-700 text-ink-100'
-                : 'text-ink-400 hover:text-ink-300'
-            }`}
-          >
+          <button onClick={() => setWatchedFilter(null)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${watchedFilter === null ? 'bg-ink-700 text-ink-100' : 'text-ink-400 hover:text-ink-300'}`}>
             Tümü ({data.movies.length})
           </button>
-          <button
-            onClick={() => setWatchedFilter(false)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-              watchedFilter === false
-                ? 'bg-gold-500/20 text-gold-400'
-                : 'text-ink-400 hover:text-ink-300'
-            }`}
-          >
+          <button onClick={() => setWatchedFilter(false)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${watchedFilter === false ? 'bg-gold-500/20 text-gold-400' : 'text-ink-400 hover:text-ink-300'}`}>
             İzlenecekler ({totalUnwatched})
           </button>
-          <button
-            onClick={() => setWatchedFilter(true)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-              watchedFilter === true
-                ? 'bg-green-500/20 text-green-400'
-                : 'text-ink-400 hover:text-ink-300'
-            }`}
-          >
+          <button onClick={() => setWatchedFilter(true)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${watchedFilter === true ? 'bg-green-500/20 text-green-400' : 'text-ink-400 hover:text-ink-300'}`}>
             İzlenenler ({totalWatched})
           </button>
         </div>
 
         <div className="relative">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500"
-          />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
           <input
             type="text"
             value={search}
@@ -365,79 +237,30 @@ export default function MoviesPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 text-xs text-ink-500">
-            <Filter size={14} />
-          </div>
-          <button
-            onClick={() => setSortMode('added')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              sortMode === 'added'
-                ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300'
-                : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'
-            }`}
-          >
-            <CalendarPlus size={14} />
-            Eklenme
+          <div className="flex items-center gap-1 text-xs text-ink-500"><Filter size={14} /></div>
+          <button onClick={() => setSortMode('added')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sortMode === 'added' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'}`}>
+            <CalendarPlus size={14} /> Eklenme
           </button>
-          <button
-            onClick={() => setSortMode('az')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              sortMode === 'az'
-                ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300'
-                : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'
-            }`}
-          >
-            <ArrowDownAZ size={14} />
-            A-Z
+          <button onClick={() => setSortMode('az')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sortMode === 'az' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'}`}>
+            <ArrowDownAZ size={14} /> A-Z
           </button>
-          <button
-            onClick={() => setSortMode('year')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              sortMode === 'year'
-                ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300'
-                : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'
-            }`}
-          >
-            <CalendarDays size={14} />
-            Yıl
+          <button onClick={() => setSortMode('year')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sortMode === 'year' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'}`}>
+            <CalendarDays size={14} /> Yıl
           </button>
-          <button
-            onClick={() => setSortMode('rating')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              sortMode === 'rating'
-                ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300'
-                : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'
-            }`}
-          >
-            <StarIcon size={14} />
-            Puan
+          <button onClick={() => setSortMode('rating')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sortMode === 'rating' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'}`}>
+            <StarIcon size={14} /> Puan
           </button>
         </div>
 
         {allGenres.length > 0 && (
           <div className="flex flex-wrap gap-1.5 items-center">
-            <button
-              onClick={clearGenres}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                selectedGenres.size === 0
-                  ? 'bg-gold-500 text-ink-950'
-                  : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
-              }`}
-            >
+            <button onClick={clearGenres} className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedGenres.size === 0 ? 'bg-gold-500 text-ink-950' : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'}`}>
               Tümü
             </button>
             {allGenres.map((g) => {
               const active = selectedGenres.has(g);
               return (
-                <button
-                  key={g}
-                  onClick={() => toggleGenre(g)}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                    active
-                      ? 'bg-gold-500 text-ink-950'
-                      : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
-                  }`}
-                >
+                <button key={g} onClick={() => toggleGenre(g)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${active ? 'bg-gold-500 text-ink-950' : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'}`}>
                   {active && <Check size={11} />}
                   {g}
                 </button>
@@ -455,40 +278,17 @@ export default function MoviesPage() {
           </h2>
           {data.collections.map((coll) => {
             const movies = collectionMap.get(coll.id) || [];
-
-            const matchesSearch =
-              search.trim() === '' ||
-              coll.name.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR')) ||
-              movies.some((m) =>
-                m.title.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR'))
-              );
-
+            const matchesSearch = search.trim() === '' || coll.name.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR')) || movies.some((m) => m.title.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR')));
             if (!matchesSearch) return null;
 
-            const visibleMovies = [...movies].sort((a, b) => {
-              const yearA = parseInt(a.year || '9999', 10);
-              const yearB = parseInt(b.year || '9999', 10);
-              return yearA - yearB;
-            });
-
+            const visibleMovies = [...movies].sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10));
             const isExpanded = expandedCollections.has(coll.id);
 
             return (
-              <div
-                key={coll.id}
-                className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50"
-              >
+              <div key={coll.id} className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50">
                 <div className="w-full flex items-center justify-between p-4 hover:bg-ink-800/40 transition-colors">
-                  <button
-                    type="button"
-                    onClick={() => toggleCollection(coll.id)}
-                    className="flex items-center gap-2.5 flex-1 text-left"
-                  >
-                    {isExpanded ? (
-                      <ChevronDown size={18} className="text-ink-500" />
-                    ) : (
-                      <ChevronRight size={18} className="text-ink-500" />
-                    )}
+                  <button type="button" onClick={() => toggleCollection(coll.id)} className="flex items-center gap-2.5 flex-1 text-left">
+                    {isExpanded ? <ChevronDown size={18} className="text-ink-500" /> : <ChevronRight size={18} className="text-ink-500" />}
                     <Boxes size={18} className="text-gold-400" />
                     <span className="font-semibold text-ink-100">{coll.name}</span>
                   </button>
@@ -496,27 +296,20 @@ export default function MoviesPage() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setAddMoviesToCollectionId(coll.id);
-                        setCollectionSearch('');
-                      }}
+                      onClick={() => { setAddMoviesToCollectionId(coll.id); setCollectionSearch(''); }}
                       className="flex items-center gap-1 text-[11px] font-bold text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 px-2.5 py-1 rounded-lg transition-colors"
                       title="Listeden bu koleksiyona film ekle"
                     >
                       <Plus size={12} /> Film Ekle
                     </button>
-                    <span className="text-xs text-ink-500 bg-ink-800/60 px-2.5 py-1 rounded-full">
-                      {visibleMovies.length} film
-                    </span>
+                    <span className="text-xs text-ink-500 bg-ink-800/60 px-2.5 py-1 rounded-full">{visibleMovies.length} film</span>
                   </div>
                 </div>
 
                 {isExpanded && (
                   <div className="border-t border-ink-700/40">
                     {visibleMovies.length === 0 ? (
-                      <div className="p-4 text-xs text-ink-500 text-center">
-                        Bu koleksiyonda henüz film yok. Sağ üstteki "+ Film Ekle" butonundan ekleyebilirsin.
-                      </div>
+                      <div className="p-4 text-xs text-ink-500 text-center">Bu koleksiyonda henüz film yok. Sağ üstteki "+ Film Ekle" butonundan ekleyebilirsin.</div>
                     ) : (
                       visibleMovies.map((m) => (
                         <MovieRow
@@ -525,6 +318,8 @@ export default function MoviesPage() {
                           collectionName={coll.name}
                           onDelete={(movie) => setDeleteTarget(movie)}
                           onRate={(movie) => setRatingTarget(movie)}
+                          onStartWatch={startWatchingMovie}
+                          onCancelWatch={cancelWatchingMovie}
                           onUnwatch={unwatchMovie}
                           onEdit={(movie) => setEditTarget(movie)}
                           onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
@@ -547,15 +342,9 @@ export default function MoviesPage() {
                         className="w-10 sm:w-12 aspect-[2/3] flex-shrink-0 rounded-md overflow-hidden border border-ink-700/50 shadow-sm relative group cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500"
                       >
                         {m.posterUrl ? (
-                          <img
-                            src={m.posterUrl}
-                            alt={m.title}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                          />
+                          <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                         ) : (
-                          <div className="w-full h-full bg-ink-800 flex items-center justify-center">
-                            <ImageIcon size={14} className="text-ink-600" />
-                          </div>
+                          <div className="w-full h-full bg-ink-800 flex items-center justify-center"><ImageIcon size={14} className="text-ink-600" /></div>
                         )}
                         {m.watched && (
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px] group-hover:opacity-0 transition-opacity">
@@ -577,19 +366,11 @@ export default function MoviesPage() {
 
       {/* BAĞIMSIZ FİLMLER LİSTESİ */}
       <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-ink-400 uppercase tracking-wide">
-          Bağımsız Filmler
-        </h2>
+        <h2 className="text-sm font-semibold text-ink-400 uppercase tracking-wide">Bağımsız Filmler</h2>
         {sortedStandalone.length === 0 ? (
           <div className="text-center py-12 text-ink-500">
             <Projector size={40} className="mx-auto mb-3 opacity-40" />
-            <p>
-              {watchedFilter === true
-                ? 'İzlenen film yok.'
-                : watchedFilter === false
-                ? 'İzlenecek film kalmadı.'
-                : 'Aramaya uygun film bulunamadı.'}
-            </p>
+            <p>{watchedFilter === true ? 'İzlenen film yok.' : watchedFilter === false ? 'İzlenecek film kalmadı.' : 'Aramaya uygun film bulunamadı.'}</p>
           </div>
         ) : (
           sortedStandalone.map((m) => (
@@ -598,6 +379,8 @@ export default function MoviesPage() {
               movie={m}
               onDelete={(movie) => setDeleteTarget(movie)}
               onRate={(movie) => setRatingTarget(movie)}
+              onStartWatch={startWatchingMovie}
+              onCancelWatch={cancelWatchingMovie}
               onUnwatch={unwatchMovie}
               onEdit={(movie) => setEditTarget(movie)}
               onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
@@ -608,42 +391,24 @@ export default function MoviesPage() {
         )}
       </div>
 
-      {/* =========================================================
-          TEK TIKLA FİLMİ KOLEKSİYONA EKLEME / TAŞIMA MODALI
-          ========================================================= */}
+      {/* KOLEKSİYONA EKLEME MODALI */}
       {collectionTargetMovie && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in"
-          onClick={() => setCollectionTargetMovie(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in-up"
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCollectionTargetMovie(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in-up">
             <div className="flex items-center justify-between p-4 border-b border-ink-800">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center flex-shrink-0">
                   <Boxes size={18} className="text-gold-400" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm font-black text-white truncate">
-                    Koleksiyona Ekle / Değiştir
-                  </h3>
-                  <p className="text-xs text-gold-400 truncate font-medium">
-                    {collectionTargetMovie.title}
-                  </p>
+                  <h3 className="text-sm font-black text-white truncate">Koleksiyona Ekle / Değiştir</h3>
+                  <p className="text-xs text-gold-400 truncate font-medium">{collectionTargetMovie.title}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setCollectionTargetMovie(null)}
-                className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800"
-              >
-                <X size={18} />
-              </button>
+              <button onClick={() => setCollectionTargetMovie(null)} className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800"><X size={18} /></button>
             </div>
 
             <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              {/* Yeni Koleksiyon Oluşturup Direkt Atama */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black uppercase tracking-wider text-ink-400 flex items-center gap-1.5">
                   <FolderPlus size={13} className="text-gold-400" /> Yeni Koleksiyon Oluştur ve Ata
@@ -655,31 +420,18 @@ export default function MoviesPage() {
                     onChange={(e) => setNewCollectionName(e.target.value)}
                     placeholder="Yeni koleksiyon adı yaz..."
                     className="flex-1 bg-ink-950 border border-ink-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-ink-500 focus:outline-none focus:border-gold-500"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleCreateAndAssignCollection();
-                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCreateAndAssignCollection(); }}
                   />
-                  <button
-                    type="button"
-                    disabled={!newCollectionName.trim()}
-                    onClick={handleCreateAndAssignCollection}
-                    className="bg-gold-500 hover:bg-gold-400 text-ink-950 font-black px-4 py-2 rounded-xl text-xs transition-all disabled:opacity-40"
-                  >
+                  <button type="button" disabled={!newCollectionName.trim()} onClick={handleCreateAndAssignCollection} className="bg-gold-500 hover:bg-gold-400 text-ink-950 font-black px-4 py-2 rounded-xl text-xs transition-all disabled:opacity-40">
                     Oluştur
                   </button>
                 </div>
               </div>
 
-              {/* Mevcut Koleksiyonlardan Seç */}
               <div className="space-y-2">
-                <div className="text-[11px] font-black uppercase tracking-wider text-ink-400">
-                  Mevcut Koleksiyonlar ({data.collections.length})
-                </div>
-
+                <div className="text-[11px] font-black uppercase tracking-wider text-ink-400">Mevcut Koleksiyonlar ({data.collections.length})</div>
                 {data.collections.length === 0 ? (
-                  <p className="text-xs text-ink-500 py-3 text-center bg-ink-950/50 rounded-xl border border-ink-800">
-                    Henüz hiç koleksiyon yok. Yukarıdan yeni bir koleksiyon oluşturabilirsin.
-                  </p>
+                  <p className="text-xs text-ink-500 py-3 text-center bg-ink-950/50 rounded-xl border border-ink-800">Henüz hiç koleksiyon yok.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {data.collections.map((col) => {
@@ -691,17 +443,11 @@ export default function MoviesPage() {
                           type="button"
                           onClick={() => handleAssignCollection(collectionTargetMovie, col.id)}
                           className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                            isCurrent
-                              ? 'bg-gold-500/20 border-gold-500 text-gold-300 font-black'
-                              : 'bg-ink-950/60 hover:bg-ink-800 border-ink-800 text-ink-200 font-semibold'
+                            isCurrent ? 'bg-gold-500/20 border-gold-500 text-gold-300 font-black' : 'bg-ink-950/60 hover:bg-ink-800 border-ink-800 text-ink-200 font-semibold'
                           }`}
                         >
                           <span className="flex items-center gap-2 text-xs truncate">
-                            <Boxes
-                              size={15}
-                              className={isCurrent ? 'text-gold-400' : 'text-ink-400'}
-                            />
-                            {col.name}
+                            <Boxes size={15} className={isCurrent ? 'text-gold-400' : 'text-ink-400'} /> {col.name}
                           </span>
                           <span className="flex items-center gap-2 text-[11px] text-ink-400 flex-shrink-0">
                             <span>{count} film</span>
@@ -714,13 +460,8 @@ export default function MoviesPage() {
                 )}
               </div>
 
-              {/* Koleksiyondan Çıkar */}
               {collectionTargetMovie.collectionId && (
-                <button
-                  type="button"
-                  onClick={() => handleAssignCollection(collectionTargetMovie, null)}
-                  className="w-full py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-bold transition-colors"
-                >
+                <button type="button" onClick={() => handleAssignCollection(collectionTargetMovie, null)} className="w-full py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-bold transition-colors">
                   Koleksiyondan Çıkar (Bağımsız Film Yap)
                 </button>
               )}
@@ -729,43 +470,24 @@ export default function MoviesPage() {
         </div>
       )}
 
-      {/* =========================================================
-          KOLEKSİYON İÇİNE LİSTEDEN ÇOKLU FİLM SEÇME MODALI
-          ========================================================= */}
+      {/* KOLEKSİYON İÇİNE ÇOKLU FİLM SEÇME MODALI */}
       {addMoviesToCollectionId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in"
-          onClick={() => setAddMoviesToCollectionId(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[82vh] animate-fade-in-up"
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setAddMoviesToCollectionId(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[82vh] animate-fade-in-up">
             <div className="flex items-center justify-between p-4 border-b border-ink-800">
               <div>
                 <h3 className="text-sm font-black text-white flex items-center gap-2">
                   <Boxes size={17} className="text-gold-400" />
-                  {data.collections.find((c) => c.id === addMoviesToCollectionId)?.name}{' '}
-                  Koleksiyonuna Film Ekle
+                  {data.collections.find((c) => c.id === addMoviesToCollectionId)?.name} Koleksiyonuna Film Ekle
                 </h3>
-                <p className="text-xs text-ink-400 mt-0.5">
-                  Listendeki filmlere tıklayarak bu koleksiyona dahil edebilir veya çıkarabilirsin
-                </p>
+                <p className="text-xs text-ink-400 mt-0.5">Listendeki filmlere tıklayarak bu koleksiyona dahil edebilir veya çıkarabilirsin</p>
               </div>
-              <button
-                onClick={() => setAddMoviesToCollectionId(null)}
-                className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800"
-              >
-                <X size={18} />
-              </button>
+              <button onClick={() => setAddMoviesToCollectionId(null)} className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800"><X size={18} /></button>
             </div>
 
             <div className="p-3 border-b border-ink-800 bg-ink-950/40">
               <div className="relative">
-                <Search
-                  size={15}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500"
-                />
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
                 <input
                   type="text"
                   value={collectionSearch}
@@ -778,75 +500,30 @@ export default function MoviesPage() {
 
             <div className="flex-1 overflow-y-auto p-3 space-y-1.5 custom-scrollbar">
               {data.movies
-                .filter(
-                  (m) =>
-                    !collectionSearch.trim() ||
-                    m.title
-                      .toLocaleLowerCase('tr-TR')
-                      .includes(collectionSearch.toLocaleLowerCase('tr-TR'))
-                )
+                .filter((m) => !collectionSearch.trim() || m.title.toLocaleLowerCase('tr-TR').includes(collectionSearch.toLocaleLowerCase('tr-TR')))
                 .map((m) => {
                   const isInThisCollection = m.collectionId === addMoviesToCollectionId;
-                  const otherColName =
-                    m.collectionId && !isInThisCollection
-                      ? data.collections.find((c) => c.id === m.collectionId)?.name
-                      : null;
-
+                  const otherColName = m.collectionId && !isInThisCollection ? data.collections.find((c) => c.id === m.collectionId)?.name : null;
                   return (
                     <button
                       key={m.id}
                       type="button"
-                      onClick={() =>
-                        setMovieCollection(
-                          m.id,
-                          isInThisCollection ? null : addMoviesToCollectionId
-                        )
-                      }
+                      onClick={() => setMovieCollection(m.id, isInThisCollection ? null : addMoviesToCollectionId)}
                       className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
-                        isInThisCollection
-                          ? 'bg-gold-500/20 border-gold-500/50 text-white'
-                          : 'bg-ink-950/50 hover:bg-ink-800/70 border-ink-800/80 text-ink-200'
+                        isInThisCollection ? 'bg-gold-500/20 border-gold-500/50 text-white' : 'bg-ink-950/50 hover:bg-ink-800/70 border-ink-800/80 text-ink-200'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-8 h-11 rounded bg-ink-900 overflow-hidden flex-shrink-0 border border-ink-700">
-                          {m.posterUrl ? (
-                            <img
-                              src={m.posterUrl}
-                              alt={m.title}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <ImageIcon size={12} className="text-ink-600" />
-                            </div>
-                          )}
+                          {m.posterUrl ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
                         </div>
                         <div className="min-w-0">
                           <div className="text-xs font-bold truncate">{m.title}</div>
-                          <div className="text-[10px] text-ink-400">
-                            {m.year || 'Yıl yok'}
-                            {otherColName ? ` · Mevcut: ${otherColName}` : ''}
-                          </div>
+                          <div className="text-[10px] text-ink-400">{m.year || 'Yıl yok'}{otherColName ? ` · Mevcut: ${otherColName}` : ''}</div>
                         </div>
                       </div>
-
-                      <div
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 flex-shrink-0 ${
-                          isInThisCollection
-                            ? 'bg-gold-500 text-ink-950'
-                            : 'bg-ink-800 text-ink-300'
-                        }`}
-                      >
-                        {isInThisCollection ? (
-                          <>
-                            <Check size={12} /> Eklendi
-                          </>
-                        ) : (
-                          <>
-                            <Plus size={12} /> Ekle
-                          </>
-                        )}
+                      <div className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 flex-shrink-0 ${isInThisCollection ? 'bg-gold-500 text-ink-950' : 'bg-ink-800 text-ink-300'}`}>
+                        {isInThisCollection ? <><Check size={12} /> Eklendi</> : <><Plus size={12} /> Ekle</>}
                       </div>
                     </button>
                   );
@@ -854,11 +531,7 @@ export default function MoviesPage() {
             </div>
 
             <div className="p-3 border-t border-ink-800 bg-ink-950/60">
-              <button
-                type="button"
-                onClick={() => setAddMoviesToCollectionId(null)}
-                className="w-full py-2.5 rounded-xl bg-gold-500 hover:bg-gold-400 text-ink-950 font-black text-xs transition-colors"
-              >
+              <button type="button" onClick={() => setAddMoviesToCollectionId(null)} className="w-full py-2.5 rounded-xl bg-gold-500 hover:bg-gold-400 text-ink-950 font-black text-xs transition-colors">
                 Tamamla
               </button>
             </div>
@@ -872,9 +545,7 @@ export default function MoviesPage() {
           seriesCount={0}
           unwatchedMovies={eligibleMovies}
           nextEpisodes={[]}
-          onPick={(item) => {
-            if (item.kind === 'movie') setPickedMovie(item.movie);
-          }}
+          onPick={(item) => { if (item.kind === 'movie') setPickedMovie(item.movie); }}
           onClose={() => setShowPick(false)}
         />
       )}
@@ -898,51 +569,33 @@ export default function MoviesPage() {
         <RatingModal
           title={ratingTarget.title}
           subtitle={ratingTarget.year ? `Çıkış Yılı: ${ratingTarget.year}` : 'Film'}
-          onRate={(rating, note, detailedRating, reviewTags) =>
-            watchMovie(ratingTarget.id, rating, note, detailedRating, reviewTags)
-          }
+          onRate={(rating, note, detailedRating, reviewTags) => watchMovie(ratingTarget.id, rating, note, detailedRating, reviewTags)}
           onClose={() => setRatingTarget(null)}
         />
       )}
-      {editTarget && (
-        <EditMovieModal movie={editTarget} onClose={() => setEditTarget(null)} />
-      )}
+      {editTarget && <EditMovieModal movie={editTarget} onClose={() => setEditTarget(null)} />}
       {deleteTarget && (
         <ConfirmDialog
           title="Film Sil"
           message={`"${deleteTarget.title}" silinecek. Emin misin?`}
-          onConfirm={() => {
-            deleteMovie(deleteTarget.id);
-            setDeleteTarget(null);
-          }}
+          onConfirm={() => { deleteMovie(deleteTarget.id); setDeleteTarget(null); }}
           onCancel={() => setDeleteTarget(null)}
         />
       )}
-      {detailMovie && (
-        <MediaDetailModal
-          target={{ type: 'movie', data: detailMovie }}
-          onClose={() => setDetailMovieId(null)}
-        />
-      )}
+      {detailMovie && <MediaDetailModal target={{ type: 'movie', data: detailMovie }} onClose={() => setDetailMovieId(null)} />}
     </div>
   );
 }
 
 function MovieRow({
-  movie,
-  collectionName,
-  onDelete,
-  onRate,
-  onUnwatch,
-  onEdit,
-  onAssignCollection,
-  onSelectDetail,
-  altWatchTemplate,
+  movie, collectionName, onDelete, onRate, onStartWatch, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, altWatchTemplate,
 }: {
   movie: Movie;
   collectionName?: string;
   onDelete: (movie: Movie) => void;
   onRate: (movie: Movie) => void;
+  onStartWatch: (id: string, silent?: boolean) => void;
+  onCancelWatch: (id: string) => void;
   onUnwatch: (id: string) => void;
   onEdit: (movie: Movie) => void;
   onAssignCollection: (movie: Movie) => void;
@@ -951,78 +604,35 @@ function MovieRow({
 }) {
   const watchLinks: { href: string; text: string; logo: string | null; icon: any }[] = [];
 
-  if (movie.customUrl) {
-    watchLinks.push({
-      href: movie.customUrl,
-      text: 'Özel Kaynak',
-      logo: null,
-      icon: ExternalLink,
-    });
-  }
+  if (movie.customUrl) watchLinks.push({ href: movie.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
 
   if (movie.watchProviders && movie.watchProviders.length > 0) {
     movie.watchProviders.slice(0, 2).forEach((provider) => {
       let finalHref = provider.link || '';
       const pName = provider.providerName.toLowerCase();
-
-      if (pName.includes('netflix'))
-        finalHref = `https://www.netflix.com/search?q=${encodeURIComponent(movie.title)}`;
-      else if (pName.includes('amazon') || pName.includes('prime'))
-        finalHref = `https://www.primevideo.com/search/ref=atv_sr_sug_1?phrase=${encodeURIComponent(
-          movie.title
-        )}`;
-      else if (pName.includes('disney'))
-        finalHref = `https://www.disneyplus.com/search?q=${encodeURIComponent(movie.title)}`;
-      else if (pName.includes('blutv'))
-        finalHref = `https://www.blutv.com/arama?q=${encodeURIComponent(movie.title)}`;
-      else if (pName.includes('mubi'))
-        finalHref = `https://mubi.com/tr/search?query=${encodeURIComponent(movie.title)}`;
-      else if (pName.includes('apple'))
-        finalHref = `https://tv.apple.com/tr/search?q=${encodeURIComponent(movie.title)}`;
-
-      watchLinks.push({
-        href: finalHref,
-        text: provider.providerName,
-        logo: provider.logoUrl,
-        icon: PlayCircle,
-      });
+      if (pName.includes('netflix')) finalHref = `https://www.netflix.com/search?q=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('amazon') || pName.includes('prime')) finalHref = `https://www.primevideo.com/search/ref=atv_sr_sug_1?phrase=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('disney')) finalHref = `https://www.disneyplus.com/search?q=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('blutv')) finalHref = `https://www.blutv.com/arama?q=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('mubi')) finalHref = `https://mubi.com/tr/search?query=${encodeURIComponent(movie.title)}`;
+      else if (pName.includes('apple')) finalHref = `https://tv.apple.com/tr/search?q=${encodeURIComponent(movie.title)}`;
+      watchLinks.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle });
     });
   }
 
   const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} izle`);
-  watchLinks.push({
-    href: `https://www.google.com/search?q=${searchQuery}`,
-    text: "Google'da Bul",
-    logo: null,
-    icon: Search,
-  });
+  watchLinks.push({ href: `https://www.google.com/search?q=${searchQuery}`, text: "Google'da Bul", logo: null, icon: Search });
 
-  if (
-    altWatchTemplate &&
-    (movie.imdbId || altWatchTemplate.includes('{slug}') || altWatchTemplate.includes('{title}'))
-  ) {
-    const charMap: Record<string, string> = {
-      ç: 'c',
-      ğ: 'g',
-      ı: 'i',
-      ö: 'o',
-      ş: 's',
-      ü: 'u',
-    };
-    const slug = movie.title
-      .toLocaleLowerCase('tr-TR')
-      .replace(/[çğıöşü]/g, (match) => charMap[match])
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-
-    const finalAltHref = altWatchTemplate
-      .replace('{imdb}', movie.imdbId || '')
-      .replace('{slug}', slug)
-      .replace('{title}', encodeURIComponent(movie.title))
-      .replace('{year}', movie.year || '');
-
+  if (altWatchTemplate && (movie.imdbId || altWatchTemplate.includes('{slug}') || altWatchTemplate.includes('{title}'))) {
+    const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
+    const slug = movie.title.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (match) => charMap[match]).replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const finalAltHref = altWatchTemplate.replace('{imdb}', movie.imdbId || '').replace('{slug}', slug).replace('{title}', encodeURIComponent(movie.title)).replace('{year}', movie.year || '');
     watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
   }
+
+  const startedTimeText = movie.startedAt
+    ? new Date(movie.startedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   return (
     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
@@ -1034,11 +644,7 @@ function MovieRow({
           className="w-16 sm:w-20 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500"
         >
           {movie.posterUrl ? (
-            <img
-              src={movie.posterUrl}
-              alt={movie.title}
-              className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"
-            />
+            <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
           ) : (
             <ImageIcon size={20} className="text-ink-600" />
           )}
@@ -1046,9 +652,7 @@ function MovieRow({
             <div className="w-7 h-7 rounded-full bg-gold-500/90 text-ink-950 flex items-center justify-center shadow-md transform scale-75 group-hover/poster:scale-100 transition-transform">
               <Eye size={15} />
             </div>
-            <span className="text-[9px] font-black text-white uppercase tracking-wider">
-              İncele
-            </span>
+            <span className="text-[9px] font-black text-white uppercase tracking-wider">İncele</span>
           </div>
         </button>
 
@@ -1057,9 +661,7 @@ function MovieRow({
             <button
               type="button"
               onClick={() => onSelectDetail(movie)}
-              className={`font-bold text-sm sm:text-base truncate text-left hover:text-gold-400 transition-colors ${
-                movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'
-              }`}
+              className={`font-bold text-sm sm:text-base truncate text-left hover:text-gold-400 transition-colors ${movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'}`}
               title="Sinema Kartını Gör"
             >
               {movie.title}
@@ -1077,37 +679,22 @@ function MovieRow({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-[10px] sm:text-xs text-ink-400 mb-1">
-            {movie.year && (
-              <span className="flex items-center gap-1">
-                <Calendar size={12} /> {movie.year}
-              </span>
-            )}
-            {movie.runtime && (
-              <span className="flex items-center gap-1">
-                <Clock size={12} /> {movie.runtime} dk
+            {movie.year && <span className="flex items-center gap-1"><Calendar size={12} /> {movie.year}</span>}
+            {movie.runtime && <span className="flex items-center gap-1"><Clock size={12} /> {movie.runtime} dk</span>}
+            {movie.watched && movie.actualRuntime && movie.runtime && movie.actualRuntime < movie.runtime && (
+              <span className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded font-bold text-[10px]" title={`Orijinal süre: ${movie.runtime} dk | Senin bitirme süren: ${movie.actualRuntime} dk`}>
+                <Zap size={10} /> {movie.actualRuntime} dk'da bitti
               </span>
             )}
           </div>
 
-          {movie.genres.length > 0 && (
-            <div className="text-[10px] sm:text-xs text-ink-500 truncate mb-2">
-              {movie.genres.join(' · ')}
-            </div>
-          )}
+          {movie.genres.length > 0 && <div className="text-[10px] sm:text-xs text-ink-500 truncate mb-2">{movie.genres.join(' · ')}</div>}
 
           <div className="flex items-center gap-2 flex-wrap mt-auto">
             {movie.watched && movie.rating !== null && (
               <div className="flex items-center gap-1.5 mr-2">
-                <span
-                  className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold shadow-sm ${ratingBgClass(
-                    movie.rating
-                  )}`}
-                >
-                  {movie.rating}
-                </span>
-                <span className="text-[10px] text-ink-500 hidden sm:inline">
-                  {formatDateShort(movie.watchedAt!)}
-                </span>
+                <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold shadow-sm ${ratingBgClass(movie.rating)}`}>{movie.rating}</span>
+                <span className="text-[10px] text-ink-500 hidden sm:inline">{formatDateShort(movie.watchedAt!)}</span>
               </div>
             )}
 
@@ -1119,18 +706,13 @@ function MovieRow({
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!movie.watched) onStartWatch(movie.id, true);
+                  }}
                   className="inline-flex items-center gap-1.5 bg-ink-800/80 hover:bg-gold-900/30 text-gold-400 border border-gold-500/30 px-2 py-1 sm:py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold transition-all hover:scale-105"
                 >
-                  {link.logo ? (
-                    <img
-                      src={link.logo}
-                      alt="Platform"
-                      className="w-3.5 h-3.5 rounded-sm object-cover"
-                    />
-                  ) : (
-                    <Icon size={12} />
-                  )}
+                  {link.logo ? <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={12} />}
                   {link.text}
                 </a>
               );
@@ -1140,46 +722,60 @@ function MovieRow({
       </div>
 
       <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 sm:gap-1.5 pt-3 sm:pt-0 mt-1 sm:mt-0 border-t border-ink-800/50 sm:border-0 flex-shrink-0">
-        <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+        <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
           {movie.watched ? (
-            <button
-              onClick={() => onUnwatch(movie.id)}
-              className="flex-1 sm:flex-none text-xs text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 rounded-lg transition-colors border border-ink-700/50"
-            >
+            <button onClick={() => onUnwatch(movie.id)} className="flex-1 sm:flex-none text-xs text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 rounded-lg transition-colors border border-ink-700/50">
               Geri Al
             </button>
           ) : (
-            <button
-              onClick={() => onRate(movie)}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-4 py-1.5 rounded-lg transition-all shadow-md shadow-gold-500/10 font-bold"
-            >
-              <Star size={14} /> Puanla
-            </button>
+            <>
+              {startedTimeText ? (
+                <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-2.5 py-1.5 rounded-lg text-[11px] font-bold">
+                  <Timer size={13} className="animate-pulse text-emerald-400" />
+                  <span>{startedTimeText}</span>
+                  <button
+                    type="button"
+                    onClick={() => onCancelWatch(movie.id)}
+                    title="Sayacı İptal Et"
+                    className="ml-1 text-ink-400 hover:text-red-400"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onStartWatch(movie.id, false)}
+                  title="İzleme Süresini Başlat"
+                  className="flex items-center justify-center gap-1 text-xs bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg transition-all font-bold"
+                >
+                  <Play size={12} className="fill-current" /> Başlat
+                </button>
+              )}
+
+              <button
+                onClick={() => onRate(movie)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-3.5 py-1.5 rounded-lg transition-all shadow-md shadow-gold-500/10 font-bold"
+              >
+                <Star size={14} /> Puanla
+              </button>
+            </>
           )}
+
           <div className="flex items-center gap-1 ml-auto sm:ml-0">
             <button
               onClick={() => onAssignCollection(movie)}
               title="Koleksiyona Ekle / Değiştir"
               className={`p-1.5 rounded-lg transition-colors border ${
-                movie.collectionId
-                  ? 'text-gold-400 bg-gold-500/10 border-gold-500/30 hover:bg-gold-500/20'
-                  : 'text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 border-transparent hover:border-ink-700'
+                movie.collectionId ? 'text-gold-400 bg-gold-500/10 border-gold-500/30 hover:bg-gold-500/20' : 'text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 border-transparent hover:border-ink-700'
               }`}
             >
               <Boxes size={15} />
             </button>
-            <button
-              onClick={() => onEdit(movie)}
-              title="Filmi Düzenle"
-              className="text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700"
-            >
+            <button onClick={() => onEdit(movie)} title="Filmi Düzenle" className="text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700">
               <Edit2 size={15} />
             </button>
-            <button
-              onClick={() => onDelete(movie)}
-              title="Filmi Sil"
-              className="text-ink-500 hover:text-red-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700"
-            >
+            <button onClick={() => onDelete(movie)} title="Filmi Sil" className="text-ink-500 hover:text-red-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700">
               <Trash2 size={16} />
             </button>
           </div>
