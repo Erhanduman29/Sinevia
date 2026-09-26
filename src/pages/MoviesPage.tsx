@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter,
   ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock,
   CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye,
-  FolderPlus, X, Play, Timer, Zap,
+  FolderPlus, X, Play, Pause, Timer, Zap, Lock,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import { ratingBgClass, formatDateShort } from '../lib/utils';
 import { searchTMDB } from '../lib/tmdb';
 import AddMovieModal from '../components/AddMovieModal';
@@ -21,8 +21,9 @@ type SortMode = 'az' | 'year' | 'rating' | 'added';
 
 export default function MoviesPage() {
   const {
-    data, editMovie, deleteMovie, startWatchingMovie, cancelWatchingMovie,
-    watchMovie, unwatchMovie, setMovieCollection, addCollection, showToast,
+    data, editMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie,
+    cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie,
+    setMovieCollection, addCollection, showToast,
   } = useApp();
 
   const [showAdd, setShowAdd] = useState(false);
@@ -46,10 +47,25 @@ export default function MoviesPage() {
   const [search, setSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Canlı geri sayım için her saniye güncellenen saat
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const activeTimerMovie = useMemo(() => data.movies.find((m) => !m.watched && m.startedAt) || null, [data.movies]);
+
+  useEffect(() => {
+    if (!activeTimerMovie) return;
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [activeTimerMovie]);
+
   const detailMovie = useMemo(
     () => (detailMovieId ? data.movies.find((m) => m.id === detailMovieId) || null : null),
     [data.movies, detailMovieId]
   );
+
+  const handleRequestRate = (movie: Movie) => {
+    if (!canRateMovieWithTimer(movie.id)) return;
+    setRatingTarget(movie);
+  };
 
   const handleSyncTMDB = async () => {
     setIsSyncing(true);
@@ -212,6 +228,61 @@ export default function MoviesPage() {
         </div>
       </div>
 
+      {/* AKTİF İZLEME SAYACI BANNER'I */}
+      {activeTimerMovie && (() => {
+        const info = getMovieTimerInfo(activeTimerMovie, nowMs);
+        return (
+          <div className="bg-gradient-to-r from-emerald-950/80 via-ink-900 to-ink-950 border border-emerald-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
+                <Timer size={20} className={info.isPaused ? 'text-amber-400' : 'text-emerald-400 animate-pulse'} />
+              </div>
+              <div>
+                <div className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                  <span>{info.isPaused ? '⏸️ Sayaç Duraklatıldı' : '⏳ Canlı Geri Sayım Aktif'}</span>
+                  <span className="text-white">• {activeTimerMovie.title}</span>
+                </div>
+                <div className="text-[11px] text-ink-300 mt-0.5">
+                  Kalan Süre: <strong className="text-emerald-300 font-mono text-xs">{info.formattedRemaining}</strong> • Geçen: <strong>{info.elapsedMins} dk</strong> / {info.maxMins} dk
+                  {!info.canRateWithTimer && (
+                    <span className="text-amber-400 ml-2">(En az {info.minRequiredMins} dk geçmeden puanlanamaz)</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-ink-800 hover:bg-ink-700 text-amber-300 border border-amber-500/30 text-xs font-bold"
+              >
+                {info.isPaused ? <><Play size={13} className="fill-current" /> Devam Et</> : <><Pause size={13} /> Duraklat</>}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRequestRate(activeTimerMovie)}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  info.canRateWithTimer
+                    ? 'bg-gold-500 hover:bg-gold-400 text-ink-950 shadow-md'
+                    : 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
+                }`}
+              >
+                {info.canRateWithTimer ? <><Star size={13} className="fill-current" /> Bitir & Puanla</> : <><Lock size={12} /> Kilitli ({info.minRequiredMins - info.elapsedMins} dk)</>}
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelWatchingMovie(activeTimerMovie.id)}
+                title="Sayacı İptal Et"
+                className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="space-y-3">
         <div className="flex bg-ink-800/50 rounded-lg p-1 border border-ink-700/50 w-fit">
           <button onClick={() => setWatchedFilter(null)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${watchedFilter === null ? 'bg-ink-700 text-ink-100' : 'text-ink-400 hover:text-ink-300'}`}>
@@ -315,10 +386,13 @@ export default function MoviesPage() {
                         <MovieRow
                           key={m.id}
                           movie={m}
+                          nowMs={nowMs}
+                          anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
                           collectionName={coll.name}
                           onDelete={(movie) => setDeleteTarget(movie)}
-                          onRate={(movie) => setRatingTarget(movie)}
+                          onRate={handleRequestRate}
                           onStartWatch={startWatchingMovie}
+                          onTogglePause={togglePauseWatchingMovie}
                           onCancelWatch={cancelWatchingMovie}
                           onUnwatch={unwatchMovie}
                           onEdit={(movie) => setEditTarget(movie)}
@@ -377,9 +451,12 @@ export default function MoviesPage() {
             <MovieRow
               key={m.id}
               movie={m}
+              nowMs={nowMs}
+              anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
               onDelete={(movie) => setDeleteTarget(movie)}
-              onRate={(movie) => setRatingTarget(movie)}
+              onRate={handleRequestRate}
               onStartWatch={startWatchingMovie}
+              onTogglePause={togglePauseWatchingMovie}
               onCancelWatch={cancelWatchingMovie}
               onUnwatch={unwatchMovie}
               onEdit={(movie) => setEditTarget(movie)}
@@ -588,13 +665,16 @@ export default function MoviesPage() {
 }
 
 function MovieRow({
-  movie, collectionName, onDelete, onRate, onStartWatch, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, altWatchTemplate,
+  movie, nowMs, anotherTimerActive, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, altWatchTemplate,
 }: {
   movie: Movie;
+  nowMs: number;
+  anotherTimerActive: boolean;
   collectionName?: string;
   onDelete: (movie: Movie) => void;
   onRate: (movie: Movie) => void;
   onStartWatch: (id: string, silent?: boolean) => void;
+  onTogglePause: (id: string) => void;
   onCancelWatch: (id: string) => void;
   onUnwatch: (id: string) => void;
   onEdit: (movie: Movie) => void;
@@ -630,9 +710,7 @@ function MovieRow({
     watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
   }
 
-  const startedTimeText = movie.startedAt
-    ? new Date(movie.startedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
-    : null;
+  const timerInfo = !movie.watched && movie.startedAt ? getMovieTimerInfo(movie, nowMs) : null;
 
   return (
     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
@@ -706,10 +784,7 @@ function MovieRow({
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!movie.watched) onStartWatch(movie.id, true);
-                  }}
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex items-center gap-1.5 bg-ink-800/80 hover:bg-gold-900/30 text-gold-400 border border-gold-500/30 px-2 py-1 sm:py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold transition-all hover:scale-105"
                 >
                   {link.logo ? <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={12} />}
@@ -729,15 +804,25 @@ function MovieRow({
             </button>
           ) : (
             <>
-              {startedTimeText ? (
+              {timerInfo ? (
                 <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-2.5 py-1.5 rounded-lg text-[11px] font-bold">
-                  <Timer size={13} className="animate-pulse text-emerald-400" />
-                  <span>{startedTimeText}</span>
+                  <Timer size={13} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
+                  <span className="font-mono" title={`Geçen: ${timerInfo.elapsedMins} dk | Kalan: ${timerInfo.formattedRemaining}`}>
+                    {timerInfo.formattedRemaining}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onTogglePause(movie.id)}
+                    title={timerInfo.isPaused ? 'Devam Et' : 'Duraklat'}
+                    className="ml-1 text-amber-300 hover:text-white"
+                  >
+                    {timerInfo.isPaused ? <Play size={12} className="fill-current" /> : <Pause size={12} />}
+                  </button>
                   <button
                     type="button"
                     onClick={() => onCancelWatch(movie.id)}
                     title="Sayacı İptal Et"
-                    className="ml-1 text-ink-400 hover:text-red-400"
+                    className="ml-0.5 text-ink-400 hover:text-red-400"
                   >
                     <X size={12} />
                   </button>
@@ -746,18 +831,27 @@ function MovieRow({
                 <button
                   type="button"
                   onClick={() => onStartWatch(movie.id, false)}
-                  title="İzleme Süresini Başlat"
-                  className="flex items-center justify-center gap-1 text-xs bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg transition-all font-bold"
+                  title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'Geri Sayımı Başlat'}
+                  className={`flex items-center justify-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-all font-bold border ${
+                    anotherTimerActive
+                      ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed'
+                      : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
+                  }`}
                 >
-                  <Play size={12} className="fill-current" /> Başlat
+                  {anotherTimerActive ? <Lock size={11} /> : <Play size={12} className="fill-current" />} Başlat
                 </button>
               )}
 
               <button
                 onClick={() => onRate(movie)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 px-3.5 py-1.5 rounded-lg transition-all shadow-md shadow-gold-500/10 font-bold"
+                title={timerInfo && !timerInfo.canRateWithTimer ? `En az ${timerInfo.minRequiredMins} dk geçmeden puanlanamaz!` : 'Filmi Puanla'}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs px-3.5 py-1.5 rounded-lg transition-all font-bold ${
+                  timerInfo && !timerInfo.canRateWithTimer
+                    ? 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 shadow-md shadow-gold-500/10'
+                }`}
               >
-                <Star size={14} /> Puanla
+                {timerInfo && !timerInfo.canRateWithTimer ? <><Lock size={12} /> Puanla</> : <><Star size={14} /> Puanla</>}
               </button>
             </>
           )}

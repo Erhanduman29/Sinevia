@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search, User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers, Building2, Tag, Edit2, CheckCircle2, Play, Timer, Zap } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useState, useEffect } from 'react';
+import { X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search, User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers, Building2, Tag, Edit2, CheckCircle2, Play, Pause, Timer, Zap, Lock } from 'lucide-react';
+import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
 import RatingModal from './RatingModal';
 import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
@@ -15,9 +15,14 @@ interface MediaDetailModalProps {
 }
 
 export default function MediaDetailModal({ target, onClose }: MediaDetailModalProps) {
-  const { data: appData, startWatchingMovie, cancelWatchingMovie, watchMovie, watchEpisode, updateHistoryRating } = useApp();
+  const {
+    data: appData, startWatchingMovie, togglePauseWatchingMovie,
+    cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, updateHistoryRating
+  } = useApp();
+
   const [isMainNoteExpanded, setIsMainNoteExpanded] = useState(false);
   const [expandedEpNotes, setExpandedEpNotes] = useState<Set<string>>(new Set());
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [ratingModalConfig, setRatingModalConfig] = useState<{
     title: string;
@@ -33,6 +38,12 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
   const liveMovie = isMovie ? (appData.movies.find((m) => m.id === target.data.id) || (target.data as Movie)) : null;
   const liveSeries = !isMovie ? (appData.series.find((s) => s.id === target.data.id) || (target.data as Series)) : null;
   const liveHistoryItem = target.historyItem ? (appData.history.find((h) => h.id === target.historyItem!.id) || target.historyItem) : undefined;
+
+  useEffect(() => {
+    if (!isMovie || !liveMovie?.startedAt || liveMovie.watched) return;
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isMovie, liveMovie?.startedAt, liveMovie?.watched]);
 
   const title = isMovie ? liveMovie!.title : liveSeries!.title;
   const year = isMovie ? liveMovie!.year : liveSeries!.year;
@@ -65,9 +76,8 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
   const watchedAt = liveHistoryItem ? liveHistoryItem.watchedAt : isMovie ? liveMovie!.watchedAt : null;
   const collectionName = isMovie && liveMovie!.collectionId ? appData.collections.find((c) => c.id === liveMovie!.collectionId)?.name : undefined;
 
-  const startedTimeText = isMovie && liveMovie?.startedAt
-    ? new Date(liveMovie.startedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
-    : null;
+  const timerInfo = isMovie && liveMovie && !liveMovie.watched && liveMovie.startedAt ? getMovieTimerInfo(liveMovie, nowMs) : null;
+  const anotherTimerActive = isMovie && liveMovie ? appData.movies.some((m) => !m.watched && m.id !== liveMovie.id && m.startedAt) : false;
 
   const toggleEpNote = (epId: string) => {
     setExpandedEpNotes((prev) => {
@@ -80,6 +90,8 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
 
   const handleOpenMovieRating = () => {
     if (!liveMovie) return;
+    if (!liveMovie.watched && !liveHistoryItem && !canRateMovieWithTimer(liveMovie.id)) return;
+
     setRatingModalConfig({
       title: liveMovie.title,
       subtitle: liveMovie.year ? `Çıkış Yılı: ${liveMovie.year}` : 'Film',
@@ -258,15 +270,23 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                   {isMovie && liveMovie && (
                     <div className="flex items-center gap-2 flex-wrap justify-center">
                       {!liveMovie.watched && !liveHistoryItem && (
-                        startedTimeText ? (
+                        timerInfo ? (
                           <div className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3 py-2 rounded-xl text-xs font-bold">
-                            <Timer size={14} className="animate-pulse text-emerald-400" />
-                            <span>İzleniyor ({startedTimeText})</span>
+                            <Timer size={14} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
+                            <span className="font-mono">{timerInfo.formattedRemaining}</span>
+                            <button
+                              type="button"
+                              onClick={() => togglePauseWatchingMovie(liveMovie.id)}
+                              title={timerInfo.isPaused ? 'Devam Et' : 'Duraklat'}
+                              className="ml-1 text-amber-300 hover:text-white"
+                            >
+                              {timerInfo.isPaused ? <Play size={13} className="fill-current" /> : <Pause size={13} />}
+                            </button>
                             <button
                               type="button"
                               onClick={() => cancelWatchingMovie(liveMovie.id)}
                               title="Sayacı İptal Et"
-                              className="ml-1 text-ink-400 hover:text-red-400"
+                              className="ml-0.5 text-ink-400 hover:text-red-400"
                             >
                               <X size={14} />
                             </button>
@@ -275,9 +295,14 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                           <button
                             type="button"
                             onClick={() => startWatchingMovie(liveMovie.id, false)}
-                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border border-emerald-500/30 transition-all"
+                            title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'Geri Sayımı Başlat'}
+                            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                              anotherTimerActive
+                                ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed'
+                                : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
+                            }`}
                           >
-                            <Play size={13} className="fill-current" /> İzlemeye Başla
+                            {anotherTimerActive ? <Lock size={13} /> : <Play size={13} className="fill-current" />} Geri Sayımı Başlat
                           </button>
                         )
                       )}
@@ -285,14 +310,18 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                       <button
                         type="button"
                         onClick={handleOpenMovieRating}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105 ${
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
                           liveMovie.watched || liveHistoryItem
-                            ? 'bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30'
-                            : 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black shadow-gold-500/20'
+                            ? 'bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 hover:scale-105'
+                            : timerInfo && !timerInfo.canRateWithTimer
+                            ? 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black shadow-gold-500/20 hover:scale-105'
                         }`}
                       >
                         {liveMovie.watched || liveHistoryItem ? (
                           <><Edit2 size={13} /> Puanı / Notu Düzenle</>
+                        ) : timerInfo && !timerInfo.canRateWithTimer ? (
+                          <><Lock size={13} /> Kilitli ({timerInfo.minRequiredMins - timerInfo.elapsedMins} dk)</>
                         ) : (
                           <><Star size={14} className="fill-current" /> Puanla</>
                         )}
@@ -400,9 +429,6 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                       href={link.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={() => {
-                        if (isMovie && liveMovie && !liveMovie.watched) startWatchingMovie(liveMovie.id, true);
-                      }}
                       className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-105"
                     >
                       {link.logo ? <img src={link.logo} alt={link.text} className="w-4 h-4 rounded-sm object-cover" /> : <Icon size={14} />}

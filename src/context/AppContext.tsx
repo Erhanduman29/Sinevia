@@ -16,6 +16,43 @@ export interface MovieExtraData { keywords?: string[]; directors?: string[]; cas
 export interface SeriesExtraData { keywords?: string[]; creators?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; }
 interface ExtendedAppData extends AppData { aiChatHistory?: AIMessage[]; theme?: string; reviewTags: string[]; }
 
+// ⏱️ CANLI GERİ SAYIM VE ENGELLEYİCİ HESAPLAMA YARDIMCISI
+export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
+  const maxMins = movie.runtime && movie.runtime > 0 ? movie.runtime : 115;
+  const totalSec = maxMins * 60;
+  const minRequiredMins = Math.max(5, Math.ceil(maxMins * 0.15)); // En az %15 (veya min 5 dk) izleme şartı
+
+  if (!movie.startedAt) {
+    return { isActive: false, isPaused: false, elapsedSec: 0, remainingSec: totalSec, elapsedMins: 0, maxMins, minRequiredMins, canRateWithTimer: true, formattedRemaining: '' };
+  }
+
+  let elapsedSec = 0;
+  let isPaused = false;
+
+  if (movie.startedAt.startsWith('PAUSED:')) {
+    isPaused = true;
+    elapsedSec = Math.min(totalSec, Math.max(0, parseInt(movie.startedAt.slice(7), 10) || 0));
+  } else {
+    const startMs = new Date(movie.startedAt).getTime();
+    if (!isNaN(startMs)) {
+      elapsedSec = Math.min(totalSec, Math.max(0, Math.floor((nowMs - startMs) / 1000)));
+    }
+  }
+
+  const remainingSec = Math.max(0, totalSec - elapsedSec);
+  const elapsedMins = Math.floor(elapsedSec / 60);
+  const canRateWithTimer = elapsedMins >= minRequiredMins;
+
+  const hrs = Math.floor(remainingSec / 3600);
+  const mins = Math.floor((remainingSec % 3600) / 60);
+  const secs = remainingSec % 60;
+  const formattedRemaining = hrs > 0
+    ? `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  return { isActive: true, isPaused, elapsedSec, remainingSec, elapsedMins, maxMins, minRequiredMins, canRateWithTimer, formattedRemaining };
+}
+
 function createInitialAchievements(existingList?: AchievementProgress[]): AchievementProgress[] {
   const existingMap = new Map((existingList || []).map((a) => [a.achievementId, a]));
   return ACHIEVEMENT_DEFS.map((def) => {
@@ -469,7 +506,9 @@ interface AppContextValue {
   addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => boolean;
   deleteMovie: (id: string) => void;
   startWatchingMovie: (id: string, silent?: boolean) => void;
+  togglePauseWatchingMovie: (id: string) => void;
   cancelWatchingMovie: (id: string) => void;
+  canRateMovieWithTimer: (id: string) => boolean;
   watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[]) => void;
   unwatchMovie: (id: string) => void;
   updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>, reviewTags?: string[]) => void;
@@ -570,7 +609,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => {
     const id = uid(); setToasts({ type: 'add', toast: { id, message, type } });
-    setTimeout(() => setToasts({ type: 'remove', id }), 2000);
+    setTimeout(() => setToasts({ type: 'remove', id }), 2800);
   }, []);
 
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
@@ -581,30 +620,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Film eklendi'); return true;
   }, [data.movies, showToast]);
 
+  // 🔒 ENGELLEYİCİ 1: Aynı anda sadece 1 filmin sayacı çalışabilir!
   const startWatchingMovie = useCallback((id: string, silent = false) => {
     const movie = data.movies.find((m) => m.id === id);
     if (!movie || movie.watched) return;
-    if (silent && movie.startedAt) return;
+    if (movie.startedAt) return;
+
+    const anotherActive = data.movies.find((m) => !m.watched && m.id !== id && m.startedAt);
+    if (anotherActive) {
+      if (!silent) showToast(`⛔ Sayaç Engelleyici: Şu anda "${anotherActive.title}" için sayaç zaten açık! Önce onu tamamla veya iptal et.`, 'warning');
+      return;
+    }
+
     dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: new Date().toISOString() });
-    showToast(`⏱️ "${movie.title}" için izleme süresi başlatıldı!`, 'info');
+    showToast(`⏳ "${movie.title}" için geri sayım başladı!`, 'info');
+  }, [data.movies, showToast]);
+
+  // ⏸️ DURAKLAT / DEVAM ET KONTROLÜ
+  const togglePauseWatchingMovie = useCallback((id: string) => {
+    const movie = data.movies.find((m) => m.id === id);
+    if (!movie || !movie.startedAt) return;
+    const info = getMovieTimerInfo(movie);
+
+    if (info.isPaused) {
+      const resumedStart = new Date(Date.now() - info.elapsedSec * 1000).toISOString();
+      dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: resumedStart });
+      showToast('▶️ Geri sayım kaldığı yerden devam ediyor', 'info');
+    } else {
+      dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: `PAUSED:${info.elapsedSec}` });
+      showToast('⏸️ Geri sayım duraklatıldı', 'warning');
+    }
   }, [data.movies, showToast]);
 
   const cancelWatchingMovie = useCallback((id: string) => {
     dispatch({ type: 'CANCEL_WATCHING_MOVIE', id });
-    showToast('İzleme sayacı sıfırlandı', 'info');
+    showToast('İzleme sayacı iptal edildi', 'info');
   }, [showToast]);
+
+  // ⛔ ENGELLEYİCİ 2: Minimum izleme süresi (%25) geçmeden sayaçlı puanlamayı engeller!
+  const canRateMovieWithTimer = useCallback((id: string): boolean => {
+    const movie = data.movies.find((m) => m.id === id);
+    if (!movie || !movie.startedAt) return true;
+    const info = getMovieTimerInfo(movie);
+    if (!info.canRateWithTimer) {
+      showToast(`⛔ Sayaç Engelleyici: Henüz ${info.elapsedMins} dk geçti! Puanlamak için en az ${info.minRequiredMins} dk geçmeli (veya X ile sayacı iptal et).`, 'error');
+      return false;
+    }
+    return true;
+  }, [data.movies, showToast]);
 
   const watchMovie = useCallback((id: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => {
     const movie = data.movies.find((m) => m.id === id); if (!movie) return;
     const now = new Date().toISOString();
-    const maxRuntime = movie.runtime && movie.runtime > 0 ? movie.runtime : 115;
-    let actualRuntime = maxRuntime;
+    const info = getMovieTimerInfo(movie);
+    let actualRuntime = info.maxMins;
 
-    if (movie.startedAt) {
-      const startMs = new Date(movie.startedAt).getTime(), endMs = new Date(now).getTime();
-      if (!isNaN(startMs) && endMs > startMs) {
-        actualRuntime = Math.min(Math.max(1, Math.round((endMs - startMs) / 60000)), maxRuntime);
-      }
+    if (movie.startedAt && info.canRateWithTimer) {
+      actualRuntime = Math.min(Math.max(1, info.elapsedMins), info.maxMins);
     }
 
     dispatch({
@@ -612,13 +684,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       historyItem: {
         id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title,
         rating, detailedRating, reviewTags, note, watchedAt: now,
-        startedAt: movie.startedAt || null, actualRuntime, originalRuntime: maxRuntime,
+        startedAt: movie.startedAt || null, actualRuntime, originalRuntime: info.maxMins,
         genres: movie.genres, year: movie.year
       }
     });
 
-    if (movie.startedAt && actualRuntime < maxRuntime) {
-      showToast(`Film ${actualRuntime} dk'da bitti! (${maxRuntime - actualRuntime} dk kazandın ⚡)`, 'success');
+    if (movie.startedAt && actualRuntime < info.maxMins) {
+      showToast(`Film ${actualRuntime} dk'da bitti! (${info.maxMins - actualRuntime} dk kazandın ⚡)`, 'success');
     }
   }, [data.movies, showToast]);
 
@@ -811,7 +883,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
 
   return (
-    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, cancelWatchingMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme }}>
+    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme }}>
       {children}
     </AppContext.Provider>
   );

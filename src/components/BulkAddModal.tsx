@@ -1,24 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
-  Search,
-  X,
-  Check,
-  Film,
-  Tv,
-  ShoppingCart,
-  FolderPlus,
-  Loader2,
-  Sparkles,
-  Plus,
-  Trash2,
-  ChevronDown,
-  ChevronUp,
-  Filter,
-  ArrowUpDown,
-  AlertTriangle,
-  User,
+  Search, X, Check, Film, Tv, ShoppingCart, FolderPlus, Loader2, Sparkles,
+  Plus, Trash2, ChevronDown, ChevronUp, Filter, ArrowUpDown, AlertTriangle, User, CheckCircle2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { normalize } from '../lib/utils';
 
 const MOVIE_GENRES = [
   { id: 28, name: 'Aksiyon' },
@@ -73,7 +59,7 @@ export default function BulkAddModal({
   initialTab?: MediaType;
   onClose: () => void;
 }) {
-  const { data, addMovie, addSeries, addCollection } = useApp();
+  const { data, addMovie, addSeries, addCollection, showToast } = useApp();
 
   const [activeTab, setActiveTab] = useState<MediaType>(initialTab);
   const [step, setStep] = useState<Step>('browse');
@@ -82,7 +68,6 @@ export default function BulkAddModal({
   const [selectedGenre, setSelectedGenre] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<string>('popularity.desc');
 
-  // Kişi (Oyuncu / Yönetmen) arama sonuçları ve seçili kişi
   const [matchedPeople, setMatchedPeople] = useState<TMDBPerson[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<TMDBPerson | null>(null);
 
@@ -98,10 +83,55 @@ export default function BulkAddModal({
   const [collectionName, setCollectionName] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState(0);
-
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45';
+
+  // Kütüphanedeki mevcut Film ve Dizileri hızlı kontrol için haritalandır
+  const libraryLookup = useMemo(() => {
+    const movieTmdbIds = new Map<number, boolean>();
+    const movieTitles = new Map<string, boolean>();
+    data.movies.forEach((m) => {
+      if (m.tmdbId) movieTmdbIds.set(m.tmdbId, m.watched);
+      movieTitles.set(normalize(m.title), m.watched);
+    });
+
+    const seriesTmdbIds = new Map<number, boolean>();
+    const seriesTitles = new Map<string, boolean>();
+    data.series.forEach((s) => {
+      const allWatched = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
+      if (s.tmdbId) seriesTmdbIds.set(s.tmdbId, allWatched);
+      seriesTitles.set(normalize(s.title), allWatched);
+    });
+    data.removedSeriesTitles.forEach((t) => {
+      seriesTitles.set(normalize(t), true);
+    });
+
+    return { movieTmdbIds, movieTitles, seriesTmdbIds, seriesTitles };
+  }, [data.movies, data.series, data.removedSeriesTitles]);
+
+  const getExistingStatus = (item: TMDBItem): { exists: boolean; watched: boolean } => {
+    const type = item.media_type || activeTab;
+    const rawTitle = item.title || item.name || '';
+    const normTitle = normalize(rawTitle);
+
+    if (type === 'movie') {
+      if (libraryLookup.movieTmdbIds.has(item.id)) {
+        return { exists: true, watched: Boolean(libraryLookup.movieTmdbIds.get(item.id)) };
+      }
+      if (normTitle && libraryLookup.movieTitles.has(normTitle)) {
+        return { exists: true, watched: Boolean(libraryLookup.movieTitles.get(normTitle)) };
+      }
+    } else {
+      if (libraryLookup.seriesTmdbIds.has(item.id)) {
+        return { exists: true, watched: Boolean(libraryLookup.seriesTmdbIds.get(item.id)) };
+      }
+      if (normTitle && libraryLookup.seriesTitles.has(normTitle)) {
+        return { exists: true, watched: Boolean(libraryLookup.seriesTitles.get(normTitle)) };
+      }
+    }
+    return { exists: false, watched: false };
+  };
 
   useEffect(() => {
     const scrollEl = document.getElementById('main-scroll');
@@ -125,27 +155,18 @@ export default function BulkAddModal({
     }
   }, [query, activeTab, selectedGenre, sortBy]);
 
-  // Bir oyuncunun veya yönetmenin filmografisini çeken yardımcı fonksiyon
   const fetchPersonCredits = async (personId: number, mediaType: MediaType): Promise<TMDBItem[]> => {
     try {
       const endpoint = mediaType === 'movie' ? 'movie_credits' : 'tv_credits';
-      const res = await fetch(
-        `https://api.themoviedb.org/3/person/${personId}/${endpoint}?api_key=${API_KEY}&language=tr-TR`
-      );
+      const res = await fetch(`https://api.themoviedb.org/3/person/${personId}/${endpoint}?api_key=${API_KEY}&language=tr-TR`);
       if (!res.ok) return [];
       const credits = await res.json();
 
       const castItems: TMDBItem[] = credits.cast || [];
       const crewItems: TMDBItem[] = (credits.crew || []).filter(
-        (c: any) =>
-          c.job === 'Director' ||
-          c.department === 'Directing' ||
-          c.job === 'Creator' ||
-          c.job === 'Executive Producer' ||
-          c.job === 'Writer'
+        (c: any) => c.job === 'Director' || c.department === 'Directing' || c.job === 'Creator' || c.job === 'Executive Producer' || c.job === 'Writer'
       );
 
-      // Tekrar edenleri birleştir ve popülerliğe göre sırala
       const uniqueMap = new Map<number, TMDBItem>();
       [...crewItems, ...castItems].forEach((item) => {
         if (item && item.id && item.poster_path && !uniqueMap.has(item.id)) {
@@ -167,7 +188,6 @@ export default function BulkAddModal({
       else setIsLoadingMore(true);
 
       try {
-        // EĞER KULLANICI ÜSTTEKİ ROZETLERDEN BİR OYUNCU / YÖNETMEN SEÇTİYSE SADECE ONUN YAPIMLARINI GÖSTER
         if (selectedPerson) {
           const personWorks = await fetchPersonCredits(selectedPerson.id, activeTab);
           setResults(personWorks);
@@ -177,17 +197,11 @@ export default function BulkAddModal({
           return;
         }
 
-        // ARAMA KUTUSUNDA METİN VARSA: HEM YAPIM ADI HEM DE OYUNCU/YÖNETMEN ARA
         if (query.trim().length > 1) {
-          const titleUrl = `https://api.themoviedb.org/3/search/${activeTab}?api_key=${API_KEY}&query=${encodeURIComponent(
-            query
-          )}&language=tr-TR&page=${page}`;
+          const titleUrl = `https://api.themoviedb.org/3/search/${activeTab}?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=tr-TR&page=${page}`;
 
           if (page === 1) {
-            const personUrl = `https://api.themoviedb.org/3/search/person?api_key=${API_KEY}&query=${encodeURIComponent(
-              query
-            )}&language=tr-TR&page=1`;
-
+            const personUrl = `https://api.themoviedb.org/3/search/person?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=tr-TR&page=1`;
             const [titleRes, personRes] = await Promise.all([fetch(titleUrl), fetch(personUrl)]);
             const titleJson = await titleRes.json();
             const personJson = await personRes.json();
@@ -197,13 +211,11 @@ export default function BulkAddModal({
 
             let combinedResults: TMDBItem[] = titleJson.results || [];
 
-            // Eğer aranan metin bir oyuncu/yönetmen ismiyle eşleştiyse, ilk sıradaki kişinin filmlerini/dizilerini de otomatik listeye dahil et!
             if (peopleList.length > 0) {
               const topPersonWorks = await fetchPersonCredits(peopleList[0].id, activeTab);
               const existingIds = new Set(combinedResults.map((r) => r.id));
               const extraWorks = topPersonWorks.filter((w) => !existingIds.has(w.id));
 
-              // Eğer doğrudan film adı aramasında çok az sonuç çıktıysa (örn. sadece "Christopher Nolan" yazıldıysa) kişinin filmlerini en üste koy
               if (combinedResults.filter((r) => r.poster_path).length < 3) {
                 combinedResults = [...topPersonWorks, ...combinedResults.filter((r) => !topPersonWorks.some((w) => w.id === r.id))];
               } else {
@@ -224,17 +236,12 @@ export default function BulkAddModal({
             setTotalPages(json.total_pages || 1);
           }
         } else {
-          // KEŞFET MODU (ARAMA YOKSA)
-          const dateSortParam =
-            activeTab === 'movie' ? 'primary_release_date.desc' : 'first_air_date.desc';
+          const dateSortParam = activeTab === 'movie' ? 'primary_release_date.desc' : 'first_air_date.desc';
           const actualSort = sortBy === 'date.desc' ? dateSortParam : sortBy;
 
           let url = `https://api.themoviedb.org/3/discover/${activeTab}?api_key=${API_KEY}&language=tr-TR&sort_by=${actualSort}&page=${page}`;
           if (selectedGenre) url += `&with_genres=${selectedGenre}`;
-
-          if (actualSort === 'vote_average.desc') {
-            url += '&vote_count.gte=200';
-          }
+          if (actualSort === 'vote_average.desc') url += '&vote_count.gte=200';
 
           const res = await fetch(url);
           const json = await res.json();
@@ -257,6 +264,12 @@ export default function BulkAddModal({
   }, [query, activeTab, selectedGenre, sortBy, page, selectedPerson]);
 
   const toggleCartItem = (item: TMDBItem) => {
+    const status = getExistingStatus(item);
+    if (status.exists) {
+      showToast(`"${item.title || item.name}" zaten kütüphanende ekli!`, 'info');
+      return;
+    }
+
     const itemType = item.media_type || activeTab;
     const exists = cart.find((c) => c.id === item.id);
     if (exists) {
@@ -269,24 +282,15 @@ export default function BulkAddModal({
   };
 
   const handleSafeClose = () => {
-    if (cart.length > 0 && step !== 'importing') {
-      setShowCloseConfirm(true);
-    } else {
-      onClose();
-    }
+    if (cart.length > 0 && step !== 'importing') setShowCloseConfirm(true);
+    else onClose();
   };
 
   const processWatchProviders = (detailData: any) => {
     const trProviders = detailData['watch/providers']?.results?.TR;
     if (trProviders) {
-      const providersList = [
-        ...(trProviders.flatrate || []),
-        ...(trProviders.rent || []),
-        ...(trProviders.buy || []),
-      ];
-      const uniqueProviders = Array.from(
-        new Map(providersList.map((p) => [p.provider_id, p])).values()
-      );
+      const providersList = [...(trProviders.flatrate || []), ...(trProviders.rent || []), ...(trProviders.buy || [])];
+      const uniqueProviders = Array.from(new Map(providersList.map((p) => [p.provider_id, p])).values());
       return uniqueProviders.slice(0, 3).map((p: any) => ({
         logoUrl: `https://image.tmdb.org/t/p/w200${p.logo_path}`,
         providerName: p.provider_name,
@@ -304,8 +308,6 @@ export default function BulkAddModal({
       finalColId = addCollection(collectionName) as unknown as string;
     }
 
-    // Başarım bildirimlerinin (Toast) bu modalın arkasında kalıp kaybolmaması için
-    // önce tüm TMDB detaylarını çekip hazırlıyoruz, ardından tek seferde ekleyip modalı kapatıyoruz.
     const preparedMovies: Parameters<typeof addMovie>[] = [];
     const preparedSeries: Parameters<typeof addSeries>[] = [];
 
@@ -321,43 +323,20 @@ export default function BulkAddModal({
           const year = details.release_date ? details.release_date.substring(0, 4) : '';
           const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
           const runtime = details.runtime || undefined;
-          const posterFullUrl = details.poster_path
-            ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
-            : null;
+          const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
           const overview = details.overview || '';
-
           const imdbId = details.external_ids?.imdb_id || details.imdb_id;
           const watchProviders = processWatchProviders(details);
 
-          const directors = (details.credits?.crew || [])
-            .filter((c: any) => c.job === 'Director')
-            .map((c: any) => c.name)
-            .slice(0, 3);
+          const directors = (details.credits?.crew || []).filter((c: any) => c.job === 'Director').map((c: any) => c.name).slice(0, 3);
           const cast = (details.credits?.cast || []).slice(0, 12).map((c: any) => c.name);
-          const studios = (details.production_companies || [])
-            .slice(0, 3)
-            .map((s: any) => s.name);
+          const studios = (details.production_companies || []).slice(0, 3).map((s: any) => s.name);
           const keywords = (details.keywords?.keywords || []).map((k: any) => k.name);
           const originalLanguage = details.original_language || undefined;
 
           preparedMovies.push([
-            details.title || item.title || '',
-            year,
-            genres,
-            finalColId,
-            runtime,
-            posterFullUrl,
-            overview,
-            details.id,
-            imdbId,
-            watchProviders,
-            {
-              directors,
-              cast,
-              studios,
-              keywords,
-              originalLanguage,
-            },
+            details.title || item.title || '', year, genres, finalColId, runtime, posterFullUrl, overview,
+            details.id, imdbId, watchProviders, { directors, cast, studios, keywords, originalLanguage },
           ]);
         } else if (item.media_type === 'tv') {
           const res = await fetch(
@@ -367,53 +346,26 @@ export default function BulkAddModal({
 
           const year = details.first_air_date ? details.first_air_date.substring(0, 4) : '';
           const genres = details.genres ? details.genres.map((g: any) => g.name) : [];
-          const seasons = (details.seasons || [])
-            .filter((s: any) => s.season_number > 0)
-            .map((s: any) => s.episode_count);
-          const posterFullUrl = details.poster_path
-            ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
-            : null;
+          const seasons = (details.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => s.episode_count);
+          const posterFullUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null;
           const overview = details.overview || '';
-
           const imdbId = details.external_ids?.imdb_id;
           const watchProviders = processWatchProviders(details);
 
           const rawCreators = [
             ...(details.created_by || []).map((c: any) => c.name),
-            ...(details.credits?.crew || [])
-              .filter((c: any) => c.job === 'Director' || c.job === 'Executive Producer')
-              .map((c: any) => c.name),
+            ...(details.credits?.crew || []).filter((c: any) => c.job === 'Director' || c.job === 'Executive Producer').map((c: any) => c.name),
           ];
           const creators = Array.from(new Set(rawCreators)).slice(0, 3);
-
           const cast = (details.credits?.cast || []).slice(0, 12).map((c: any) => c.name);
-
-          const rawStudios = [
-            ...(details.networks || []).map((n: any) => n.name),
-            ...(details.production_companies || []).map((s: any) => s.name),
-          ];
+          const rawStudios = [...(details.networks || []).map((n: any) => n.name), ...(details.production_companies || []).map((s: any) => s.name)];
           const studios = Array.from(new Set(rawStudios)).slice(0, 3);
-
           const keywords = (details.keywords?.results || []).map((k: any) => k.name);
           const originalLanguage = details.original_language || undefined;
 
           preparedSeries.push([
-            details.name || item.name || '',
-            genres,
-            seasons,
-            posterFullUrl,
-            overview,
-            details.id,
-            year,
-            imdbId,
-            watchProviders,
-            {
-              creators,
-              cast,
-              studios,
-              keywords,
-              originalLanguage,
-            },
+            details.name || item.name || '', genres, seasons, posterFullUrl, overview,
+            details.id, year, imdbId, watchProviders, { creators, cast, studios, keywords, originalLanguage },
           ]);
         }
       } catch (error) {
@@ -422,7 +374,6 @@ export default function BulkAddModal({
       setImportProgress(Math.floor(((i + 1) / cart.length) * 100));
     }
 
-    // Tüm veriler hazırlandığında kütüphaneye ekle ve modalı kapat ki başarım bildirimleri ekranda net görünsün
     preparedMovies.forEach((args) => addMovie(...args));
     preparedSeries.forEach((args) => addSeries(...args));
 
@@ -434,14 +385,8 @@ export default function BulkAddModal({
   const activeGenres = activeTab === 'movie' ? MOVIE_GENRES : TV_GENRES;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 md:pl-56 overscroll-none"
-      onTouchMove={(e) => e.stopPropagation()}
-    >
-      <div
-        className="absolute inset-0 bg-ink-950/95 backdrop-blur-xl animate-fade-in"
-        onClick={handleSafeClose}
-      />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 md:pl-56 overscroll-none" onTouchMove={(e) => e.stopPropagation()}>
+      <div className="absolute inset-0 bg-ink-950/95 backdrop-blur-xl animate-fade-in" onClick={handleSafeClose} />
 
       {showCloseConfirm && (
         <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/80 backdrop-blur-sm animate-fade-in px-4 md:pl-56">
@@ -450,20 +395,12 @@ export default function BulkAddModal({
               <AlertTriangle className="text-red-500" size={28} />
             </div>
             <h3 className="text-lg md:text-xl font-bold text-white mb-2">Emin misiniz?</h3>
-            <p className="text-xs md:text-sm text-ink-400 mb-6">
-              Sepetinizde seçili yapımlar var. Kapatırsanız bu seçimler silinecek.
-            </p>
+            <p className="text-xs md:text-sm text-ink-400 mb-6">Sepetinizde seçili yapımlar var. Kapatırsanız bu seçimler silinecek.</p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowCloseConfirm(false)}
-                className="flex-1 py-2.5 md:py-3 rounded-xl bg-ink-800 text-white font-bold hover:bg-ink-700 border border-ink-700 transition-colors text-sm"
-              >
+              <button onClick={() => setShowCloseConfirm(false)} className="flex-1 py-2.5 md:py-3 rounded-xl bg-ink-800 text-white font-bold hover:bg-ink-700 border border-ink-700 transition-colors text-sm">
                 Vazgeç
               </button>
-              <button
-                onClick={onClose}
-                className="flex-1 py-2.5 md:py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold shadow-lg shadow-red-500/20 transition-colors text-sm"
-              >
+              <button onClick={onClose} className="flex-1 py-2.5 md:py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold shadow-lg shadow-red-500/20 transition-colors text-sm">
                 Evet, Kapat
               </button>
             </div>
@@ -478,18 +415,11 @@ export default function BulkAddModal({
               <Sparkles className="text-gold-400" size={18} />
             </div>
             <div>
-              <h2 className="text-base md:text-xl font-black text-white tracking-wide">
-                Kütüphaneyi Genişlet
-              </h2>
-              <p className="text-[10px] md:text-xs text-ink-400 font-medium">
-                Film/Dizi adı, oyuncu veya yönetmen ismiyle keşfet
-              </p>
+              <h2 className="text-base md:text-xl font-black text-white tracking-wide">Kütüphaneyi Genişlet</h2>
+              <p className="text-[10px] md:text-xs text-ink-400 font-medium">Film/Dizi adı, oyuncu veya yönetmen ismiyle keşfet</p>
             </div>
           </div>
-          <button
-            onClick={handleSafeClose}
-            className="text-ink-400 hover:text-white transition-colors bg-ink-800/50 hover:bg-ink-700 p-2 rounded-full"
-          >
+          <button onClick={handleSafeClose} className="text-ink-400 hover:text-white transition-colors bg-ink-800/50 hover:bg-ink-700 p-2 rounded-full">
             <X size={20} />
           </button>
         </div>
@@ -501,29 +431,17 @@ export default function BulkAddModal({
                 <div className="flex flex-col md:flex-row gap-3 md:gap-4">
                   <div className="flex bg-ink-950 rounded-xl p-1.5 border border-ink-800/50 flex-shrink-0">
                     <button
-                      onClick={() => {
-                        setActiveTab('movie');
-                        setSelectedGenre(null);
-                        setSortBy('popularity.desc');
-                      }}
+                      onClick={() => { setActiveTab('movie'); setSelectedGenre(null); setSortBy('popularity.desc'); }}
                       className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                        activeTab === 'movie'
-                          ? 'bg-ink-800 text-white shadow-sm'
-                          : 'text-ink-400 hover:text-ink-200'
+                        activeTab === 'movie' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200'
                       }`}
                     >
                       <Film size={16} /> Filmler
                     </button>
                     <button
-                      onClick={() => {
-                        setActiveTab('tv');
-                        setSelectedGenre(null);
-                        setSortBy('popularity.desc');
-                      }}
+                      onClick={() => { setActiveTab('tv'); setSelectedGenre(null); setSortBy('popularity.desc'); }}
                       className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                        activeTab === 'tv'
-                          ? 'bg-ink-800 text-white shadow-sm'
-                          : 'text-ink-400 hover:text-ink-200'
+                        activeTab === 'tv' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-400 hover:text-ink-200'
                       }`}
                     >
                       <Tv size={16} /> Diziler
@@ -531,28 +449,18 @@ export default function BulkAddModal({
                   </div>
 
                   <div className="relative flex-1">
-                    <Search
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500"
-                      size={18}
-                    />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
                     <input
                       type="text"
                       value={query}
-                      onChange={(e) => {
-                        setQuery(e.target.value);
-                        setSelectedPerson(null);
-                      }}
+                      onChange={(e) => { setQuery(e.target.value); setSelectedPerson(null); }}
                       placeholder="Film/Dizi adı, oyuncu veya yönetmen ara (Örn: Christopher Nolan, Brad Pitt)..."
                       className="w-full bg-ink-950 border border-ink-800/50 rounded-xl pl-11 pr-10 py-3 text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 transition-all shadow-inner"
                     />
                     {query && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setQuery('');
-                          setSelectedPerson(null);
-                          setMatchedPeople([]);
-                        }}
+                        onClick={() => { setQuery(''); setSelectedPerson(null); setMatchedPeople([]); }}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white p-1"
                       >
                         <X size={16} />
@@ -561,7 +469,6 @@ export default function BulkAddModal({
                   </div>
                 </div>
 
-                {/* EŞLEŞEN OYUNCU VE YÖNETMENLER BARI */}
                 {matchedPeople.length > 0 && (
                   <div className="pt-1 space-y-2 animate-fade-in">
                     <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-gold-400">
@@ -569,11 +476,7 @@ export default function BulkAddModal({
                         <User size={13} /> Bulunan Oyuncu & Yönetmenler (Tüm Filmografisi İçin Tıkla)
                       </span>
                       {selectedPerson && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPerson(null)}
-                          className="text-xs text-ink-400 hover:text-white underline"
-                        >
+                        <button type="button" onClick={() => setSelectedPerson(null)} className="text-xs text-ink-400 hover:text-white underline">
                           Kişi Filtresini Kaldır
                         </button>
                       )}
@@ -581,19 +484,12 @@ export default function BulkAddModal({
                     <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
                       {matchedPeople.map((person) => {
                         const isSelected = selectedPerson?.id === person.id;
-                        const roleLabel =
-                          person.known_for_department === 'Directing'
-                            ? 'Yönetmen'
-                            : person.known_for_department === 'Acting'
-                            ? 'Oyuncu'
-                            : 'Sinema';
+                        const roleLabel = person.known_for_department === 'Directing' ? 'Yönetmen' : person.known_for_department === 'Acting' ? 'Oyuncu' : 'Sinema';
                         return (
                           <button
                             key={person.id}
                             type="button"
-                            onClick={() =>
-                              setSelectedPerson(isSelected ? null : person)
-                            }
+                            onClick={() => setSelectedPerson(isSelected ? null : person)}
                             className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border text-left transition-all flex-shrink-0 ${
                               isSelected
                                 ? 'bg-gold-500 text-ink-950 border-gold-400 shadow-lg scale-[1.02]'
@@ -602,24 +498,14 @@ export default function BulkAddModal({
                           >
                             <div className="w-8 h-8 rounded-full overflow-hidden bg-ink-800 flex-shrink-0 border border-white/10 flex items-center justify-center">
                               {person.profile_path ? (
-                                <img
-                                  src={`https://image.tmdb.org/t/p/w200${person.profile_path}`}
-                                  alt={person.name}
-                                  className="w-full h-full object-cover"
-                                />
+                                <img src={`https://image.tmdb.org/t/p/w200${person.profile_path}`} alt={person.name} className="w-full h-full object-cover" />
                               ) : (
                                 <User size={14} className={isSelected ? 'text-ink-950' : 'text-ink-400'} />
                               )}
                             </div>
                             <div>
                               <div className="text-xs font-black leading-tight">{person.name}</div>
-                              <div
-                                className={`text-[10px] font-bold ${
-                                  isSelected ? 'text-ink-900' : 'text-gold-400'
-                                }`}
-                              >
-                                {roleLabel}
-                              </div>
+                              <div className={`text-[10px] font-bold ${isSelected ? 'text-ink-900' : 'text-gold-400'}`}>{roleLabel}</div>
                             </div>
                           </button>
                         );
@@ -644,9 +530,7 @@ export default function BulkAddModal({
                           <option value="popularity.desc">🔥 En Popüler</option>
                           <option value="vote_average.desc">⭐ En Yüksek Puanlılar</option>
                           <option value="date.desc">🆕 En Yeniler</option>
-                          {activeTab === 'movie' && (
-                            <option value="revenue.desc">💰 En Çok Hasılat Yapanlar</option>
-                          )}
+                          {activeTab === 'movie' && <option value="revenue.desc">💰 En Çok Hasılat Yapanlar</option>}
                         </select>
                       </div>
                     </div>
@@ -657,9 +541,7 @@ export default function BulkAddModal({
                           key={g.id}
                           onClick={() => setSelectedGenre(selectedGenre === g.id ? null : g.id)}
                           className={`flex-shrink-0 px-3 md:px-4 py-2 rounded-lg text-[11px] md:text-xs font-bold transition-all border ${
-                            selectedGenre === g.id
-                              ? 'bg-gold-500/20 text-gold-400 border-gold-500/30 shadow-sm'
-                              : 'bg-ink-950 border-ink-800/50 text-ink-400 hover:bg-ink-800'
+                            selectedGenre === g.id ? 'bg-gold-500/20 text-gold-400 border-gold-500/30 shadow-sm' : 'bg-ink-950 border-ink-800/50 text-ink-400 hover:bg-ink-800'
                           }`}
                         >
                           {g.name}
@@ -674,9 +556,7 @@ export default function BulkAddModal({
                 {isLoading && page === 1 ? (
                   <div className="flex flex-col items-center justify-center h-48 md:h-64 text-gold-500">
                     <Loader2 className="animate-spin mb-4" size={32} />
-                    <span className="text-xs md:text-sm font-bold tracking-widest uppercase">
-                      Aranıyor...
-                    </span>
+                    <span className="text-xs md:text-sm font-bold tracking-widest uppercase">Aranıyor...</span>
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -685,6 +565,7 @@ export default function BulkAddModal({
                         .filter((r) => r.poster_path)
                         .map((item) => {
                           const isSelected = cart.some((c) => c.id === item.id);
+                          const status = getExistingStatus(item);
                           const title = item.title || item.name;
                           const date = item.release_date || item.first_air_date;
 
@@ -692,10 +573,12 @@ export default function BulkAddModal({
                             <div
                               key={item.id}
                               onClick={() => toggleCartItem(item)}
-                              className={`group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 ${
-                                isSelected
-                                  ? 'ring-2 md:ring-4 ring-gold-500 ring-offset-1 md:ring-offset-2 ring-offset-ink-900 scale-95 shadow-[0_0_15px_rgba(234,179,8,0.4)]'
-                                  : 'hover:scale-105 hover:shadow-xl hover:ring-2 hover:ring-ink-500 hover:ring-offset-2 hover:ring-offset-ink-900'
+                              className={`group relative rounded-xl overflow-hidden transition-all duration-300 ${
+                                status.exists
+                                  ? 'ring-2 ring-emerald-500/70 opacity-85 cursor-default'
+                                  : isSelected
+                                  ? 'ring-2 md:ring-4 ring-gold-500 ring-offset-1 md:ring-offset-2 ring-offset-ink-900 scale-95 shadow-[0_0_15px_rgba(234,179,8,0.4)] cursor-pointer'
+                                  : 'hover:scale-105 hover:shadow-xl hover:ring-2 hover:ring-ink-500 hover:ring-offset-2 hover:ring-offset-ink-900 cursor-pointer'
                               }`}
                             >
                               <img
@@ -705,31 +588,35 @@ export default function BulkAddModal({
                                 loading="lazy"
                               />
 
-                              <div
-                                className={`absolute top-1.5 right-1.5 md:top-2 md:right-2 w-5 h-5 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-all ${
-                                  isSelected
-                                    ? 'bg-gold-500 text-ink-900 opacity-100 scale-100'
-                                    : 'bg-black/50 text-white opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100'
-                                }`}
-                              >
-                                {isSelected ? (
-                                  <Check size={12} strokeWidth={3} className="md:w-3.5 md:h-3.5" />
-                                ) : (
-                                  <Plus size={12} className="md:w-3.5 md:h-3.5" />
-                                )}
-                              </div>
+                              {/* KÜTÜPHANEDE EKLİ ROZETİ */}
+                              {status.exists ? (
+                                <div className="absolute top-1.5 inset-x-1.5 bg-emerald-600/95 backdrop-blur-md text-white px-2 py-1 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-lg border border-emerald-400/40">
+                                  <CheckCircle2 size={11} className="flex-shrink-0" />
+                                  <span className="truncate">{status.watched ? 'İzlendi' : 'Listede Ekli'}</span>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`absolute top-1.5 right-1.5 md:top-2 md:right-2 w-5 h-5 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-all ${
+                                    isSelected
+                                      ? 'bg-gold-500 text-ink-900 opacity-100 scale-100'
+                                      : 'bg-black/50 text-white opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100'
+                                  }`}
+                                >
+                                  {isSelected ? (
+                                    <Check size={12} strokeWidth={3} className="md:w-3.5 md:h-3.5" />
+                                  ) : (
+                                    <Plus size={12} className="md:w-3.5 md:h-3.5" />
+                                  )}
+                                </div>
+                              )}
 
                               <div
-                                className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-1.5 md:p-3 pt-6 md:pt-10 transition-opacity ${
-                                  isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent p-1.5 md:p-3 pt-6 md:pt-10 transition-opacity ${
+                                  isSelected || status.exists ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                                 }`}
                               >
-                                <div className="text-[10px] md:text-xs font-bold text-white truncate">
-                                  {title}
-                                </div>
-                                <div className="text-[8px] md:text-[10px] text-gold-400 font-medium">
-                                  {date?.substring(0, 4)}
-                                </div>
+                                <div className="text-[10px] md:text-xs font-bold text-white truncate">{title}</div>
+                                <div className="text-[8px] md:text-[10px] text-gold-400 font-medium">{date?.substring(0, 4)}</div>
                               </div>
                             </div>
                           );
@@ -744,14 +631,9 @@ export default function BulkAddModal({
                           className="flex items-center gap-2 px-6 py-3 bg-ink-800 hover:bg-ink-700 text-white rounded-xl font-bold transition-all border border-ink-700/50 shadow-lg disabled:opacity-50 text-sm"
                         >
                           {isLoadingMore ? (
-                            <>
-                              <Loader2 size={16} className="animate-spin text-gold-400" />{' '}
-                              Yükleniyor...
-                            </>
+                            <><Loader2 size={16} className="animate-spin text-gold-400" /> Yükleniyor...</>
                           ) : (
-                            <>
-                              Daha Fazla Göster <ChevronDown size={16} className="text-gold-400" />
-                            </>
+                            <>Daha Fazla Göster <ChevronDown size={16} className="text-gold-400" /></>
                           )}
                         </button>
                       </div>
@@ -772,14 +654,9 @@ export default function BulkAddModal({
                 {isCartExpanded && (
                   <div className="p-4 border-b border-ink-800 bg-ink-950/50 max-h-48 md:max-h-60 overflow-y-auto overscroll-contain animate-fade-in">
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-xs md:text-sm font-bold text-white">
-                        Sepetindeki Yapımlar
-                      </h4>
+                      <h4 className="text-xs md:text-sm font-bold text-white">Sepetindeki Yapımlar</h4>
                       <button
-                        onClick={() => {
-                          setCart([]);
-                          setIsCartExpanded(false);
-                        }}
+                        onClick={() => { setCart([]); setIsCartExpanded(false); }}
                         className="text-[10px] md:text-xs text-red-400 hover:text-red-300 flex items-center gap-1 font-bold transition-colors"
                       >
                         <Trash2 size={14} /> Tümünü Sil
@@ -787,20 +664,10 @@ export default function BulkAddModal({
                     </div>
                     <div className="flex flex-wrap gap-2 md:gap-3">
                       {cart.map((item) => (
-                        <div
-                          key={item.id}
-                          className="relative group w-12 h-16 md:w-16 md:h-24 rounded-lg overflow-hidden border border-ink-700 shadow-md"
-                        >
-                          <img
-                            src={`https://image.tmdb.org/t/p/w200${item.poster_path}`}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
+                        <div key={item.id} className="relative group w-12 h-16 md:w-16 md:h-24 rounded-lg overflow-hidden border border-ink-700 shadow-md">
+                          <img src={`https://image.tmdb.org/t/p/w200${item.poster_path}`} alt="" className="w-full h-full object-cover" />
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleCartItem(item);
-                            }}
+                            onClick={(e) => { e.stopPropagation(); toggleCartItem(item); }}
                             className="absolute inset-0 bg-red-500/90 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex backdrop-blur-sm"
                           >
                             <Trash2 size={16} className="text-white" />
@@ -826,25 +693,16 @@ export default function BulkAddModal({
                     </div>
                     <div>
                       <div className="font-bold text-xs md:text-base text-white flex items-center gap-1">
-                        Sepet{' '}
-                        {isCartExpanded ? (
-                          <ChevronDown size={14} className="text-ink-400" />
-                        ) : (
-                          <ChevronUp size={14} className="text-ink-400" />
-                        )}
+                        Sepet {isCartExpanded ? <ChevronDown size={14} className="text-ink-400" /> : <ChevronUp size={14} className="text-ink-400" />}
                       </div>
                       <div className="hidden md:block text-[10px] md:text-xs font-medium text-ink-400">
-                        {cart.filter((c) => c.media_type === 'movie').length} Film,{' '}
-                        {cart.filter((c) => c.media_type === 'tv').length} Dizi
+                        {cart.filter((c) => c.media_type === 'movie').length} Film, {cart.filter((c) => c.media_type === 'tv').length} Dizi
                       </div>
                     </div>
                   </button>
 
                   <button
-                    onClick={() => {
-                      setIsCartExpanded(false);
-                      setStep('collection');
-                    }}
+                    onClick={() => { setIsCartExpanded(false); setStep('collection'); }}
                     className="bg-gradient-to-r from-gold-500 to-gold-400 text-ink-950 px-4 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl text-[11px] md:text-base font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg shadow-gold-500/20 flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
                     İlerle <Check size={14} className="md:w-[18px] md:h-[18px]" />
@@ -860,22 +718,13 @@ export default function BulkAddModal({
             <div className="max-w-3xl mx-auto w-full space-y-6 md:space-y-8">
               <div className="text-center space-y-2">
                 <h3 className="text-2xl md:text-3xl font-black text-white">Toplu Atama</h3>
-                <p className="text-xs md:text-sm text-ink-400">
-                  Seçtiğin {cart.length} yapımı istersen tek tıkla bir koleksiyona atayabilirsin.
-                </p>
+                <p className="text-xs md:text-sm text-ink-400">Seçtiğin {cart.length} yapımı istersen tek tıkla bir koleksiyona atayabilirsin.</p>
               </div>
 
               <div className="flex flex-wrap justify-center gap-2 md:gap-3 p-3 md:p-4 bg-ink-900/50 rounded-2xl border border-ink-800/50">
                 {cart.map((item) => (
-                  <div
-                    key={item.id}
-                    className="relative group w-12 h-16 md:w-16 md:h-24 rounded-lg overflow-hidden border border-ink-700 shadow-md"
-                  >
-                    <img
-                      src={`https://image.tmdb.org/t/p/w200${item.poster_path}`}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
+                  <div key={item.id} className="relative group w-12 h-16 md:w-16 md:h-24 rounded-lg overflow-hidden border border-ink-700 shadow-md">
+                    <img src={`https://image.tmdb.org/t/p/w200${item.poster_path}`} alt="" className="w-full h-full object-cover" />
                     <button
                       onClick={() => setCart(cart.filter((c) => c.id !== item.id))}
                       className="absolute inset-0 bg-red-500/80 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex backdrop-blur-sm"
@@ -889,19 +738,14 @@ export default function BulkAddModal({
               <div className="bg-ink-900 border border-ink-800 rounded-2xl p-4 md:p-6 space-y-4 md:space-y-6 shadow-lg">
                 <div className="flex items-center gap-2 md:gap-3 text-gold-400 mb-2 md:mb-4">
                   <FolderPlus size={20} />
-                  <h4 className="font-bold text-base md:text-lg text-white">
-                    Koleksiyona Ekle (Opsiyonel)
-                  </h4>
+                  <h4 className="font-bold text-base md:text-lg text-white">Koleksiyona Ekle (Opsiyonel)</h4>
                 </div>
 
                 <div className="space-y-4">
                   <input
                     type="text"
                     value={collectionName}
-                    onChange={(e) => {
-                      setCollectionName(e.target.value);
-                      setSelectedCollectionId(null);
-                    }}
+                    onChange={(e) => { setCollectionName(e.target.value); setSelectedCollectionId(null); }}
                     placeholder="Yeni koleksiyon adı (Örn: Hafta Sonu)"
                     className="w-full bg-ink-950 border border-ink-800 rounded-xl px-4 py-3 text-xs md:text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
                   />
@@ -910,9 +754,7 @@ export default function BulkAddModal({
                     <>
                       <div className="flex items-center gap-3 md:gap-4">
                         <div className="h-px bg-ink-800 flex-1" />
-                        <span className="text-[10px] md:text-xs font-bold text-ink-500 uppercase tracking-widest">
-                          VEYA MEVCUT SEÇ
-                        </span>
+                        <span className="text-[10px] md:text-xs font-bold text-ink-500 uppercase tracking-widest">VEYA MEVCUT SEÇ</span>
                         <div className="h-px bg-ink-800 flex-1" />
                       </div>
 
@@ -920,14 +762,9 @@ export default function BulkAddModal({
                         {data.collections.map((col: any) => (
                           <button
                             key={col.id}
-                            onClick={() => {
-                              setSelectedCollectionId(col.id);
-                              setCollectionName('');
-                            }}
+                            onClick={() => { setSelectedCollectionId(col.id); setCollectionName(''); }}
                             className={`px-3 md:px-4 py-2 rounded-lg text-[11px] md:text-xs font-bold transition-all border ${
-                              selectedCollectionId === col.id
-                                ? 'bg-gold-500/20 text-gold-400 border-gold-500/30'
-                                : 'bg-ink-950 border-ink-800 text-ink-400 hover:bg-ink-800'
+                              selectedCollectionId === col.id ? 'bg-gold-500/20 text-gold-400 border-gold-500/30' : 'bg-ink-950 border-ink-800 text-ink-400 hover:bg-ink-800'
                             }`}
                           >
                             {col.name}
@@ -940,16 +777,10 @@ export default function BulkAddModal({
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 pt-2 md:pt-4">
-                <button
-                  onClick={() => setStep('browse')}
-                  className="w-full sm:flex-1 py-3.5 md:py-4 bg-ink-900 text-ink-300 font-bold rounded-xl hover:bg-ink-800 transition-colors border border-ink-700 text-sm md:text-base"
-                >
+                <button onClick={() => setStep('browse')} className="w-full sm:flex-1 py-3.5 md:py-4 bg-ink-900 text-ink-300 font-bold rounded-xl hover:bg-ink-800 transition-colors border border-ink-700 text-sm md:text-base">
                   Geri Dön
                 </button>
-                <button
-                  onClick={handleImport}
-                  className="w-full sm:flex-[2] py-3.5 md:py-4 bg-gradient-to-r from-gold-500 to-gold-400 text-ink-950 font-black tracking-widest uppercase rounded-xl hover:scale-[1.02] transition-transform shadow-lg shadow-gold-500/20 text-xs md:text-sm"
-                >
+                <button onClick={handleImport} className="w-full sm:flex-[2] py-3.5 md:py-4 bg-gradient-to-r from-gold-500 to-gold-400 text-ink-950 font-black tracking-widest uppercase rounded-xl hover:scale-[1.02] transition-transform shadow-lg shadow-gold-500/20 text-xs md:text-sm">
                   {cart.length} Yapımı Ekle
                 </button>
               </div>
@@ -967,9 +798,7 @@ export default function BulkAddModal({
               </div>
             </div>
 
-            <h3 className="text-xl md:text-2xl font-black text-white mb-2">
-              Sinema Kartları & DNA Künyeleri Çekiliyor...
-            </h3>
+            <h3 className="text-xl md:text-2xl font-black text-white mb-2">Sinema Kartları & DNA Künyeleri Çekiliyor...</h3>
             <p className="text-xs md:text-sm text-ink-400 mb-6 md:mb-8 max-w-md">
               Yönetmen, oyuncu kadrosu, özet ve izleme platformları kütüphanene işleniyor.
             </p>
@@ -980,10 +809,7 @@ export default function BulkAddModal({
                 <span className="text-gold-400">% {importProgress}</span>
               </div>
               <div className="h-2 md:h-3 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800 shadow-inner relative">
-                <div
-                  className="h-full bg-gradient-to-r from-gold-600 to-yellow-400 transition-all duration-300"
-                  style={{ width: `${importProgress}%` }}
-                />
+                <div className="h-full bg-gradient-to-r from-gold-600 to-yellow-400 transition-all duration-300" style={{ width: `${importProgress}%` }} />
               </div>
             </div>
 
