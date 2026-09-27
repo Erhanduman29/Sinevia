@@ -107,8 +107,19 @@ export default function AchievementsPage() {
     if (filterMode === 'locked' && a.isUnlocked) return false;
     if (search.trim()) {
       const q = search.toLocaleLowerCase('tr-TR');
-      const name = (a.tier.name || a.def.name).toLocaleLowerCase('tr-TR');
-      return name.includes(q);
+      const tierName = (a.tier.name || '').toLocaleLowerCase('tr-TR');
+      const defName = (a.def.name || '').toLocaleLowerCase('tr-TR');
+      const parsedDesc = a.def.description
+        .replace('{threshold}', String(a.tier.threshold))
+        .toLocaleLowerCase('tr-TR');
+      const category = (a.def.category || '').toLocaleLowerCase('tr-TR');
+
+      return (
+        tierName.includes(q) ||
+        defName.includes(q) ||
+        parsedDesc.includes(q) ||
+        category.includes(q)
+      );
     }
     return true;
   });
@@ -360,9 +371,19 @@ export default function AchievementsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Başarım ara..."
-              className="w-full bg-ink-800/80 border border-ink-700 rounded-xl pl-10 pr-4 py-2 md:py-2.5 text-xs md:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 transition-all shadow-inner"
+              placeholder="Başarım adı, açıklama veya kategori ara..."
+              className="w-full bg-ink-800/80 border border-ink-700 rounded-xl pl-10 pr-9 py-2 md:py-2.5 text-xs md:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 transition-all shadow-inner"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                title="Aramayı Temizle"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white p-0.5 rounded-full hover:bg-ink-700 transition-colors"
+              >
+                <Icons.X size={15} />
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
