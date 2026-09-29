@@ -21,6 +21,7 @@ import {
   Layers,
   User,
   Tag,
+  History,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateTime, formatDateShort } from '../lib/utils';
@@ -31,7 +32,7 @@ import type { WatchHistoryItem, Movie, Series } from '../types';
 
 type SortMode = 'newest' | 'oldest' | 'rating';
 type FilterType = 'all' | 'movie' | 'series';
-type ViewMode = 'timeline' | 'grid';
+type ViewMode = 'timeline' | 'grid' | 'past';
 
 export default function HistoryPage() {
   const { data, updateHistoryRating } = useApp();
@@ -49,36 +50,58 @@ export default function HistoryPage() {
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
 
+  const isItemPastWatch = (h: WatchHistoryItem): boolean => {
+    if (h.isPastWatch) return true;
+    if (h.kind === 'movie' || h.type === 'movie') {
+      const m = data.movies.find((x) => x.id === (h.itemId || h.id));
+      if (m?.isPastWatch) return true;
+    }
+    return false;
+  };
+
+  // Güncel izlenenler (Zaman Tüneli ve Poster Vitrini için) ve Daha Önce İzlenenler ayrımı
+  const regularHistory = useMemo(
+    () => data.history.filter((h) => !isItemPastWatch(h)),
+    [data.history, data.movies]
+  );
+
+  const pastHistory = useMemo(
+    () => data.history.filter((h) => isItemPastWatch(h)),
+    [data.history, data.movies]
+  );
+
+  const activeBaseHistory = viewMode === 'past' ? pastHistory : regularHistory;
+
   // Geçmişte kullanılan tüm değerlendirme başlıklarını çıkar
   const usedReviewTags = useMemo(() => {
     const set = new Set<string>();
-    data.history.forEach((h) => (h.reviewTags || []).forEach((t) => set.add(t)));
+    activeBaseHistory.forEach((h) => (h.reviewTags || []).forEach((t) => set.add(t)));
     return Array.from(set);
-  }, [data.history]);
+  }, [activeBaseHistory]);
 
   // Günlük Özet İstatistikleri
   const diaryStats = useMemo(() => {
-    const total = data.history.length;
-    const movies = data.history.filter((h) => h.kind === 'movie' || h.type === 'movie').length;
+    const total = regularHistory.length;
+    const movies = regularHistory.filter((h) => h.kind === 'movie' || h.type === 'movie').length;
     const episodes = total - movies;
-    const withNotes = data.history.filter((h) => h.note && h.note.trim().length > 0).length;
+    const withNotes = regularHistory.filter((h) => h.note && h.note.trim().length > 0).length;
     const uniqueDays = new Set(
-      data.history.map((h) => (h.watchedAt ? h.watchedAt.slice(0, 10) : '')).filter(Boolean)
+      regularHistory.map((h) => (h.watchedAt ? h.watchedAt.slice(0, 10) : '')).filter(Boolean)
     ).size;
-    const rated = data.history.filter((h) => h.rating !== null);
+    const rated = regularHistory.filter((h) => h.rating !== null);
     const avgRating =
       rated.length > 0
         ? (rated.reduce((sum, h) => sum + (h.rating || 0), 0) / rated.length).toFixed(1)
         : '-';
 
     return { total, movies, episodes, withNotes, uniqueDays, avgRating };
-  }, [data.history]);
+  }, [regularHistory]);
 
   // Arama, Filtreleme ve Sıralama
   const processedItems = useMemo(() => {
-    let items = [...data.history];
+    let items = [...activeBaseHistory];
 
-    if (filterType !== 'all') {
+    if (viewMode !== 'past' && filterType !== 'all') {
       items = items.filter((h) => h.kind === filterType || h.type === filterType);
     }
 
@@ -119,7 +142,7 @@ export default function HistoryPage() {
     });
 
     return items;
-  }, [data.history, search, sortMode, filterType, onlyWithNotes, onlyHighRated, selectedTagFilter]);
+  }, [activeBaseHistory, viewMode, search, sortMode, filterType, onlyWithNotes, onlyHighRated, selectedTagFilter]);
 
   const seriesGroups = new Map<string, WatchHistoryItem[]>();
   processedItems
@@ -204,6 +227,7 @@ export default function HistoryPage() {
       genres: item.genres || [],
       collectionId: null,
       watched: true,
+      isPastWatch: item.isPastWatch,
       rating: item.rating,
       detailedRating: item.detailedRating,
       reviewTags: item.reviewTags,
@@ -245,7 +269,7 @@ export default function HistoryPage() {
         </h1>
 
         {data.history.length > 0 && (
-          <div className="flex items-center bg-ink-900/80 border border-ink-700/60 rounded-xl p-1">
+          <div className="flex flex-wrap items-center bg-ink-900/80 border border-ink-700/60 rounded-xl p-1 gap-1">
             <button
               type="button"
               onClick={() => setViewMode('timeline')}
@@ -267,6 +291,17 @@ export default function HistoryPage() {
               }`}
             >
               <LayoutGrid size={14} /> Poster Vitrini
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('past')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'past'
+                  ? 'bg-violet-500 text-white shadow-md'
+                  : 'text-ink-400 hover:text-violet-300'
+              }`}
+            >
+              <History size={14} /> Daha Önce İzlediklerim ({pastHistory.length})
             </button>
           </div>
         )}
@@ -350,38 +385,40 @@ export default function HistoryPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex bg-ink-950/80 rounded-xl p-1 border border-ink-800">
-                <button
-                  onClick={() => setFilterType('all')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                    filterType === 'all'
-                      ? 'bg-ink-800 text-ink-50 shadow-sm'
-                      : 'text-ink-400 hover:text-ink-200'
-                  }`}
-                >
-                  Tümü
-                </button>
-                <button
-                  onClick={() => setFilterType('movie')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                    filterType === 'movie'
-                      ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30'
-                      : 'text-ink-400 hover:text-ink-200'
-                  }`}
-                >
-                  <Film size={13} /> Filmler
-                </button>
-                <button
-                  onClick={() => setFilterType('series')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                    filterType === 'series'
-                      ? 'bg-azure-500/20 text-azure-400 border border-azure-500/30'
-                      : 'text-ink-400 hover:text-ink-200'
-                  }`}
-                >
-                  <Tv size={13} /> Diziler
-                </button>
-              </div>
+              {viewMode !== 'past' && (
+                <div className="flex bg-ink-950/80 rounded-xl p-1 border border-ink-800">
+                  <button
+                    onClick={() => setFilterType('all')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      filterType === 'all'
+                        ? 'bg-ink-800 text-ink-50 shadow-sm'
+                        : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    Tümü
+                  </button>
+                  <button
+                    onClick={() => setFilterType('movie')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      filterType === 'movie'
+                        ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30'
+                        : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    <Film size={13} /> Filmler
+                  </button>
+                  <button
+                    onClick={() => setFilterType('series')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      filterType === 'series'
+                        ? 'bg-azure-500/20 text-azure-400 border border-azure-500/30'
+                        : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    <Tv size={13} /> Diziler
+                  </button>
+                </div>
+              )}
 
               <button
                 type="button"
@@ -482,27 +519,58 @@ export default function HistoryPage() {
       )}
 
       {/* =========================================================
-          4. İÇERİK ALANI: BOŞ DURUM / POSTER VİTRİNİ / ZAMAN TÜNELİ
+          4. İÇERİK ALANI: BOŞ DURUM / DAHA ÖNCE İZLEDİKLERİM / POSTER VİTRİNİ / ZAMAN TÜNELİ
           ========================================================= */}
       {displayItems.length === 0 ? (
         <div className="text-center py-16 bg-ink-900/40 border border-ink-800/60 rounded-3xl text-ink-500">
           <div className="w-16 h-16 rounded-2xl bg-ink-800/50 flex items-center justify-center mx-auto mb-4">
-            <Film size={32} className="text-ink-600" />
+            {viewMode === 'past' ? (
+              <History size={32} className="text-violet-400/70" />
+            ) : (
+              <Film size={32} className="text-ink-600" />
+            )}
           </div>
           <p className="text-lg font-bold text-ink-200">
-            {data.history.length === 0
+            {viewMode === 'past'
+              ? pastHistory.length === 0
+                ? 'Daha önce izlediklerim kısmında henüz film yok.'
+                : 'Aramaya ve filtrelere uygun kayıt bulunamadı.'
+              : regularHistory.length === 0
               ? 'Henüz izlenen bir şey yok.'
               : 'Aramaya ve filtrelere uygun kayıt bulunamadı.'}
           </p>
           <p className="text-sm mt-1">
-            {data.history.length === 0
+            {viewMode === 'past'
+              ? 'Bir filmi puanlarken "Önceden İzlendi" seçeneğini işaretlediğinde burada listelenir.'
+              : regularHistory.length === 0
               ? 'Film veya dizi puanladıkça sinema günlüğün burada oluşacak.'
               : 'Filtreleri sıfırlamayı veya arama kelimesini değiştirmeyi dene.'}
           </p>
         </div>
+      ) : viewMode === 'past' ? (
+        /* =========================================================
+           MOD C: DAHA ÖNCE İZLEDİKLERİM SEKMESİ
+           ========================================================= */
+        <div className="space-y-4 animate-fade-in">
+          {displayItems.map(({ item }) => {
+            const movieData = data.movies.find((m) => m.id === (item.itemId || item.id));
+            return (
+              <MovieHistoryCard
+                key={item.id}
+                item={item}
+                movieData={movieData}
+                criteriaList={data.criteria || []}
+                isNoteExpanded={expandedNotes.has(item.id)}
+                onToggleNote={() => toggleNoteExpand(item.id)}
+                onEdit={() => setEditingItem(item)}
+                onSelectDetail={() => openMovieDetail(item, movieData)}
+              />
+            );
+          })}
+        </div>
       ) : viewMode === 'grid' ? (
         /* =========================================================
-           MOD A: POSTER VİTRİNİ (GALERİ GÖRÜNÜMÜ)
+           MOD A: POSTER VİTRİNİ (GALERİ GÖRÜNÜMÜ - ÖNCEDEN İZLENENLER HARİÇ)
            ========================================================= */
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 animate-fade-in">
           {displayItems.map(({ type, item, seriesId }) => {
@@ -955,8 +1023,10 @@ export default function HistoryPage() {
           initialNote={editingItem.note}
           initialDetailedRating={editingItem.detailedRating}
           initialReviewTags={editingItem.reviewTags}
-          onRate={(rating, note, detailedRating, reviewTags) => {
-            updateHistoryRating(editingItem.id, rating, note, detailedRating, reviewTags);
+          initialIsPastWatch={isItemPastWatch(editingItem)}
+          allowPastWatch={editingItem.kind === 'movie' || editingItem.type === 'movie'}
+          onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
+            updateHistoryRating(editingItem.id, rating, note, detailedRating, reviewTags, isPastWatch);
             setEditingItem(null);
           }}
           onClose={() => setEditingItem(null)}
@@ -993,6 +1063,7 @@ function MovieHistoryCard({
 }) {
   const hasDetailed = item.detailedRating && Object.keys(item.detailedRating).length > 0;
   const hasTags = item.reviewTags && item.reviewTags.length > 0;
+  const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch);
 
   return (
     <div className="relative bg-ink-900/80 backdrop-blur-md border border-ink-700/60 hover:border-gold-500/40 rounded-3xl p-4 sm:p-5 shadow-xl transition-all overflow-hidden group">
@@ -1036,9 +1107,15 @@ function MovieHistoryCard({
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-gold-500/20 text-gold-300 border border-gold-500/30">
-                <Film size={11} /> Film Kaydı
-              </span>
+              {isPast ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                  <History size={11} /> Daha Önce İzlendi
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-gold-500/20 text-gold-300 border border-gold-500/30">
+                  <Film size={11} /> Film Kaydı
+                </span>
+              )}
               {item.rating !== null && item.rating >= 9 && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   <Award size={11} /> Favori Seçim
@@ -1080,8 +1157,17 @@ function MovieHistoryCard({
             </div>
 
             <div className="text-xs text-ink-400 mt-2 flex items-center gap-1.5 font-medium">
-              <Clock size={12} className="text-gold-400" />
-              <span>İzlendi: {formatDateTime(item.watchedAt)}</span>
+              {isPast ? (
+                <>
+                  <History size={12} className="text-violet-400" />
+                  <span>Daha önce izlendi</span>
+                </>
+              ) : (
+                <>
+                  <Clock size={12} className="text-gold-400" />
+                  <span>İzlendi: {formatDateTime(item.watchedAt)}</span>
+                </>
+              )}
             </div>
 
             {/* Seçilen Değerlendirme Başlıkları (🔥 Başyapıt, 🎭 Oyunculuk Muazzam vb.) */}

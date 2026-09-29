@@ -2,10 +2,10 @@ import { useState, useMemo } from 'react';
 import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
   Hourglass, Activity, User, Users, Building2, SlidersHorizontal, Crown, Sparkles,
-  Eye, Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward,
+  Eye, Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { ratingBgClass } from '../lib/utils';
+import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { ratingBgClass, normalize } from '../lib/utils';
 import MediaDetailModal from '../components/MediaDetailModal';
 import WrappedModal from '../components/WrappedModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
@@ -29,15 +29,54 @@ const LANGUAGE_LABELS: Record<string, { name: string; flag: string }> = {
   no: { name: 'Norveççe', flag: '🇳🇴' },
 };
 
+type StatsScopeMode = 'current' | 'past' | 'all';
+
 export default function StatsPage() {
   const { data } = useApp();
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
   const [peopleTab, setPeopleTab] = useState<'directors' | 'cast' | 'studios'>('directors');
   const [showWrapped, setShowWrapped] = useState(false);
+  const [statsMode, setStatsMode] = useState<StatsScopeMode>('current');
+
+  const isHistoryItemPast = (h: WatchHistoryItem): boolean => {
+    if (h.isPastWatch) return true;
+    if (h.kind === 'movie' || h.type === 'movie') {
+      const m = data.movies.find((x) => x.id === (h.itemId || h.id));
+      if (m?.isPastWatch) return true;
+    }
+    return false;
+  };
+
+  const currentMoviesCount = useMemo(
+    () => data.movies.filter((m) => m.watched && !m.isPastWatch).length,
+    [data.movies]
+  );
+  const pastMoviesCount = useMemo(
+    () => data.movies.filter((m) => m.watched && m.isPastWatch).length,
+    [data.movies]
+  );
 
   const stats = useMemo(() => {
-    const movieHistory = data.history.filter((h) => h.kind === 'movie' || h.type === 'movie');
-    const seriesHistory = data.history.filter((h) => h.kind === 'series' || h.type === 'series');
+    const scopedHistory = data.history.filter((h) => {
+      const isPast = isHistoryItemPast(h);
+      if (statsMode === 'current') return !isPast;
+      if (statsMode === 'past') return isPast;
+      return true;
+    });
+
+    const scopedWatchedMovies = data.movies.filter((m) => {
+      if (!m.watched) return false;
+      if (statsMode === 'current') return !m.isPastWatch;
+      if (statsMode === 'past') return Boolean(m.isPastWatch);
+      return true;
+    });
+
+    const includeSeries = statsMode !== 'past';
+
+    const movieHistory = scopedHistory.filter((h) => h.kind === 'movie' || h.type === 'movie');
+    const seriesHistory = includeSeries
+      ? scopedHistory.filter((h) => h.kind === 'series' || h.type === 'series')
+      : [];
 
     const genreMovieMap = new Map<string, { count: number; totalRating: number; ratedCount: number }>();
     const genreSeriesMap = new Map<string, { count: number; totalRating: number; ratedCount: number }>();
@@ -73,7 +112,7 @@ export default function StatsPage() {
     });
 
     const monthlyMap = new Map<string, { movies: number; series: number; total: number }>();
-    data.history.forEach((h) => {
+    scopedHistory.forEach((h) => {
       if (!h.watchedAt) return;
       const d = new Date(h.watchedAt);
       if (isNaN(d.getTime())) return;
@@ -88,7 +127,7 @@ export default function StatsPage() {
     const maxMonthly = Math.max(...monthly.map(([, v]) => v.total), 1);
 
     const ratingDist = new Map<number, number>();
-    data.history.forEach((h) => {
+    scopedHistory.forEach((h) => {
       if (h.rating !== null) ratingDist.set(h.rating, (ratingDist.get(h.rating) || 0) + 1);
     });
     const ratings = Array.from(ratingDist.entries()).sort((a, b) => b[0] - a[0]);
@@ -97,20 +136,20 @@ export default function StatsPage() {
     const ratedSeries = seriesHistory.filter((h) => h.rating !== null);
     const avgMovie = ratedMovies.length > 0 ? ratedMovies.reduce((s, h) => s + (h.rating || 0), 0) / ratedMovies.length : 0;
     const avgSeries = ratedSeries.length > 0 ? ratedSeries.reduce((s, h) => s + (h.rating || 0), 0) / ratedSeries.length : 0;
-    const avgAll = data.history.filter((h) => h.rating !== null);
+    const avgAll = scopedHistory.filter((h) => h.rating !== null);
     const avgTotal = avgAll.length > 0 ? avgAll.reduce((s, h) => s + (h.rating || 0), 0) / avgAll.length : 0;
 
     let ratingPersona = { label: 'Yeni Başlayan', color: 'text-ink-400' };
     if (avgAll.length > 0) {
       if (avgTotal >= 8.5) ratingPersona = { label: 'Çok Cömert 💖', color: 'text-emerald-400' };
       else if (avgTotal >= 7.0) ratingPersona = { label: 'Pozitif Sinefil 😊', color: 'text-teal-400' };
-      else if (avgTotal >= 5.0) ratingPersona = { label: 'Dengeli Eleştirmen ⚖️', color: 'text-amber-400' };
+      else if (avgTotal >= 5.0) ratingPersona = { label: 'Dengeli Eleştirmen ⚖️️', color: 'text-amber-400' };
       else ratingPersona = { label: 'Acımasız Yargıç 💀', color: 'text-red-400' };
     }
 
     const uniqueTopItems: WatchHistoryItem[] = [];
     const seenTopKeys = new Set<string>();
-    const sortedByRating = [...data.history].filter((h) => h.rating !== null).sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    const sortedByRating = [...scopedHistory].filter((h) => h.rating !== null).sort((a, b) => (b.rating || 0) - (a.rating || 0));
 
     for (const item of sortedByRating) {
       const key = item.kind === 'series' || item.type === 'series' ? `series_${item.seriesId || item.title}` : `movie_${item.itemId || item.id}`;
@@ -118,14 +157,16 @@ export default function StatsPage() {
       if (uniqueTopItems.length >= 6) break;
     }
 
-    const collectionStats = data.collections.map((c) => {
-      const movies = data.movies.filter((m) => m.collectionId === c.id);
-      const watched = movies.filter((m) => m.watched).length;
-      return { name: c.name, total: movies.length, watched, progress: movies.length > 0 ? (watched / movies.length) * 100 : 0 };
-    });
+    const collectionStats = data.collections
+      .filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME))
+      .map((c) => {
+        const movies = data.movies.filter((m) => m.collectionId === c.id);
+        const watched = movies.filter((m) => m.watched).length;
+        return { name: c.name, total: movies.length, watched, progress: movies.length > 0 ? (watched / movies.length) * 100 : 0 };
+      });
 
     const dayOfWeekMap = new Array(7).fill(0);
-    data.history.forEach((h) => {
+    scopedHistory.forEach((h) => {
       if (!h.watchedAt) return;
       const d = new Date(h.watchedAt).getDay();
       if (!isNaN(d)) dayOfWeekMap[d]++;
@@ -136,7 +177,7 @@ export default function StatsPage() {
 
     const now = new Date();
     const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const thisMonthCount = data.history.filter((h) => {
+    const thisMonthCount = scopedHistory.filter((h) => {
       if (!h.watchedAt) return false;
       const d = new Date(h.watchedAt);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === thisMonthKey;
@@ -156,7 +197,7 @@ export default function StatsPage() {
     // =========================================================
     // GERÇEK SÜRE VE KATALOG SÜRESİ HESAPLAMALARI + HIZ ANALİZİ
     // =========================================================
-    const watchedMoviesList = data.movies.filter((m) => m.watched);
+    const watchedMoviesList = scopedWatchedMovies;
     const catalogMovieRuntimeMinutes = watchedMoviesList.reduce((sum, m) => sum + (m.runtime || 110), 0);
     const actualMovieRuntimeMinutes = watchedMoviesList.reduce((sum, m) => {
       const orig = m.runtime || 110;
@@ -164,7 +205,9 @@ export default function StatsPage() {
       return sum + real;
     }, 0);
 
-    const watchedEpisodesCount = data.series.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0);
+    const watchedEpisodesCount = includeSeries
+      ? data.series.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0)
+      : 0;
     const seriesRuntimeMinutes = watchedEpisodesCount * 42;
 
     const totalActualMinutes = actualMovieRuntimeMinutes + seriesRuntimeMinutes;
@@ -179,13 +222,13 @@ export default function StatsPage() {
     const catalogMins = totalCatalogMinutes % 60;
 
     // Zamanından önce bitirilen filmler ve hız istatistikleri
-    const earlyMovies = watchedMoviesList.filter((m) => m.actualRuntime && m.runtime && m.actualRuntime < m.runtime);
+    const earlyMovies = watchedMoviesList.filter((m) => !m.isPastWatch && m.actualRuntime && m.runtime && m.actualRuntime < m.runtime);
     const earlyFinishedCount = earlyMovies.length;
     const totalSavedMinutes = earlyMovies.reduce((sum, m) => sum + ((m.runtime || 0) - (m.actualRuntime || 0)), 0);
     const savedHours = Math.floor(totalSavedMinutes / 60);
     const savedMins = totalSavedMinutes % 60;
 
-    const trackedSpeedMovies = watchedMoviesList.filter((m) => m.actualRuntime && m.actualRuntime > 0 && m.runtime && m.runtime > 0);
+    const trackedSpeedMovies = watchedMoviesList.filter((m) => !m.isPastWatch && m.actualRuntime && m.actualRuntime > 0 && m.runtime && m.runtime > 0);
     const avgSpeedMultiplier = trackedSpeedMovies.length > 0
       ? trackedSpeedMovies.reduce((s, m) => s + (m.runtime || 0), 0) / trackedSpeedMovies.reduce((s, m) => s + (m.actualRuntime || 1), 0)
       : 1.0;
@@ -193,7 +236,7 @@ export default function StatsPage() {
     const fastestMovieRecord = [...earlyMovies].sort((a, b) => ((b.runtime || 0) - (b.actualRuntime || 0)) - ((a.runtime || 0) - (a.actualRuntime || 0)))[0] || null;
 
     const timeBuckets = { morning: 0, afternoon: 0, evening: 0, night: 0 };
-    data.history.forEach((h) => {
+    scopedHistory.forEach((h) => {
       if (!h.watchedAt) return;
       const hr = new Date(h.watchedAt).getHours();
       if (isNaN(hr)) return;
@@ -205,7 +248,7 @@ export default function StatsPage() {
     const totalTimeTracked = timeBuckets.morning + timeBuckets.afternoon + timeBuckets.evening + timeBuckets.night || 1;
 
     const dailyCountMap = new Map<string, number>();
-    data.history.forEach((h) => {
+    scopedHistory.forEach((h) => {
       if (!h.watchedAt) return;
       const dateStr = h.watchedAt.slice(0, 10);
       dailyCountMap.set(dateStr, (dailyCountMap.get(dateStr) || 0) + 1);
@@ -239,14 +282,16 @@ export default function StatsPage() {
     }
 
     const longestMovie: Movie | null = [...watchedMoviesList].filter((m) => m.runtime && m.runtime > 0).sort((a, b) => (b.runtime || 0) - (a.runtime || 0))[0] || null;
-    const mostWatchedSeries: { title: string; count: number } | null = data.series.map((s) => ({ title: s.title, count: s.episodes.filter((e) => e.watched).length })).filter((item) => item.count > 0).sort((a, b) => b.count - a.count)[0] || null;
+    const mostWatchedSeries: { title: string; count: number } | null = includeSeries
+      ? data.series.map((s) => ({ title: s.title, count: s.episodes.filter((e) => e.watched).length })).filter((item) => item.count > 0).sort((a, b) => b.count - a.count)[0] || null
+      : null;
 
-    const notesWritten = data.history.filter((h) => h.note && h.note.trim().length > 0);
+    const notesWritten = scopedHistory.filter((h) => h.note && h.note.trim().length > 0);
     const totalNoteWords = notesWritten.reduce((sum, h) => sum + h.note.trim().split(/\s+/).filter(Boolean).length, 0);
 
     const reviewTagMap = new Map<string, { count: number; ratingSum: number; ratedCount: number }>();
     let totalTaggedItems = 0;
-    data.history.forEach((h) => {
+    scopedHistory.forEach((h) => {
       if (!h.reviewTags || h.reviewTags.length === 0) return;
       totalTaggedItems++;
       h.reviewTags.forEach((tag) => {
@@ -271,20 +316,22 @@ export default function StatsPage() {
       if (m.rating !== null) { cur.ratingSum += m.rating; cur.ratedCount++; }
       langMap.set(code, cur);
     });
-    data.series.forEach((s) => {
-      if (!s.originalLanguage) return;
-      const watchedEps = s.episodes.filter((e) => e.watched);
-      if (watchedEps.length === 0) return;
-      const code = s.originalLanguage.toLowerCase();
-      const cur = langMap.get(code) || { count: 0, ratingSum: 0, ratedCount: 0 };
-      cur.count++;
-      const ratedEps = watchedEps.filter((e) => e.rating !== null);
-      if (ratedEps.length > 0) {
-        const sAvg = ratedEps.reduce((sum, e) => sum + (e.rating || 0), 0) / ratedEps.length;
-        cur.ratingSum += sAvg; cur.ratedCount++;
-      }
-      langMap.set(code, cur);
-    });
+    if (includeSeries) {
+      data.series.forEach((s) => {
+        if (!s.originalLanguage) return;
+        const watchedEps = s.episodes.filter((e) => e.watched);
+        if (watchedEps.length === 0) return;
+        const code = s.originalLanguage.toLowerCase();
+        const cur = langMap.get(code) || { count: 0, ratingSum: 0, ratedCount: 0 };
+        cur.count++;
+        const ratedEps = watchedEps.filter((e) => e.rating !== null);
+        if (ratedEps.length > 0) {
+          const sAvg = ratedEps.reduce((sum, e) => sum + (e.rating || 0), 0) / ratedEps.length;
+          cur.ratingSum += sAvg; cur.ratedCount++;
+        }
+        langMap.set(code, cur);
+      });
+    }
 
     const topLanguages = Array.from(langMap.entries())
       .map(([code, val]) => {
@@ -312,15 +359,17 @@ export default function StatsPage() {
       (m.studios || []).forEach((st) => addPersonStat(studioMap, st, m.rating));
     });
 
-    data.series.forEach((s) => {
-      const watchedEps = s.episodes.filter((e) => e.watched);
-      if (watchedEps.length === 0) return;
-      const ratedEps = watchedEps.filter((e) => e.rating !== null);
-      const sAvg = ratedEps.length > 0 ? ratedEps.reduce((sum, e) => sum + (e.rating || 0), 0) / ratedEps.length : null;
-      (s.creators || []).forEach((cr) => addPersonStat(directorMap, cr, sAvg));
-      (s.cast || []).forEach((a) => addPersonStat(castMap, a, sAvg));
-      (s.studios || []).forEach((st) => addPersonStat(studioMap, st, sAvg));
-    });
+    if (includeSeries) {
+      data.series.forEach((s) => {
+        const watchedEps = s.episodes.filter((e) => e.watched);
+        if (watchedEps.length === 0) return;
+        const ratedEps = watchedEps.filter((e) => e.rating !== null);
+        const sAvg = ratedEps.length > 0 ? ratedEps.reduce((sum, e) => sum + (e.rating || 0), 0) / ratedEps.length : null;
+        (s.creators || []).forEach((cr) => addPersonStat(directorMap, cr, sAvg));
+        (s.cast || []).forEach((a) => addPersonStat(castMap, a, sAvg));
+        (s.studios || []).forEach((st) => addPersonStat(studioMap, st, sAvg));
+      });
+    }
 
     const formatTopPeople = (map: Map<string, { count: number; ratingSum: number; ratedCount: number }>) =>
       Array.from(map.entries())
@@ -333,7 +382,7 @@ export default function StatsPage() {
     const topStudios = formatTopPeople(studioMap);
 
     const criteriaStatsMap = new Map<string, { sum: number; count: number }>();
-    data.history.forEach((h) => {
+    scopedHistory.forEach((h) => {
       if (!h.detailedRating) return;
       Object.entries(h.detailedRating).forEach(([critId, score]) => {
         const num = Number(score);
@@ -371,7 +420,7 @@ export default function StatsPage() {
 
     return {
       genreMovieMap, genreSeriesMap, genreAllMap, monthly, maxMonthly, ratings, avgMovie, avgSeries, avgTotal,
-      ratingPersona, topRated: uniqueTopItems, movieCount: movieHistory.length, seriesCount: seriesHistory.length,
+      ratingPersona, topRated: uniqueTopItems, movieCount: watchedMoviesList.length, seriesCount: seriesHistory.length,
       uniqueSeriesCount: uniqueSeries, collectionStats, dayOfWeekMap, maxDayOfWeek, thisMonthCount,
       remainingMovies, remainingMoviesHours, movieCompletionPct, ongoingSeriesCount, remainingEpisodes,
       remainingEpisodesHours, seriesCompletionPct,
@@ -383,7 +432,7 @@ export default function StatsPage() {
       reviewTagStats, maxReviewTagCount, totalTaggedItems, topLanguages, topDirectors, topCast, topStudios,
       criteriaAverages, decades, maxDecadeCount,
     };
-  }, [data]);
+  }, [data, statsMode]);
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
@@ -398,7 +447,7 @@ export default function StatsPage() {
       const found = data.movies.find((m) => m.id === (h.itemId || h.id));
       const fallback: Movie = found || {
         id: h.itemId || h.id, title: h.title, year: h.year || '', genres: h.genres || [], collectionId: null,
-        watched: true, rating: h.rating, detailedRating: h.detailedRating, reviewTags: h.reviewTags, note: h.note, watchedAt: h.watchedAt, addedAt: h.watchedAt,
+        watched: true, isPastWatch: h.isPastWatch, rating: h.rating, detailedRating: h.detailedRating, reviewTags: h.reviewTags, note: h.note, watchedAt: h.watchedAt, addedAt: h.watchedAt,
       };
       setDetailTarget({ type: 'movie', data: fallback, historyItem: h });
     } else {
@@ -411,27 +460,76 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* SAYFA BAŞLIĞI & WRAPPED BUTONU */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-ink-100 flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-azure-500/20 border border-gold-500/30 flex items-center justify-center">
-            <BarChart3 size={22} className="text-gold-400" />
-          </div>
-          Sinema Analiz & İstatistik Stüdyosu
-        </h1>
+      {/* SAYFA BAŞLIĞI & SEKMELİ İSTATİSTİK MODU SEÇİCİ */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-2xl font-bold text-ink-100 flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-azure-500/20 border border-gold-500/30 flex items-center justify-center">
+              <BarChart3 size={22} className="text-gold-400" />
+            </div>
+            Sinema Analiz & İstatistik Stüdyosu
+          </h1>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={() => setShowWrapped(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-gold-500 via-amber-500 to-orange-500 hover:from-gold-400 hover:to-amber-400 text-ink-950 px-4 py-2 rounded-full text-xs font-black shadow-lg shadow-gold-500/20 transition-all hover:scale-105"
-          >
-            <Sparkles size={15} /> 🎬 Sinevia Wrapped Özeti
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => setShowWrapped(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-gold-500 via-amber-500 to-orange-500 hover:from-gold-400 hover:to-amber-400 text-ink-950 px-4 py-2 rounded-full text-xs font-black shadow-lg shadow-gold-500/20 transition-all hover:scale-105"
+            >
+              <Sparkles size={15} /> 🎬 Sinevia Wrapped Özeti
+            </button>
 
-          <div className="inline-flex items-center gap-2 bg-ink-900/80 border border-ink-700/60 px-3.5 py-2 rounded-full text-xs font-bold text-ink-300">
-            <Sparkles size={13} className="text-gold-400" />
-            Eleştirmen Kimliği: <span className={stats.ratingPersona.color}>{stats.ratingPersona.label}</span>
+            <div className="inline-flex items-center gap-2 bg-ink-900/80 border border-ink-700/60 px-3.5 py-2 rounded-full text-xs font-bold text-ink-300">
+              <Sparkles size={13} className="text-gold-400" />
+              Eleştirmen Kimliği: <span className={stats.ratingPersona.color}>{stats.ratingPersona.label}</span>
+            </div>
           </div>
+        </div>
+
+        {/* ÜSTTEN 3'LÜ SEKMELİ GÖRÜNÜM SEÇİCİ (GÜNCEL / DAHA ÖNCE İZLENENLER / TÜM ZAMANLAR) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-ink-900/70 border border-ink-700/60 p-2 rounded-2xl">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setStatsMode('current')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
+                statsMode === 'current'
+                  ? 'bg-gold-500 text-ink-950 shadow-md'
+                  : 'text-ink-400 hover:text-ink-200 hover:bg-ink-800/60'
+              }`}
+            >
+              <Activity size={14} /> Güncel İstatistikler ({currentMoviesCount} Film)
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatsMode('past')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
+                statsMode === 'past'
+                  ? 'bg-violet-500 text-white shadow-md shadow-violet-500/25'
+                  : 'text-ink-400 hover:text-violet-300 hover:bg-ink-800/60'
+              }`}
+            >
+              <History size={14} /> Daha Önce İzlenenler ({pastMoviesCount} Film)
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatsMode('all')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
+                statsMode === 'all'
+                  ? 'bg-azure-500 text-white shadow-md'
+                  : 'text-ink-400 hover:text-azure-300 hover:bg-ink-800/60'
+              }`}
+            >
+              <Globe size={14} /> Tüm Zamanlar ({currentMoviesCount + pastMoviesCount} Film)
+            </button>
+          </div>
+
+          <span className="text-[11px] font-semibold text-ink-400 px-2 hidden md:inline">
+            {statsMode === 'current'
+              ? 'Önceden izlediğin filmler güncel istatistiklerine dahil edilmez.'
+              : statsMode === 'past'
+              ? 'Yalnızca daha önce (geçmişte) izleyip puanladığın filmlerin istatistikleri.'
+              : 'Güncel ve daha önce izlediğin tüm yapımların birleşik istatistikleri.'}
+          </span>
         </div>
       </div>
 
@@ -445,7 +543,10 @@ export default function StatsPage() {
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
             <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gold-400 mb-3">
-              <Clock size={15} /> Ekran Başında Geçen Toplam Ömür (Gerçek İzleme Süresi)
+              <Clock size={15} />
+              {statsMode === 'past'
+                ? 'Daha Önce İzlenen Filmlerin Toplam Süresi'
+                : 'Ekran Başında Geçen Toplam Ömür (Gerçek İzleme Süresi)'}
             </div>
             <div className="flex items-baseline gap-4 flex-wrap">
               {stats.runtimeDays > 0 && (
@@ -467,7 +568,7 @@ export default function StatsPage() {
             <div className="mt-3 space-y-1">
               <p className="text-xs text-ink-300 flex items-center gap-1.5 font-medium">
                 <Activity size={13} className="text-emerald-400" />
-                Gerçekte ekran başında <strong className="text-white">{stats.totalActualMinutes.toLocaleString('tr-TR')} dakika</strong> vakit geçirdin.
+                Toplam <strong className="text-white">{stats.totalActualMinutes.toLocaleString('tr-TR')} dakika</strong> izleme süresi.
               </p>
               <p className="text-[11px] text-ink-400 flex items-center gap-1.5">
                 <Film size={12} className="text-gold-400" />
@@ -481,7 +582,7 @@ export default function StatsPage() {
 
           <div className="grid grid-cols-2 gap-3 sm:w-auto w-full flex-shrink-0">
             <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-3.5 min-w-[140px]">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-gold-400 mb-1"><Film size={14} /> Gerçek Film Süresi</div>
+              <div className="flex items-center gap-1.5 text-xs font-bold text-gold-400 mb-1"><Film size={14} /> Film Süresi</div>
               <div className="text-xl font-black text-ink-50">{Math.round(stats.actualMovieRuntimeMinutes / 60)} <span className="text-xs font-semibold text-ink-400">Saat</span></div>
               <div className="text-[10px] text-ink-500 mt-0.5">Orijinal: {Math.round(stats.catalogMovieRuntimeMinutes / 60)} Saat ({stats.movieCount} Film)</div>
             </div>
@@ -495,85 +596,89 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {/* YENİ: ⚡ ZAMAN BÜKÜCÜ & HIZ ANALİZİ */}
-      <div className="bg-ink-900/65 border border-emerald-500/30 rounded-2xl p-5 shadow-xl">
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-ink-100 flex items-center gap-2">
-              <Zap size={19} className="text-emerald-400" />
-              Zaman Bükücü & Hız Analizi (1.25x / Atlama İstatistikleri)
-            </h2>
-            <p className="text-xs text-ink-400 mt-0.5">
-              Filmleri izlemeye başlama saatin ile puanlama saatin arasındaki farktan hesaplanan hız ve zaman tasarrufu verilerin
-            </p>
+      {/* ZAMAN BÜKÜCÜ & HIZ ANALİZİ (Sadece güncel veya tüm zamanlar modunda gösterilir) */}
+      {statsMode !== 'past' && (
+        <div className="bg-ink-900/65 border border-emerald-500/30 rounded-2xl p-5 shadow-xl">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-ink-100 flex items-center gap-2">
+                <Zap size={19} className="text-emerald-400" />
+                Zaman Bükücü & Hız Analizi (1.25x / Atlama İstatistikleri)
+              </h2>
+              <p className="text-xs text-ink-400 mt-0.5">
+                Filmleri izlemeye başlama saatin ile puanlama saatin arasındaki farktan hesaplanan hız ve zaman tasarrufu verilerin
+              </p>
+            </div>
+            <span className="text-[11px] font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full">
+              Canlı Sayaç Analizi
+            </span>
           </div>
-          <span className="text-[11px] font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full">
-            Canlı Sayaç Analizi
-          </span>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-xs font-bold text-emerald-400 uppercase">
+                <span>Zamanından Önce Biten</span>
+                <FastForward size={16} />
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-white mt-2">
+                {stats.earlyFinishedCount} <span className="text-sm font-bold text-ink-400">Film</span>
+              </div>
+              <div className="text-[11px] text-ink-400 mt-1">
+                Orijinal süresinden daha kısa sürede tamamlandı
+              </div>
+            </div>
+
+            <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-xs font-bold text-gold-400 uppercase">
+                <span>Tasarruf Edilen Süre</span>
+                <Clock size={16} />
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-white mt-2">
+                {stats.savedHours > 0 ? `${stats.savedHours} Sa ` : ''}{stats.savedMins} <span className="text-sm font-bold text-ink-400">Dk</span>
+              </div>
+              <div className="text-[11px] text-ink-400 mt-1">
+                Toplam <strong className="text-gold-400">{stats.totalSavedMinutes} dakika</strong> cebinde kaldı!
+              </div>
+            </div>
+
+            <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-xs font-bold text-azure-400 uppercase">
+                <span>Ortalama İzleme Hızın</span>
+                <Gauge size={16} />
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-white mt-2">
+                {stats.avgSpeedMultiplier.toFixed(2)}x
+              </div>
+              <div className="text-[11px] text-ink-400 mt-1">
+                {stats.avgSpeedMultiplier > 1.05 ? 'Hızlı & Dinamik İzleyici ⚡' : 'Standart Sinema Temposu 🎬'}
+              </div>
+            </div>
+
+            <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-xs font-bold text-purple-400 uppercase">
+                <span>En Hızlı Biten Rekoru</span>
+                <Zap size={16} />
+              </div>
+              <div className="text-sm font-black text-white mt-2 truncate">
+                {stats.fastestMovieRecord ? stats.fastestMovieRecord.title : 'Henüz Yok'}
+              </div>
+              <div className="text-[11px] text-ink-400 mt-1">
+                {stats.fastestMovieRecord
+                  ? `${stats.fastestMovieRecord.runtime} dk ➔ ${stats.fastestMovieRecord.actualRuntime} dk (${(stats.fastestMovieRecord.runtime || 0) - (stats.fastestMovieRecord.actualRuntime || 0)} dk kazanç)`
+                  : 'Film izlerken sayacı başlat!'}
+              </div>
+            </div>
+          </div>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-xs font-bold text-emerald-400 uppercase">
-              <span>Zamanından Önce Biten</span>
-              <FastForward size={16} />
-            </div>
-            <div className="text-2xl sm:text-3xl font-black text-white mt-2">
-              {stats.earlyFinishedCount} <span className="text-sm font-bold text-ink-400">Film</span>
-            </div>
-            <div className="text-[11px] text-ink-400 mt-1">
-              Orijinal süresinden daha kısa sürede tamamlandı
-            </div>
-          </div>
-
-          <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-xs font-bold text-gold-400 uppercase">
-              <span>Tasarruf Edilen Süre</span>
-              <Clock size={16} />
-            </div>
-            <div className="text-2xl sm:text-3xl font-black text-white mt-2">
-              {stats.savedHours > 0 ? `${stats.savedHours} Sa ` : ''}{stats.savedMins} <span className="text-sm font-bold text-ink-400">Dk</span>
-            </div>
-            <div className="text-[11px] text-ink-400 mt-1">
-              Toplam <strong className="text-gold-400">{stats.totalSavedMinutes} dakika</strong> cebinde kaldı!
-            </div>
-          </div>
-
-          <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-xs font-bold text-azure-400 uppercase">
-              <span>Ortalama İzleme Hızın</span>
-              <Gauge size={16} />
-            </div>
-            <div className="text-2xl sm:text-3xl font-black text-white mt-2">
-              {stats.avgSpeedMultiplier.toFixed(2)}x
-            </div>
-            <div className="text-[11px] text-ink-400 mt-1">
-              {stats.avgSpeedMultiplier > 1.05 ? 'Hızlı & Dinamik İzleyici ⚡' : 'Standart Sinema Temposu 🎬'}
-            </div>
-          </div>
-
-          <div className="bg-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-xs font-bold text-purple-400 uppercase">
-              <span>En Hızlı Biten Rekoru</span>
-              <Zap size={16} />
-            </div>
-            <div className="text-sm font-black text-white mt-2 truncate">
-              {stats.fastestMovieRecord ? stats.fastestMovieRecord.title : 'Henüz Yok'}
-            </div>
-            <div className="text-[11px] text-ink-400 mt-1">
-              {stats.fastestMovieRecord
-                ? `${stats.fastestMovieRecord.runtime} dk ➔ ${stats.fastestMovieRecord.actualRuntime} dk (${(stats.fastestMovieRecord.runtime || 0) - (stats.fastestMovieRecord.actualRuntime || 0)} dk kazanç)`
-                : 'Film izlerken sayacı başlat!'}
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* 2. ANA METRİKLER */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
         <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-ink-400 uppercase tracking-wider">İzlenen Film</span>
+            <span className="text-xs font-bold text-ink-400 uppercase tracking-wider">
+              {statsMode === 'past' ? 'Önceden İzlenen Film' : 'İzlenen Film'}
+            </span>
             <Film size={18} className="text-gold-400" />
           </div>
           <div className="text-3xl font-black text-ink-50 mt-2">{stats.movieCount}</div>
@@ -609,125 +714,129 @@ export default function StatsPage() {
       </div>
 
       {/* SIRADA BEKLEYENLER */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-ink-900/70 border border-gold-500/30 rounded-2xl p-5 shadow-lg flex flex-col justify-between gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center flex-shrink-0">
-                <Film size={22} className="text-gold-400" />
-              </div>
-              <div>
-                <div className="text-xs font-black uppercase tracking-wider text-gold-400">Sırada Bekleyen Filmler</div>
-                <div className="text-2xl sm:text-3xl font-black text-ink-50 mt-0.5">{stats.remainingMovies} <span className="text-sm font-bold text-ink-400">Film</span></div>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-xs font-black bg-ink-950 border border-ink-800 text-gold-400 px-2.5 py-1 rounded-lg">~{stats.remainingMoviesHours} Saatlik Maraton</span>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs font-bold text-ink-400">
-              <span>Film Arşivi Tamamlanma Oranı</span>
-              <span className="text-gold-400">%{stats.movieCompletionPct} Bitti</span>
-            </div>
-            <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800">
-              <div className="h-full bg-gradient-to-r from-gold-600 to-amber-400 rounded-full transition-all duration-700" style={{ width: `${stats.movieCompletionPct}%` }} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-ink-900/70 border border-azure-500/30 rounded-2xl p-5 shadow-lg flex flex-col justify-between gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-azure-500/15 border border-azure-500/30 flex items-center justify-center flex-shrink-0">
-                <Tv size={22} className="text-azure-400" />
-              </div>
-              <div>
-                <div className="text-xs font-black uppercase tracking-wider text-azure-400">Sırada Bekleyen Diziler & Bölümler</div>
-                <div className="text-2xl sm:text-3xl font-black text-ink-50 mt-0.5">
-                  {stats.ongoingSeriesCount} <span className="text-sm font-bold text-ink-400">Dizide</span> {stats.remainingEpisodes} <span className="text-sm font-bold text-ink-400">Bölüm</span>
+      {statsMode !== 'past' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-ink-900/70 border border-gold-500/30 rounded-2xl p-5 shadow-lg flex flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center flex-shrink-0">
+                  <Film size={22} className="text-gold-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-gold-400">Sırada Bekleyen Filmler</div>
+                  <div className="text-2xl sm:text-3xl font-black text-ink-50 mt-0.5">{stats.remainingMovies} <span className="text-sm font-bold text-ink-400">Film</span></div>
                 </div>
               </div>
+              <div className="text-right">
+                <span className="text-xs font-black bg-ink-950 border border-ink-800 text-gold-400 px-2.5 py-1 rounded-lg">~{stats.remainingMoviesHours} Saatlik Maraton</span>
+              </div>
             </div>
-            <div className="text-right">
-              <span className="text-xs font-black bg-ink-950 border border-ink-800 text-azure-400 px-2.5 py-1 rounded-lg">~{stats.remainingEpisodesHours} Saatlik Maraton</span>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-bold text-ink-400">
+                <span>Film Arşivi Tamamlanma Oranı</span>
+                <span className="text-gold-400">%{stats.movieCompletionPct} Bitti</span>
+              </div>
+              <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800">
+                <div className="h-full bg-gradient-to-r from-gold-600 to-amber-400 rounded-full transition-all duration-700" style={{ width: `${stats.movieCompletionPct}%` }} />
+              </div>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs font-bold text-ink-400">
-              <span>Dizi Bölümleri Tamamlanma Oranı</span>
-              <span className="text-azure-400">%{stats.seriesCompletionPct} Bitti</span>
+
+          <div className="bg-ink-900/70 border border-azure-500/30 rounded-2xl p-5 shadow-lg flex flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-azure-500/15 border border-azure-500/30 flex items-center justify-center flex-shrink-0">
+                  <Tv size={22} className="text-azure-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-azure-400">Sırada Bekleyen Diziler & Bölümler</div>
+                  <div className="text-2xl sm:text-3xl font-black text-ink-50 mt-0.5">
+                    {stats.ongoingSeriesCount} <span className="text-sm font-bold text-ink-400">Dizide</span> {stats.remainingEpisodes} <span className="text-sm font-bold text-ink-400">Bölüm</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-black bg-ink-950 border border-ink-800 text-azure-400 px-2.5 py-1 rounded-lg">~{stats.remainingEpisodesHours} Saatlik Maraton</span>
+              </div>
             </div>
-            <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800">
-              <div className="h-full bg-gradient-to-r from-azure-600 to-cyan-400 rounded-full transition-all duration-700" style={{ width: `${stats.seriesCompletionPct}%` }} />
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-bold text-ink-400">
+                <span>Dizi Bölümleri Tamamlanma Oranı</span>
+                <span className="text-azure-400">%{stats.seriesCompletionPct} Bitti</span>
+              </div>
+              <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800">
+                <div className="h-full bg-gradient-to-r from-azure-600 to-cyan-400 rounded-full transition-all duration-700" style={{ width: `${stats.seriesCompletionPct}%` }} />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* 3. İZLEME BİYORİTMİ & SON 14 GÜN */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-7 bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
-          <div className="mb-4">
-            <h2 className="text-base sm:text-lg font-bold text-ink-100 flex items-center gap-2"><Clock size={19} className="text-gold-400" /> İzleme Biyoritmi (Günün Saatleri)</h2>
-            <p className="text-xs text-ink-400 mt-0.5">Film ve dizileri günün hangi zaman diliminde izlemeyi seviyorsun?</p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[
-              { key: 'morning', label: 'Sabah Kuşağı', hours: '06:00 - 11:59', count: stats.timeBuckets.morning, icon: Coffee, color: 'text-amber-400', bar: 'bg-amber-400' },
-              { key: 'afternoon', label: 'Gündüz', hours: '12:00 - 17:59', count: stats.timeBuckets.afternoon, icon: Sun, color: 'text-orange-400', bar: 'bg-orange-400' },
-              { key: 'evening', label: 'Prime Time', hours: '18:00 - 23:59', count: stats.timeBuckets.evening, icon: Sunset, color: 'text-gold-400', bar: 'bg-gold-500' },
-              { key: 'night', label: 'Gece Baykuşu', hours: '00:00 - 05:59', count: stats.timeBuckets.night, icon: Moon, color: 'text-indigo-400', bar: 'bg-indigo-500' },
-            ].map((slot) => {
-              const Icon = slot.icon;
-              const pct = Math.round((slot.count / stats.totalTimeTracked) * 100);
-              return (
-                <div key={slot.key} className="bg-ink-950/70 border border-ink-800/80 rounded-xl p-3 flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-2">
-                    <Icon size={17} className={slot.color} />
-                    <span className="text-xs font-black text-ink-100">%{pct}</span>
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-ink-200">{slot.label}</div>
-                    <div className="text-[10px] text-ink-500">{slot.hours}</div>
-                  </div>
-                  <div className="mt-2.5 space-y-1">
-                    <div className="h-1.5 w-full bg-ink-900 rounded-full overflow-hidden">
-                      <div className={`h-full ${slot.bar} rounded-full`} style={{ width: `${pct}%` }} />
+      {/* 3. İZLEME BİYORİTMİ & SON 14 GÜN (Sadece güncel veya tüm zamanlar modunda anlamlıdır) */}
+      {statsMode !== 'past' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="lg:col-span-7 bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+            <div className="mb-4">
+              <h2 className="text-base sm:text-lg font-bold text-ink-100 flex items-center gap-2"><Clock size={19} className="text-gold-400" /> İzleme Biyoritmi (Günün Saatleri)</h2>
+              <p className="text-xs text-ink-400 mt-0.5">Film ve dizileri günün hangi zaman diliminde izlemeyi seviyorsun?</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {[
+                { key: 'morning', label: 'Sabah Kuşağı', hours: '06:00 - 11:59', count: stats.timeBuckets.morning, icon: Coffee, color: 'text-amber-400', bar: 'bg-amber-400' },
+                { key: 'afternoon', label: 'Gündüz', hours: '12:00 - 17:59', count: stats.timeBuckets.afternoon, icon: Sun, color: 'text-orange-400', bar: 'bg-orange-400' },
+                { key: 'evening', label: 'Prime Time', hours: '18:00 - 23:59', count: stats.timeBuckets.evening, icon: Sunset, color: 'text-gold-400', bar: 'bg-gold-500' },
+                { key: 'night', label: 'Gece Baykuşu', hours: '00:00 - 05:59', count: stats.timeBuckets.night, icon: Moon, color: 'text-indigo-400', bar: 'bg-indigo-500' },
+              ].map((slot) => {
+                const Icon = slot.icon;
+                const pct = Math.round((slot.count / stats.totalTimeTracked) * 100);
+                return (
+                  <div key={slot.key} className="bg-ink-950/70 border border-ink-800/80 rounded-xl p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-2">
+                      <Icon size={17} className={slot.color} />
+                      <span className="text-xs font-black text-ink-100">%{pct}</span>
                     </div>
-                    <div className="text-[10px] font-semibold text-ink-400 text-right">{slot.count} İzleme</div>
+                    <div>
+                      <div className="text-xs font-bold text-ink-200">{slot.label}</div>
+                      <div className="text-[10px] text-ink-500">{slot.hours}</div>
+                    </div>
+                    <div className="mt-2.5 space-y-1">
+                      <div className="h-1.5 w-full bg-ink-900 rounded-full overflow-hidden">
+                        <div className={`h-full ${slot.bar} rounded-full`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="text-[10px] font-semibold text-ink-400 text-right">{slot.count} İzleme</div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="lg:col-span-5 bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-base font-bold text-ink-100 flex items-center gap-2"><Activity size={18} className="text-azure-400" /> Son 14 Günlük Tempo</h2>
-              <p className="text-xs text-ink-400 mt-0.5">Son 2 haftadaki günlük aktivite nabzın</p>
+                );
+              })}
             </div>
-            <span className="text-xs font-bold bg-ink-950 border border-ink-800 text-azure-400 px-2.5 py-1 rounded-lg">Bu Ay: {stats.thisMonthCount}</span>
           </div>
-          <div className="flex items-end justify-between gap-1.5 h-28 pt-4 px-1">
-            {stats.last14Days.map((d) => {
-              const hPct = d.count > 0 ? Math.max(18, (d.count / stats.max14DayCount) * 100) : 6;
-              return (
-                <div key={d.date} title={`${d.label}: ${d.count} izleme`} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
-                  <span className="text-[10px] font-black text-gold-400 opacity-0 group-hover:opacity-100 transition-opacity">{d.count}</span>
-                  <div className={`w-full rounded-t-md transition-all duration-500 ${d.count > 0 ? 'bg-gradient-to-t from-gold-600 to-gold-400 group-hover:brightness-125 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 'bg-ink-800/70'}`} style={{ height: `${hPct}%` }} />
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex justify-between text-[10px] font-semibold text-ink-500 border-t border-ink-800/60 pt-2 mt-2">
-            <span>{stats.last14Days[0]?.label}</span>
-            <span>Bugün ({stats.last14Days[stats.last14Days.length - 1]?.count || 0} izleme)</span>
+
+          <div className="lg:col-span-5 bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-base font-bold text-ink-100 flex items-center gap-2"><Activity size={18} className="text-azure-400" /> Son 14 Günlük Tempo</h2>
+                <p className="text-xs text-ink-400 mt-0.5">Son 2 haftadaki günlük aktivite nabzın</p>
+              </div>
+              <span className="text-xs font-bold bg-ink-950 border border-ink-800 text-azure-400 px-2.5 py-1 rounded-lg">Bu Ay: {stats.thisMonthCount}</span>
+            </div>
+            <div className="flex items-end justify-between gap-1.5 h-28 pt-4 px-1">
+              {stats.last14Days.map((d) => {
+                const hPct = d.count > 0 ? Math.max(18, (d.count / stats.max14DayCount) * 100) : 6;
+                return (
+                  <div key={d.date} title={`${d.label}: ${d.count} izleme`} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+                    <span className="text-[10px] font-black text-gold-400 opacity-0 group-hover:opacity-100 transition-opacity">{d.count}</span>
+                    <div className={`w-full rounded-t-md transition-all duration-500 ${d.count > 0 ? 'bg-gradient-to-t from-gold-600 to-gold-400 group-hover:brightness-125 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 'bg-ink-800/70'}`} style={{ height: `${hPct}%` }} />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between text-[10px] font-semibold text-ink-500 border-t border-ink-800/60 pt-2 mt-2">
+              <span>{stats.last14Days[0]?.label}</span>
+              <span>Bugün ({stats.last14Days[stats.last14Days.length - 1]?.count || 0} izleme)</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 4. DEĞERLENDİRME BAŞLIKLARI ANALİZİ */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-5 shadow-xl">
@@ -742,7 +851,7 @@ export default function StatsPage() {
         </div>
         {stats.reviewTagStats.length === 0 ? (
           <div className="text-center py-8 bg-ink-950/40 rounded-xl border border-ink-800/60">
-            <p className="text-xs text-ink-400 px-4">Henüz hiçbir yapımda değerlendirme başlığı seçilmemiş. Film veya dizi puanlarken <strong>"🔥 Başyapıt, 🎭 Oyunculuk Muazzam"</strong> gibi başlıkları seçtiğinde istatistikleri burada oluşacak!</p>
+            <p className="text-xs text-ink-400 px-4">Bu görünümde henüz değerlendirme başlığı seçilmiş bir yapım bulunmuyor.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

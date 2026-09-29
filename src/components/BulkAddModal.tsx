@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Search, X, Check, Film, Tv, ShoppingCart, FolderPlus, Loader2, Sparkles,
-  Plus, Trash2, ChevronDown, ChevronUp, Filter, ArrowUpDown, AlertTriangle, User, CheckCircle2,
+  Plus, Trash2, ChevronDown, ChevronUp, Filter, ArrowUpDown, AlertTriangle, User, CheckCircle2, History,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { normalize } from '../lib/utils';
 
 const MOVIE_GENRES = [
@@ -82,6 +82,7 @@ export default function BulkAddModal({
 
   const [collectionName, setCollectionName] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [assignToPastCollection, setAssignToPastCollection] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
@@ -89,11 +90,12 @@ export default function BulkAddModal({
 
   // Kütüphanedeki mevcut Film ve Dizileri hızlı kontrol için haritalandır
   const libraryLookup = useMemo(() => {
-    const movieTmdbIds = new Map<number, boolean>();
-    const movieTitles = new Map<string, boolean>();
+    const movieTmdbIds = new Map<number, { watched: boolean; isPastWatch?: boolean }>();
+    const movieTitles = new Map<string, { watched: boolean; isPastWatch?: boolean }>();
     data.movies.forEach((m) => {
-      if (m.tmdbId) movieTmdbIds.set(m.tmdbId, m.watched);
-      movieTitles.set(normalize(m.title), m.watched);
+      const info = { watched: m.watched, isPastWatch: m.isPastWatch };
+      if (m.tmdbId) movieTmdbIds.set(m.tmdbId, info);
+      movieTitles.set(normalize(m.title), info);
     });
 
     const seriesTmdbIds = new Map<number, boolean>();
@@ -110,17 +112,19 @@ export default function BulkAddModal({
     return { movieTmdbIds, movieTitles, seriesTmdbIds, seriesTitles };
   }, [data.movies, data.series, data.removedSeriesTitles]);
 
-  const getExistingStatus = (item: TMDBItem): { exists: boolean; watched: boolean } => {
+  const getExistingStatus = (item: TMDBItem): { exists: boolean; watched: boolean; isPastWatch?: boolean } => {
     const type = item.media_type || activeTab;
     const rawTitle = item.title || item.name || '';
     const normTitle = normalize(rawTitle);
 
     if (type === 'movie') {
       if (libraryLookup.movieTmdbIds.has(item.id)) {
-        return { exists: true, watched: Boolean(libraryLookup.movieTmdbIds.get(item.id)) };
+        const found = libraryLookup.movieTmdbIds.get(item.id)!;
+        return { exists: true, watched: found.watched, isPastWatch: found.isPastWatch };
       }
       if (normTitle && libraryLookup.movieTitles.has(normTitle)) {
-        return { exists: true, watched: Boolean(libraryLookup.movieTitles.get(normTitle)) };
+        const found = libraryLookup.movieTitles.get(normTitle)!;
+        return { exists: true, watched: found.watched, isPastWatch: found.isPastWatch };
       }
     } else {
       if (libraryLookup.seriesTmdbIds.has(item.id)) {
@@ -304,7 +308,12 @@ export default function BulkAddModal({
     setStep('importing');
     let finalColId = selectedCollectionId;
 
-    if (collectionName.trim()) {
+    if (assignToPastCollection) {
+      const existingPast = data.collections.find(
+        (c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)
+      );
+      finalColId = existingPast ? existingPast.id : (addCollection(PAST_WATCH_COLLECTION_NAME) as unknown as string);
+    } else if (collectionName.trim()) {
       finalColId = addCollection(collectionName) as unknown as string;
     }
 
@@ -590,9 +599,25 @@ export default function BulkAddModal({
 
                               {/* KÜTÜPHANEDE EKLİ ROZETİ */}
                               {status.exists ? (
-                                <div className="absolute top-1.5 inset-x-1.5 bg-emerald-600/95 backdrop-blur-md text-white px-2 py-1 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-lg border border-emerald-400/40">
-                                  <CheckCircle2 size={11} className="flex-shrink-0" />
-                                  <span className="truncate">{status.watched ? 'İzlendi' : 'Listede Ekli'}</span>
+                                <div
+                                  className={`absolute top-1.5 inset-x-1.5 backdrop-blur-md text-white px-2 py-1 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-lg border ${
+                                    status.isPastWatch
+                                      ? 'bg-violet-600/95 border-violet-400/40'
+                                      : 'bg-emerald-600/95 border-emerald-400/40'
+                                  }`}
+                                >
+                                  {status.isPastWatch ? (
+                                    <History size={11} className="flex-shrink-0" />
+                                  ) : (
+                                    <CheckCircle2 size={11} className="flex-shrink-0" />
+                                  )}
+                                  <span className="truncate">
+                                    {status.isPastWatch
+                                      ? 'Önceden İzlendi'
+                                      : status.watched
+                                      ? 'İzlendi'
+                                      : 'Listede Ekli'}
+                                  </span>
                                 </div>
                               ) : (
                                 <div
@@ -736,44 +761,71 @@ export default function BulkAddModal({
               </div>
 
               <div className="bg-ink-900 border border-ink-800 rounded-2xl p-4 md:p-6 space-y-4 md:space-y-6 shadow-lg">
-                <div className="flex items-center gap-2 md:gap-3 text-gold-400 mb-2 md:mb-4">
-                  <FolderPlus size={20} />
-                  <h4 className="font-bold text-base md:text-lg text-white">Koleksiyona Ekle (Opsiyonel)</h4>
-                </div>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 md:gap-3 text-gold-400">
+                    <FolderPlus size={20} />
+                    <h4 className="font-bold text-base md:text-lg text-white">Koleksiyona Ekle (Opsiyonel)</h4>
+                  </div>
 
-                <div className="space-y-4">
-                  <input
-                    type="text"
-                    value={collectionName}
-                    onChange={(e) => { setCollectionName(e.target.value); setSelectedCollectionId(null); }}
-                    placeholder="Yeni koleksiyon adı (Örn: Hafta Sonu)"
-                    className="w-full bg-ink-950 border border-ink-800 rounded-xl px-4 py-3 text-xs md:text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
-                  />
-
-                  {data.collections?.length > 0 && (
-                    <>
-                      <div className="flex items-center gap-3 md:gap-4">
-                        <div className="h-px bg-ink-800 flex-1" />
-                        <span className="text-[10px] md:text-xs font-bold text-ink-500 uppercase tracking-widest">VEYA MEVCUT SEÇ</span>
-                        <div className="h-px bg-ink-800 flex-1" />
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {data.collections.map((col: any) => (
-                          <button
-                            key={col.id}
-                            onClick={() => { setSelectedCollectionId(col.id); setCollectionName(''); }}
-                            className={`px-3 md:px-4 py-2 rounded-lg text-[11px] md:text-xs font-bold transition-all border ${
-                              selectedCollectionId === col.id ? 'bg-gold-500/20 text-gold-400 border-gold-500/30' : 'bg-ink-950 border-ink-800 text-ink-400 hover:bg-ink-800'
-                            }`}
-                          >
-                            {col.name}
-                          </button>
-                        ))}
-                      </div>
-                    </>
+                  {cart.some((c) => c.media_type === 'movie') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !assignToPastCollection;
+                        setAssignToPastCollection(nextVal);
+                        if (nextVal) {
+                          setSelectedCollectionId(null);
+                          setCollectionName('');
+                        }
+                      }}
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                        assignToPastCollection
+                          ? 'bg-violet-500/25 border-violet-500 text-violet-200 shadow-md'
+                          : 'bg-ink-950 border-ink-800 text-ink-300 hover:border-violet-500/40'
+                      }`}
+                    >
+                      <History size={15} className={assignToPastCollection ? 'text-violet-300' : 'text-ink-400'} />
+                      <span>Eskiden İzlenenler Koleksiyonuna Ekle</span>
+                      {assignToPastCollection && <Check size={14} className="text-violet-300" />}
+                    </button>
                   )}
                 </div>
+
+                {!assignToPastCollection && (
+                  <div className="space-y-4">
+                    <input
+                      type="text"
+                      value={collectionName}
+                      onChange={(e) => { setCollectionName(e.target.value); setSelectedCollectionId(null); }}
+                      placeholder="Yeni koleksiyon adı (Örn: Hafta Sonu)"
+                      className="w-full bg-ink-950 border border-ink-800 rounded-xl px-4 py-3 text-xs md:text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+                    />
+
+                    {data.collections?.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-3 md:gap-4">
+                          <div className="h-px bg-ink-800 flex-1" />
+                          <span className="text-[10px] md:text-xs font-bold text-ink-500 uppercase tracking-widest">VEYA MEVCUT SEÇ</span>
+                          <div className="h-px bg-ink-800 flex-1" />
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {data.collections.map((col: any) => (
+                            <button
+                              key={col.id}
+                              onClick={() => { setSelectedCollectionId(col.id); setCollectionName(''); }}
+                              className={`px-3 md:px-4 py-2 rounded-lg text-[11px] md:text-xs font-bold transition-all border ${
+                                selectedCollectionId === col.id ? 'bg-gold-500/20 text-gold-400 border-gold-500/30' : 'bg-ink-950 border-ink-800 text-ink-400 hover:bg-ink-800'
+                              }`}
+                            >
+                              {col.name}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 pt-2 md:pt-4">

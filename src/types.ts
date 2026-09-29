@@ -33,6 +33,7 @@ export interface Movie {
   studios?: string[];
   originalLanguage?: string;
   watched: boolean;
+  isPastWatch?: boolean;
   rating: number | null;
   detailedRating?: Record<string, number>;
   reviewTags?: string[];
@@ -90,6 +91,7 @@ export interface WatchHistoryItem {
   reviewTags?: string[];
   note: string;
   watchedAt: string;
+  isPastWatch?: boolean;
   startedAt?: string | null;
   actualRuntime?: number | null;
   originalRuntime?: number | null;

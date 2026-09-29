@@ -284,6 +284,29 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
   ]},
   { id: 'secret_speedrunner', name: 'Kurgu Yönetmeni', description: 'Süresi en az 90 dakika olan {threshold} farklı filmi kendi süresinin yarısından bile kısa sürede (2x hızda/atlayarak) bitir.', icon: 'Zap', hidden: true, secret: true, category: 'Gizli', tiers: [
     { threshold: 20, xp: 1500, tier: 'diamond', name: 'Kurgu Yönetmeni' }
+  ]},
+
+  // --- DAHA ÖNCE (GEÇMİŞTE) İZLENEN FİLM BAŞARIMLARI ---
+  { id: 'past_watcher', name: 'Sine-Hafıza', description: 'Daha önceden izlediğin {threshold} filmi puanlayarak arşivine geçir.', icon: 'History', hidden: false, secret: false, category: 'Nostalji', tiers: [
+    { threshold: 1, xp: 10, tier: 'bronze', name: 'İlk Hatıra' },
+    { threshold: 10, xp: 30, tier: 'silver', name: 'Film Belleği' },
+    { threshold: 25, xp: 75, tier: 'gold', name: 'Nostalji Koleksiyoncusu' },
+    { threshold: 50, xp: 180, tier: 'platinum', name: 'Yılların Birikimi' },
+    { threshold: 100, xp: 400, tier: 'diamond', name: 'Canlı Sinema Ansiklopedisi' }
+  ]},
+  { id: 'past_masterpiece', name: 'Unutulmaz Başyapıtlar', description: 'Daha önceden izlediğin {threshold} filme 10 tam puan ver.', icon: 'Award', hidden: false, secret: false, category: 'Nostalji', tiers: [
+    { threshold: 1, xp: 15, tier: 'bronze', name: 'Unutulmayan Efsane' },
+    { threshold: 5, xp: 40, tier: 'silver', name: 'Zamana Direnenler' },
+    { threshold: 15, xp: 100, tier: 'gold', name: 'Altın Arşiv' },
+    { threshold: 30, xp: 250, tier: 'platinum', name: 'Kült Koleksiyoner' },
+    { threshold: 50, xp: 500, tier: 'diamond', name: 'Ölümsüz Başyapıtlar Müzesi' }
+  ]},
+  { id: 'past_critic', name: 'Eski Defterler', description: 'Daha önceden izlediğin {threshold} filme hem puan ver hem de inceleme notu yaz.', icon: 'BookOpen', hidden: false, secret: false, category: 'Nostalji', tiers: [
+    { threshold: 5, xp: 20, tier: 'bronze', name: 'Geriye Dönük Notlar' },
+    { threshold: 15, xp: 50, tier: 'silver', name: 'Hafıza Kayıtları' },
+    { threshold: 30, xp: 120, tier: 'gold', name: 'Eski Defterler' },
+    { threshold: 50, xp: 250, tier: 'platinum', name: 'Geçmişin Başyazarı' },
+    { threshold: 100, xp: 500, tier: 'diamond', name: 'Zamanın Ötesindeki Eleştirmen' }
   ]}
 ];
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { X, Plus, Boxes, Clock, Search, Loader2, Image as ImageIcon, Users, User } from 'lucide-react';
-import { useApp, resolveTMDBGenres } from '../context/AppContext';
+import { X, Plus, Boxes, Clock, Search, Loader2, Image as ImageIcon, Users, User, History, Check } from 'lucide-react';
+import { useApp, resolveTMDBGenres, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { normalize } from '../lib/utils';
 import { searchTMDB, type TMDBResult } from '../lib/tmdb';
 import type { WatchProvider } from '../types';
@@ -16,6 +16,7 @@ export default function AddMovieModal({ onClose }: Props) {
   const [runtime, setRuntime] = useState<string>('');
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [useCollection, setUseCollection] = useState(false);
+  const [assignToPastCollection, setAssignToPastCollection] = useState(false);
   const [collectionMode, setCollectionMode] = useState<'select' | 'new'>('select');
   const [selectedCollectionId, setSelectedCollectionId] = useState('');
   const [newCollectionName, setNewCollectionName] = useState('');
@@ -79,7 +80,13 @@ export default function AddMovieModal({ onClose }: Props) {
   const handleSubmit = () => {
     if (!title.trim()) return;
     let collectionId: string | null = null;
-    if (useCollection) {
+
+    if (assignToPastCollection) {
+      const existingPast = data.collections.find(
+        (c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)
+      );
+      collectionId = existingPast ? existingPast.id : addCollection(PAST_WATCH_COLLECTION_NAME);
+    } else if (useCollection) {
       if (collectionMode === 'new' && newCollectionName.trim()) {
         const existing = data.collections.find((c) => normalize(c.name) === normalize(newCollectionName));
         if (existing) {
@@ -94,7 +101,6 @@ export default function AddMovieModal({ onClose }: Props) {
     
     const runtimeNum = runtime ? parseInt(runtime, 10) : undefined;
     
-    // YENİ: Tüm künye ve DNA bilgilerini de addMovie fonksiyonuna gönderiyoruz
     const ok = addMovie(
       title, 
       year, 
@@ -283,18 +289,41 @@ export default function AddMovieModal({ onClose }: Props) {
           </div>
 
           <div>
-            <button
-              onClick={() => setUseCollection(!useCollection)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
-                useCollection
-                  ? 'border-ink-500 bg-ink-800 text-ink-100'
-                  : 'border-ink-700 bg-ink-800/50 text-ink-400 hover:text-ink-200'
-              }`}
-            >
-              <Boxes size={18} />
-              <span className="text-sm font-medium">Koleksiyon / Seri</span>
-            </button>
-            {useCollection && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignToPastCollection(!assignToPastCollection);
+                  if (!assignToPastCollection) setUseCollection(false);
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
+                  assignToPastCollection
+                    ? 'border-violet-500 bg-violet-500/20 text-violet-200 font-semibold'
+                    : 'border-ink-700 bg-ink-800/50 text-ink-400 hover:text-ink-200'
+                }`}
+              >
+                <History size={18} className={assignToPastCollection ? 'text-violet-300' : ''} />
+                <span className="text-sm font-medium">Eskiden İzlenenler Koleksiyonuna Ekle</span>
+                {assignToPastCollection && <Check size={15} className="text-violet-300" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUseCollection(!useCollection);
+                  if (!useCollection) setAssignToPastCollection(false);
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
+                  useCollection
+                    ? 'border-ink-500 bg-ink-800 text-ink-100'
+                    : 'border-ink-700 bg-ink-800/50 text-ink-400 hover:text-ink-200'
+                }`}
+              >
+                <Boxes size={18} />
+                <span className="text-sm font-medium">Koleksiyon / Seri</span>
+              </button>
+            </div>
+            {useCollection && !assignToPastCollection && (
               <div className="mt-3 space-y-3 pl-2 border-l-2 border-ink-700">
                 <div className="flex gap-2">
                   <button

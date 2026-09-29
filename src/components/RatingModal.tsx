@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus, Tag } from 'lucide-react';
+import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus, Tag, History } from 'lucide-react';
 import { useApp, DEFAULT_REVIEW_TAGS } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
 
@@ -10,7 +10,9 @@ interface RatingModalProps {
   initialNote?: string;
   initialDetailedRating?: Record<string, number>;
   initialReviewTags?: string[];
-  onRate: (rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => void;
+  initialIsPastWatch?: boolean;
+  allowPastWatch?: boolean;
+  onRate: (rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   onClose: () => void;
 }
 
@@ -26,12 +28,17 @@ export default function RatingModal({
   initialNote = '',
   initialDetailedRating,
   initialReviewTags = [],
+  initialIsPastWatch = false,
+  allowPastWatch,
   onRate,
   onClose,
 }: RatingModalProps) {
   const { data } = useApp();
   const criteriaList = data.criteria || [];
   const availableTags = data.reviewTags && data.reviewTags.length > 0 ? data.reviewTags : DEFAULT_REVIEW_TAGS;
+
+  // Sadece filmlerde "Önceden İzlendi" seçeneği gösterilir (Dizi bölümlerinde gösterilmez)
+  const canTogglePastWatch = allowPastWatch !== undefined ? allowPastWatch : !subtitle.includes('Sezon');
 
   // Her film/bölüm için benzersiz taslak (draft) anahtarı
   const draftKey = useMemo(() => {
@@ -59,6 +66,11 @@ export default function RatingModal({
   const [note, setNote] = useState<string>(() => {
     if (savedDraft && typeof savedDraft.note === 'string') return savedDraft.note;
     return initialNote;
+  });
+
+  const [isPastWatch, setIsPastWatch] = useState<boolean>(() => {
+    if (savedDraft && typeof savedDraft.isPastWatch === 'boolean') return savedDraft.isPastWatch;
+    return Boolean(initialIsPastWatch);
   });
 
   // Seçilebilir Değerlendirme Başlıkları (Notlara yazılmaz, rozet olarak seçilir)
@@ -112,10 +124,11 @@ export default function RatingModal({
           selectedTags,
           showCriteria,
           critScores,
+          isPastWatch,
         })
       );
     } catch {}
-  }, [draftKey, rating, note, selectedTags, showCriteria, critScores]);
+  }, [draftKey, rating, note, selectedTags, showCriteria, critScores, isPastWatch]);
 
   // Taslağı sıfırlama fonksiyonu
   const handleResetDraft = () => {
@@ -126,6 +139,7 @@ export default function RatingModal({
     setRating(defRating);
     setNote(initialNote);
     setSelectedTags(initialReviewTags || []);
+    setIsPastWatch(Boolean(initialIsPastWatch));
     const defShow = Boolean(initialDetailedRating && Object.keys(initialDetailedRating).length > 0);
     setShowCriteria(defShow);
 
@@ -259,7 +273,7 @@ export default function RatingModal({
     try {
       localStorage.removeItem(draftKey);
     } catch {}
-    onRate(rating, note.trim(), finalDetailed, finalTags);
+    onRate(rating, note.trim(), finalDetailed, finalTags, canTogglePastWatch ? isPastWatch : false);
     onClose();
   };
 
@@ -308,6 +322,51 @@ export default function RatingModal({
         {/* İÇERİK GÖVDESİ */}
         <div className="relative z-10 flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar">
           
+          {/* ÖNCEDEN (GEÇMİŞTE) İZLENDİ SEÇENEĞİ */}
+          {canTogglePastWatch && (
+            <button
+              type="button"
+              onClick={() => setIsPastWatch(!isPastWatch)}
+              className={`w-full flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all ${
+                isPastWatch
+                  ? 'bg-violet-500/20 border-violet-500/50 text-violet-200 shadow-lg shadow-violet-500/10'
+                  : 'bg-ink-900/60 hover:bg-ink-900 border-ink-800 text-ink-300'
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+                    isPastWatch
+                      ? 'bg-violet-500 text-white border-violet-400'
+                      : 'bg-ink-950 text-ink-400 border-ink-800'
+                  }`}
+                >
+                  <History size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs sm:text-sm font-black text-ink-50 flex items-center gap-2">
+                    <span>Önceden İzlendi (Daha Önce İzledim)</span>
+                  </div>
+                  <div className="text-[11px] text-ink-400 leading-snug mt-0.5">
+                    {isPastWatch
+                      ? 'Yeni izleme sayılmaz, güncel seriyi bozmaz; "Daha Önce İzlediklerim" kısmına ve nostalji başarımlarına işlenir.'
+                      : 'Bu filmi geçmişte izlediysen işaretle (Güncel izleme geçmişine düşmez).'}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 border transition-all ml-2 ${
+                  isPastWatch
+                    ? 'bg-violet-500 border-violet-300 text-white'
+                    : 'bg-ink-950 border-ink-700 text-transparent'
+                }`}
+              >
+                <Check size={14} strokeWidth={3} />
+              </div>
+            </button>
+          )}
+
           {/* MERKEZİ PUAN KADRANI */}
           <div className="flex flex-col items-center text-center bg-ink-900/50 border border-ink-800/80 rounded-3xl p-5 relative overflow-hidden shadow-inner">
             <div className="flex items-center gap-4 mb-3">
@@ -557,10 +616,18 @@ export default function RatingModal({
           <button
             type="button"
             onClick={handleSubmit}
-            className="flex-1 py-3 px-6 rounded-xl font-black text-xs sm:text-sm text-ink-950 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 shadow-xl shadow-gold-500/20 transition-all hover:scale-[1.02] active:scale-98 flex items-center justify-center gap-2"
+            className={`flex-1 py-3 px-6 rounded-xl font-black text-xs sm:text-sm shadow-xl transition-all hover:scale-[1.02] active:scale-98 flex items-center justify-center gap-2 ${
+              isPastWatch && canTogglePastWatch
+                ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-400 hover:to-fuchsia-400 text-white shadow-violet-500/25'
+                : 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 shadow-gold-500/20'
+            }`}
           >
             <Check size={18} strokeWidth={3} />
-            <span>{rating} Puanla Kaydet</span>
+            <span>
+              {isPastWatch && canTogglePastWatch
+                ? `${rating} Puanla (Önceden İzlendi Kaydet)`
+                : `${rating} Puanla Kaydet`}
+            </span>
           </button>
         </div>
 

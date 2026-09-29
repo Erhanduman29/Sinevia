@@ -6,6 +6,7 @@ import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
 
 const STORAGE_KEY = 'sinevia-v1';
+export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
 export const DEFAULT_REVIEW_TAGS = ['🔥 Başyapıt', '🎭 Oyunculuk Muazzam', '🤯 Ters Köşe Final', '🎵 Müzikler Efsane', '🎬 Görsellik Şahane', '🍿 Akıcı & Keyifli', '💤 Tempo Yavaştı', '📉 Beklentimin Altında'];
 export const DISPLAY_DURATION_MS = 4000;
@@ -62,9 +63,32 @@ function createInitialAchievements(existingList?: AchievementProgress[]): Achiev
   });
 }
 
+function ensurePastWatchCollection(collections: Collection[] = []): Collection[] {
+  const hasPastCol = collections.some((c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME));
+  if (hasPastCol) return collections;
+  return [{ id: 'col_past_watches', name: PAST_WATCH_COLLECTION_NAME }, ...collections];
+}
+
+// "Eskiden İzlenenler" koleksiyonunda olup puanlanmış (watched) olan filmleri koleksiyondan çıkarıp Daha Önce İzlenenler'e taşır
+function cleanupRatedMoviesInPastCollection(movies: Movie[] = [], collections: Collection[] = []): Movie[] {
+  const pastColIds = new Set(
+    collections
+      .filter((c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME))
+      .map((c) => c.id)
+  );
+  if (pastColIds.size === 0) return movies;
+  return movies.map((m) =>
+    m.watched && m.collectionId && pastColIds.has(m.collectionId)
+      ? { ...m, collectionId: null, isPastWatch: true }
+      : m
+  );
+}
+
 function defaultData(): ExtendedAppData {
   return {
-    movies: [], series: [], removedSeriesTitles: [], collections: [], genres: DEFAULT_GENRES, reviewTags: DEFAULT_REVIEW_TAGS, history: [],
+    movies: [], series: [], removedSeriesTitles: [],
+    collections: [{ id: 'col_past_watches', name: PAST_WATCH_COLLECTION_NAME }],
+    genres: DEFAULT_GENRES, reviewTags: DEFAULT_REVIEW_TAGS, history: [],
     achievements: createInitialAchievements(),
     criteria: [
       { id: 'crit_1', name: 'Senaryo ve Hikaye', weight: 10, appliesTo: 'both', genres: [] },
@@ -99,9 +123,9 @@ function addNewGenres(currentGenres: string[], incomingGenres: string[]): string
 type Action =
   | { type: 'ADD_MOVIE'; movie: Movie } | { type: 'DELETE_MOVIE'; id: string }
   | { type: 'START_WATCHING_MOVIE'; id: string; startedAt: string } | { type: 'CANCEL_WATCHING_MOVIE'; id: string }
-  | { type: 'WATCH_MOVIE'; id: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; actualRuntime: number; historyItem: WatchHistoryItem }
+  | { type: 'WATCH_MOVIE'; id: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; actualRuntime: number; isPastWatch?: boolean; removeFromPastCol?: boolean; historyItem: WatchHistoryItem }
   | { type: 'UNWATCH_MOVIE'; id: string }
-  | { type: 'UPDATE_HISTORY_RATING'; historyId: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[] }
+  | { type: 'UPDATE_HISTORY_RATING'; historyId: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; isPastWatch?: boolean }
   | { type: 'ADD_SERIES'; series: Series } | { type: 'DELETE_SERIES'; id: string } | { type: 'COMPLETE_SERIES'; id: string; title: string }
   | { type: 'ADD_EPISODES'; seriesId: string; episodes: Episode[] }
   | { type: 'WATCH_EPISODE'; seriesId: string; episodeId: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; historyItem: WatchHistoryItem }
@@ -122,11 +146,15 @@ const FIXED_BUGGED_ACHIEVEMENTS = new Set(['selective_critic', 'weekend_cinema',
 
 function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   const unlocked: { achievementId: string; tier: string; xp: number; name: string; icon: string; description: string }[] = [];
-  const validHistory = [...(state.history || [])].filter((h) => {
+
+  const allValidHistory = [...(state.history || [])].filter((h) => {
     if (!h.watchedAt) return false;
     const t = new Date(h.watchedAt).getTime();
     return !isNaN(t) && t > 1262304000000;
   }).sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
+
+  // Güncel izleme geçmişi (Önceden izlenen filmler mevcut izleme başarımlarını TETİKLEMEZ)
+  const validHistory = allValidHistory.filter((h) => !h.isPastWatch);
 
   const moviesHistory = validHistory.filter((h) => h.type === 'movie' || h.kind === 'movie');
   const seriesHistory = validHistory.filter((h) => h.type === 'series' || h.kind === 'series');
@@ -154,8 +182,13 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
 
   const newAchievements = createInitialAchievements(state.achievements);
   const progressMap = new Map(newAchievements.map((a) => [a.achievementId, a]));
-  const watchedMovies = state.movies.filter((m) => m.watched);
+
+  // Normal izlenen filmler (Süre ve canlı sayaç başarımları için)
+  const watchedMovies = state.movies.filter((m) => m.watched && !m.isPastWatch);
   const watchedMoviesWithRuntime = watchedMovies.filter((m) => m.runtime);
+
+  // Daha önceden (geçmişte) izlenen filmler (Sadece yeni Nostalji başarımları için)
+  const pastWatchedMovies = state.movies.filter((m) => m.watched && m.isPastWatch);
 
   for (const def of ACHIEVEMENT_DEFS) {
     const prog = progressMap.get(def.id);
@@ -206,7 +239,11 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       }
       case 'collection_complete': {
         let c = 0;
-        (state.collections || []).forEach((col) => { const cm = state.movies.filter((m) => m.collectionId === col.id); if (cm.length > 0 && cm.every((m) => m.watched)) c++; });
+        (state.collections || []).forEach((col) => {
+          if (normalize(col.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return;
+          const cm = state.movies.filter((m) => m.collectionId === col.id);
+          if (cm.length > 0 && cm.every((m) => m.watched)) c++;
+        });
         currentVal = c; break;
       }
       case 'caveman': {
@@ -279,7 +316,7 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       }
       case 'morning_sweet': currentVal = moviesHistory.filter((h) => { const hr = new Date(h.watchedAt).getHours(); return hr >= 6 && hr < 9; }).length; break;
       case 'nostalgia_wind': currentVal = moviesHistory.filter((h) => h.year && parseInt(h.year) <= 1980).length; break;
-      case 'universe_conqueror': currentVal = (state.collections || []).filter((c) => { const cM = state.movies.filter((m) => m.collectionId === c.id); return cM.length >= 3 && cM.every((m) => m.watched); }).length; break;
+      case 'universe_conqueror': currentVal = (state.collections || []).filter((c) => { if (normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return false; const cM = state.movies.filter((m) => m.collectionId === c.id); return cM.length >= 3 && cM.every((m) => m.watched); }).length; break;
       case 'final_phobia': case 'delayed_goodbye': {
         let phobiaGap = 0, delayedCount = 0;
         state.series.forEach((s) => {
@@ -331,6 +368,11 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'time_saver': currentVal = watchedMovies.filter((m) => m.actualRuntime != null && m.runtime != null && m.actualRuntime < m.runtime).reduce((sum, m) => sum + ((m.runtime || 0) - (m.actualRuntime || 0)), 0); break;
       case 'patient_purist': currentVal = watchedMovies.filter((m) => m.startedAt != null && m.actualRuntime != null && m.runtime != null && m.actualRuntime >= m.runtime).length; break;
       case 'secret_speedrunner': currentVal = watchedMovies.filter((m) => m.actualRuntime != null && m.runtime != null && m.runtime >= 90 && m.actualRuntime <= Math.floor(m.runtime / 2)).length; break;
+
+      // YENİ: DAHA ÖNCE (GEÇMİŞTE) İZLENEN FİLM BAŞARIMLARI
+      case 'past_watcher': currentVal = pastWatchedMovies.length; break;
+      case 'past_masterpiece': currentVal = pastWatchedMovies.filter((m) => m.rating === 10).length; break;
+      case 'past_critic': currentVal = pastWatchedMovies.filter((m) => m.rating !== null && m.note && m.note.trim().length > 0).length; break;
     }
 
     prog.current = currentVal;
@@ -357,7 +399,7 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
           if (!prog.tierDates) prog.tierDates = {};
           const d = prog.tierDates[tier.tier];
           if (!d || d.startsWith('2000-') || d.startsWith('1970-')) {
-            const fb = validHistory.length > 0 ? validHistory[validHistory.length - 1].watchedAt : new Date().toISOString();
+            const fb = allValidHistory.length > 0 ? allValidHistory[allValidHistory.length - 1].watchedAt : new Date().toISOString();
             prog.tierDates[tier.tier] = fb;
             if (!prog.unlockedAt || prog.unlockedAt.startsWith('2000-') || prog.unlockedAt.startsWith('1970-')) prog.unlockedAt = fb;
           }
@@ -375,7 +417,11 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
 }
 
 function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
-  if (action.type === 'IMPORT_DATA') return applyAchievements({ ...defaultData(), ...action.data, achievements: createInitialAchievements(action.data.achievements) });
+  if (action.type === 'IMPORT_DATA') {
+    const cols = ensurePastWatchCollection(action.data.collections);
+    const cleanedMovies = cleanupRatedMoviesInPastCollection(action.data.movies, cols);
+    return applyAchievements({ ...defaultData(), ...action.data, collections: cols, movies: cleanedMovies, achievements: createInitialAchievements(action.data.achievements) });
+  }
   if (action.type === 'CONSUME_NEXT_TOAST') {
     const queue = state.pendingToasts || [];
     if (queue.length === 0) return state;
@@ -416,17 +462,40 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
     case 'START_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: action.startedAt } : m)); break;
     case 'CANCEL_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: null } : m)); break;
     case 'WATCH_MOVIE':
-      nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, watched: true, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt, actualRuntime: action.actualRuntime } : m));
-      nextState.history = [action.historyItem, ...state.history]; nextState.dailyStreak = updateStreak(state); nextState.dailyStreakDate = todayStr(); nextState.lastWatchDate = todayStr(); break;
+      nextState.movies = state.movies.map((m) =>
+        m.id === action.id
+          ? {
+              ...m,
+              watched: true,
+              isPastWatch: Boolean(action.isPastWatch),
+              // Eğer film "Eskiden İzlenenler" koleksiyonundaysa, puanlandığı an koleksiyondan çıkarılır!
+              collectionId: action.removeFromPastCol ? null : m.collectionId,
+              rating: action.rating,
+              detailedRating: action.detailedRating,
+              reviewTags: action.reviewTags,
+              note: action.note,
+              watchedAt: action.watchedAt,
+              actualRuntime: action.actualRuntime
+            }
+          : m
+      );
+      nextState.history = [action.historyItem, ...state.history];
+      if (!action.isPastWatch) {
+        nextState.dailyStreak = updateStreak(state);
+        nextState.dailyStreakDate = todayStr();
+        nextState.lastWatchDate = todayStr();
+      }
+      break;
     case 'UNWATCH_MOVIE':
-      nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, watched: false, rating: null, detailedRating: undefined, reviewTags: undefined, note: '', watchedAt: null, startedAt: null, actualRuntime: null } : m));
+      nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, watched: false, isPastWatch: false, rating: null, detailedRating: undefined, reviewTags: undefined, note: '', watchedAt: null, startedAt: null, actualRuntime: null } : m));
       nextState.history = state.history.filter((h) => h.itemId !== action.id && h.id !== action.id); break;
     case 'UPDATE_HISTORY_RATING': {
       const hItem = state.history.find((h) => h.id === action.historyId); if (!hItem) break;
-      nextState.history = state.history.map((h) => (h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note } : h));
+      const updatedIsPast = action.isPastWatch !== undefined ? action.isPastWatch : hItem.isPastWatch;
+      nextState.history = state.history.map((h) => (h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: (h.kind === 'movie' || h.type === 'movie') ? Boolean(updatedIsPast) : h.isPastWatch } : h));
       const targetId = hItem.itemId || hItem.id;
       if (hItem.kind === 'movie' || hItem.type === 'movie') {
-        nextState.movies = state.movies.map((m) => (m.id === targetId ? { ...m, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note } : m));
+        nextState.movies = state.movies.map((m) => (m.id === targetId ? { ...m, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: Boolean(updatedIsPast) } : m));
       } else {
         nextState.series = state.series.map((s) => ({ ...s, episodes: s.episodes.map((e) => (e.id === targetId ? { ...e, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note } : e)) }));
       }
@@ -509,9 +578,9 @@ interface AppContextValue {
   togglePauseWatchingMovie: (id: string) => void;
   cancelWatchingMovie: (id: string) => void;
   canRateMovieWithTimer: (id: string) => boolean;
-  watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[]) => void;
+  watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   unwatchMovie: (id: string) => void;
-  updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>, reviewTags?: string[]) => void;
+  updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => boolean;
   deleteSeries: (id: string) => void; addEpisodes: (sId: string, s: number, ec: number) => void;
   watchEpisode: (sId: string, eId: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[]) => void;
@@ -539,7 +608,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        const parsedData: ExtendedAppData = { ...defaultData(), ...parsed, achievements: createInitialAchievements(parsed.achievements) };
+        const cols = ensurePastWatchCollection(parsed.collections);
+        const cleanedMovies = cleanupRatedMoviesInPastCollection(parsed.movies, cols);
+        const parsedData: ExtendedAppData = {
+          ...defaultData(),
+          ...parsed,
+          collections: cols,
+          movies: cleanedMovies,
+          achievements: createInitialAchievements(parsed.achievements)
+        };
         if (parsedData.aiChatHistory) parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= Date.now() - 3 * 86400000);
         if (!parsedData.criteria) parsedData.criteria = defaultData().criteria;
         if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS;
@@ -616,7 +693,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
     if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
-    dispatch({ type: 'ADD_MOVIE', movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders, directors: extra?.directors, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage, watched: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString() } });
+    dispatch({ type: 'ADD_MOVIE', movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders, directors: extra?.directors, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage, watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString() } });
     showToast('Film eklendi'); return true;
   }, [data.movies, showToast]);
 
@@ -657,7 +734,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('İzleme sayacı iptal edildi', 'info');
   }, [showToast]);
 
-  // ⛔ ENGELLEYİCİ 2: Minimum izleme süresi (%25) geçmeden sayaçlı puanlamayı engeller!
+  // ⛔ ENGELLEYİCİ 2: Minimum izleme süresi (%15) geçmeden sayaçlı puanlamayı engeller!
   const canRateMovieWithTimer = useCallback((id: string): boolean => {
     const movie = data.movies.find((m) => m.id === id);
     if (!movie || !movie.startedAt) return true;
@@ -669,33 +746,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return true;
   }, [data.movies, showToast]);
 
-  const watchMovie = useCallback((id: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => {
+  const watchMovie = useCallback((id: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => {
     const movie = data.movies.find((m) => m.id === id); if (!movie) return;
+    const colObj = movie.collectionId ? data.collections.find((c) => c.id === movie.collectionId) : null;
+    const isInPastCol = Boolean(colObj && normalize(colObj.name) === normalize(PAST_WATCH_COLLECTION_NAME));
+    const finalIsPastWatch = isPastWatch !== undefined ? isPastWatch : (Boolean(movie.isPastWatch) || isInPastCol);
+
     const now = new Date().toISOString();
     const info = getMovieTimerInfo(movie);
     let actualRuntime = info.maxMins;
 
-    if (movie.startedAt && info.canRateWithTimer) {
+    if (!finalIsPastWatch && movie.startedAt && info.canRateWithTimer) {
       actualRuntime = Math.min(Math.max(1, info.elapsedMins), info.maxMins);
     }
 
     dispatch({
-      type: 'WATCH_MOVIE', id, rating, detailedRating, reviewTags, note, watchedAt: now, actualRuntime,
+      type: 'WATCH_MOVIE',
+      id,
+      rating,
+      detailedRating,
+      reviewTags,
+      note,
+      watchedAt: now,
+      actualRuntime,
+      isPastWatch: finalIsPastWatch,
+      removeFromPastCol: isInPastCol,
       historyItem: {
         id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title,
-        rating, detailedRating, reviewTags, note, watchedAt: now,
-        startedAt: movie.startedAt || null, actualRuntime, originalRuntime: info.maxMins,
+        rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: finalIsPastWatch,
+        startedAt: finalIsPastWatch ? null : (movie.startedAt || null), actualRuntime, originalRuntime: info.maxMins,
         genres: movie.genres, year: movie.year
       }
     });
 
-    if (movie.startedAt && actualRuntime < info.maxMins) {
+    if (finalIsPastWatch) {
+      showToast(`"${movie.title}" puanlandı ve Daha Önce İzlenenler kısmına taşındı`, 'info');
+    } else if (movie.startedAt && actualRuntime < info.maxMins) {
       showToast(`Film ${actualRuntime} dk'da bitti! (${info.maxMins - actualRuntime} dk kazandın ⚡)`, 'success');
     }
-  }, [data.movies, showToast]);
+  }, [data.movies, data.collections, showToast]);
 
-  const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => {
-    dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags }); showToast('Puan güncellendi');
+  const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => {
+    dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags, isPastWatch }); showToast('Puan güncellendi');
   }, [showToast]);
 
   const addSeries = useCallback((title: string, genres: string[], seasons: number[], posterUrl?: string | null, overview?: string, tmdbId?: number, year?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData): boolean => {
@@ -762,7 +854,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!silent) showToast('Dizi güncellendi');
   }, [showToast]);
 
-  const addCollection = useCallback((n: string) => { const id = uid(); dispatch({ type: 'ADD_COLLECTION', collection: { id, name: n.trim() } }); showToast('Koleksiyon eklendi'); return id; }, [showToast]);
+  const addCollection = useCallback((n: string) => {
+    const clean = n.trim();
+    const existing = data.collections.find((c) => normalize(c.name) === normalize(clean));
+    if (existing) return existing.id;
+    const id = uid();
+    dispatch({ type: 'ADD_COLLECTION', collection: { id, name: clean } });
+    showToast('Koleksiyon eklendi');
+    return id;
+  }, [data.collections, showToast]);
   const deleteCollection = useCallback((id: string) => dispatch({ type: 'DELETE_COLLECTION', id }), []);
   const renameCollection = useCallback((i: string, n: string) => { dispatch({ type: 'RENAME_COLLECTION', id: i, name: n.trim() }); showToast('Koleksiyon güncellendi'); }, [showToast]);
   const setMovieCollection = useCallback((i: string, c: string | null) => dispatch({ type: 'SET_MOVIE_COLLECTION', id: i, collectionId: c }), []);
@@ -839,7 +939,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tmdbId: im.tmdbId, imdbId: im.imdbId, watchProviders: im.watchProviders,
           directors: im.directors, cast: im.cast, studios: im.studios, keywords: im.keywords,
           originalLanguage: im.originalLanguage, customUrl: im.customUrl,
-          watched: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString()
+          watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString()
         });
       });
 

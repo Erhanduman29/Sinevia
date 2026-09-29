@@ -6,10 +6,10 @@ import {
   ChevronRight, Target, Film, RefreshCw, User, Users, Shield, Award, Gem, Lock,
   CheckCircle2, Timer, Play, Pause, X, Compass, Layers,
 } from 'lucide-react';
-import { useApp, getMovieTimerInfo } from '../context/AppContext';
+import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { levelFromXp } from '../lib/xp';
 import { ACHIEVEMENT_DEFS, TIER_COLORS } from '../lib/achievements';
-import { getNextUnwatchedEpisode, ratingBgClass, formatDateShort, todayStr } from '../lib/utils';
+import { getNextUnwatchedEpisode, ratingBgClass, formatDateShort, todayStr, normalize } from '../lib/utils';
 import PickModal from '../components/PickModal';
 import RatingModal from '../components/RatingModal';
 import BulkAddModal from '../components/BulkAddModal';
@@ -84,8 +84,20 @@ export default function HomePage() {
     setPickedItem({ kind: 'movie', movie });
   };
 
+  const pastColIds = useMemo(
+    () =>
+      new Set(
+        data.collections
+          .filter((c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME))
+          .map((c) => c.id)
+      ),
+    [data.collections]
+  );
+
   const eligibleMovies = useMemo(() => {
-    const unwatched = data.movies.filter((m) => !m.watched);
+    const unwatched = data.movies.filter(
+      (m) => !m.watched && (!m.collectionId || !pastColIds.has(m.collectionId))
+    );
     const standalone = unwatched.filter((m) => !m.collectionId);
     const collectionGroups = new Map<string, Movie[]>();
     unwatched.filter((m) => m.collectionId).forEach((m) => {
@@ -99,7 +111,7 @@ export default function HomePage() {
       if (sorted.length > 0) sequentialCollectionMovies.push(sorted[0]);
     });
     return [...standalone, ...sequentialCollectionMovies];
-  }, [data.movies]);
+  }, [data.movies, pastColIds]);
 
   // Tüm izlenebilir sıradaki bölümler (Çark/PickModal için)
   const allNextEpisodes = useMemo(() => {
@@ -127,8 +139,9 @@ export default function HomePage() {
     return eligibleMovies[idx];
   }, [eligibleMovies, spotlightOffset]);
 
+  // Güncel İstatistikler (Önceden izlenen filmler Ana Sayfa metriklerini değiştirmez)
   const quickMetrics = useMemo(() => {
-    const watchedMovies = data.movies.filter((m) => m.watched);
+    const watchedMovies = data.movies.filter((m) => m.watched && !m.isPastWatch);
     const movieMinutes = watchedMovies.reduce((sum, m) => {
       const orig = m.runtime || 110;
       const real = m.actualRuntime && m.actualRuntime > 0 ? Math.min(m.actualRuntime, orig) : orig;
@@ -137,7 +150,8 @@ export default function HomePage() {
     const watchedEpsCount = data.series.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0);
     const totalHours = Math.round((movieMinutes + watchedEpsCount * 42) / 60);
 
-    const ratedHistory = data.history.filter((h) => h.rating !== null);
+    const regularHistory = data.history.filter((h) => !h.isPastWatch);
+    const ratedHistory = regularHistory.filter((h) => h.rating !== null);
     const avgRating = ratedHistory.length > 0
       ? (ratedHistory.reduce((sum, h) => sum + (h.rating || 0), 0) / ratedHistory.length).toFixed(1)
       : '-';
@@ -150,7 +164,7 @@ export default function HomePage() {
       });
     });
 
-    return { totalHours, avgRating, watchedEpsCount, tierCounts };
+    return { totalHours, avgRating, watchedEpsCount, tierCounts, regularHistoryCount: regularHistory.length };
   }, [data.movies, data.series, data.history, data.achievements]);
 
   const closestAchievements = useMemo(() => {
@@ -181,6 +195,7 @@ export default function HomePage() {
 
   const recentWatched = useMemo(() => {
     return [...(data.history || [])]
+      .filter((h) => !h.isPastWatch)
       .sort((a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime())
       .slice(0, 4);
   }, [data.history]);
@@ -243,7 +258,7 @@ export default function HomePage() {
       const found = data.movies.find((m) => m.id === (h.itemId || h.id));
       const fallback: Movie = found || {
         id: h.itemId || h.id, title: h.title, year: h.year || '', genres: h.genres || [], collectionId: null,
-        watched: true, rating: h.rating, detailedRating: h.detailedRating, reviewTags: h.reviewTags, note: h.note, watchedAt: h.watchedAt, addedAt: h.watchedAt,
+        watched: true, isPastWatch: h.isPastWatch, rating: h.rating, detailedRating: h.detailedRating, reviewTags: h.reviewTags, note: h.note, watchedAt: h.watchedAt, addedAt: h.watchedAt,
       };
       setDetailTarget({ type: 'movie', data: fallback, historyItem: h });
     } else {
@@ -433,7 +448,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ALT BAR: 4'LÜ HIZLI KOMUT BUTONLARI (KATALOG BUTONU YENİLENDİ) */}
+        {/* ALT BAR: 4'LÜ HIZLI KOMUT BUTONLARI */}
         <div className="relative z-10 mt-4 sm:mt-6 pt-3.5 sm:pt-5 border-t border-ink-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           <button
             onClick={() => setShowPick(true)}
@@ -527,7 +542,7 @@ export default function HomePage() {
       })()}
 
       {/* =========================================================
-          2. BU AKŞAMIN VİTRİN ÖNERİSİ (GELİŞMİŞ SİNEMATİK TASARIM & KAYDIRMALI ÖZET)
+          2. BU AKŞAMIN VİTRİN ÖNERİSİ
           ========================================================= */}
       {spotlightMovie && (() => {
         const isSpotlightTimerActive = activeTimerMovie?.id === spotlightMovie.id;
@@ -626,7 +641,6 @@ export default function HomePage() {
                     </div>
                   )}
 
-                  {/* KAYDIRMA ÇUBUKLU (SCROLLABLE) KONU & ÖZET KUTUSU */}
                   <div className="bg-ink-950/70 border border-ink-800/90 rounded-2xl p-3.5 text-left shadow-inner">
                     <div className="text-[10px] font-black uppercase tracking-widest text-gold-400/90 mb-1">
                       Film Konusu & Özet
@@ -799,7 +813,7 @@ export default function HomePage() {
         <button onClick={() => navigateTo('history')} className="group relative overflow-hidden flex flex-col items-center justify-center bg-ink-900/60 border border-ink-700/50 rounded-2xl p-5 text-center shadow-lg hover:border-violet-500/40 transition-all hover:-translate-y-1">
           <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <Clock size={26} className="text-violet-400 mb-2 group-hover:scale-110 transition-transform duration-300" />
-          <div className="text-3xl font-black text-ink-100">{data.history.length}</div>
+          <div className="text-3xl font-black text-ink-100">{quickMetrics.regularHistoryCount}</div>
           <div className="text-xs font-semibold text-ink-500 tracking-wider uppercase mt-1 group-hover:text-violet-400/80 transition-colors">Geçmiş</div>
         </button>
 
@@ -1048,9 +1062,11 @@ export default function HomePage() {
               ? pickedItem.movie.year ? `Çıkış Yılı: ${pickedItem.movie.year}` : 'Film'
               : `${pickedItem.episode.season}. Sezon ${pickedItem.episode.episode}. Bölüm`
           }
-          onRate={(rating, note, detailedRating, reviewTags) => {
+          initialIsPastWatch={pickedItem.kind === 'movie' ? Boolean(pickedItem.movie.isPastWatch) : false}
+          allowPastWatch={pickedItem.kind === 'movie'}
+          onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
             if (pickedItem.kind === 'movie') {
-              watchMovie(pickedItem.movie.id, rating, note, detailedRating, reviewTags);
+              watchMovie(pickedItem.movie.id, rating, note, detailedRating, reviewTags, isPastWatch);
             } else {
               watchEpisode(pickedItem.series.id, pickedItem.episode.id, rating, note, detailedRating, reviewTags);
             }
