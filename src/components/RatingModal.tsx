@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus, Tag, History } from 'lucide-react';
-import { useApp, DEFAULT_REVIEW_TAGS } from '../context/AppContext';
+import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
 
 interface RatingModalProps {
@@ -252,8 +252,12 @@ export default function RatingModal({
     );
   };
 
-  const displayedTags = useMemo(() => {
-    return Array.from(new Set([...availableTags, ...selectedTags]));
+  const { positiveTags, negativeTags } = useMemo(() => {
+    const all = Array.from(new Set([...availableTags, ...selectedTags]));
+    return {
+      positiveTags: all.filter((t) => isPositiveTag(t)),
+      negativeTags: all.filter((t) => !isPositiveTag(t)),
+    };
   }, [availableTags, selectedTags]);
 
   const handleSubmit = () => {
@@ -534,7 +538,7 @@ export default function RatingModal({
           )}
 
           {/* SEÇİLEBİLİR DEĞERLENDİRME BAŞLIKLARI */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-ink-300 flex items-center gap-1.5">
                 <Tag size={13} className="text-gold-400" /> Değerlendirme Başlıkları
@@ -546,26 +550,63 @@ export default function RatingModal({
               )}
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              {displayedTags.map((tag) => {
-                const isSelected = selectedTags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleReviewTag(tag)}
-                    className={`text-[11px] sm:text-xs font-bold px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
-                      isSelected
-                        ? 'bg-gold-500 text-ink-950 border-gold-400 shadow-md shadow-gold-500/20'
-                        : 'bg-ink-900/90 hover:bg-ink-800 text-ink-300 border-ink-800'
-                    }`}
-                  >
-                    {isSelected && <Check size={11} strokeWidth={3} />}
-                    <span>{tag}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {positiveTags.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <ThumbsUp size={12} className="text-emerald-400" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Övgü Yorumları</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {positiveTags.map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleReviewTag(tag)}
+                        className={`text-[11px] sm:text-xs font-bold px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/20'
+                            : 'bg-ink-900/90 hover:bg-ink-800 text-ink-300 border-ink-800'
+                        }`}
+                      >
+                        {isSelected && <Check size={11} strokeWidth={3} />}
+                        <span>{tag}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {negativeTags.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Frown size={12} className="text-red-400" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-red-400">Eleştiriler</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {negativeTags.map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleReviewTag(tag)}
+                        className={`text-[11px] sm:text-xs font-bold px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-red-500 text-white border-red-400 shadow-md shadow-red-500/20'
+                            : 'bg-ink-900/90 hover:bg-ink-800 text-ink-300 border-ink-800'
+                        }`}
+                      >
+                        {isSelected && <Check size={11} strokeWidth={3} />}
+                        <span>{tag}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* KİŞİSEL İNCELEME DEFTERİ */}

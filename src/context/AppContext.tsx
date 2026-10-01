@@ -8,7 +8,18 @@ import { levelFromXp } from '../lib/xp';
 const STORAGE_KEY = 'sinevia-v1';
 export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
-export const DEFAULT_REVIEW_TAGS = ['🔥 Başyapıt', '🎭 Oyunculuk Muazzam', '🤯 Ters Köşe Final', '🎵 Müzikler Efsane', '🎬 Görsellik Şahane', '🍿 Akıcı & Keyifli', '💤 Tempo Yavaştı', '📉 Beklentimin Altında'];
+export const DEFAULT_REVIEW_TAGS = ['🔥 Başyapıt', '🎭 Oyunculuk Muazzam', '🤯 Ters Köşe Final', '🎵 Müzikler Efsane', '🎬 Görsellik Şahane', '🍿 Akıcı & Keyifli', '🧠 Beyin Yakan Kurgu', '💪 Tempo Yavaştı', '📉 Beklentimin Altında', '💩 Bok Gibi'];
+
+export const POSITIVE_TAG_EMOJIS = ['🔥', '🎭', '🤯', '🎵', '🎬', '🍿', '🧠', '⭐', '💎', '🏆', '✨', '💪', '🌟', '🥇', '👏', '😍', '❤️', '🤩', '👍'];
+export const NEGATIVE_TAG_EMOJIS = ['💤', '📉', '💩', '😴', '🤮', '👎', '😩', '😤', '🤦', '💔', '⚠️', '🗑️', '🤢', '😈', '💀', '😱'];
+
+export function isPositiveTag(tag: string): boolean {
+  const code = tag.trim().codePointAt(0);
+  if (code === undefined) return true;
+  const firstChar = String.fromCodePoint(code);
+  if (NEGATIVE_TAG_EMOJIS.includes(firstChar)) return false;
+  return true;
+}
 export const DISPLAY_DURATION_MS = 4000;
 export const QUEUE_STEP_DURATION_MS = 4300;
 
