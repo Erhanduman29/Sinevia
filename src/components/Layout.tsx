@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
-import { Film, Tv, History, Trophy, Settings, BarChart3, Bot, Menu, X, LayoutDashboard, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Film, Tv, History, Trophy, Settings, BarChart3, Bot,
+  Menu, X, LayoutDashboard, Sparkles,
+} from 'lucide-react';
 import WrappedModal from './WrappedModal';
 
 export type TabId = 'home' | 'movies' | 'series' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
@@ -14,15 +17,46 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showWrapped, setShowWrapped] = useState(false);
 
+  // Akıllı Alt Bar (Auto-Hide) State ve Referansları
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
   const navItems = [
-    { id: 'home', icon: LayoutDashboard, label: 'Ana Sayfa' },
+    { id: 'home', icon: LayoutDashboard, label: 'Ana Sayfa', shortLabel: 'Ana Sayfa' },
+    { id: 'movies', icon: Film, label: 'Filmler', shortLabel: 'Filmler' },
+    { id: 'series', icon: Tv, label: 'Diziler', shortLabel: 'Diziler' },
+    { id: 'history', icon: History, label: 'Geçmiş', shortLabel: 'Geçmiş' },
+    { id: 'achievements', icon: Trophy, label: 'Başarımlar', shortLabel: 'Kupalar' },
+    { id: 'stats', icon: BarChart3, label: 'İstatistik', shortLabel: 'İstatistik' },
+    { id: 'ai', icon: Bot, label: 'AI Asistan', shortLabel: 'AI' },
+  ] as const;
+
+  const mobileBottomTabs = [
     { id: 'movies', icon: Film, label: 'Filmler' },
     { id: 'series', icon: Tv, label: 'Diziler' },
     { id: 'history', icon: History, label: 'Geçmiş' },
-    { id: 'achievements', icon: Trophy, label: 'Başarımlar' },
     { id: 'stats', icon: BarChart3, label: 'İstatistik' },
-    { id: 'ai', icon: Bot, label: 'AI Asistan' },
+    { id: 'achievements', icon: Trophy, label: 'Başarımlar' },
   ] as const;
+
+  // Aşağı kaydırınca barı gizle, yukarı kaydırınca göster
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const currentY = e.currentTarget.scrollTop;
+    if (currentY > lastScrollY.current + 15) {
+      setIsNavVisible(false); // Aşağı kaydırılıyor
+    } else if (currentY < lastScrollY.current - 15 || currentY < 20) {
+      setIsNavVisible(true); // Yukarı kaydırılıyor veya en üstte
+    }
+    lastScrollY.current = currentY;
+  };
+
+  useEffect(() => {
+    const scrollEl = document.getElementById('main-scroll');
+    if (scrollEl) {
+      scrollEl.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+      setIsNavVisible(true); // Sekme değiştiğinde menü her zaman görünür olsun
+    }
+  }, [activeTab]);
 
   const handleMobileMenuClick = (id: TabId) => {
     onTabChange(id);
@@ -36,51 +70,66 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       <div className="fixed top-[40%] left-[30%] w-[500px] h-[500px] rounded-full blur-[140px] pointer-events-none ambient-glow-3 z-0 transition-all duration-700" />
 
       {/* MOBİL: SABİT ÜST BAR */}
-      <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-ink-950/90 backdrop-blur-xl border-b border-ink-800 z-[60] flex items-center justify-between px-3 shadow-md shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-ink-950/90 backdrop-blur-xl border-b border-ink-800 z-[60] flex items-center justify-between px-3 shadow-md shrink-0 transition-transform duration-300">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-white bg-ink-900 border border-ink-800 hover:bg-ink-800 transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-white bg-ink-900 border border-ink-800 hover:bg-ink-800 transition-colors"
+            title="Menü"
           >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            {isMobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
           </button>
 
           <button onClick={() => handleMobileMenuClick('home')} className="flex items-center gap-2 transition-transform active:scale-95">
-            <div className="w-8 h-8 bg-gradient-to-br from-gold-500 to-gold-600 rounded-lg flex items-center justify-center shadow-md">
-              <Film size={16} className="text-white" />
+            <div className="w-7 h-7 bg-gradient-to-br from-gold-500 to-gold-600 rounded-lg flex items-center justify-center shadow-md">
+              <Film size={15} className="text-white" />
             </div>
-            <span className="text-base font-black text-white tracking-widest uppercase">SINEVIA</span>
+            <span className="text-sm font-black text-white tracking-widest uppercase">SINEVIA</span>
           </button>
         </div>
 
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setShowWrapped(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-gold-500 to-amber-500 text-ink-950 text-xs font-black shadow-md"
+            onClick={() => handleMobileMenuClick('ai')}
+            className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-all ${
+              activeTab === 'ai'
+                ? 'bg-azure-500/25 text-azure-300 border-azure-500/40'
+                : 'bg-ink-900/80 text-azure-400 border-ink-800 hover:text-azure-300'
+            }`}
+            title="AI Asistan"
           >
-            <Sparkles size={14} /> Wrapped
+            <Bot size={17} />
           </button>
+
+          <button
+            onClick={() => setShowWrapped(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-gold-500 to-amber-500 text-ink-950 text-[11px] font-black shadow-md"
+          >
+            <Sparkles size={13} /> Wrapped
+          </button>
+
           <button
             onClick={() => handleMobileMenuClick('settings')}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
+            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${
               activeTab === 'settings' ? 'bg-ink-800 text-gold-400 border border-gold-500/30' : 'text-ink-400 hover:bg-ink-900 hover:text-white'
             }`}
+            title="Ayarlar"
           >
-            <Settings size={20} />
+            <Settings size={18} />
           </button>
         </div>
       </header>
 
-      {/* MOBİL: AÇILIR MENÜ EKRANI */}
+      {/* MOBİL: AÇILIR TAM MENÜ EKRANI */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed top-14 inset-0 bg-ink-950/95 backdrop-blur-3xl z-[55] animate-fade-in flex flex-col p-4 overflow-y-auto">
+        <div className="md:hidden fixed top-14 inset-0 bg-ink-950/95 backdrop-blur-3xl z-[55] animate-fade-in flex flex-col p-4 pb-20 overflow-y-auto">
           <div className="flex flex-col gap-2">
             <button
               onClick={() => { setIsMobileMenuOpen(false); setShowWrapped(true); }}
-              className="flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-black bg-gradient-to-r from-gold-500 via-amber-500 to-orange-500 text-ink-950 shadow-lg mb-1"
+              className="flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-black bg-gradient-to-r from-gold-500 via-amber-500 to-orange-500 text-ink-950 shadow-lg mb-1"
             >
               <span className="flex items-center gap-3">
-                <Sparkles size={20} /> SINEVIA WRAPPED ÖZETİN
+                <Sparkles size={19} /> SINEVIA WRAPPED ÖZETİN
               </span>
               <span className="text-[10px] bg-black/20 text-white px-2 py-0.5 rounded-full">Story</span>
             </button>
@@ -92,21 +141,33 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                 <button
                   key={item.id}
                   onClick={() => handleMobileMenuClick(item.id as TabId)}
-                  className={`flex items-center gap-4 px-4 py-4 rounded-2xl text-sm font-bold transition-all ${
+                  className={`flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all ${
                     isActive
                       ? isAI
                         ? 'text-azure-300 bg-azure-500/20 border border-azure-500/30 shadow-sm'
                         : 'text-gold-400 bg-ink-800 border border-gold-500/30 shadow-sm'
                       : isAI
                       ? 'text-azure-400 bg-azure-500/5 hover:bg-azure-500/10'
-                      : 'text-ink-400 bg-ink-900/50 hover:bg-ink-800/50 hover:text-ink-200'
+                      : 'text-ink-300 bg-ink-900/50 hover:bg-ink-800/50 hover:text-ink-100'
                   }`}
                 >
-                  <item.icon size={20} className={isActive ? 'scale-110' : ''} />
+                  <item.icon size={19} className={isActive ? 'scale-110' : ''} />
                   <span className="tracking-wide">{item.label}</span>
                 </button>
               );
             })}
+
+            <button
+              onClick={() => handleMobileMenuClick('settings')}
+              className={`flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all ${
+                activeTab === 'settings'
+                  ? 'text-gold-400 bg-ink-800 border border-gold-500/30 shadow-sm'
+                  : 'text-ink-300 bg-ink-900/50 hover:bg-ink-800/50 hover:text-ink-100'
+              }`}
+            >
+              <Settings size={19} />
+              <span className="tracking-wide">Ayarlar</span>
+            </button>
           </div>
         </div>
       )}
@@ -170,11 +231,38 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       </aside>
 
       {/* ANA İÇERİK ALANI */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent relative pt-14 md:pt-0 z-10">
-        <div id="main-scroll" className="flex-1 overflow-y-auto p-4 md:p-8 relative z-10 custom-scrollbar">
-          <div className="max-w-7xl mx-auto pb-6 md:pb-0">{children}</div>
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent relative pt-14 pb-0 md:pt-0 md:pb-0 z-10">
+        <div id="main-scroll" onScroll={handleScroll} className="flex-1 overflow-y-auto p-3.5 sm:p-4 md:p-8 relative z-10 custom-scrollbar pb-24 md:pb-8">
+          <div className="max-w-7xl mx-auto">{children}</div>
         </div>
       </main>
+
+      {/* MOBİL: AKILLI (GİZLENEN) SABİT ALT NAVİGASYON BARI */}
+      <nav
+        className={`md:hidden fixed bottom-0 inset-x-0 h-[68px] bg-ink-950/95 backdrop-blur-2xl border-t border-ink-800/90 z-[58] grid grid-cols-5 px-1.5 shadow-[0_-8px_25px_rgba(0,0,0,0.6)] transition-transform duration-300 ease-in-out ${
+          isNavVisible ? 'translate-y-0' : 'translate-y-[120%]'
+        }`}
+      >
+        {mobileBottomTabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleMobileMenuClick(tab.id as TabId)}
+              className={`flex flex-col items-center justify-center gap-1 rounded-xl my-1.5 transition-all ${
+                isActive ? 'text-gold-400 bg-gold-500/10' : 'text-ink-400 hover:text-ink-200'
+              }`}
+            >
+              <Icon size={20} className={isActive ? 'scale-110' : ''} />
+              <span className={`text-[10px] tracking-tight ${isActive ? 'font-black' : 'font-semibold'}`}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
 
       {showWrapped && <WrappedModal onClose={() => setShowWrapped(false)} />}
     </div>

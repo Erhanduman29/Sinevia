@@ -3,7 +3,7 @@ import {
   Search, X, Check, Film, Tv, ShoppingCart, FolderPlus, Loader2, Sparkles,
   Plus, Trash2, ChevronDown, ChevronUp, Filter, ArrowUpDown, AlertTriangle, User, CheckCircle2, History,
 } from 'lucide-react';
-import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { normalize } from '../lib/utils';
 
 const MOVIE_GENRES = [
@@ -308,12 +308,7 @@ export default function BulkAddModal({
     setStep('importing');
     let finalColId = selectedCollectionId;
 
-    if (assignToPastCollection) {
-      const existingPast = data.collections.find(
-        (c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)
-      );
-      finalColId = existingPast ? existingPast.id : (addCollection(PAST_WATCH_COLLECTION_NAME) as unknown as string);
-    } else if (collectionName.trim()) {
+    if (collectionName.trim()) {
       finalColId = addCollection(collectionName) as unknown as string;
     }
 
@@ -345,7 +340,7 @@ export default function BulkAddModal({
 
           preparedMovies.push([
             details.title || item.title || '', year, genres, finalColId, runtime, posterFullUrl, overview,
-            details.id, imdbId, watchProviders, { directors, cast, studios, keywords, originalLanguage },
+            details.id, imdbId, watchProviders, { directors, cast, studios, keywords, originalLanguage, inPastQueue: assignToPastCollection },
           ]);
         } else if (item.media_type === 'tv') {
           const res = await fetch(
@@ -743,7 +738,7 @@ export default function BulkAddModal({
             <div className="max-w-3xl mx-auto w-full space-y-6 md:space-y-8">
               <div className="text-center space-y-2">
                 <h3 className="text-2xl md:text-3xl font-black text-white">Toplu Atama</h3>
-                <p className="text-xs md:text-sm text-ink-400">Seçtiğin {cart.length} yapımı istersen tek tıkla bir koleksiyona atayabilirsin.</p>
+                <p className="text-xs md:text-sm text-ink-400">Seçtiğin {cart.length} yapımı istersen bir koleksiyona veya Eskiden İzlenenler sırasına atayabilirsin.</p>
               </div>
 
               <div className="flex flex-wrap justify-center gap-2 md:gap-3 p-3 md:p-4 bg-ink-900/50 rounded-2xl border border-ink-800/50">
@@ -770,14 +765,7 @@ export default function BulkAddModal({
                   {cart.some((c) => c.media_type === 'movie') && (
                     <button
                       type="button"
-                      onClick={() => {
-                        const nextVal = !assignToPastCollection;
-                        setAssignToPastCollection(nextVal);
-                        if (nextVal) {
-                          setSelectedCollectionId(null);
-                          setCollectionName('');
-                        }
-                      }}
+                      onClick={() => setAssignToPastCollection(!assignToPastCollection)}
                       className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
                         assignToPastCollection
                           ? 'bg-violet-500/25 border-violet-500 text-violet-200 shadow-md'
@@ -791,41 +779,39 @@ export default function BulkAddModal({
                   )}
                 </div>
 
-                {!assignToPastCollection && (
-                  <div className="space-y-4">
-                    <input
-                      type="text"
-                      value={collectionName}
-                      onChange={(e) => { setCollectionName(e.target.value); setSelectedCollectionId(null); }}
-                      placeholder="Yeni koleksiyon adı (Örn: Hafta Sonu)"
-                      className="w-full bg-ink-950 border border-ink-800 rounded-xl px-4 py-3 text-xs md:text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
-                    />
+                <div className="space-y-4">
+                  <input
+                    type="text"
+                    value={collectionName}
+                    onChange={(e) => { setCollectionName(e.target.value); setSelectedCollectionId(null); }}
+                    placeholder="Yeni koleksiyon adı (Örn: Matrix Serisi)"
+                    className="w-full bg-ink-950 border border-ink-800 rounded-xl px-4 py-3 text-xs md:text-sm font-medium text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+                  />
 
-                    {data.collections?.length > 0 && (
-                      <>
-                        <div className="flex items-center gap-3 md:gap-4">
-                          <div className="h-px bg-ink-800 flex-1" />
-                          <span className="text-[10px] md:text-xs font-bold text-ink-500 uppercase tracking-widest">VEYA MEVCUT SEÇ</span>
-                          <div className="h-px bg-ink-800 flex-1" />
-                        </div>
+                  {data.collections?.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-3 md:gap-4">
+                        <div className="h-px bg-ink-800 flex-1" />
+                        <span className="text-[10px] md:text-xs font-bold text-ink-500 uppercase tracking-widest">VEYA MEVCUT SEÇ</span>
+                        <div className="h-px bg-ink-800 flex-1" />
+                      </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          {data.collections.map((col: any) => (
-                            <button
-                              key={col.id}
-                              onClick={() => { setSelectedCollectionId(col.id); setCollectionName(''); }}
-                              className={`px-3 md:px-4 py-2 rounded-lg text-[11px] md:text-xs font-bold transition-all border ${
-                                selectedCollectionId === col.id ? 'bg-gold-500/20 text-gold-400 border-gold-500/30' : 'bg-ink-950 border-ink-800 text-ink-400 hover:bg-ink-800'
-                              }`}
-                            >
-                              {col.name}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
+                      <div className="flex flex-wrap gap-2">
+                        {data.collections.map((col: any) => (
+                          <button
+                            key={col.id}
+                            onClick={() => { setSelectedCollectionId(selectedCollectionId === col.id ? null : col.id); setCollectionName(''); }}
+                            className={`px-3 md:px-4 py-2 rounded-lg text-[11px] md:text-xs font-bold transition-all border ${
+                              selectedCollectionId === col.id ? 'bg-gold-500/20 text-gold-400 border-gold-500/30' : 'bg-ink-950 border-ink-800 text-ink-400 hover:bg-ink-800'
+                            }`}
+                          >
+                            {col.name}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 pt-2 md:pt-4">

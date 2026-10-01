@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Check, Clock, Link as LinkIcon, Boxes, Plus } from 'lucide-react';
+import { X, Check, Clock, Link as LinkIcon, Boxes, Plus, History } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Movie } from '../types';
 
@@ -9,14 +9,14 @@ interface Props {
 }
 
 export default function EditMovieModal({ movie, onClose }: Props) {
-  const { data, editMovie, setMovieCollection, addCollection } = useApp();
+  const { data, editMovie, setMovieCollection, setMoviePastQueue, addCollection } = useApp();
   const [title, setTitle] = useState(movie.title);
   const [year, setYear] = useState(movie.year);
   const [runtime, setRuntime] = useState<string>(movie.runtime ? movie.runtime.toString() : '');
   const [selectedGenres, setSelectedGenres] = useState<string[]>(movie.genres);
   const [customUrl, setCustomUrl] = useState<string>(movie.customUrl || '');
+  const [inPastQueue, setInPastQueue] = useState<boolean>(Boolean(movie.inPastQueue));
 
-  // Koleksiyon seçimi ve yeni koleksiyon oluşturma state'leri
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(
     movie.collectionId || null
   );
@@ -42,18 +42,19 @@ export default function EditMovieModal({ movie, onClose }: Props) {
 
     const runtimeNum = runtime ? parseInt(runtime, 10) : undefined;
 
-    // Eğer yeni koleksiyon kutusuna bir isim yazılıp "+" tuşuna basılmadan direkt Kaydet'e basıldıysa onu da oluştur
     let finalCollectionId = selectedCollectionId;
     if (showNewCollInput && newCollectionName.trim()) {
       finalCollectionId = addCollection(newCollectionName.trim());
     }
 
-    // Filmin koleksiyonunu güncelle
     if (finalCollectionId !== movie.collectionId) {
       setMovieCollection(movie.id, finalCollectionId);
     }
 
-    // Filmin tüm bilgilerini (yönetmen, oyuncu, DNA verilerini kaybetmeden) güncelle
+    if (!movie.watched && inPastQueue !== Boolean(movie.inPastQueue)) {
+      setMoviePastQueue(movie.id, inPastQueue);
+    }
+
     editMovie(
       movie.id,
       title.trim(),
@@ -81,49 +82,51 @@ export default function EditMovieModal({ movie, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2.5 sm:p-4 animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl custom-scrollbar"
+        className="bg-ink-900 border border-ink-700 rounded-2xl sm:rounded-3xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden shadow-2xl animate-fade-in-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b border-ink-700 sticky top-0 bg-ink-900 z-10">
-          <h2 className="text-lg font-semibold text-ink-100">Film Düzenle & Koleksiyon Ata</h2>
+        <div className="flex items-center justify-between px-4 py-3.5 sm:p-5 border-b border-ink-800 bg-ink-900 shrink-0">
+          <h2 className="text-base sm:text-lg font-bold text-ink-100 truncate">
+            Film Düzenle & Koleksiyon Ata
+          </h2>
           <button
             onClick={onClose}
-            className="text-ink-400 hover:text-ink-200 transition-colors"
+            className="w-8 h-8 rounded-full bg-ink-800/80 hover:bg-ink-700 text-ink-400 hover:text-white flex items-center justify-center transition-colors"
           >
-            <X size={22} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="p-5 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar">
           <div>
-            <label className="block text-sm font-medium text-ink-300 mb-1.5">Film Adı</label>
+            <label className="block text-xs sm:text-sm font-medium text-ink-300 mb-1.5">Film Adı</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-ink-800 border border-ink-700 rounded-lg px-4 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500 transition-colors"
+              className="w-full bg-ink-800 border border-ink-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500 transition-colors"
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-ink-300 mb-1.5">Çıkış Yılı</label>
+              <label className="block text-xs sm:text-sm font-medium text-ink-300 mb-1.5">Çıkış Yılı</label>
               <input
                 type="text"
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
-                className="w-full bg-ink-800 border border-ink-700 rounded-lg px-4 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500 transition-colors"
+                className="w-full bg-ink-800 border border-ink-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500 transition-colors"
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               />
             </div>
             <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-ink-300 mb-1.5">
-                <Clock size={16} className="text-ink-400" />
+              <label className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-ink-300 mb-1.5">
+                <Clock size={14} className="text-ink-400" />
                 Süre (Dakika)
               </label>
               <input
@@ -131,26 +134,58 @@ export default function EditMovieModal({ movie, onClose }: Props) {
                 value={runtime}
                 onChange={(e) => setRuntime(e.target.value)}
                 placeholder="örn. 148"
-                className="w-full bg-ink-800 border border-ink-700 rounded-lg px-4 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500 transition-colors"
+                className="w-full bg-ink-800 border border-ink-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500 transition-colors"
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               />
             </div>
           </div>
 
-          {/* YENİ: KOLEKSİYONA EKLEME / DEĞİŞTİRME BÖLÜMÜ */}
-          <div className="bg-ink-950/60 border border-ink-800 rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-1.5 text-sm font-bold text-gold-400">
-                <Boxes size={16} />
+          {/* ESKİDEN İZLENENLER SIRASI SEÇENEĞİ */}
+          {!movie.watched && (
+            <button
+              type="button"
+              onClick={() => setInPastQueue(!inPastQueue)}
+              className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                inPastQueue
+                  ? 'bg-violet-500/20 border-violet-500 text-violet-200'
+                  : 'bg-ink-950/60 hover:bg-ink-800 border-ink-800 text-ink-300'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <History size={16} className={inPastQueue ? 'text-violet-300 flex-shrink-0' : 'text-ink-400 flex-shrink-0'} />
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-ink-100">
+                    Eskiden İzlenenler Koleksiyonunda (Sırada)
+                  </div>
+                  <div className="text-[10px] text-ink-400 truncate">
+                    Kendi serisinden kopmadan puanlanmak üzere Eskiden İzlenenler kutusunda görünür
+                  </div>
+                </div>
+              </div>
+              <div
+                className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 border ml-2 ${
+                  inPastQueue ? 'bg-violet-500 border-violet-300 text-white' : 'bg-ink-900 border-ink-700 text-transparent'
+                }`}
+              >
+                <Check size={12} strokeWidth={3} />
+              </div>
+            </button>
+          )}
+
+          {/* KOLEKSİYONA EKLEME / DEĞİŞTİRME BÖLÜMÜ */}
+          <div className="bg-ink-950/60 border border-ink-800 rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-gold-400">
+                <Boxes size={15} />
                 Koleksiyon (Seri / Evren)
               </label>
               <button
                 type="button"
                 onClick={() => setShowNewCollInput(!showNewCollInput)}
-                className="text-xs font-bold text-gold-400 hover:text-gold-300 flex items-center gap-1 bg-gold-500/10 border border-gold-500/30 px-2.5 py-1 rounded-lg transition-colors"
+                className="text-[11px] font-bold text-gold-400 hover:text-gold-300 flex items-center gap-1 bg-gold-500/10 border border-gold-500/30 px-2.5 py-1 rounded-lg transition-colors"
               >
-                <Plus size={13} />
-                {showNewCollInput ? 'Vazgeç' : 'Yeni Koleksiyon Oluştur'}
+                <Plus size={12} />
+                {showNewCollInput ? 'Vazgeç' : 'Yeni Koleksiyon'}
               </button>
             </div>
 
@@ -160,8 +195,8 @@ export default function EditMovieModal({ movie, onClose }: Props) {
                   type="text"
                   value={newCollectionName}
                   onChange={(e) => setNewCollectionName(e.target.value)}
-                  placeholder="Yeni koleksiyon adı (Örn: Yüzüklerin Efendisi)..."
-                  className="flex-1 bg-ink-900 border border-gold-500/40 rounded-lg px-3 py-2 text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500"
+                  placeholder="Yeni koleksiyon adı..."
+                  className="flex-1 bg-ink-900 border border-gold-500/40 rounded-lg px-3 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -173,24 +208,24 @@ export default function EditMovieModal({ movie, onClose }: Props) {
                   type="button"
                   onClick={handleCreateCollectionInline}
                   disabled={!newCollectionName.trim()}
-                  className="bg-gold-500 hover:bg-gold-400 text-ink-950 font-bold px-3.5 py-2 rounded-lg text-xs transition-colors disabled:opacity-40"
+                  className="bg-gold-500 hover:bg-gold-400 text-ink-950 font-bold px-3 py-2 rounded-lg text-xs transition-colors disabled:opacity-40"
                 >
                   Ekle & Seç
                 </button>
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
                 onClick={() => setSelectedCollectionId(null)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                   selectedCollectionId === null
                     ? 'bg-ink-700 text-white border-ink-500 shadow-sm'
                     : 'bg-ink-900 text-ink-400 border-ink-800 hover:text-ink-200'
                 }`}
               >
-                Bağımsız Film (Koleksiyon Yok)
+                Bağımsız Film
               </button>
 
               {data.collections.map((col) => {
@@ -200,7 +235,7 @@ export default function EditMovieModal({ movie, onClose }: Props) {
                     key={col.id}
                     type="button"
                     onClick={() => setSelectedCollectionId(col.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
                       isSelected
                         ? 'bg-gold-500 text-ink-950 border-gold-400 shadow-md'
                         : 'bg-ink-900 text-ink-300 border-ink-800 hover:border-gold-500/40'
@@ -214,10 +249,10 @@ export default function EditMovieModal({ movie, onClose }: Props) {
             </div>
           </div>
 
-          {/* ÖZEL İZLEME LİNKİ (CUSTOM URL) */}
+          {/* ÖZEL İZLEME LİNKİ */}
           <div>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-ink-300 mb-1.5">
-              <LinkIcon size={16} className="text-azure-400" />
+            <label className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-ink-300 mb-1.5">
+              <LinkIcon size={14} className="text-azure-400" />
               Özel İzleme Linki (İsteğe Bağlı)
             </label>
             <input
@@ -225,23 +260,20 @@ export default function EditMovieModal({ movie, onClose }: Props) {
               value={customUrl}
               onChange={(e) => setCustomUrl(e.target.value)}
               placeholder="https://... (Kişisel arşiv linki)"
-              className="w-full bg-ink-800 border border-ink-700 rounded-lg px-4 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500 transition-colors"
+              className="w-full bg-ink-800 border border-ink-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500 transition-colors"
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             />
-            <p className="text-[10px] text-ink-500 mt-1">
-              Bu linki girerseniz, film kartındaki "Özel Kaynak" butonu doğrudan buraya yönlenir.
-            </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink-300 mb-2">Türler</label>
-            <div className="flex flex-wrap gap-2">
+            <label className="block text-xs sm:text-sm font-medium text-ink-300 mb-2">Türler</label>
+            <div className="flex flex-wrap gap-1.5">
               {data.genres.map((g) => (
                 <button
                   key={g}
                   type="button"
                   onClick={() => toggleGenre(g)}
-                  className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     selectedGenres.includes(g)
                       ? 'bg-gold-500 text-ink-950 font-bold'
                       : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
@@ -254,13 +286,13 @@ export default function EditMovieModal({ movie, onClose }: Props) {
           </div>
         </div>
 
-        <div className="p-5 border-t border-ink-700 sticky bottom-0 bg-ink-900">
+        <div className="p-3.5 sm:p-5 border-t border-ink-800 bg-ink-900 shrink-0">
           <button
             onClick={handleSubmit}
             disabled={!title.trim()}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 rounded-lg py-3 font-semibold hover:from-gold-400 hover:to-gold-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 rounded-xl py-3 font-black text-xs sm:text-sm hover:from-gold-400 hover:to-gold-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Check size={20} />
+            <Check size={18} strokeWidth={2.5} />
             Kaydet
           </button>
         </div>

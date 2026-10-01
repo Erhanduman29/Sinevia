@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Dna,
@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   Layers,
   Film,
+  History,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
@@ -36,7 +37,7 @@ interface DnaSynthesizerModalProps {
 
 type Step = 'select' | 'synthesizing' | 'result';
 type Slot = 'A' | 'B' | null;
-type SelectionTab = 'library' | 'history';
+type SelectionTab = 'library' | 'watched' | 'past';
 
 interface SynthTrait {
   category: string;
@@ -85,6 +86,14 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
   const [syncStatusText, setSyncStatusText] = useState<string>('');
 
+  // PENCERE AÇIKKEN ARKA PLANDAKİ KAYDIRMA ÇUBUĞUNU KİLİTLE
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, []);
+
   const movieA = useMemo(
     () => (movieAId ? data.movies.find((m) => m.id === movieAId) || null : null),
     [data.movies, movieAId]
@@ -94,9 +103,10 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     [data.movies, movieBId]
   );
 
-  // KOLEKSİYON KURALI: Koleksiyondaki filmlerden sadece izlenmemiş EN ESKİ (sıradaki ilk) film sentezlenebilir
+  // KOLEKSİYON KURALI: Sadece izlenmemiş EN ESKİ (ilk) film sentezlenebilir
+  // ESKİDEN İZLENENLER KURALI: inPastQueue olanlar aday olamaz!
   const eligibleUnwatchedMovies = useMemo(() => {
-    const unwatched = data.movies.filter((m) => !m.watched);
+    const unwatched = data.movies.filter((m) => !m.watched && !m.inPastQueue);
     const standalone = unwatched.filter((m) => !m.collectionId);
 
     const collectionGroups = new Map<string, Movie[]>();
@@ -124,10 +134,23 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     return [...standalone, ...sequentialCollectionMovies];
   }, [data.movies]);
 
-  const historyMovies = useMemo(() => data.movies.filter((m) => m.watched), [data.movies]);
+  const currentWatchedMovies = useMemo(
+    () => data.movies.filter((m) => m.watched && !m.isPastWatch),
+    [data.movies]
+  );
+  const pastWatchedMovies = useMemo(
+    () => data.movies.filter((m) => m.watched && m.isPastWatch),
+    [data.movies]
+  );
 
   const filteredMovies = useMemo(() => {
-    const sourceList = selectionTab === 'history' ? historyMovies : data.movies;
+    const sourceList =
+      selectionTab === 'watched'
+        ? currentWatchedMovies
+        : selectionTab === 'past'
+        ? pastWatchedMovies
+        : data.movies;
+        
     if (!search.trim()) return sourceList;
     const q = search.toLocaleLowerCase('tr-TR').trim();
     return sourceList.filter(
@@ -136,7 +159,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         (m.directors && m.directors.some((d) => d.toLocaleLowerCase('tr-TR').includes(q))) ||
         (m.cast && m.cast.some((c) => c.toLocaleLowerCase('tr-TR').includes(q)))
     );
-  }, [data.movies, historyMovies, selectionTab, search]);
+  }, [data.movies, currentWatchedMovies, pastWatchedMovies, selectionTab, search]);
 
   // Seçilen iki ebeveyn filmin kendi aralarındaki ortak genleri (Önizleme için)
   const sharedParentGenes = useMemo(() => {
@@ -178,7 +201,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     return badges;
   }, [movieA, movieB]);
 
-  // Bir filmin TMDB üzerinden tam oyuncu (ilk 15 oyuncu) ve yönetmen verisini çeken yardımcı fonksiyon
+  // Bir filmin TMDB üzerinden tam oyuncu ve yönetmen verisini çeken yardımcı fonksiyon
   const fetchFullCreditsForMovie = async (m: Movie): Promise<Movie> => {
     try {
       let targetTmdbId = m.tmdbId;
@@ -213,7 +236,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         .filter(Boolean)
         .slice(0, 4);
 
-      // Oyuncu eşleşmelerinin kaçmaması için ilk 15 oyuncuyu alıyoruz
       const cast: string[] = (details.credits?.cast || [])
         .slice(0, 15)
         .map((c: any) => String(c.name).trim())
@@ -273,7 +295,8 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
   };
 
   const handleRandomPair = () => {
-    const highRated = historyMovies.filter((m) => (m.rating || 0) >= 8);
+    const allWatched = data.movies.filter((m) => m.watched);
+    const highRated = allWatched.filter((m) => (m.rating || 0) >= 8);
     const pool = highRated.length >= 2 ? highRated : data.movies;
     if (pool.length < 2) return;
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
@@ -285,7 +308,9 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
   // SABİT ORANLI MATEMATİKSEL SENTEZ MOTORU
   // =========================================================
   const handleSynthesize = async () => {
+    // Ebeveynler eksikse veya hiç havuz yoksa başlama
     if (!movieA || !movieB || eligibleUnwatchedMovies.length === 0) return;
+    
     setStep('synthesizing');
 
     // 1. Adım: Seçilen ebeveynlerin ve aday filmlerin oyuncu/yönetmen verisi eksikse TMDB'den çek
@@ -317,7 +342,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     const activeB = updatedMap.get(movieB.id) || movieB;
 
     setTimeout(() => {
-      // Sadece gerçekten oyuncu/yönetmen dizisi doluysa karşılaştırmaya al!
+      // Sadece gerçekten oyuncu/yönetmen dizisi doluysa karşılaştırmaya al
       const hasDirA = Array.isArray(activeA.directors) && activeA.directors.length > 0;
       const hasDirB = Array.isArray(activeB.directors) && activeB.directors.length > 0;
       const dirsA = new Set(hasDirA ? activeA.directors!.map((d) => d.trim()).filter(Boolean) : []);
@@ -373,6 +398,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
       eligibleUnwatchedMovies.forEach((rawCand) => {
         const candidate = updatedMap.get(rawCand.id) || rawCand;
+        // Eğer havuzdaki film zaten ebeveynlerden biriyse atla
         if (candidate.id === activeA.id || candidate.id === activeB.id) return;
 
         let pctFromA = 0;
@@ -381,8 +407,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
         // ---------------------------------------------------------
         // 1. YÖNETMEN KARŞILAŞTIRMASI
-        // KURAL: Aday filmde yönetmen verisi yoksa kesinlikle hiçbir şey alınmaz.
-        // Sabit Oran: İki ebeveynde de aynı yönetmen varsa +%30, tek ebeveynde varsa +%25
         // ---------------------------------------------------------
         const hasCandDirs = Array.isArray(candidate.directors) && candidate.directors.length > 0;
         if (hasCandDirs && (hasDirA || hasDirB)) {
@@ -395,9 +419,13 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             if (!cleanD) return;
             const inA = dirsA.has(cleanD);
             const inB = dirsB.has(cleanD);
-            if (inA && inB) dirsBoth.push(cleanD);
-            else if (inA) dirsOnlyA.push(cleanD);
-            else if (inB) dirsOnlyB.push(cleanD);
+            if (inA && inB) {
+              dirsBoth.push(cleanD);
+            } else if (inA) {
+              dirsOnlyA.push(cleanD);
+            } else if (inB) {
+              dirsOnlyB.push(cleanD);
+            }
           });
 
           if (dirsBoth.length > 0) {
@@ -439,10 +467,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
         // ---------------------------------------------------------
         // 2. OYUNCU KARŞILAŞTIRMASI
-        // KURAL: Aday filmde oyuncu verisi (cast) yoksa kesinlikle hiçbir şey alınmaz.
-        // Sabit Oran:
-        // - A filminde B oyuncusu + C filminde B oyuncusu + D filminde B oyuncusu = +%15 (Her İki Filmle Ortak Oyuncu)
-        // - Tek ebeveynle ortak her oyuncu = +%10 (Maksimum toplam +%30)
         // ---------------------------------------------------------
         const hasCandCast = Array.isArray(candidate.cast) && candidate.cast.length > 0;
         if (hasCandCast && (hasCastA || hasCastB)) {
@@ -455,9 +479,13 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             if (!cleanActor) return;
             const inA = castA.has(cleanActor);
             const inB = castB.has(cleanActor);
-            if (inA && inB) actorsBoth.push(cleanActor);
-            else if (inA) actorsOnlyA.push(cleanActor);
-            else if (inB) actorsOnlyB.push(cleanActor);
+            if (inA && inB) {
+              actorsBoth.push(cleanActor);
+            } else if (inA) {
+              actorsOnlyA.push(cleanActor);
+            } else if (inB) {
+              actorsOnlyB.push(cleanActor);
+            }
           });
 
           let castPctUsed = 0;
@@ -505,7 +533,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
         // ---------------------------------------------------------
         // 3. TÜR KARŞILAŞTIRMASI
-        // Sabit Oran: Her iki filmde de olan ortak tür başına +%8, tek filmle ortak tür başına +%5 (Maks +%25)
         // ---------------------------------------------------------
         const hasCandGenres = Array.isArray(candidate.genres) && candidate.genres.length > 0;
         if (hasCandGenres) {
@@ -518,9 +545,13 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             if (!cleanG) return;
             const inA = genresA.has(cleanG);
             const inB = genresB.has(cleanG);
-            if (inA && inB) genresBoth.push(cleanG);
-            else if (inA) genresOnlyA.push(cleanG);
-            else if (inB) genresOnlyB.push(cleanG);
+            if (inA && inB) {
+              genresBoth.push(cleanG);
+            } else if (inA) {
+              genresOnlyA.push(cleanG);
+            } else if (inB) {
+              genresOnlyB.push(cleanG);
+            }
           });
 
           let genrePctUsed = 0;
@@ -578,7 +609,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
         // ---------------------------------------------------------
         // 4. ANAHTAR KELİME / TEMA KARŞILAŞTIRMASI
-        // Sabit Oran: İki ebeveynde de olan tema +%6, tek ebeveynle ortak tema +%4 (Maks +%20)
         // ---------------------------------------------------------
         const hasCandKw = Array.isArray(candidate.keywords) && candidate.keywords.length > 0;
         if (hasCandKw && (hasKwA || hasKwB)) {
@@ -591,18 +621,24 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             if (!cleanK) return;
             const inA = kwA.has(cleanK);
             const inB = kwB.has(cleanK);
-            if (inA && inB) kwsBoth.push(k.trim());
-            else if (inA) kwsOnlyA.push(k.trim());
-            else if (inB) kwsOnlyB.push(k.trim());
+            if (inA && inB) {
+              kwsBoth.push(k.trim());
+            } else if (inA) {
+              kwsOnlyA.push(k.trim());
+            } else if (inB) {
+              kwsOnlyB.push(k.trim());
+            }
           });
 
           const rawKwPct = kwsBoth.length * 6 + (kwsOnlyA.length + kwsOnlyB.length) * 4;
           const kwPct = Math.min(20, rawKwPct);
+          
           if (kwPct > 0) {
             const allKws = [...kwsBoth, ...kwsOnlyA, ...kwsOnlyB];
             const shareA = kwsBoth.length * 3 + kwsOnlyA.length * 4;
             const shareB = kwsBoth.length * 3 + kwsOnlyB.length * 4;
             const sumShare = shareA + shareB || 1;
+            
             pctFromA += Math.round(kwPct * (shareA / sumShare));
             pctFromB += kwPct - Math.round(kwPct * (shareA / sumShare));
 
@@ -625,7 +661,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
         // ---------------------------------------------------------
         // 5. KONU ÖZETİ KELİME KESİŞİMİ
-        // Sabit Oran: Her ortak kavram +%3 (Maks +%12)
         // ---------------------------------------------------------
         if (candidate.overview && (activeA.overview || activeB.overview)) {
           const candStems = extractKeywordsFromText(candidate.overview);
@@ -646,6 +681,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           if (matchedWords.length > 0) {
             const storyPct = Math.min(12, matchedWords.length * 3);
             const wSum = wA + wB || 1;
+            
             pctFromA += Math.round(storyPct * (wA / wSum));
             pctFromB += storyPct - Math.round(storyPct * (wA / wSum));
 
@@ -660,11 +696,12 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         }
 
         // ---------------------------------------------------------
-        // 6. KOLEKSİYON / SERİ BAĞI (Sabit Oran: +%15)
+        // 6. KOLEKSİYON / SERİ BAĞI
         // ---------------------------------------------------------
         if (candidate.collectionId) {
           const inColA = candidate.collectionId === activeA.collectionId;
           const inColB = candidate.collectionId === activeB.collectionId;
+          
           if (inColA || inColB) {
             const colPct = 15;
             if (inColA && inColB) {
@@ -675,6 +712,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             } else {
               pctFromB += colPct;
             }
+            
             traits.push({
               category: 'Koleksiyon Serisi',
               label: 'Serinin Sıradaki İlk Filmi',
@@ -686,7 +724,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         }
 
         // ---------------------------------------------------------
-        // 7. YAPIMCI STÜDYO (Sabit Oran: +%5, 2+ Stüdyo +%8)
+        // 7. YAPIMCI STÜDYO
         // ---------------------------------------------------------
         const hasCandSt = Array.isArray(candidate.studios) && candidate.studios.length > 0;
         if (hasCandSt && (hasStA || hasStB)) {
@@ -697,6 +735,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           candidate.studios!.forEach((s) => {
             const cleanS = s.trim();
             if (!cleanS) return;
+            
             if (studiosA.has(cleanS)) {
               matchedStudios.push(cleanS);
               stInA = true;
@@ -709,6 +748,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
           if (matchedStudios.length > 0) {
             const stPct = matchedStudios.length >= 2 ? 8 : 5;
+            
             if (stInA && stInB) {
               pctFromA += stPct / 2;
               pctFromB += stPct / 2;
@@ -717,6 +757,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             } else {
               pctFromB += stPct;
             }
+            
             traits.push({
               category: 'Aynı Stüdyo',
               label: matchedStudios.slice(0, 2).join(', '),
@@ -728,7 +769,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         }
 
         // ---------------------------------------------------------
-        // 8. DÖNEM (ON YIL) UYUMU (Sabit Oran: +%5)
+        // 8. DÖNEM (ON YIL) UYUMU
         // ---------------------------------------------------------
         const candYear = parseInt(candidate.year || '0', 10);
         const candDecade = candYear > 1900 ? Math.floor(candYear / 10) * 10 : 0;
@@ -742,6 +783,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           } else {
             pctFromB += decPct;
           }
+          
           traits.push({
             category: 'Aynı Dönem',
             label: `${candDecade}'ler Sineması (${candidate.year})`,
@@ -762,7 +804,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         }
 
         // ---------------------------------------------------------
-        // 9. SÜRE & TEMPO UYUMU (Sabit Oran: ±15 dk içindeyse +%5)
+        // 9. SÜRE & TEMPO UYUMU
         // ---------------------------------------------------------
         if (candidate.runtime && candidate.runtime > 0 && avgParentRuntime > 0) {
           const diffAvg = Math.abs(candidate.runtime - avgParentRuntime);
@@ -770,6 +812,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             const rtPct = 5;
             pctFromA += 2.5;
             pctFromB += 2.5;
+            
             traits.push({
               category: 'Süre Uyumu',
               label: `${candidate.runtime} dk (Ebeveyn Ort: ${avgParentRuntime} dk)`,
@@ -781,13 +824,13 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         }
 
         // ---------------------------------------------------------
-        // 10. ÇİFT EBEVEYN MELEZ SENTEZ BONUSU (Sabit Oran: +%5)
-        // Hem 1. filmden hem 2. filmden en az %5'lik özellik taşıyorsa
+        // 10. ÇİFT EBEVEYN MELEZ SENTEZ BONUSU
         // ---------------------------------------------------------
         const isTrueHybrid = pctFromA >= 5 && pctFromB >= 5;
         if (isTrueHybrid) {
           pctFromA += 2.5;
           pctFromB += 2.5;
+          
           traits.push({
             category: 'Melez Sentez',
             label: 'Hem 1. Hem 2. Filmden Ortak Gen Taşıyor',
@@ -802,6 +845,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           const chaosBonus = Math.floor(Math.random() * 8) + 3;
           pctFromA += chaosBonus / 2;
           pctFromB += chaosBonus / 2;
+          
           traits.push({
             category: 'Kaos Mutasyonu',
             label: 'Deneysel Genetik Sapma',
@@ -811,8 +855,10 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           });
         }
 
-        // TOPLAM UYUM = Kazanılan sabit yüzdelerin birebir toplamı!
+        // TOPLAM UYUM HESABI
         const exactSumPct = traits.reduce((sum, t) => sum + t.addedPct, 0);
+        
+        // EĞER HİÇBİR ORTAK ÖZELLİK YOKSA BU FİLMİ ATLA
         if (exactSumPct <= 0) return;
 
         const matchScore = Math.min(100, exactSumPct);
@@ -836,6 +882,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         });
       });
 
+      // Adayları yüksek skordan düşüğe sırala
       scoredCandidates.sort((a, b) => b.sortRank - a.sortRank || b.matchScore - a.matchScore);
 
       setVariants(scoredCandidates.slice(0, 3));
@@ -918,12 +965,12 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-5 bg-black/85 backdrop-blur-xl animate-fade-in"
+      className="fixed inset-0 z-[60] flex items-center justify-center sm:p-5 bg-black sm:bg-black/85 backdrop-blur-xl animate-fade-in"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative bg-ink-950/95 border border-emerald-500/30 rounded-[2rem] w-full max-w-4xl overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.9)] flex flex-col max-h-[92vh]"
+        className="relative w-full h-full sm:h-auto sm:max-h-[92vh] max-w-4xl bg-ink-950/95 border-0 sm:border border-emerald-500/30 rounded-none sm:rounded-[2rem] overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.9)] flex flex-col"
       >
         {/* SENTEZ SONUCU FLU ARKA PLAN ATMOSFERİ */}
         {step === 'result' && currentResult?.movie.posterUrl && (
@@ -938,57 +985,57 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         )}
 
         {/* ÜST HEADER */}
-        <div className="relative z-10 flex items-center justify-between px-5 sm:px-7 py-4 border-b border-ink-800/70 bg-gradient-to-r from-emerald-950/50 via-ink-900/90 to-ink-950">
-          <div className="flex items-center gap-3">
+        <div className="relative z-10 flex items-center justify-between px-4 sm:px-7 py-3 sm:py-4 border-b border-ink-800/70 bg-gradient-to-r from-emerald-950/50 via-ink-900/90 to-ink-950 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {selectingSlot ? (
               <button
                 onClick={() => setSelectingSlot(null)}
-                className="p-2 -ml-2 rounded-xl bg-ink-800/80 hover:bg-ink-700 text-ink-200 transition-colors"
+                className="p-2 -ml-2 rounded-xl bg-ink-800/80 hover:bg-ink-700 text-ink-200 transition-colors flex-shrink-0"
               >
                 <ChevronLeft size={20} />
               </button>
             ) : (
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500/25 to-teal-500/10 flex items-center justify-center border border-emerald-500/40 shadow-lg shadow-emerald-500/10">
-                <Dna size={22} className="text-emerald-400" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-emerald-500/25 to-teal-500/10 flex items-center justify-center border border-emerald-500/40 shadow-lg shadow-emerald-500/10 flex-shrink-0">
+                <Dna size={20} className="text-emerald-400" />
               </div>
             )}
-            <div>
-              <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl font-black text-white tracking-tight truncate">
                 Film DNA Sentezleyici
               </h2>
-              <p className="text-[11px] sm:text-xs text-emerald-400/90 font-medium">
-                Sabit Oranlı Genetik Çaprazlama Laboratuvarı
+              <p className="text-[10px] sm:text-xs text-emerald-400/90 font-medium truncate">
+                Sabit Oranlı Genetik Çaprazlama
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
               type="button"
               onClick={() => setShowFormulaTable(!showFormulaTable)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold border transition-all ${
                 showFormulaTable
                   ? 'bg-emerald-500 text-ink-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
                   : 'bg-ink-900/90 text-emerald-300 border-emerald-500/30 hover:bg-ink-800'
               }`}
               title="Sabit Matematiksel Oranları Gör"
             >
-              <Calculator size={14} /> <span className="hidden sm:inline">Sabit Oranlar</span>
+              <Calculator size={13} /> <span className="hidden xs:inline">Oranlar</span>
             </button>
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-full bg-ink-900 hover:bg-ink-800 text-ink-400 hover:text-white border border-ink-800 flex items-center justify-center transition-all"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-ink-900 hover:bg-ink-800 text-ink-400 hover:text-white border border-ink-800 flex items-center justify-center transition-all flex-shrink-0"
             >
-              <X size={18} />
+              <X size={17} />
             </button>
           </div>
         </div>
 
         {/* SABİT MATEMATİKSEL ORAN TABLOSU */}
         {showFormulaTable && (
-          <div className="relative z-10 bg-ink-900/95 border-b border-emerald-500/30 px-6 py-4 text-xs space-y-2.5 animate-fade-in">
-            <div className="font-black text-emerald-400 uppercase tracking-wider flex items-center justify-between">
-              <span>📐 Sabit Genetik Uyum Oranları (Kazanılan Puanların Toplamı = % Uyum)</span>
+          <div className="relative z-10 bg-ink-900/95 border-b border-emerald-500/30 px-4 sm:px-6 py-3 sm:py-4 text-xs space-y-2.5 animate-fade-in shrink-0">
+            <div className="font-black text-emerald-400 uppercase tracking-wider flex items-center justify-between text-[10px] sm:text-xs">
+              <span>📐 Sabit Genetik Uyum Oranları</span>
               <button
                 onClick={() => setShowFormulaTable(false)}
                 className="text-ink-400 hover:text-white font-bold"
@@ -996,33 +1043,33 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                 Kapat
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-ink-200">
-              <div className="bg-ink-950/90 p-2.5 rounded-xl border border-ink-800">
-                🎬 <strong>Aynı Yönetmen:</strong>{' '}
-                <span className="text-emerald-400 font-black">+%25</span> (İkisinde de ortaksa:{' '}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-ink-200">
+              <div className="bg-ink-950/90 p-2 sm:p-2.5 rounded-xl border border-ink-800">
+                🎬 <strong>Yönetmen:</strong>{' '}
+                <span className="text-emerald-400 font-black">+%25</span> (Ortak:{' '}
                 <span className="text-emerald-400 font-black">+%30</span>)
               </div>
-              <div className="bg-ink-950/90 p-2.5 rounded-xl border border-ink-800">
-                🎭 <strong>Ortak Oyuncu:</strong> Oyuncu başı{' '}
-                <span className="text-emerald-400 font-black">+%10</span> (İkisinde de oynuyorsa:{' '}
+              <div className="bg-ink-950/90 p-2 sm:p-2.5 rounded-xl border border-ink-800">
+                🎭 <strong>Oyuncu:</strong> Her biri{' '}
+                <span className="text-emerald-400 font-black">+%10</span> (Ortak:{' '}
                 <span className="text-emerald-400 font-black">+%15</span>)
               </div>
-              <div className="bg-ink-950/90 p-2.5 rounded-xl border border-ink-800">
-                🏷️ <strong>Ortak Tür:</strong> Tür başı{' '}
-                <span className="text-emerald-400 font-black">+%5</span> (İkisinde de ortaksa:{' '}
+              <div className="bg-ink-950/90 p-2 sm:p-2.5 rounded-xl border border-ink-800">
+                🏷 <strong>Tür:</strong> Her biri{' '}
+                <span className="text-emerald-400 font-black">+%5</span> (Ortak:{' '}
                 <span className="text-emerald-400 font-black">+%8</span>)
               </div>
-              <div className="bg-ink-950/90 p-2.5 rounded-xl border border-ink-800">
-                🔑 <strong>Ortak Tema:</strong> Kelime başı{' '}
-                <span className="text-emerald-400 font-black">+%4</span> (İkisinde de varsa:{' '}
+              <div className="bg-ink-950/90 p-2 sm:p-2.5 rounded-xl border border-ink-800">
+                🔑 <strong>Tema:</strong> Her biri{' '}
+                <span className="text-emerald-400 font-black">+%4</span> (Ortak:{' '}
                 <span className="text-emerald-400 font-black">+%6</span>)
               </div>
-              <div className="bg-ink-950/90 p-2.5 rounded-xl border border-ink-800">
-                📦 <strong>Aynı Koleksiyon:</strong>{' '}
-                <span className="text-emerald-400 font-black">+%15</span> (Sadece sıradaki en eski film)
+              <div className="bg-ink-950/90 p-2 sm:p-2.5 rounded-xl border border-ink-800">
+                📦 <strong>Koleksiyon:</strong>{' '}
+                <span className="text-emerald-400 font-black">+%15</span> (Sıradaki ilk)
               </div>
-              <div className="bg-ink-950/90 p-2.5 rounded-xl border border-ink-800">
-                ⏱️ <strong>Stüdyo / Dönem / Süre:</strong> Her biri{' '}
+              <div className="bg-ink-950/90 p-2 sm:p-2.5 rounded-xl border border-ink-800">
+                ⏱ <strong>Stüdyo / Süre:</strong>{' '}
                 <span className="text-emerald-400 font-black">+%5</span>
               </div>
             </div>
@@ -1030,51 +1077,63 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         )}
 
         {/* ANA İÇERİK GÖVDESİ */}
-        <div className="relative z-10 flex-1 overflow-y-auto p-4 sm:p-7 custom-scrollbar">
+        <div className="relative z-10 flex-1 overflow-y-auto p-3.5 sm:p-7 custom-scrollbar pb-20 sm:pb-7">
+          
           {/* =========================================================
               DURUM 1: EBEVEYN FİLM SEÇİM LİSTESİ
               ========================================================= */}
           {selectingSlot && (
-            <div className="space-y-4 animate-fade-in">
+            <div className="space-y-3.5 animate-fade-in">
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <div className="relative flex-1">
-                  <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500" />
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
                   <input
                     type="text"
                     autoFocus
                     placeholder="Film adı, yönetmen veya oyuncu ara..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full bg-ink-900 border border-ink-700/80 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-ink-500 focus:outline-none focus:border-emerald-500/60 transition-all"
+                    className="w-full bg-ink-900 border border-ink-700/80 rounded-xl pl-10 pr-4 py-2.5 text-base sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-emerald-500/60 transition-all"
                   />
                 </div>
-                <div className="flex bg-ink-900 p-1 rounded-xl border border-ink-800 flex-shrink-0">
+                <div className="grid grid-cols-3 sm:flex bg-ink-900 p-1 rounded-xl border border-ink-800 flex-shrink-0 gap-1">
                   <button
                     type="button"
                     onClick={() => setSelectionTab('library')}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all truncate ${
                       selectionTab === 'library'
                         ? 'bg-emerald-500 text-ink-950 shadow-sm'
                         : 'text-ink-400 hover:text-ink-200'
                     }`}
                   >
-                    Tüm Kütüphane ({data.movies.length})
+                    Tümü ({data.movies.length})
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSelectionTab('history')}
-                    className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
-                      selectionTab === 'history'
+                    onClick={() => setSelectionTab('watched')}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all truncate ${
+                      selectionTab === 'watched'
                         ? 'bg-emerald-500 text-ink-950 shadow-sm'
                         : 'text-ink-400 hover:text-ink-200'
                     }`}
                   >
-                    İzlenenler ({historyMovies.length})
+                    İzlenen ({currentWatchedMovies.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectionTab('past')}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all truncate flex items-center justify-center gap-1.5 ${
+                      selectionTab === 'past'
+                        ? 'bg-violet-500 text-white shadow-sm'
+                        : 'text-ink-400 hover:text-violet-300'
+                    }`}
+                  >
+                    <History size={12} className="hidden xs:inline" /> Önceden
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[55vh] overflow-y-auto pr-1 custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[55svh] overflow-y-auto pr-1 custom-scrollbar">
                 {filteredMovies.map((m) => {
                   const hasCast = Array.isArray(m.cast) && m.cast.length > 0;
                   const hasDirs = Array.isArray(m.directors) && m.directors.length > 0;
@@ -1082,9 +1141,9 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     <button
                       key={m.id}
                       onClick={() => handleSelectMovie(m)}
-                      className="flex items-center gap-3.5 p-3 rounded-2xl border border-ink-800/90 bg-ink-900/50 hover:bg-ink-800/80 hover:border-emerald-500/40 transition-all text-left group relative overflow-hidden"
+                      className="flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl border border-ink-800/90 bg-ink-900/50 hover:bg-ink-800/80 hover:border-emerald-500/40 transition-all text-left group relative overflow-hidden"
                     >
-                      <div className="w-14 aspect-[2/3] bg-ink-950 rounded-xl overflow-hidden flex-shrink-0 border border-ink-700/60 shadow-md">
+                      <div className="w-12 sm:w-14 aspect-[2/3] bg-ink-950 rounded-xl overflow-hidden flex-shrink-0 border border-ink-700/60 shadow-md">
                         {m.posterUrl ? (
                           <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
                         ) : (
@@ -1099,15 +1158,22 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                           <span className="font-black text-sm text-ink-100 truncate group-hover:text-emerald-400 transition-colors">
                             {m.title}
                           </span>
-                          {m.watched && m.rating !== null && (
-                            <span
-                              className={`text-[10px] px-2 py-0.5 rounded-md font-black flex-shrink-0 ${ratingBgClass(
-                                m.rating
-                              )}`}
-                            >
-                              ★ {m.rating}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {m.isPastWatch && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 font-bold">
+                                Önceden
+                              </span>
+                            )}
+                            {m.watched && m.rating !== null && (
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded-md font-black flex-shrink-0 ${ratingBgClass(
+                                  m.rating
+                                )}`}
+                              >
+                                ★ {m.rating}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="text-[11px] text-ink-400 truncate mt-0.5">
@@ -1137,35 +1203,34 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
               DURUM 2: MODERN EBEVEYN SEÇİM VE SENTEZ HAZIRLIK EKRANI
               ========================================================= */}
           {!selectingSlot && step === 'select' && (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-4 sm:space-y-6 animate-fade-in">
               {eligibleUnwatchedMovies.length === 0 ? (
-                <div className="text-center py-12">
+                <div className="text-center py-10 sm:py-12 bg-ink-900/40 rounded-3xl border border-ink-800">
                   <Beaker size={48} className="mx-auto text-ink-600 mb-4" />
-                  <h3 className="text-lg font-bold text-ink-200">Bekleyen Film Bulunamadı</h3>
-                  <p className="text-sm text-ink-500 mt-2 max-w-md mx-auto">
-                    Sentezleme yapabilmek için kütüphanende izlenmemiş (bekleyen) filmler olması gerekiyor.
+                  <h3 className="text-base sm:text-lg font-bold text-ink-200">Aday Film Bulunamadı</h3>
+                  <p className="text-xs sm:text-sm text-ink-500 mt-2 max-w-md mx-auto px-4">
+                    Sentezleme yapabilmek için kütüphanende normal olarak izlenmeyi bekleyen filmler olması gerekiyor.<br/><br/>
+                    *(Eskiden izlenenler sırasına attığın filmler yeni aday havuzuna dahil edilmez)*
                   </p>
                 </div>
               ) : (
                 <>
-                  {/* Üst Bilgi & Hızlı Seçim Barı */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-ink-900/70 border border-ink-800 rounded-2xl p-4">
-                    <div className="text-xs text-ink-300 leading-relaxed text-center sm:text-left">
-                      Çaprazlamak istediğin iki filmi seç. Ortak <strong>oyuncular, yönetmen, tür, anahtar kelime ve dönem</strong> sabit matematiksel oranlarla toplanarak en uyumlu film sentezlenir.
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-ink-900/70 border border-ink-800 rounded-2xl p-3.5 sm:p-4">
+                    <div className="text-[11px] sm:text-xs text-ink-300 leading-relaxed text-center sm:text-left">
+                      Çaprazlamak istediğin iki filmi seç. Ortak <strong>oyuncular, yönetmen, tür, tema ve dönem</strong> sabit matematiksel oranlarla toplanarak en uyumlu film sentezlenir.
                     </div>
                     {data.movies.length >= 2 && (
                       <button
                         type="button"
                         onClick={handleRandomPair}
-                        className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-black bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-4 py-2.5 rounded-xl transition-all hover:scale-105"
+                        className="flex-shrink-0 w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-[11px] sm:text-xs font-black bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-4 py-2.5 rounded-xl transition-all"
                       >
-                        <Shuffle size={14} /> Favorilerden Rastgele Doldur
+                        <Shuffle size={14} /> Rastgele Doldur
                       </button>
                     )}
                   </div>
 
-                  {/* EBEVEYN A VE EBEVEYN B MODERN SİNEMA KARTLARI */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {[
                       {
                         slot: 'A' as const,
@@ -1189,16 +1254,15 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         <div
                           key={slot}
                           onClick={() => setSelectingSlot(slot)}
-                          className={`relative rounded-3xl border-2 p-4 transition-all cursor-pointer group overflow-hidden ${
+                          className={`relative rounded-2xl sm:rounded-3xl border-2 p-3 sm:p-4 transition-all cursor-pointer group overflow-hidden ${
                             movie
                               ? `bg-ink-900/80 ${accent} shadow-xl`
-                              : 'border-dashed border-ink-700 bg-ink-900/30 hover:border-emerald-500/40 hover:bg-ink-900/60 min-h-[200px] flex items-center justify-center'
+                              : 'border-dashed border-ink-700 bg-ink-900/30 hover:border-emerald-500/40 hover:bg-ink-900/60 min-h-[140px] sm:min-h-[180px] flex items-center justify-center'
                           }`}
                         >
                           {movie ? (
-                            <div className="flex gap-4 items-start">
-                              {/* Sol: Net 2:3 Poster */}
-                              <div className="w-24 sm:w-28 aspect-[2/3] rounded-2xl overflow-hidden bg-ink-950 border border-ink-700/80 flex-shrink-0 shadow-lg relative">
+                            <div className="flex gap-3 sm:gap-4 items-start">
+                              <div className="w-20 sm:w-28 aspect-[2/3] rounded-xl sm:rounded-2xl overflow-hidden bg-ink-950 border border-ink-700/80 flex-shrink-0 shadow-lg relative">
                                 {movie.posterUrl ? (
                                   <img
                                     src={movie.posterUrl}
@@ -1207,12 +1271,12 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                                   />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center text-ink-600">
-                                    <Film size={28} />
+                                    <Film size={24} />
                                   </div>
                                 )}
                                 {movie.rating !== null && (
                                   <div
-                                    className={`absolute top-1.5 left-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-black shadow ${ratingBgClass(
+                                    className={`absolute top-1.5 left-1.5 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-md font-black shadow ${ratingBgClass(
                                       movie.rating
                                     )}`}
                                   >
@@ -1221,52 +1285,54 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                                 )}
                               </div>
 
-                              {/* Sağ: Net Künye Detayları */}
-                              <div className="flex-1 min-w-0 flex flex-col justify-between min-h-[144px]">
+                              <div className="flex-1 min-w-0 flex flex-col justify-between min-h-[120px] sm:min-h-[144px]">
                                 <div>
-                                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                                  <div className="flex items-center justify-between gap-1.5 mb-1.5">
                                     <span
-                                      className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${badgeBg}`}
+                                      className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${badgeBg}`}
                                     >
                                       {label}
                                     </span>
-                                    <span className="text-[11px] font-bold text-ink-400 group-hover:text-white transition-colors">
+                                    <span className="text-[10px] font-bold text-ink-400 group-hover:text-white transition-colors">
                                       Değiştir ↻
                                     </span>
                                   </div>
 
-                                  <h3 className="text-base sm:text-lg font-black text-white leading-snug truncate">
+                                  <h3 className="text-sm sm:text-lg font-black text-white leading-snug truncate">
                                     {movie.title}
                                   </h3>
 
-                                  <div className="text-xs text-ink-400 mt-1 font-medium">
-                                    {movie.year || 'Yıl yok'}
-                                    {movie.runtime ? ` · ${movie.runtime} dk` : ''}
+                                  <div className="text-[11px] sm:text-xs text-ink-400 mt-1 font-medium flex items-center gap-1.5 flex-wrap">
+                                    <span>{movie.year || 'Yıl yok'}</span>
+                                    {movie.runtime && <span>· {movie.runtime} dk</span>}
+                                    {movie.isPastWatch && (
+                                      <span className="inline-flex items-center gap-0.5 text-violet-300">
+                                        <History size={10} /> Önceden
+                                      </span>
+                                    )}
                                   </div>
 
-                                  {/* Sadece yönetmen verisi varsa gösterilir */}
                                   {hasDirs && (
-                                    <div className="text-xs text-emerald-300 font-bold mt-2 truncate flex items-center gap-1.5">
-                                      <User size={13} className="flex-shrink-0" />
+                                    <div className="text-[11px] sm:text-xs text-emerald-300 font-bold mt-1.5 truncate flex items-center gap-1.5">
+                                      <User size={12} className="flex-shrink-0" />
                                       <span className="truncate">{movie.directors!.join(', ')}</span>
                                     </div>
                                   )}
 
-                                  {/* Sadece oyuncu verisi varsa gösterilir */}
                                   {hasCast && (
-                                    <div className="text-[11px] text-ink-300 mt-1 line-clamp-2 leading-relaxed">
-                                      <Users size={12} className="inline mr-1 text-gold-400" />
+                                    <div className="text-[10px] sm:text-[11px] text-ink-300 mt-1 line-clamp-1 sm:line-clamp-2 leading-relaxed">
+                                      <Users size={11} className="inline mr-1 text-gold-400" />
                                       {movie.cast!.slice(0, 4).join(', ')}
                                     </div>
                                   )}
                                 </div>
 
                                 {movie.genres.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-2.5">
+                                  <div className="flex flex-wrap gap-1 mt-2">
                                     {movie.genres.slice(0, 3).map((g) => (
                                       <span
                                         key={g}
-                                        className="text-[10px] font-bold bg-ink-950 text-ink-300 px-2 py-0.5 rounded-md border border-ink-800"
+                                        className="text-[9px] sm:text-[10px] font-bold bg-ink-950 text-ink-300 px-1.5 sm:px-2 py-0.5 rounded-md border border-ink-800"
                                       >
                                         {g}
                                       </span>
@@ -1276,14 +1342,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                               </div>
                             </div>
                           ) : (
-                            <div className="flex flex-col items-center text-center p-4">
-                              <div className="w-14 h-14 rounded-2xl bg-ink-800/80 border border-ink-700 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:border-emerald-500/50 transition-all">
-                                <Plus size={26} className="text-ink-400 group-hover:text-emerald-400" />
+                            <div className="flex flex-col items-center text-center p-3">
+                              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-ink-800/80 border border-ink-700 flex items-center justify-center mb-2.5 group-hover:scale-110 group-hover:border-emerald-500/50 transition-all">
+                                <Plus size={24} className="text-ink-400 group-hover:text-emerald-400" />
                               </div>
-                              <span className="text-sm font-black text-ink-200">{label} Seç</span>
-                              <span className="text-xs text-ink-500 mt-1">
-                                Kütüphanenden veya izleme geçmişinden bir film ekle
-                              </span>
+                              <span className="text-xs sm:text-sm font-black text-ink-200">{label} Seç</span>
                             </div>
                           )}
                         </div>
@@ -1293,23 +1356,23 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
                   {/* İKİ EBEVEYN ARASINDA TESPİT EDİLEN ORTAK GENLER ÖNİZLEMESİ */}
                   {movieA && movieB && (
-                    <div className="bg-emerald-950/25 border border-emerald-500/30 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 animate-fade-in">
-                      <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 flex-shrink-0">
-                        <Dna size={15} /> Seçilen İki Filmin Ortak Genleri:
+                    <div className="bg-emerald-950/25 border border-emerald-500/30 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 animate-fade-in">
+                      <span className="text-[11px] sm:text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 flex-shrink-0">
+                        <Dna size={14} /> Ortak Genler:
                       </span>
                       {sharedParentGenes.length > 0 ? (
                         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-1.5">
                           {sharedParentGenes.map((badge, i) => (
                             <span
                               key={i}
-                              className="text-xs font-bold bg-ink-950/90 text-emerald-200 px-2.5 py-1 rounded-lg border border-emerald-500/30"
+                              className="text-[10px] sm:text-[11px] font-bold bg-ink-950/90 text-emerald-200 px-2.5 py-0.5 rounded-lg border border-emerald-500/30"
                             >
                               {badge}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <span className="text-xs text-ink-400">
+                        <span className="text-[10px] sm:text-[11px] text-ink-400 text-center">
                           İki film tamamen farklı dünyalardan — çapraz melezleme yapılacak!
                         </span>
                       )}
@@ -1317,47 +1380,52 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                   )}
 
                   {/* SENTEZ MODU SEÇİMİ */}
-                  <div className="bg-ink-900/60 border border-ink-800 rounded-2xl p-4 space-y-2.5">
-                    <div className="flex justify-between text-xs font-bold text-ink-400 uppercase tracking-wider">
+                  <div className="bg-ink-900/60 border border-ink-800 rounded-2xl p-3.5 sm:p-4 space-y-2.5">
+                    <div className="flex justify-between text-[11px] sm:text-xs font-bold text-ink-400 uppercase tracking-wider">
                       <span>Sentezleme Stratejisi</span>
-                      <span className="text-emerald-400">
+                      <span className="text-emerald-400 truncate max-w-[50%] text-right">
                         {mutationRate === 0
-                          ? 'Safkan Matematik (%0 Rastgelelik)'
+                          ? 'Safkan Matematik'
                           : mutationRate === 1
-                          ? 'Melez A×B Öncelikli (%0 Rastgelelik)'
-                          : 'Kaos Modu (+%3-10 Mutasyon)'}
+                          ? 'Melez A×B Öncelikli'
+                          : 'Kaos Modu'}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
                       {[
-                        { val: 0, title: '🛡️ Safkan', sub: 'En yüksek matematiksel toplam' },
-                        { val: 1, title: '⚖️ Melez (A×B)', sub: 'Her iki filmden de gen alanlar' },
-                        { val: 2, title: '⚡ Kaos Modu', sub: 'Deneysel sürpriz varyasyon' },
+                        { val: 0, title: '🛡️ Safkan', sub: 'En yüksek toplam' },
+                        { val: 1, title: '⚖️ Melez', sub: 'İkisinden de gen' },
+                        { val: 2, title: '⚡ Kaos', sub: 'Deneysel sürpriz' },
                       ].map((m) => (
                         <button
                           key={m.val}
                           type="button"
                           onClick={() => setMutationRate(m.val)}
-                          className={`p-3 rounded-xl border text-left transition-all ${
+                          className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all ${
                             mutationRate === m.val
                               ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-md'
                               : 'bg-ink-950/60 border-ink-800 text-ink-400 hover:bg-ink-800'
                           }`}
                         >
-                          <div className="text-xs font-black">{m.title}</div>
-                          <div className="text-[10px] opacity-75 mt-0.5">{m.sub}</div>
+                          <div className="text-[11px] sm:text-xs font-black truncate">{m.title}</div>
+                          <div className="text-[9px] sm:text-[10px] opacity-75 mt-0.5 truncate">{m.sub}</div>
                         </button>
                       ))}
                     </div>
                   </div>
 
                   <button
-                    disabled={!movieA || !movieB}
+                    disabled={!movieA || !movieB || eligibleUnwatchedMovies.length === 0}
                     onClick={handleSynthesize}
-                    className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-ink-950 font-black px-8 py-4 rounded-2xl shadow-xl shadow-emerald-500/20 transition-all hover:scale-[1.01] active:scale-99 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2.5 text-sm sm:text-base"
+                    className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-ink-950 font-black px-6 py-3.5 sm:py-4 rounded-2xl shadow-xl shadow-emerald-500/20 transition-all hover:scale-[1.01] active:scale-99 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 text-xs sm:text-base"
                   >
-                    <Beaker size={20} />
-                    <span>DNA Sentezini Başlat ({eligibleUnwatchedMovies.length} Uygun Aday)</span>
+                    <Beaker size={18} />
+                    <span>
+                      {eligibleUnwatchedMovies.length > 0 
+                        ? `DNA Sentezini Başlat (${eligibleUnwatchedMovies.length} Aday)`
+                        : 'Sentez İçin Aday Bekleyen Film Yok'
+                      }
+                    </span>
                   </button>
                 </>
               )}
@@ -1368,17 +1436,17 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
               DURUM 3: SENTEZ & KÜNYE TAMAMLAMA ANİMASYONU
               ========================================================= */}
           {!selectingSlot && step === 'synthesizing' && (
-            <div className="flex flex-col items-center justify-center py-16 animate-fade-in space-y-6">
-              <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="flex flex-col items-center justify-center py-16 animate-fade-in space-y-5">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
                 <div className="absolute inset-0 rounded-full border-4 border-emerald-500/20" />
                 <div className="absolute inset-0 rounded-full border-4 border-emerald-400 border-t-transparent animate-spin" />
-                <Dna size={40} className="text-emerald-400 animate-pulse" />
+                <Dna size={36} className="text-emerald-400 animate-pulse" />
               </div>
-              <div className="text-center space-y-2 max-w-md">
-                <h3 className="text-xl font-black text-white tracking-wider uppercase">
+              <div className="text-center space-y-2 max-w-md px-4">
+                <h3 className="text-lg sm:text-xl font-black text-white tracking-wider uppercase">
                   Genetik Matris Hesaplanıyor...
                 </h3>
-                <p className="text-xs sm:text-sm text-emerald-400 font-medium">
+                <p className="text-[11px] sm:text-xs text-emerald-400 font-medium">
                   {syncStatusText || `${movieA?.title} × ${movieB?.title} çaprazlanıyor...`}
                 </p>
               </div>
@@ -1386,20 +1454,20 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           )}
 
           {/* =========================================================
-              DURUM 4: YENİ GÖSTERİŞLİ SENTEZ SONUÇ VİTRİNİ
+              DURUM 4: SENTEZ SONUÇ VİTRİNİ
               ========================================================= */}
           {!selectingSlot && step === 'result' && (
-            <div className="animate-fade-in-up space-y-5">
+            <div className="animate-fade-in-up space-y-4 sm:space-y-5">
               {!currentResult ? (
-                <div className="text-center py-12 space-y-4 bg-ink-900/50 rounded-3xl border border-ink-800 p-6">
+                <div className="text-center py-12 space-y-3 sm:space-y-4 bg-ink-900/50 rounded-3xl border border-ink-800 p-6">
                   <Beaker size={48} className="mx-auto text-ink-500" />
-                  <h3 className="text-lg font-black text-white">Ortak Genetik Özellik Bulunamadı</h3>
-                  <p className="text-xs sm:text-sm text-ink-400 max-w-md mx-auto">
-                    Seçtiğin iki filmle bekleyen filmlerin arasında ortak yönetmen, oyuncu, tür veya tema kesişimi çıkmadı.
+                  <h3 className="text-base sm:text-lg font-black text-white">Ortak Genetik Özellik Bulunamadı</h3>
+                  <p className="text-[11px] sm:text-xs text-ink-400 max-w-md mx-auto">
+                    Seçtiğin iki filmle bekleyen filmlerin arasında hiçbir uyum eşleşmedi.
                   </p>
                   <button
                     onClick={() => setStep('select')}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-ink-950 font-black px-6 py-3 rounded-xl text-xs transition-all"
+                    className="bg-emerald-500 hover:bg-emerald-400 text-ink-950 font-black px-5 py-2.5 sm:py-3 rounded-xl text-xs transition-all"
                   >
                     Farklı Filmler Seç
                   </button>
@@ -1407,20 +1475,20 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
               ) : (
                 <>
                   {/* ÜST BAR: VARYANT SEÇİCİ SEKMELER */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-wider w-fit">
-                      <CheckCircle2 size={16} className="text-emerald-400" />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="inline-flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3.5 py-1.5 rounded-2xl text-[11px] sm:text-xs font-black uppercase tracking-wider w-fit">
+                      <CheckCircle2 size={15} className="text-emerald-400" />
                       Sentezlenen Film Bulundu
                     </div>
 
                     {variants.length > 1 && (
-                      <div className="flex items-center gap-1.5 bg-ink-900/90 p-1.5 rounded-2xl border border-ink-800">
+                      <div className="grid grid-cols-3 sm:flex items-center gap-1 bg-ink-900/90 p-1 rounded-2xl border border-ink-800">
                         {variants.map((v, idx) => (
                           <button
                             key={v.movie.id}
                             type="button"
                             onClick={() => setActiveVariantIdx(idx)}
-                            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                            className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[10px] sm:text-xs font-black transition-all truncate ${
                               activeVariantIdx === idx
                                 ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-ink-950 shadow-md'
                                 : 'text-ink-400 hover:text-white'
@@ -1433,26 +1501,26 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     )}
                   </div>
 
-                  {/* EBEVEYN KALITIM KÖPRÜSÜ (MİNİ POSTERLİ ÇİFT RENKLİ BARI) */}
+                  {/* EBEVEYN KALITIM KÖPRÜSÜ */}
                   {movieA && movieB && (
-                    <div className="bg-ink-900/80 border border-ink-800 rounded-2xl p-3.5 flex items-center gap-3.5 shadow-lg">
+                    <div className="bg-ink-900/80 border border-ink-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex items-center gap-3 shadow-lg">
                       {movieA.posterUrl && (
                         <img
                           src={movieA.posterUrl}
                           alt={movieA.title}
-                          className="w-9 h-12 rounded-lg object-cover border border-emerald-500/50 flex-shrink-0 hidden sm:block"
+                          className="w-8 h-11 rounded-lg object-cover border border-emerald-500/50 flex-shrink-0 hidden sm:block"
                         />
                       )}
-                      <div className="flex-1 space-y-1.5">
-                        <div className="flex justify-between text-xs font-black">
-                          <span className="text-emerald-400 truncate max-w-[46%]">
+                      <div className="flex-1 space-y-1.5 min-w-0">
+                        <div className="flex justify-between text-[10px] sm:text-[11px] font-black gap-2">
+                          <span className="text-emerald-400 truncate">
                             {movieA.title} (%{currentResult.parentAPct})
                           </span>
-                          <span className="text-cyan-400 truncate max-w-[46%] text-right">
+                          <span className="text-cyan-400 truncate text-right">
                             (%{currentResult.parentBPct}) {movieB.title}
                           </span>
                         </div>
-                        <div className="h-2.5 w-full bg-ink-950 rounded-full overflow-hidden flex border border-ink-800 p-0.5 gap-0.5">
+                        <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden flex border border-ink-800 p-[1px] gap-[1px]">
                           <div
                             className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-l-full transition-all duration-500"
                             style={{ width: `${currentResult.parentAPct}%` }}
@@ -1467,21 +1535,21 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         <img
                           src={movieB.posterUrl}
                           alt={movieB.title}
-                          className="w-9 h-12 rounded-lg object-cover border border-cyan-500/50 flex-shrink-0 hidden sm:block"
+                          className="w-8 h-11 rounded-lg object-cover border border-cyan-500/50 flex-shrink-0 hidden sm:block"
                         />
                       )}
                     </div>
                   )}
 
-                  {/* ANA SENTEZ VİTRİN KARTI (POSTER ASLA SÜNDÜRÜLMEZ - SABİT 2:3 ORAN) */}
-                  <div className="bg-ink-900/75 backdrop-blur-md border border-emerald-500/35 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col lg:flex-row items-center lg:items-start gap-6">
-                    {/* SOL: KUSURSUZ 2:3 POSTER VİTRİNİ */}
-                    <div className="flex flex-col items-center gap-3 flex-shrink-0">
+                  {/* ANA SENTEZ VİTRİN KARTI */}
+                  <div className="bg-ink-900/75 backdrop-blur-md border border-emerald-500/35 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col lg:flex-row items-center lg:items-start gap-4 sm:gap-6">
+                    {/* SOL: 2:3 POSTER VİTRİNİ */}
+                    <div className="flex flex-col items-center gap-2.5 flex-shrink-0">
                       <button
                         type="button"
                         onClick={() => setDetailMovie(currentResult.movie)}
                         title="Tam Sinema Kartını Aç"
-                        className="w-48 sm:w-56 aspect-[2/3] rounded-2xl overflow-hidden bg-ink-950 border-2 border-emerald-500/50 shadow-[0_15px_40px_rgba(0,0,0,0.8)] relative group cursor-pointer"
+                        className="w-36 sm:w-52 aspect-[2/3] rounded-2xl overflow-hidden bg-ink-950 border-2 border-emerald-500/50 shadow-[0_15px_40px_rgba(0,0,0,0.8)] relative group cursor-pointer"
                       >
                         {currentResult.movie.posterUrl ? (
                           <img
@@ -1491,28 +1559,26 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-ink-600 gap-2">
-                            <ImageIcon size={42} />
-                            <span className="text-xs">Afiş Yok</span>
+                            <ImageIcon size={36} />
+                            <span className="text-[10px] sm:text-xs">Afiş Yok</span>
                           </div>
                         )}
 
-                        {/* Hover Sinema Kartı İpucu */}
                         <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5">
-                          <div className="w-11 h-11 rounded-full bg-emerald-500 text-ink-950 flex items-center justify-center shadow-lg">
-                            <Eye size={20} />
+                          <div className="w-10 h-10 rounded-full bg-emerald-500 text-ink-950 flex items-center justify-center shadow-lg">
+                            <Eye size={18} />
                           </div>
-                          <span className="text-xs font-black text-white uppercase tracking-wider">
-                            Sinema Kartını Gör
+                          <span className="text-[10px] font-black text-white uppercase tracking-wider">
+                            Sinema Kartı
                           </span>
                         </div>
                       </button>
 
-                      {/* Poster Altı Net Uyum Göstergesi */}
-                      <div className="w-48 sm:w-56 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 rounded-2xl py-2.5 px-4 text-center shadow-lg">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                      <div className="w-36 sm:w-52 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 rounded-xl sm:rounded-2xl py-2 sm:py-2.5 px-3 sm:px-4 text-center shadow-lg">
+                        <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-emerald-300">
                           Matematiksel Uyum
                         </div>
-                        <div className="text-2xl font-black text-white mt-0.5">
+                        <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
                           %{currentResult.matchScore}
                         </div>
                       </div>
@@ -1522,60 +1588,56 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     <div className="flex-1 min-w-0 w-full flex flex-col justify-between text-center lg:text-left">
                       <div>
                         {currentResult.movie.collectionId && (
-                          <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-gold-400 bg-gold-500/10 border border-gold-500/30 px-3 py-0.5 rounded-full mb-2">
-                            <Layers size={12} />{' '}
+                          <div className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-gold-400 bg-gold-500/10 border border-gold-500/30 px-2.5 py-0.5 rounded-full mb-1.5">
+                            <Layers size={11} />{' '}
                             {
                               data.collections.find((c) => c.id === currentResult.movie.collectionId)
                                 ?.name
                             }{' '}
-                            (Sıradaki İlk Film)
+                            (Sıradaki İlk)
                           </div>
                         )}
 
-                        <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+                        <h3 className="text-xl sm:text-3xl font-black text-white tracking-tight leading-tight">
                           {currentResult.movie.title}
                         </h3>
 
-                        {/* Yıl, Süre, Yönetmen ve Tür Rozetleri */}
-                        <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 mt-2.5 text-xs text-ink-200 font-semibold">
+                        <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 mt-2 text-[11px] sm:text-xs text-ink-200 font-semibold">
                           {currentResult.movie.year && (
                             <span className="flex items-center gap-1 bg-ink-950/90 px-2.5 py-1 rounded-lg border border-ink-800">
-                              <Calendar size={13} className="text-emerald-400" />{' '}
+                              <Calendar size={12} className="text-emerald-400" />{' '}
                               {currentResult.movie.year}
                             </span>
                           )}
                           {currentResult.movie.runtime && (
                             <span className="flex items-center gap-1 bg-ink-950/90 px-2.5 py-1 rounded-lg border border-ink-800">
-                              <Clock size={13} className="text-emerald-400" />{' '}
+                              <Clock size={12} className="text-emerald-400" />{' '}
                               {currentResult.movie.runtime} dk
                             </span>
                           )}
                           {Array.isArray(currentResult.movie.directors) &&
                             currentResult.movie.directors.length > 0 && (
                               <span className="flex items-center gap-1 bg-emerald-500/15 text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-500/30 font-bold">
-                                <User size={13} /> {currentResult.movie.directors.join(', ')}
+                                <User size={12} /> {currentResult.movie.directors.join(', ')}
                               </span>
                             )}
                         </div>
 
-                        {/* Sadece oyuncu verisi varsa gösterilir */}
                         {Array.isArray(currentResult.movie.cast) &&
                           currentResult.movie.cast.length > 0 && (
-                            <div className="mt-2.5 text-xs text-ink-300 bg-ink-950/60 px-3 py-2 rounded-xl border border-ink-800/80 text-left">
+                            <div className="mt-2.5 text-[10px] sm:text-xs text-ink-300 bg-ink-950/60 px-3 py-2 rounded-xl border border-ink-800/80 text-left">
                               <span className="font-black text-gold-400 mr-1.5">🎭 Oyuncular:</span>
-                              {currentResult.movie.cast.slice(0, 6).join(', ')}
+                              {currentResult.movie.cast.slice(0, 5).join(', ')}
                             </div>
                           )}
 
-                        {/* Konu Özeti */}
                         {currentResult.movie.overview && (
-                          <p className="mt-2.5 text-xs text-ink-300 leading-relaxed line-clamp-2 text-left">
+                          <p className="mt-2 text-[11px] sm:text-xs text-ink-300 leading-relaxed line-clamp-2 text-left">
                             {currentResult.movie.overview}
                           </p>
                         )}
 
-                        {/* İzleme & Fragman Linkleri */}
-                        <div className="flex items-center justify-center lg:justify-start gap-1.5 flex-wrap my-3.5">
+                        <div className="flex items-center justify-center lg:justify-start gap-1.5 flex-wrap my-3">
                           {getWatchLinks(currentResult.movie).map((link, idx) => {
                             const Icon = link.icon;
                             if (link.isTrailer) {
@@ -1585,7 +1647,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                                   href={link.href}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow"
+                                  className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105"
                                 >
                                   <Icon size={13} /> {link.text}
                                 </a>
@@ -1597,7 +1659,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                                 href={link.href}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                                className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105"
                               >
                                 {link.logo ? (
                                   <img
@@ -1614,16 +1676,15 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                           })}
                         </div>
 
-                        {/* SABİT ORANLI GENETİK EŞLEŞME MATRİSİ */}
-                        <div className="bg-ink-950/85 border border-ink-800 rounded-2xl p-4 space-y-2.5 text-left">
-                          <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-ink-400 border-b border-ink-800 pb-2">
+                        <div className="bg-ink-950/85 border border-ink-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 space-y-1.5 sm:space-y-2 text-left">
+                          <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-ink-400 border-b border-ink-800 pb-1.5">
                             <span>Eşleşen Kriterler & Kaynakları</span>
                             <span className="text-emerald-400 font-mono">
                               Toplam: %{currentResult.matchScore}
                             </span>
                           </div>
 
-                          <div className="space-y-2">
+                          <div className="space-y-1 sm:space-y-1.5">
                             {currentResult.traits.map((t, i) => {
                               const badgeColor =
                                 t.sourceType === 'both'
@@ -1637,20 +1698,20 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                               return (
                                 <div
                                   key={i}
-                                  className="bg-ink-900/80 border border-ink-800/80 rounded-xl p-2.5 flex items-center justify-between gap-3"
+                                  className="bg-ink-900/80 border border-ink-800/80 rounded-lg sm:rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2"
                                 >
                                   <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-black text-white">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[10px] sm:text-[11px] font-black text-white">
                                         {t.category}:
                                       </span>
-                                      <span className="text-xs font-bold text-emerald-300 truncate">
+                                      <span className="text-[10px] sm:text-[11px] font-bold text-emerald-300 truncate">
                                         {t.label}
                                       </span>
                                     </div>
-                                    <div className="mt-1">
+                                    <div className="mt-0.5 sm:mt-1">
                                       <span
-                                        className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-md border ${badgeColor}`}
+                                        className={`inline-block text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md border ${badgeColor}`}
                                       >
                                         Kaynak: {t.sourceLabel}
                                       </span>
@@ -1658,7 +1719,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                                   </div>
 
                                   <div className="flex-shrink-0 text-right">
-                                    <span className="inline-block bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black font-mono text-xs px-2.5 py-1 rounded-lg">
+                                    <span className="inline-block bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black font-mono text-[10px] sm:text-[11px] px-2 py-0.5 rounded-lg">
                                       +%{t.addedPct}
                                     </span>
                                   </div>
@@ -1671,28 +1732,27 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     </div>
                   </div>
 
-                  {/* ALT AKSİYON BUTONLARI */}
-                  <div className="flex flex-col sm:flex-row gap-3 pt-1 w-full">
+                  <div className="grid grid-cols-2 sm:flex gap-2 pt-1 w-full">
                     <button
                       onClick={() => setShowRating(true)}
-                      className="flex-1 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black py-3.5 rounded-xl shadow-lg shadow-gold-500/20 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm"
+                      className="col-span-2 sm:flex-1 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black py-2.5 sm:py-3.5 rounded-xl shadow-lg shadow-gold-500/20 transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm"
                     >
-                      <Star size={17} className="fill-current" /> İzle ve Puanla
+                      <Star size={15} className="fill-current" /> İzledim & Puanla
                     </button>
                     <button
                       onClick={() => setDetailMovie(currentResult.movie)}
-                      className="sm:w-auto px-6 bg-ink-800 hover:bg-ink-700 text-emerald-300 border border-emerald-500/30 font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm"
+                      className="bg-ink-800 hover:bg-ink-700 text-emerald-300 border border-emerald-500/30 font-bold py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-xs sm:text-sm"
                     >
-                      <Eye size={16} /> Sinema Kartı
+                      <Eye size={14} /> Künye
                     </button>
                     <button
                       onClick={() => {
                         setStep('select');
                         setVariants([]);
                       }}
-                      className="sm:w-auto px-6 bg-ink-900 hover:bg-ink-800 text-ink-200 font-bold py-3.5 rounded-xl transition-colors border border-ink-700 flex items-center justify-center gap-2 text-xs sm:text-sm"
+                      className="bg-ink-900 hover:bg-ink-800 text-ink-200 font-bold py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl transition-colors border border-ink-700 flex items-center justify-center gap-1.5 text-xs sm:text-sm"
                     >
-                      <RefreshCw size={15} /> Yeni Sentez
+                      <RefreshCw size={13} /> Sentez
                     </button>
                   </div>
                 </>
@@ -1702,13 +1762,13 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         </div>
       </div>
 
-      {/* PUANLAMA MODALI */}
       {showRating && currentResult && (
         <RatingModal
           title={currentResult.movie.title}
           subtitle={currentResult.movie.year ? `Çıkış Yılı: ${currentResult.movie.year}` : 'Film'}
-          onRate={(rating, note, detailedRating, reviewTags) => {
-            watchMovie(currentResult.movie.id, rating, note, detailedRating, reviewTags);
+          initialIsPastWatch={Boolean(currentResult.movie.isPastWatch || currentResult.movie.inPastQueue)}
+          onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
+            watchMovie(currentResult.movie.id, rating, note, detailedRating, reviewTags, isPastWatch);
             setShowRating(false);
             onClose();
           }}
@@ -1716,7 +1776,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         />
       )}
 
-      {/* SİNEMA KARTI MODALI */}
       {detailMovie && (
         <MediaDetailModal
           target={{ type: 'movie', data: detailMovie }}

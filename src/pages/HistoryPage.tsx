@@ -22,6 +22,7 @@ import {
   User,
   Tag,
   History,
+  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateTime, formatDateShort } from '../lib/utils';
@@ -37,10 +38,10 @@ type ViewMode = 'timeline' | 'grid' | 'past';
 export default function HistoryPage() {
   const { data, updateHistoryRating } = useApp();
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
-  // Notlar varsayılan olarak tek satırdır (kapalıdır). Tıklananların ID'si burada tutulur ve açılır.
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<WatchHistoryItem | null>(null);
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
 
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('newest');
@@ -59,7 +60,6 @@ export default function HistoryPage() {
     return false;
   };
 
-  // Güncel izlenenler (Zaman Tüneli ve Poster Vitrini için) ve Daha Önce İzlenenler ayrımı
   const regularHistory = useMemo(
     () => data.history.filter((h) => !isItemPastWatch(h)),
     [data.history, data.movies]
@@ -72,12 +72,28 @@ export default function HistoryPage() {
 
   const activeBaseHistory = viewMode === 'past' ? pastHistory : regularHistory;
 
-  // Geçmişte kullanılan tüm değerlendirme başlıklarını çıkar
   const usedReviewTags = useMemo(() => {
     const set = new Set<string>();
     activeBaseHistory.forEach((h) => (h.reviewTags || []).forEach((t) => set.add(t)));
     return Array.from(set);
   }, [activeBaseHistory]);
+
+  const activeFilterCount =
+    (search.trim() !== '' ? 1 : 0) +
+    (viewMode !== 'past' && filterType !== 'all' ? 1 : 0) +
+    (onlyWithNotes ? 1 : 0) +
+    (onlyHighRated ? 1 : 0) +
+    (selectedTagFilter ? 1 : 0) +
+    (sortMode !== 'newest' ? 1 : 0);
+
+  const resetAllFilters = () => {
+    setSearch('');
+    setFilterType('all');
+    setOnlyWithNotes(false);
+    setOnlyHighRated(false);
+    setSelectedTagFilter(null);
+    setSortMode('newest');
+  };
 
   // Günlük Özet İstatistikleri
   const diaryStats = useMemo(() => {
@@ -97,7 +113,6 @@ export default function HistoryPage() {
     return { total, movies, episodes, withNotes, uniqueDays, avgRating };
   }, [regularHistory]);
 
-  // Arama, Filtreleme ve Sıralama
   const processedItems = useMemo(() => {
     let items = [...activeBaseHistory];
 
@@ -251,286 +266,314 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* =========================================================
-          1. BAŞLIK VE GÖRÜNÜM SEÇİCİ
-          ========================================================= */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-ink-100 flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-azure-500/20 border border-gold-500/30 flex items-center justify-center shadow-lg">
-            <Clock size={22} className="text-gold-400" />
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      {/* 1. BAŞLIK */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-azure-500/20 border border-gold-500/30 flex items-center justify-center shadow-lg">
+            <Clock size={20} className="text-gold-400" />
           </div>
           <div>
             <span>Sinema Günlüğü & Geçmiş</span>
-            <span className="block text-xs font-medium text-ink-400 mt-0.5">
+            <span className="hidden sm:block text-xs font-medium text-ink-400 mt-0.5">
               İzlediğin tüm yapımların kronolojik zaman tüneli ve inceleme arşivin
             </span>
           </div>
         </h1>
-
-        {data.history.length > 0 && (
-          <div className="flex flex-wrap items-center bg-ink-900/80 border border-ink-700/60 rounded-xl p-1 gap-1">
-            <button
-              type="button"
-              onClick={() => setViewMode('timeline')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'timeline'
-                  ? 'bg-gold-500 text-ink-950 shadow-md'
-                  : 'text-ink-400 hover:text-ink-200'
-              }`}
-            >
-              <LayoutList size={14} /> Zaman Tüneli
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'grid'
-                  ? 'bg-gold-500 text-ink-950 shadow-md'
-                  : 'text-ink-400 hover:text-ink-200'
-              }`}
-            >
-              <LayoutGrid size={14} /> Poster Vitrini
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('past')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'past'
-                  ? 'bg-violet-500 text-white shadow-md'
-                  : 'text-ink-400 hover:text-violet-300'
-              }`}
-            >
-              <History size={14} /> Daha Önce İzlediklerim ({pastHistory.length})
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* =========================================================
-          2. SİNEMA GÜNLÜĞÜ ÖZET VİTRİNİ (HERO STATS)
-          ========================================================= */}
+      {/* 2. SİNEMA GÜNLÜĞÜ ÖZET VİTRİNİ (HERO STATS - MOBİLDE YATAY KAYDIRMALI VEYA KOMPAKT) */}
       {data.history.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3.5 flex items-center gap-3 shadow-lg">
-            <div className="w-10 h-10 rounded-xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center flex-shrink-0">
-              <Sparkles size={18} className="text-gold-400" />
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3">
+          <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3 flex items-center gap-2.5 shadow-lg">
+            <div className="w-9 h-9 rounded-xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center flex-shrink-0">
+              <Sparkles size={16} className="text-gold-400" />
             </div>
             <div>
-              <div className="text-xl font-black text-ink-50 leading-none">{diaryStats.total}</div>
-              <div className="text-[11px] font-bold text-ink-400 mt-1">Toplam Kayıt</div>
+              <div className="text-lg sm:text-xl font-black text-ink-50 leading-none">{diaryStats.total}</div>
+              <div className="text-[10px] sm:text-[11px] font-bold text-ink-400 mt-1">Toplam Kayıt</div>
             </div>
           </div>
 
-          <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3.5 flex items-center gap-3 shadow-lg">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
-              <Film size={18} className="text-amber-400" />
+          <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3 flex items-center gap-2.5 shadow-lg">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+              <Film size={16} className="text-amber-400" />
             </div>
             <div>
-              <div className="text-xl font-black text-ink-50 leading-none">{diaryStats.movies}</div>
-              <div className="text-[11px] font-bold text-ink-400 mt-1">İzlenen Film</div>
+              <div className="text-lg sm:text-xl font-black text-ink-50 leading-none">{diaryStats.movies}</div>
+              <div className="text-[10px] sm:text-[11px] font-bold text-ink-400 mt-1">İzlenen Film</div>
             </div>
           </div>
 
-          <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3.5 flex items-center gap-3 shadow-lg">
-            <div className="w-10 h-10 rounded-xl bg-azure-500/15 border border-azure-500/30 flex items-center justify-center flex-shrink-0">
-              <Tv size={18} className="text-azure-400" />
+          <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3 flex items-center gap-2.5 shadow-lg">
+            <div className="w-9 h-9 rounded-xl bg-azure-500/15 border border-azure-500/30 flex items-center justify-center flex-shrink-0">
+              <Tv size={16} className="text-azure-400" />
             </div>
             <div>
-              <div className="text-xl font-black text-ink-50 leading-none">{diaryStats.episodes}</div>
-              <div className="text-[11px] font-bold text-ink-400 mt-1">Dizi Bölümü</div>
+              <div className="text-lg sm:text-xl font-black text-ink-50 leading-none">{diaryStats.episodes}</div>
+              <div className="text-[10px] sm:text-[11px] font-bold text-ink-400 mt-1">Dizi Bölümü</div>
             </div>
           </div>
 
-          <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3.5 flex items-center gap-3 shadow-lg">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
-              <StickyNote size={18} className="text-emerald-400" />
+          <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3 flex items-center gap-2.5 shadow-lg">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+              <StickyNote size={16} className="text-emerald-400" />
             </div>
             <div>
-              <div className="text-xl font-black text-ink-50 leading-none">{diaryStats.withNotes}</div>
-              <div className="text-[11px] font-bold text-ink-400 mt-1">Yazılan İnceleme</div>
+              <div className="text-lg sm:text-xl font-black text-ink-50 leading-none">{diaryStats.withNotes}</div>
+              <div className="text-[10px] sm:text-[11px] font-bold text-ink-400 mt-1">İnceleme</div>
             </div>
           </div>
 
-          <div className="col-span-2 sm:col-span-1 bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3.5 flex items-center gap-3 shadow-lg">
-            <div className="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
-              <Calendar size={18} className="text-violet-400" />
+          <div className="col-span-2 sm:col-span-1 bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3 flex items-center gap-2.5 shadow-lg">
+            <div className="w-9 h-9 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+              <Calendar size={16} className="text-violet-400" />
             </div>
             <div>
-              <div className="text-xl font-black text-ink-50 leading-none">
+              <div className="text-lg sm:text-xl font-black text-ink-50 leading-none">
                 {diaryStats.uniqueDays}{' '}
                 <span className="text-xs font-bold text-gold-400">★{diaryStats.avgRating}</span>
               </div>
-              <div className="text-[11px] font-bold text-ink-400 mt-1">Aktif Gün & Ort.</div>
+              <div className="text-[10px] sm:text-[11px] font-bold text-ink-400 mt-1">Aktif Gün & Ort.</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* =========================================================
-          3. ARAMA VE AKILLI FİLTRE MERKEZİ
-          ========================================================= */}
+      {/* 3. GÖRÜNÜM SEÇİCİ SEKMELER & GİZLİ ARAMA/FİLTRE BUTONU */}
       {data.history.length > 0 && (
-        <div className="bg-ink-900/50 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 space-y-3 shadow-xl">
-          <div className="relative">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Yapım adı, değerlendirme başlığı, tür veya inceleme notları içinde ara..."
-              className="w-full bg-ink-950/80 border border-ink-700/80 rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 transition-all"
-            />
+        <div className="space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="grid grid-cols-3 sm:flex items-center bg-ink-900/80 border border-ink-700/60 rounded-xl p-1 gap-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('timeline')}
+                className={`flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all truncate ${
+                  viewMode === 'timeline'
+                    ? 'bg-gold-500 text-ink-950 shadow-md'
+                    : 'text-ink-400 hover:text-ink-200'
+                }`}
+              >
+                <LayoutList size={13} className="flex-shrink-0" />
+                <span className="truncate">Zaman Tüneli</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all truncate ${
+                  viewMode === 'grid'
+                    ? 'bg-gold-500 text-ink-950 shadow-md'
+                    : 'text-ink-400 hover:text-ink-200'
+                }`}
+              >
+                <LayoutGrid size={13} className="flex-shrink-0" />
+                <span className="truncate">Poster Vitrini</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('past')}
+                className={`flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all truncate ${
+                  viewMode === 'past'
+                    ? 'bg-violet-500 text-white shadow-md'
+                    : 'text-ink-400 hover:text-violet-300'
+                }`}
+              >
+                <History size={13} className="flex-shrink-0" />
+                <span className="truncate">Önceden ({pastHistory.length})</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsFilterPanelOpen((prev) => !prev)}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                  isFilterPanelOpen || activeFilterCount > 0
+                    ? 'bg-gold-500/15 text-gold-300 border-gold-500/40 shadow-sm'
+                    : 'bg-ink-900/70 hover:bg-ink-800 text-ink-300 border-ink-700/60'
+                }`}
+              >
+                <SlidersHorizontal size={14} className="text-gold-400" />
+                <span>Ara & Filtrele</span>
+                {activeFilterCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-gold-500 text-ink-950 text-[10px] font-black">
+                    {activeFilterCount}
+                  </span>
+                )}
+                {isFilterPanelOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  title="Filtreleri sıfırla"
+                  className="p-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-bold transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2.5">
-            <div className="flex flex-wrap items-center gap-2">
-              {viewMode !== 'past' && (
+          {/* AÇILIR/KAPANIR ARAMA VE FİLTRE MERKEZİ */}
+          {isFilterPanelOpen && (
+            <div className="bg-ink-900/70 backdrop-blur-sm border border-ink-700/60 rounded-2xl p-3 sm:p-4 space-y-3 shadow-xl animate-fade-in">
+              <div className="relative">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Yapım adı, başlık, tür veya inceleme notu ara..."
+                  className="w-full bg-ink-950/90 border border-ink-700/80 rounded-xl pl-9 pr-8 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white p-1"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {viewMode !== 'past' && (
+                    <div className="flex bg-ink-950/80 rounded-xl p-1 border border-ink-800">
+                      <button
+                        onClick={() => setFilterType('all')}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                          filterType === 'all' ? 'bg-ink-800 text-ink-50 shadow-sm' : 'text-ink-400 hover:text-ink-200'
+                        }`}
+                      >
+                        Tümü
+                      </button>
+                      <button
+                        onClick={() => setFilterType('movie')}
+                        className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                          filterType === 'movie' ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30' : 'text-ink-400 hover:text-ink-200'
+                        }`}
+                      >
+                        <Film size={12} /> Filmler
+                      </button>
+                      <button
+                        onClick={() => setFilterType('series')}
+                        className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                          filterType === 'series' ? 'bg-azure-500/20 text-azure-400 border border-azure-500/30' : 'text-ink-400 hover:text-ink-200'
+                        }`}
+                      >
+                        <Tv size={12} /> Diziler
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setOnlyWithNotes(!onlyWithNotes)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                      onlyWithNotes
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-ink-950/70 text-ink-400 border-ink-800 hover:text-ink-200'
+                    }`}
+                  >
+                    <StickyNote size={12} /> Notlular
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOnlyHighRated(!onlyHighRated)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                      onlyHighRated
+                        ? 'bg-gold-500/20 text-gold-300 border-gold-500/40'
+                        : 'bg-ink-950/70 text-ink-400 border-ink-800 hover:text-ink-200'
+                    }`}
+                  >
+                    <Flame size={12} /> 8.5+
+                  </button>
+                </div>
+
                 <div className="flex bg-ink-950/80 rounded-xl p-1 border border-ink-800">
                   <button
-                    onClick={() => setFilterType('all')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      filterType === 'all'
-                        ? 'bg-ink-800 text-ink-50 shadow-sm'
-                        : 'text-ink-400 hover:text-ink-200'
+                    onClick={() => setSortMode('newest')}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                      sortMode === 'newest' ? 'bg-ink-800 text-ink-50 shadow-sm' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    <Clock size={11} /> En Yeni
+                  </button>
+                  <button
+                    onClick={() => setSortMode('oldest')}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                      sortMode === 'oldest' ? 'bg-ink-800 text-ink-50 shadow-sm' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    En Eski
+                  </button>
+                  <button
+                    onClick={() => setSortMode('rating')}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                      sortMode === 'rating' ? 'bg-ink-800 text-ink-50 shadow-sm' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    <StarIcon size={11} /> Puan
+                  </button>
+                </div>
+              </div>
+
+              {usedReviewTags.length > 0 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pt-2 border-t border-ink-800/60">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-ink-400 flex items-center gap-1 mr-1 flex-shrink-0">
+                    <Tag size={11} className="text-gold-400" /> Başlıklar:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTagFilter(null)}
+                    className={`flex-shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
+                      selectedTagFilter === null
+                        ? 'bg-gold-500 text-ink-950 border-gold-400'
+                        : 'bg-ink-950/70 text-ink-400 border-ink-800 hover:text-ink-200'
                     }`}
                   >
                     Tümü
                   </button>
-                  <button
-                    onClick={() => setFilterType('movie')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      filterType === 'movie'
-                        ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30'
-                        : 'text-ink-400 hover:text-ink-200'
-                    }`}
-                  >
-                    <Film size={13} /> Filmler
-                  </button>
-                  <button
-                    onClick={() => setFilterType('series')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      filterType === 'series'
-                        ? 'bg-azure-500/20 text-azure-400 border border-azure-500/30'
-                        : 'text-ink-400 hover:text-ink-200'
-                    }`}
-                  >
-                    <Tv size={13} /> Diziler
-                  </button>
+                  {usedReviewTags.map((tag) => {
+                    const active = selectedTagFilter === tag;
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setSelectedTagFilter(active ? null : tag)}
+                        className={`flex-shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
+                          active
+                            ? 'bg-gold-500 text-ink-950 border-gold-400 shadow-sm'
+                            : 'bg-ink-950/70 text-ink-300 border-ink-800 hover:border-gold-500/40'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-
-              <button
-                type="button"
-                onClick={() => setOnlyWithNotes(!onlyWithNotes)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  onlyWithNotes
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                    : 'bg-ink-950/70 text-ink-400 border-ink-800 hover:text-ink-200'
-                }`}
-              >
-                <StickyNote size={13} /> Sadece Notlular
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setOnlyHighRated(!onlyHighRated)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  onlyHighRated
-                    ? 'bg-gold-500/20 text-gold-300 border-gold-500/40 shadow-sm'
-                    : 'bg-ink-950/70 text-ink-400 border-ink-800 hover:text-ink-200'
-                }`}
-              >
-                <Flame size={13} /> 8.5+ Başyapıtlar
-              </button>
-            </div>
-
-            <div className="flex bg-ink-950/80 rounded-xl p-1 border border-ink-800">
-              <button
-                onClick={() => setSortMode('newest')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                  sortMode === 'newest'
-                    ? 'bg-ink-800 text-ink-50 shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200'
-                }`}
-              >
-                <Clock size={12} /> En Yeni
-              </button>
-              <button
-                onClick={() => setSortMode('oldest')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                  sortMode === 'oldest'
-                    ? 'bg-ink-800 text-ink-50 shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200'
-                }`}
-              >
-                En Eski
-              </button>
-              <button
-                onClick={() => setSortMode('rating')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                  sortMode === 'rating'
-                    ? 'bg-ink-800 text-ink-50 shadow-sm'
-                    : 'text-ink-400 hover:text-ink-200'
-                }`}
-              >
-                <StarIcon size={12} /> Puana Göre
-              </button>
-            </div>
-          </div>
-
-          {/* Değerlendirme Başlıkları Filtre Barı */}
-          {usedReviewTags.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-ink-800/60">
-              <span className="text-[10px] font-black uppercase tracking-wider text-ink-400 flex items-center gap-1 mr-1">
-                <Tag size={11} className="text-gold-400" /> Başlıklar:
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedTagFilter(null)}
-                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
-                  selectedTagFilter === null
-                    ? 'bg-gold-500 text-ink-950 border-gold-400'
-                    : 'bg-ink-950/70 text-ink-400 border-ink-800 hover:text-ink-200'
-                }`}
-              >
-                Tümü
-              </button>
-              {usedReviewTags.map((tag) => {
-                const active = selectedTagFilter === tag;
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setSelectedTagFilter(active ? null : tag)}
-                    className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
-                      active
-                        ? 'bg-gold-500 text-ink-950 border-gold-400 shadow-sm'
-                        : 'bg-ink-950/70 text-ink-300 border-ink-800 hover:border-gold-500/40'
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
             </div>
           )}
         </div>
       )}
 
-      {/* =========================================================
-          4. İÇERİK ALANI: BOŞ DURUM / DAHA ÖNCE İZLEDİKLERİM / POSTER VİTRİNİ / ZAMAN TÜNELİ
-          ========================================================= */}
+      {/* 4. İÇERİK ALANI */}
       {displayItems.length === 0 ? (
-        <div className="text-center py-16 bg-ink-900/40 border border-ink-800/60 rounded-3xl text-ink-500">
-          <div className="w-16 h-16 rounded-2xl bg-ink-800/50 flex items-center justify-center mx-auto mb-4">
+        <div className="text-center py-14 bg-ink-900/40 border border-ink-800/60 rounded-3xl text-ink-500 px-4">
+          <div className="w-14 h-14 rounded-2xl bg-ink-800/50 flex items-center justify-center mx-auto mb-3">
             {viewMode === 'past' ? (
-              <History size={32} className="text-violet-400/70" />
+              <History size={28} className="text-violet-400/70" />
             ) : (
-              <Film size={32} className="text-ink-600" />
+              <Film size={28} className="text-ink-600" />
             )}
           </div>
-          <p className="text-lg font-bold text-ink-200">
+          <p className="text-base sm:text-lg font-bold text-ink-200">
             {viewMode === 'past'
               ? pastHistory.length === 0
                 ? 'Daha önce izlediklerim kısmında henüz film yok.'
@@ -539,7 +582,7 @@ export default function HistoryPage() {
               ? 'Henüz izlenen bir şey yok.'
               : 'Aramaya ve filtrelere uygun kayıt bulunamadı.'}
           </p>
-          <p className="text-sm mt-1">
+          <p className="text-xs sm:text-sm mt-1">
             {viewMode === 'past'
               ? 'Bir filmi puanlarken "Önceden İzlendi" seçeneğini işaretlediğinde burada listelenir.'
               : regularHistory.length === 0
@@ -548,10 +591,7 @@ export default function HistoryPage() {
           </p>
         </div>
       ) : viewMode === 'past' ? (
-        /* =========================================================
-           MOD C: DAHA ÖNCE İZLEDİKLERİM SEKMESİ
-           ========================================================= */
-        <div className="space-y-4 animate-fade-in">
+        <div className="space-y-3 sm:space-y-4 animate-fade-in">
           {displayItems.map(({ item }) => {
             const movieData = data.movies.find((m) => m.id === (item.itemId || item.id));
             return (
@@ -569,10 +609,7 @@ export default function HistoryPage() {
           })}
         </div>
       ) : viewMode === 'grid' ? (
-        /* =========================================================
-           MOD A: POSTER VİTRİNİ (GALERİ GÖRÜNÜMÜ - ÖNCEDEN İZLENENLER HARİÇ)
-           ========================================================= */
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 animate-fade-in">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 animate-fade-in">
           {displayItems.map(({ type, item, seriesId }) => {
             const isMovie = type === 'movie';
             const movieData = isMovie
@@ -601,82 +638,62 @@ export default function HistoryPage() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-ink-600">
-                      {isMovie ? <Film size={36} /> : <Tv size={36} />}
+                      {isMovie ? <Film size={32} /> : <Tv size={32} />}
                     </div>
                   )}
 
-                  <div className="absolute top-2.5 left-2.5 bg-black/80 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border border-white/15 flex items-center gap-1">
+                  <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border border-white/15 flex items-center gap-1">
                     {isMovie ? (
-                      <>
-                        <Film size={10} className="text-gold-400" /> Film
-                      </>
+                      <><Film size={10} className="text-gold-400" /> Film</>
                     ) : (
-                      <>
-                        <Tv size={10} className="text-azure-400" /> S{item.season} B{item.episode}
-                      </>
+                      <><Tv size={10} className="text-azure-400" /> S{item.season} B{item.episode}</>
                     )}
                   </div>
 
                   {item.rating !== null && (
-                    <div
-                      className={`absolute top-2.5 right-2.5 px-2.5 py-1 rounded-xl text-xs font-black shadow-lg ${ratingBgClass(
-                        item.rating
-                      )}`}
-                    >
+                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-xl text-xs font-black shadow-lg ${ratingBgClass(item.rating)}`}>
                       ★ {item.rating}
                     </div>
                   )}
 
                   <div className="absolute bottom-2 inset-x-2 flex items-center justify-between gap-1">
                     {item.note ? (
-                      <span className="bg-emerald-500/90 text-ink-950 text-[10px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 shadow">
-                        <StickyNote size={10} /> İncelemeli
+                      <span className="bg-emerald-500/90 text-ink-950 text-[9px] font-black px-1.5 py-0.5 rounded-md flex items-center gap-1 shadow">
+                        <StickyNote size={9} /> Notlu
                       </span>
                     ) : (
                       <span />
                     )}
                     {!isMovie && epsCount > 1 && (
-                      <span className="bg-azure-500/90 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow">
-                        {epsCount} Bölüm
+                      <span className="bg-azure-500/90 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow">
+                        {epsCount} Böl.
                       </span>
                     )}
                   </div>
-
-                  <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5">
-                    <div className="w-10 h-10 rounded-full bg-gold-500 text-ink-950 flex items-center justify-center shadow-lg">
-                      <Eye size={18} />
-                    </div>
-                    <span className="text-xs font-black text-white uppercase tracking-wider">
-                      Sinema Kartı
-                    </span>
-                  </div>
                 </div>
 
-                <div className="p-3 flex-1 flex flex-col justify-between">
+                <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
                   <div>
                     <h3 className="font-black text-xs sm:text-sm text-ink-100 truncate group-hover:text-gold-400 transition-colors">
                       {item.title}
                     </h3>
                     {item.reviewTags && item.reviewTags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
+                      <div className="flex flex-wrap gap-1 mt-1">
                         {item.reviewTags.slice(0, 2).map((t) => (
-                          <span
-                            key={t}
-                            className="text-[9px] font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-1.5 py-0.5 rounded"
-                          >
+                          <span key={t} className="text-[9px] font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-1.5 py-0.5 rounded truncate">
                             {t}
                           </span>
                         ))}
                       </div>
                     )}
                     {item.note && (
-                      <p className="text-[11px] text-ink-400 italic line-clamp-1 mt-1">
+                      <p className="text-[10px] sm:text-[11px] text-ink-400 italic line-clamp-1 mt-1">
                         "{item.note}"
                       </p>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-ink-500 font-semibold mt-2 pt-2 border-t border-ink-800/60">
+                  <div className="flex items-center justify-between text-[10px] text-ink-500 font-semibold mt-2 pt-1.5 border-t border-ink-800/60">
                     <span>{formatDateShort(item.watchedAt)}</span>
                     <button
                       type="button"
@@ -696,27 +713,24 @@ export default function HistoryPage() {
           })}
         </div>
       ) : (
-        /* =========================================================
-           MOD B: SİNEMATİK ZAMAN TÜNELİ (TIMELINE) GÖRÜNÜMÜ
-           ========================================================= */
-        <div className="relative pl-3 sm:pl-6 space-y-8">
-          <div className="absolute left-1 sm:left-2.5 top-3 bottom-3 w-0.5 bg-gradient-to-b from-gold-500 via-azure-500/50 to-transparent rounded-full pointer-events-none" />
+        <div className="relative pl-2.5 sm:pl-6 space-y-6 sm:space-y-8">
+          <div className="absolute left-0.5 sm:left-2.5 top-3 bottom-3 w-0.5 bg-gradient-to-b from-gold-500 via-azure-500/50 to-transparent rounded-full pointer-events-none" />
 
           {Array.from(groupedByDate.entries()).map(([dateLabel, items]) => (
             <div key={dateLabel} className="relative animate-fade-in-up">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="absolute -left-[11px] sm:-left-[19px] w-4 h-4 rounded-full bg-ink-950 border-2 border-gold-400 shadow-[0_0_10px_rgba(245,158,11,0.7)]" />
-                <div className="inline-flex items-center gap-2 bg-ink-900/90 border border-gold-500/30 px-3.5 py-1.5 rounded-full text-xs font-black text-gold-300 uppercase tracking-wider shadow-md">
-                  <Calendar size={13} className="text-gold-400" />
-                  <span>{dateLabel}</span>
-                  <span className="text-[10px] bg-gold-500/20 text-gold-300 px-1.5 py-0.5 rounded-full ml-1">
-                    {items.length} Kayıt
+              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                <div className="absolute -left-[9px] sm:-left-[19px] w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-ink-950 border-2 border-gold-400 shadow-[0_0_10px_rgba(245,158,11,0.7)]" />
+                <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-ink-900/90 border border-gold-500/30 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-black text-gold-300 uppercase tracking-wider shadow-md">
+                  <Calendar size={12} className="text-gold-400 flex-shrink-0" />
+                  <span className="truncate">{dateLabel}</span>
+                  <span className="text-[10px] bg-gold-500/20 text-gold-300 px-1.5 py-0.5 rounded-full ml-0.5 flex-shrink-0">
+                    {items.length}
                   </span>
                 </div>
                 <div className="flex-1 h-px bg-gradient-to-r from-ink-700/60 to-transparent" />
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {items.map(({ type, item, seriesId }) => {
                   if (type === 'movie') {
                     const movieData = data.movies.find((m) => m.id === (item.itemId || item.id));
@@ -747,32 +761,27 @@ export default function HistoryPage() {
                     const avgEpRating =
                       ratedEps.length > 0
                         ? Math.round(
-                            (ratedEps.reduce((s, e) => s + (e.rating || 0), 0) / ratedEps.length) *
-                              10
+                            (ratedEps.reduce((s, e) => s + (e.rating || 0), 0) / ratedEps.length) * 10
                           ) / 10
                         : null;
 
                     return (
                       <div
                         key={sid}
-                        className="relative bg-ink-900/80 backdrop-blur-md border border-ink-700/60 hover:border-azure-500/40 rounded-3xl overflow-hidden shadow-xl transition-all"
+                        className="relative bg-ink-900/80 backdrop-blur-md border border-ink-700/60 hover:border-azure-500/40 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl transition-all"
                       >
                         {seriesData?.posterUrl && (
                           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-15">
-                            <img
-                              src={seriesData.posterUrl}
-                              alt=""
-                              className="w-full h-full object-cover blur-3xl scale-125 saturate-150"
-                            />
+                            <img src={seriesData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150" />
                             <div className="absolute inset-0 bg-gradient-to-r from-ink-950 via-ink-950/85 to-transparent" />
                           </div>
                         )}
 
                         <div
                           onClick={() => toggleSeries(sid)}
-                          className="relative z-10 w-full flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 sm:p-5 hover:bg-ink-800/30 transition-colors cursor-pointer"
+                          className="relative z-10 w-full flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3.5 sm:p-5 hover:bg-ink-800/30 transition-colors cursor-pointer"
                         >
-                          <div className="flex items-start gap-4 flex-1 min-w-0 w-full">
+                          <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -780,214 +789,125 @@ export default function HistoryPage() {
                                 openSeriesDetail(item, seriesData);
                               }}
                               title="Dizi Sinema Kartını Gör"
-                              className="flex-shrink-0 w-16 sm:w-20 aspect-[2/3] rounded-2xl bg-ink-950 border-2 border-ink-700/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-azure-500"
+                              className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-ink-950 border-2 border-ink-700/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer"
                             >
                               {seriesData?.posterUrl ? (
-                                <img
-                                  src={seriesData.posterUrl}
-                                  alt={item.title}
-                                  className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"
-                                />
+                                <img src={seriesData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
                               ) : (
-                                <Tv size={26} className="text-ink-600" />
+                                <Tv size={22} className="text-ink-600" />
                               )}
-                              <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 p-1">
-                                <div className="w-7 h-7 rounded-full bg-azure-500 text-white flex items-center justify-center shadow-md">
-                                  <Eye size={14} />
-                                </div>
-                                <span className="text-[9px] font-black text-white uppercase tracking-wider">
-                                  Künye
-                                </span>
-                              </div>
                             </button>
 
                             <div className="flex-1 min-w-0 text-left">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-azure-500/20 text-azure-300 border border-azure-500/30">
-                                  <Tv size={11} /> Dizi Günlüğü
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-azure-500/20 text-azure-300 border border-azure-500/30">
+                                  <Tv size={10} /> Dizi
                                 </span>
-                                <span className="text-xs font-bold text-azure-300 bg-ink-950/80 border border-azure-500/30 px-2.5 py-0.5 rounded-lg">
-                                  Son İzlenen: {item.season}. Sezon {item.episode}. Bölüm
+                                <span className="text-[11px] font-bold text-azure-300 bg-ink-950/80 border border-azure-500/30 px-2 py-0.5 rounded-lg">
+                                  Son: S{item.season} B{item.episode}
                                 </span>
                               </div>
 
-                              <h3 className="text-lg sm:text-xl font-black text-ink-50 truncate mt-1.5">
+                              <h3 className="text-base sm:text-xl font-black text-ink-50 truncate mt-1">
                                 {item.title}
                               </h3>
 
-                              <div className="flex items-center gap-2.5 flex-wrap text-xs text-ink-300 mt-1.5 font-medium">
+                              <div className="flex items-center gap-2 flex-wrap text-[11px] sm:text-xs text-ink-300 mt-1 font-medium">
                                 {seriesData?.year && <span>{seriesData.year}</span>}
-                                {seriesData?.creators && seriesData.creators.length > 0 && (
-                                  <>
-                                    <span className="text-ink-600">·</span>
-                                    <span className="flex items-center gap-1 text-ink-200">
-                                      <User size={12} className="text-azure-400" />{' '}
-                                      {seriesData.creators[0]}
-                                    </span>
-                                  </>
-                                )}
                                 {item.genres && item.genres.length > 0 && (
                                   <>
                                     <span className="text-ink-600">·</span>
-                                    <span className="text-ink-400 truncate">
-                                      {item.genres.slice(0, 3).join(', ')}
-                                    </span>
+                                    <span className="text-ink-400 truncate">{item.genres.slice(0, 3).join(', ')}</span>
                                   </>
                                 )}
                               </div>
 
-                              {/* Son Bölümün Seçili Değerlendirme Başlıkları */}
-                              {item.reviewTags && item.reviewTags.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-2.5">
-                                  {item.reviewTags.map((tag) => (
-                                    <span
-                                      key={tag}
-                                      className="text-[11px] font-bold bg-azure-500/15 text-azure-300 border border-azure-500/30 px-2.5 py-0.5 rounded-lg"
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              <div className="text-xs text-ink-400 mt-2.5 flex items-center gap-1.5 font-medium">
-                                <Clock size={12} className="text-azure-400" />
-                                <span>Son aktivite: {formatDateTime(item.watchedAt)}</span>
+                              <div className="text-[11px] text-ink-400 mt-1.5 flex items-center gap-1 font-medium">
+                                <Clock size={11} className="text-azure-400" />
+                                <span>{formatDateTime(item.watchedAt)}</span>
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-3 sm:pt-0 border-t border-ink-800/60 sm:border-0 flex-shrink-0">
-                            <div className="flex items-center gap-2">
+                          <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-2.5 sm:pt-0 border-t border-ink-800/60 sm:border-0 flex-shrink-0">
+                            <div className="flex items-center gap-1.5">
                               {item.rating !== null && (
-                                <div
-                                  className={`px-3.5 py-1.5 rounded-2xl font-black text-base shadow-lg flex items-center gap-1.5 ${ratingBgClass(
-                                    item.rating
-                                  )}`}
-                                  title="Son Bölüm Puanı"
-                                >
-                                  <StarIcon size={15} className="fill-current" />
+                                <div className={`px-3 py-1 rounded-xl font-black text-sm sm:text-base shadow-lg flex items-center gap-1 ${ratingBgClass(item.rating)}`}>
+                                  <StarIcon size={13} className="fill-current" />
                                   <span>{item.rating}</span>
                                 </div>
                               )}
                               {avgEpRating !== null && eps.length > 1 && (
-                                <div className="text-[11px] font-bold bg-ink-950/80 border border-ink-700 text-ink-300 px-2.5 py-1.5 rounded-xl">
+                                <div className="text-[11px] font-bold bg-ink-950/80 border border-ink-700 text-ink-300 px-2 py-1 rounded-xl">
                                   Ort: <strong className="text-azure-400">{avgEpRating}</strong>
                                 </div>
                               )}
                             </div>
 
-                            <div className="inline-flex items-center gap-1.5 text-xs font-black text-azure-300 bg-azure-500/15 hover:bg-azure-500/25 border border-azure-500/30 px-3 py-1.5 rounded-xl transition-colors">
-                              <span>{eps.length} Bölüm Kaydı</span>
-                              {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                            <div className="inline-flex items-center gap-1 text-xs font-black text-azure-300 bg-azure-500/15 hover:bg-azure-500/25 border border-azure-500/30 px-2.5 py-1 rounded-xl transition-colors">
+                              <span>{eps.length} Bölüm</span>
+                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                             </div>
                           </div>
                         </div>
 
-                        {/* Genişletilmiş Bölüm Listesi */}
                         {isExpanded && (
-                          <div className="relative z-10 border-t border-ink-700/50 bg-ink-950/60 p-4 space-y-2.5 animate-fade-in">
-                            <div className="text-[11px] font-black uppercase tracking-widest text-azure-400 mb-2 flex items-center gap-1.5">
-                              <Layers size={13} /> İzlenen Bölümlerin Kronolojisi ({eps.length})
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                          <div className="relative z-10 border-t border-ink-700/50 bg-ink-950/60 p-3 sm:p-4 space-y-2 animate-fade-in">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                               {eps.map((ep) => {
                                 const isEpNoteExpanded = expandedNotes.has(ep.id);
                                 return (
                                   <div
                                     key={ep.id}
-                                    className="bg-ink-900/80 border border-ink-800 hover:border-azure-500/40 rounded-2xl p-3.5 flex flex-col justify-between gap-2.5 transition-all"
+                                    className="bg-ink-900/80 border border-ink-800 hover:border-azure-500/40 rounded-xl p-3 flex flex-col justify-between gap-2 transition-all"
                                   >
                                     <div className="flex items-start justify-between gap-2">
                                       <div>
                                         <button
                                           type="button"
                                           onClick={() => openSeriesDetail(ep, seriesData)}
-                                          className="text-sm font-black text-ink-100 hover:text-azure-400 transition-colors text-left flex items-center gap-1.5"
-                                          title="Bu Bölümün Sinema Kartını Gör"
+                                          className="text-xs sm:text-sm font-black text-ink-100 hover:text-azure-400 transition-colors text-left flex items-center gap-1.5"
                                         >
                                           <span className="w-2 h-2 rounded-full bg-azure-400" />
                                           {ep.season}. Sezon {ep.episode}. Bölüm
                                         </button>
-                                        <div className="text-[11px] text-ink-500 mt-1 flex items-center gap-1.5">
-                                          <Clock size={11} /> {formatDateTime(ep.watchedAt)}
+                                        <div className="text-[10px] text-ink-500 mt-0.5 flex items-center gap-1">
+                                          <Clock size={10} /> {formatDateTime(ep.watchedAt)}
                                         </div>
                                       </div>
 
                                       <div className="flex items-center gap-1.5 flex-shrink-0">
                                         {ep.rating !== null && (
-                                          <span
-                                            className={`text-xs px-2.5 py-1 rounded-lg font-black ${ratingBgClass(
-                                              ep.rating
-                                            )}`}
-                                          >
+                                          <span className={`text-xs px-2 py-0.5 rounded-lg font-black ${ratingBgClass(ep.rating)}`}>
                                             ★ {ep.rating}
                                           </span>
                                         )}
                                         <button
                                           onClick={() => setEditingItem(ep)}
                                           className="text-ink-400 hover:text-azure-400 bg-ink-950 p-1.5 rounded-lg border border-ink-800 transition-colors"
-                                          title="Bölüm Puanını / Notunu Düzenle"
                                         >
-                                          <Edit2 size={13} />
+                                          <Edit2 size={12} />
                                         </button>
                                       </div>
                                     </div>
 
-                                    {/* Bölümün Seçili Değerlendirme Başlıkları */}
                                     {ep.reviewTags && ep.reviewTags.length > 0 && (
                                       <div className="flex flex-wrap gap-1">
                                         {ep.reviewTags.map((t) => (
-                                          <span
-                                            key={t}
-                                            className="text-[10px] font-bold bg-azure-500/15 text-azure-300 border border-azure-500/30 px-2 py-0.5 rounded-md"
-                                          >
+                                          <span key={t} className="text-[10px] font-bold bg-azure-500/15 text-azure-300 border border-azure-500/30 px-2 py-0.5 rounded-md">
                                             {t}
                                           </span>
                                         ))}
                                       </div>
                                     )}
 
-                                    {/* Bölümün Detaylı Kriter Rozetleri */}
-                                    {ep.detailedRating && Object.keys(ep.detailedRating).length > 0 && (
-                                      <div className="flex flex-wrap gap-1 pt-0.5">
-                                        {Object.entries(ep.detailedRating).map(([cId, sc]) => {
-                                          const cName =
-                                            data.criteria?.find((c) => c.id === cId)?.name || cId;
-                                          return (
-                                            <span
-                                              key={cId}
-                                              className="text-[10px] font-bold bg-ink-950 text-ink-300 px-2 py-0.5 rounded-md border border-ink-800"
-                                            >
-                                              {cName}: <strong className="text-azure-400">{sc}</strong>
-                                            </span>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-
-                                    {/* Bölümün Günlük Notu (Tek Satır, Tıklayınca Büyür/Küçülür) */}
                                     {ep.note && (
                                       <div
                                         onClick={() => toggleNoteExpand(ep.id)}
-                                        title={
-                                          isEpNoteExpanded
-                                            ? 'Küçültmek için tıkla'
-                                            : 'Tamamını okumak için tıkla'
-                                        }
-                                        className="bg-ink-950/80 hover:bg-ink-950 rounded-xl p-2.5 border-l-2 border-azure-500 flex items-start gap-2 cursor-pointer transition-colors"
+                                        className="bg-ink-950/80 hover:bg-ink-950 rounded-xl p-2 border-l-2 border-azure-500 flex items-start gap-2 cursor-pointer transition-colors"
                                       >
-                                        <Quote
-                                          size={13}
-                                          className="text-azure-400 flex-shrink-0 mt-0.5"
-                                        />
-                                        <p
-                                          className={`text-xs text-ink-200 italic leading-relaxed flex-1 min-w-0 ${
-                                            isEpNoteExpanded
-                                              ? 'whitespace-pre-wrap break-words'
-                                              : 'line-clamp-1'
-                                          }`}
-                                        >
+                                        <Quote size={12} className="text-azure-400 flex-shrink-0 mt-0.5" />
+                                        <p className={`text-xs text-ink-200 italic leading-relaxed flex-1 min-w-0 ${isEpNoteExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-1'}`}>
                                           {ep.note}
                                         </p>
                                       </div>
@@ -1008,7 +928,6 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {/* PUAN, NOT VE BAŞLIK DÜZENLEME MODALI */}
       {editingItem && (
         <RatingModal
           title={editingItem.title}
@@ -1033,7 +952,6 @@ export default function HistoryPage() {
         />
       )}
 
-      {/* TAM SİNEMA KARTI MODALI */}
       {detailTarget && (
         <MediaDetailModal target={detailTarget} onClose={() => setDetailTarget(null)} />
       )}
@@ -1041,9 +959,6 @@ export default function HistoryPage() {
   );
 }
 
-/* =========================================================
-   GÖSTERİŞLİ FİLM GEÇMİŞİ KARTI (TEK SATIR TIKLANABİLİR NOT & BAŞLIK ROZETLERİ)
-   ========================================================= */
 function MovieHistoryCard({
   item,
   movieData,
@@ -1066,59 +981,43 @@ function MovieHistoryCard({
   const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch);
 
   return (
-    <div className="relative bg-ink-900/80 backdrop-blur-md border border-ink-700/60 hover:border-gold-500/40 rounded-3xl p-4 sm:p-5 shadow-xl transition-all overflow-hidden group">
+    <div className="relative bg-ink-900/80 backdrop-blur-md border border-ink-700/60 hover:border-gold-500/40 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-xl transition-all overflow-hidden group">
       {movieData?.posterUrl && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-15 group-hover:opacity-25 transition-opacity">
-          <img
-            src={movieData.posterUrl}
-            alt=""
-            className="w-full h-full object-cover blur-3xl scale-125 saturate-150"
-          />
+          <img src={movieData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150" />
           <div className="absolute inset-0 bg-gradient-to-r from-ink-950 via-ink-950/85 to-transparent" />
         </div>
       )}
 
-      <div className="relative z-10 flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
-        <div className="flex items-start gap-4 flex-1 min-w-0 w-full">
+      <div className="relative z-10 flex flex-col sm:flex-row items-start gap-3 sm:gap-5">
+        <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0 w-full">
           <button
             type="button"
             onClick={onSelectDetail}
             title="Sinema Kartını & Detayları Gör"
-            className="flex-shrink-0 w-16 sm:w-20 aspect-[2/3] rounded-2xl bg-ink-950 border-2 border-ink-700/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500"
+            className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-ink-950 border-2 border-ink-700/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer"
           >
             {movieData?.posterUrl ? (
-              <img
-                src={movieData.posterUrl}
-                alt={item.title}
-                className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"
-              />
+              <img src={movieData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
             ) : (
-              <Film size={26} className="text-ink-600" />
+              <Film size={22} className="text-ink-600" />
             )}
-            <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 p-1">
-              <div className="w-7 h-7 rounded-full bg-gold-500 text-ink-950 flex items-center justify-center shadow-md">
-                <Eye size={14} />
-              </div>
-              <span className="text-[9px] font-black text-white uppercase tracking-wider">
-                Künye
-              </span>
-            </div>
           </button>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {isPast ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                  <History size={11} /> Daha Önce İzlendi
+                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                  <History size={10} /> Daha Önce İzlendi
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-gold-500/20 text-gold-300 border border-gold-500/30">
-                  <Film size={11} /> Film Kaydı
+                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-gold-500/20 text-gold-300 border border-gold-500/30">
+                  <Film size={10} /> Film Kaydı
                 </span>
               )}
               {item.rating !== null && item.rating >= 9 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  <Award size={11} /> Favori Seçim
+                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <Award size={10} /> Favori
                 </span>
               )}
             </div>
@@ -1126,26 +1025,17 @@ function MovieHistoryCard({
             <button
               type="button"
               onClick={onSelectDetail}
-              className="text-lg sm:text-xl font-black text-ink-50 hover:text-gold-400 transition-colors text-left truncate block w-full mt-1"
-              title="Sinema Kartını Gör"
+              className="text-base sm:text-xl font-black text-ink-50 hover:text-gold-400 transition-colors text-left truncate block w-full mt-1"
             >
               {item.title}
             </button>
 
-            <div className="text-xs text-ink-300 mt-1.5 flex items-center gap-2 flex-wrap font-medium">
+            <div className="text-[11px] sm:text-xs text-ink-300 mt-1 flex items-center gap-1.5 flex-wrap font-medium">
               {(movieData?.year || item.year) && <span>{movieData?.year || item.year}</span>}
               {movieData?.runtime && (
                 <>
                   <span className="text-ink-600">·</span>
                   <span>{movieData.runtime} dk</span>
-                </>
-              )}
-              {movieData?.directors && movieData.directors.length > 0 && (
-                <>
-                  <span className="text-ink-600">·</span>
-                  <span className="flex items-center gap-1 text-ink-200">
-                    <User size={12} className="text-gold-400" /> {movieData.directors[0]}
-                  </span>
                 </>
               )}
               {item.genres && item.genres.length > 0 && (
@@ -1156,47 +1046,36 @@ function MovieHistoryCard({
               )}
             </div>
 
-            <div className="text-xs text-ink-400 mt-2 flex items-center gap-1.5 font-medium">
+            <div className="text-[11px] text-ink-400 mt-1.5 flex items-center gap-1 font-medium">
               {isPast ? (
                 <>
-                  <History size={12} className="text-violet-400" />
+                  <History size={11} className="text-violet-400" />
                   <span>Daha önce izlendi</span>
                 </>
               ) : (
                 <>
-                  <Clock size={12} className="text-gold-400" />
-                  <span>İzlendi: {formatDateTime(item.watchedAt)}</span>
+                  <Clock size={11} className="text-gold-400" />
+                  <span>{formatDateTime(item.watchedAt)}</span>
                 </>
               )}
             </div>
 
-            {/* Seçilen Değerlendirme Başlıkları (🔥 Başyapıt, 🎭 Oyunculuk Muazzam vb.) */}
             {hasTags && (
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <div className="mt-2 flex flex-wrap items-center gap-1">
                 {item.reviewTags!.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-2.5 py-0.5 rounded-lg shadow-sm"
-                  >
+                  <span key={tag} className="text-[10px] sm:text-xs font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-2 py-0.5 rounded-lg">
                     {tag}
                   </span>
                 ))}
               </div>
             )}
 
-            {/* Varsa Detaylı Kriter Analizi Rozetleri */}
             {hasDetailed && (
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-azure-400 flex items-center gap-1 mr-1">
-                  <SlidersHorizontal size={11} /> Kriterler:
-                </span>
+              <div className="mt-2 flex flex-wrap items-center gap-1">
                 {Object.entries(item.detailedRating!).map(([critId, score]) => {
                   const critName = criteriaList.find((c) => c.id === critId)?.name || critId;
                   return (
-                    <span
-                      key={critId}
-                      className="text-[11px] font-bold bg-ink-950/90 text-ink-200 px-2.5 py-0.5 rounded-lg border border-ink-800"
-                    >
+                    <span key={critId} className="text-[10px] font-bold bg-ink-950/90 text-ink-200 px-2 py-0.5 rounded-lg border border-ink-800">
                       {critName}: <strong className="text-gold-400">{score}</strong>
                     </span>
                   );
@@ -1204,20 +1083,14 @@ function MovieHistoryCard({
               </div>
             )}
 
-            {/* Eleştirmen İnceleme & Not Kutusu (SADECE TEK SATIR, TIKLAYINCA BÜYÜR/KÜÇÜLÜR) */}
             {item.note && (
               <div
                 onClick={onToggleNote}
-                title={isNoteExpanded ? 'Küçültmek için tıkla' : 'Tamamını okumak için tıkla'}
-                className="mt-3 bg-ink-950/75 hover:bg-ink-950 border border-ink-800/90 hover:border-gold-500/40 border-l-4 border-l-gold-500 rounded-2xl px-3.5 py-2.5 relative cursor-pointer transition-all"
+                className="mt-2.5 bg-ink-950/75 hover:bg-ink-950 border border-ink-800/90 hover:border-gold-500/40 border-l-4 border-l-gold-500 rounded-xl px-3 py-2 relative cursor-pointer transition-all"
               >
-                <div className="flex items-start gap-2.5">
-                  <Quote size={15} className="text-gold-400 flex-shrink-0 mt-0.5 opacity-80" />
-                  <p
-                    className={`text-xs sm:text-sm text-ink-100 italic leading-relaxed flex-1 min-w-0 ${
-                      isNoteExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-1'
-                    }`}
-                  >
+                <div className="flex items-start gap-2">
+                  <Quote size={13} className="text-gold-400 flex-shrink-0 mt-0.5 opacity-80" />
+                  <p className={`text-xs sm:text-sm text-ink-100 italic leading-relaxed flex-1 min-w-0 ${isNoteExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-1'}`}>
                     {item.note}
                   </p>
                 </div>
@@ -1226,15 +1099,10 @@ function MovieHistoryCard({
           </div>
         </div>
 
-        {/* Sağ: Dev Puan Rozeti ve Düzenleme/İnceleme Butonları */}
-        <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-3 sm:pt-0 border-t border-ink-800/60 sm:border-0 flex-shrink-0">
+        <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-2.5 sm:pt-0 border-t border-ink-800/60 sm:border-0 flex-shrink-0">
           {item.rating !== null && (
-            <div
-              className={`px-4 py-2 rounded-2xl font-black text-lg sm:text-xl shadow-lg flex items-center gap-1.5 ${ratingBgClass(
-                item.rating
-              )}`}
-            >
-              <StarIcon size={17} className="fill-current" />
+            <div className={`px-3 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg flex items-center gap-1 ${ratingBgClass(item.rating)}`}>
+              <StarIcon size={15} className="fill-current" />
               <span>{item.rating}</span>
             </div>
           )}
@@ -1244,17 +1112,15 @@ function MovieHistoryCard({
               type="button"
               onClick={onSelectDetail}
               className="flex items-center gap-1 text-xs font-bold bg-ink-950/80 hover:bg-ink-800 text-ink-300 hover:text-white px-2.5 py-1.5 rounded-xl border border-ink-800 transition-colors"
-              title="Sinema Kartını Aç"
             >
-              <Eye size={14} /> <span className="sm:hidden md:inline">Kart</span>
+              <Eye size={13} /> <span>Kart</span>
             </button>
             <button
               type="button"
               onClick={onEdit}
               className="flex items-center gap-1 text-xs font-bold bg-ink-950/80 hover:bg-ink-800 text-ink-300 hover:text-gold-400 px-2.5 py-1.5 rounded-xl border border-ink-800 transition-colors"
-              title="Puanı ve Notu Düzenle"
             >
-              <Edit2 size={14} /> <span className="sm:hidden md:inline">Düzenle</span>
+              <Edit2 size={13} /> <span>Düzenle</span>
             </button>
           </div>
         </div>

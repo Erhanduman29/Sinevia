@@ -18,6 +18,7 @@ export interface Movie {
   year: string;
   genres: string[];
   collectionId: string | null;
+  inPastQueue?: boolean;
   runtime?: number;
   startedAt?: string | null;
   actualRuntime?: number | null;

@@ -13,7 +13,7 @@ export const DISPLAY_DURATION_MS = 4000;
 export const QUEUE_STEP_DURATION_MS = 4300;
 
 export interface AIMessage { id: string; sender: 'user' | 'ai'; text: string; timestamp: number; actionItems?: any[]; }
-export interface MovieExtraData { keywords?: string[]; directors?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; }
+export interface MovieExtraData { keywords?: string[]; directors?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; inPastQueue?: boolean; }
 export interface SeriesExtraData { keywords?: string[]; creators?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; }
 interface ExtendedAppData extends AppData { aiChatHistory?: AIMessage[]; theme?: string; reviewTags: string[]; }
 
@@ -63,31 +63,36 @@ function createInitialAchievements(existingList?: AchievementProgress[]): Achiev
   });
 }
 
-function ensurePastWatchCollection(collections: Collection[] = []): Collection[] {
-  const hasPastCol = collections.some((c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME));
-  if (hasPastCol) return collections;
-  return [{ id: 'col_past_watches', name: PAST_WATCH_COLLECTION_NAME }, ...collections];
-}
-
-// "Eskiden İzlenenler" koleksiyonunda olup puanlanmış (watched) olan filmleri koleksiyondan çıkarıp Daha Önce İzlenenler'e taşır
-function cleanupRatedMoviesInPastCollection(movies: Movie[] = [], collections: Collection[] = []): Movie[] {
+// Eski "Eskiden İzlenenler" koleksiyon ID'sine bağlı filmleri yeni inPastQueue yapısına geçirir
+function migrateLegacyPastCollection(movies: Movie[] = [], collections: Collection[] = []): { movies: Movie[]; collections: Collection[] } {
   const pastColIds = new Set(
     collections
       .filter((c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME))
       .map((c) => c.id)
   );
-  if (pastColIds.size === 0) return movies;
-  return movies.map((m) =>
-    m.watched && m.collectionId && pastColIds.has(m.collectionId)
-      ? { ...m, collectionId: null, isPastWatch: true }
-      : m
-  );
+  const cleanedCollections = collections.filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME));
+
+  const cleanedMovies = movies.map((m) => {
+    if (m.collectionId && pastColIds.has(m.collectionId)) {
+      return {
+        ...m,
+        collectionId: null,
+        inPastQueue: !m.watched,
+        isPastWatch: m.watched ? true : m.isPastWatch,
+      };
+    }
+    if (m.watched && m.inPastQueue) {
+      return { ...m, inPastQueue: false };
+    }
+    return m;
+  });
+
+  return { movies: cleanedMovies, collections: cleanedCollections };
 }
 
 function defaultData(): ExtendedAppData {
   return {
-    movies: [], series: [], removedSeriesTitles: [],
-    collections: [{ id: 'col_past_watches', name: PAST_WATCH_COLLECTION_NAME }],
+    movies: [], series: [], removedSeriesTitles: [], collections: [],
     genres: DEFAULT_GENRES, reviewTags: DEFAULT_REVIEW_TAGS, history: [],
     achievements: createInitialAchievements(),
     criteria: [
@@ -123,7 +128,7 @@ function addNewGenres(currentGenres: string[], incomingGenres: string[]): string
 type Action =
   | { type: 'ADD_MOVIE'; movie: Movie } | { type: 'DELETE_MOVIE'; id: string }
   | { type: 'START_WATCHING_MOVIE'; id: string; startedAt: string } | { type: 'CANCEL_WATCHING_MOVIE'; id: string }
-  | { type: 'WATCH_MOVIE'; id: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; actualRuntime: number; isPastWatch?: boolean; removeFromPastCol?: boolean; historyItem: WatchHistoryItem }
+  | { type: 'WATCH_MOVIE'; id: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; actualRuntime: number; isPastWatch?: boolean; historyItem: WatchHistoryItem }
   | { type: 'UNWATCH_MOVIE'; id: string }
   | { type: 'UPDATE_HISTORY_RATING'; historyId: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; isPastWatch?: boolean }
   | { type: 'ADD_SERIES'; series: Series } | { type: 'DELETE_SERIES'; id: string } | { type: 'COMPLETE_SERIES'; id: string; title: string }
@@ -134,7 +139,9 @@ type Action =
   | { type: 'ADD_REVIEW_TAG'; tag: string } | { type: 'DELETE_REVIEW_TAG'; tag: string } | { type: 'RENAME_REVIEW_TAG'; oldTag: string; newTag: string }
   | { type: 'EDIT_MOVIE'; id: string; title: string; year: string; genres: string[]; runtime?: number; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[]; extra?: MovieExtraData }
   | { type: 'EDIT_SERIES'; id: string; title: string; genres: string[]; year?: string; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[]; extra?: SeriesExtraData }
-  | { type: 'ADD_COLLECTION'; collection: Collection } | { type: 'DELETE_COLLECTION'; id: string } | { type: 'RENAME_COLLECTION'; id: string; name: string } | { type: 'SET_MOVIE_COLLECTION'; id: string; collectionId: string | null }
+  | { type: 'ADD_COLLECTION'; collection: Collection } | { type: 'DELETE_COLLECTION'; id: string } | { type: 'RENAME_COLLECTION'; id: string; name: string }
+  | { type: 'SET_MOVIE_COLLECTION'; id: string; collectionId: string | null }
+  | { type: 'SET_MOVIE_PAST_QUEUE'; id: string; inPastQueue: boolean }
   | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'MERGE_SHARED_LIST'; movies: Movie[]; series: Series[]; collections: Collection[]; genres: string[] }
   | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
   | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'SYNC_ACHIEVEMENTS' }
@@ -418,9 +425,14 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
 
 function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'IMPORT_DATA') {
-    const cols = ensurePastWatchCollection(action.data.collections);
-    const cleanedMovies = cleanupRatedMoviesInPastCollection(action.data.movies, cols);
-    return applyAchievements({ ...defaultData(), ...action.data, collections: cols, movies: cleanedMovies, achievements: createInitialAchievements(action.data.achievements) });
+    const migrated = migrateLegacyPastCollection(action.data.movies, action.data.collections);
+    return applyAchievements({
+      ...defaultData(),
+      ...action.data,
+      collections: migrated.collections,
+      movies: migrated.movies,
+      achievements: createInitialAchievements(action.data.achievements)
+    });
   }
   if (action.type === 'CONSUME_NEXT_TOAST') {
     const queue = state.pendingToasts || [];
@@ -462,14 +474,14 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
     case 'START_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: action.startedAt } : m)); break;
     case 'CANCEL_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: null } : m)); break;
     case 'WATCH_MOVIE':
+      // Puanlanan film Eskiden İzlenenler sırasından (inPastQueue: false) çıkarılır ama kendi collectionId'si (ör. Matrix) AYNEN KORUNUR!
       nextState.movies = state.movies.map((m) =>
         m.id === action.id
           ? {
               ...m,
               watched: true,
+              inPastQueue: false,
               isPastWatch: Boolean(action.isPastWatch),
-              // Eğer film "Eskiden İzlenenler" koleksiyonundaysa, puanlandığı an koleksiyondan çıkarılır!
-              collectionId: action.removeFromPastCol ? null : m.collectionId,
               rating: action.rating,
               detailedRating: action.detailedRating,
               reviewTags: action.reviewTags,
@@ -558,6 +570,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
     case 'DELETE_COLLECTION': nextState.collections = state.collections.filter((c) => c.id !== action.id); nextState.movies = state.movies.map((m) => (m.collectionId === action.id ? { ...m, collectionId: null } : m)); break;
     case 'RENAME_COLLECTION': nextState.collections = state.collections.map((c) => (c.id === action.id ? { ...c, name: action.name } : c)); break;
     case 'SET_MOVIE_COLLECTION': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, collectionId: action.collectionId } : m)); break;
+    case 'SET_MOVIE_PAST_QUEUE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, inPastQueue: action.inPastQueue } : m)); break;
     case 'ADD_CRITERION': nextState.criteria = [...(state.criteria || []), action.criterion]; break;
     case 'EDIT_CRITERION': nextState.criteria = (state.criteria || []).map((c) => (c.id === action.id ? action.criterion : c)); break;
     case 'DELETE_CRITERION': nextState.criteria = (state.criteria || []).filter((c) => c.id !== action.id); break;
@@ -589,7 +602,9 @@ interface AppContextValue {
   addReviewTag: (tag: string) => void; deleteReviewTag: (tag: string) => void; renameReviewTag: (oldTag: string, newTag: string) => void;
   editMovie: (i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => void;
   editSeries: (i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => void;
-  addCollection: (n: string) => string; deleteCollection: (i: string) => void; renameCollection: (i: string, n: string) => void; setMovieCollection: (i: string, c: string | null) => void;
+  addCollection: (n: string) => string; deleteCollection: (i: string) => void; renameCollection: (i: string, n: string) => void;
+  setMovieCollection: (i: string, c: string | null) => void;
+  setMoviePastQueue: (i: string, inPastQueue: boolean) => void;
   exportData: () => void; importData: (j: string) => boolean; resetData: () => void;
   exportShareList: () => void; importShareList: (j: string) => boolean;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void; achievementToasts: AchievementToastItem[];
@@ -608,13 +623,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        const cols = ensurePastWatchCollection(parsed.collections);
-        const cleanedMovies = cleanupRatedMoviesInPastCollection(parsed.movies, cols);
+        const migrated = migrateLegacyPastCollection(parsed.movies, parsed.collections);
         const parsedData: ExtendedAppData = {
           ...defaultData(),
           ...parsed,
-          collections: cols,
-          movies: cleanedMovies,
+          collections: migrated.collections,
+          movies: migrated.movies,
           achievements: createInitialAchievements(parsed.achievements)
         };
         if (parsedData.aiChatHistory) parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= Date.now() - 3 * 86400000);
@@ -693,7 +707,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
     if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
-    dispatch({ type: 'ADD_MOVIE', movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders, directors: extra?.directors, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage, watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString() } });
+    dispatch({
+      type: 'ADD_MOVIE',
+      movie: {
+        id: uid(), title: title.trim(), year: year.trim(), genres, collectionId,
+        inPastQueue: Boolean(extra?.inPastQueue),
+        runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders,
+        directors: extra?.directors, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage,
+        watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString()
+      }
+    });
     showToast('Film eklendi'); return true;
   }, [data.movies, showToast]);
 
@@ -748,9 +771,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const watchMovie = useCallback((id: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => {
     const movie = data.movies.find((m) => m.id === id); if (!movie) return;
-    const colObj = movie.collectionId ? data.collections.find((c) => c.id === movie.collectionId) : null;
-    const isInPastCol = Boolean(colObj && normalize(colObj.name) === normalize(PAST_WATCH_COLLECTION_NAME));
-    const finalIsPastWatch = isPastWatch !== undefined ? isPastWatch : (Boolean(movie.isPastWatch) || isInPastCol);
+    const finalIsPastWatch = isPastWatch !== undefined ? isPastWatch : Boolean(movie.isPastWatch || movie.inPastQueue);
 
     const now = new Date().toISOString();
     const info = getMovieTimerInfo(movie);
@@ -770,7 +791,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       watchedAt: now,
       actualRuntime,
       isPastWatch: finalIsPastWatch,
-      removeFromPastCol: isInPastCol,
       historyItem: {
         id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title,
         rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: finalIsPastWatch,
@@ -780,11 +800,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     if (finalIsPastWatch) {
-      showToast(`"${movie.title}" puanlandı ve Daha Önce İzlenenler kısmına taşındı`, 'info');
+      showToast(`"${movie.title}" puanlandı ve Daha Önce İzlenenler kısmına eklendi`, 'info');
     } else if (movie.startedAt && actualRuntime < info.maxMins) {
       showToast(`Film ${actualRuntime} dk'da bitti! (${info.maxMins - actualRuntime} dk kazandın ⚡)`, 'success');
     }
-  }, [data.movies, data.collections, showToast]);
+  }, [data.movies, showToast]);
 
   const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => {
     dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags, isPastWatch }); showToast('Puan güncellendi');
@@ -866,6 +886,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCollection = useCallback((id: string) => dispatch({ type: 'DELETE_COLLECTION', id }), []);
   const renameCollection = useCallback((i: string, n: string) => { dispatch({ type: 'RENAME_COLLECTION', id: i, name: n.trim() }); showToast('Koleksiyon güncellendi'); }, [showToast]);
   const setMovieCollection = useCallback((i: string, c: string | null) => dispatch({ type: 'SET_MOVIE_COLLECTION', id: i, collectionId: c }), []);
+  const setMoviePastQueue = useCallback((i: string, inPastQueue: boolean) => dispatch({ type: 'SET_MOVIE_PAST_QUEUE', id: i, inPastQueue }), []);
 
   const updateAIHistory = useCallback((messages: AIMessage[]) => dispatch({ type: 'UPDATE_AI_HISTORY', messages }), []);
   const addCriterion = useCallback((c: RatingCriterion) => { dispatch({ type: 'ADD_CRITERION', criterion: c }); showToast('Kriter Eklendi'); }, [showToast]);
@@ -983,7 +1004,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
 
   return (
-    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme }}>
+    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme }}>
       {children}
     </AppContext.Provider>
   );

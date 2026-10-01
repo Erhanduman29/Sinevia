@@ -2,12 +2,13 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Sparkles, Clock, Film, Tv, Star, Award, Flame, Crown, Download, Play, Pause, Tag, SlidersHorizontal, User, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
+import type { WatchHistoryItem } from '../types';
 
 interface WrappedModalProps {
   onClose: () => void;
 }
 
-type Period = 'all' | 'year' | 'month';
+type Period = 'all' | 'year' | 'month' | 'past';
 const SLIDE_DURATION_MS = 7000;
 
 export default function WrappedModal({ onClose }: WrappedModalProps) {
@@ -21,9 +22,23 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
   const currentYear = new Date().getFullYear();
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const isHistoryItemPast = (h: WatchHistoryItem): boolean => {
+    if (h.isPastWatch) return true;
+    if (h.kind === 'movie' || h.type === 'movie') {
+      const m = data.movies.find((x) => x.id === (h.itemId || h.id));
+      if (m?.isPastWatch) return true;
+    }
+    return false;
+  };
+
   const stats = useMemo(() => {
     const now = Date.now();
     const filteredHistory = data.history.filter((h) => {
+      const isPast = isHistoryItemPast(h);
+      if (period === 'past') return isPast;
+      // Güncel dönemlerde (Tümü / Bu Yıl / Son 30 Gün) önceden izlenenler istatistiği bozmaz
+      if (isPast) return false;
+
       if (!h.watchedAt) return false;
       const d = new Date(h.watchedAt);
       if (isNaN(d.getTime())) return false;
@@ -117,7 +132,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
       .filter((c) => c.count > 0)
       .sort((a, b) => b.avg - a.avg);
 
-    let criticTitle = 'Dengeli Jüri ⚖️';
+    let criticTitle = 'Dengeli Jüri ⚖';
     if (avgRating >= 8.5) criticTitle = 'Bonkör Kalpli 💖';
     else if (avgRating >= 7.2) criticTitle = 'Pozitif Sinefil 🍿';
     else if (avgRating > 0 && avgRating < 5.5) criticTitle = 'Acımasız Eleştirmen 💀';
@@ -125,6 +140,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     let nightCount = 0, weekendCount = 0;
     const dayCounts: Record<string, number> = {};
     filteredHistory.forEach((h) => {
+      if (!h.watchedAt) return;
       const d = new Date(h.watchedAt);
       const hr = d.getHours(), day = d.getDay();
       if (hr >= 0 && hr < 5) nightCount++;
@@ -144,7 +160,9 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     }
 
     let persona = { icon: '🎬', title: 'Kültür Muhafızı', desc: 'Günün her saatinde kaliteli yapımların peşinde koşan gerçek bir sinema tutkunu.' };
-    if (nightCount >= Math.max(3, filteredHistory.length * 0.25)) {
+    if (period === 'past') {
+      persona = { icon: '🕰️', title: 'Nostalji Koleksiyoncusu', desc: 'Geçmişte izlediği kült filmleri ve başyapıtları unutmayıp arşivinde yaşatan hafıza ustası.' };
+    } else if (nightCount >= Math.max(3, filteredHistory.length * 0.25)) {
       persona = { icon: '🦉', title: 'Gece Baykuşu', desc: `Herkes uyurken ekran başındaydın! Gece yarısından sonra tam ${nightCount} yapım devirdin.` };
     } else if (maxDaily >= 4) {
       persona = { icon: '👾', title: 'Maraton Canavarı', desc: `Tek bir günde tam ${maxDaily} yapım/bölüm izleyerek kırılması güç bir rekora imza attın!` };
@@ -193,7 +211,6 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     });
   }, []);
 
-  // İlerleme Çubuğu Zamanlayıcısı
   useEffect(() => {
     if (progressTimerRef.current) clearInterval(progressTimerRef.current);
     if (isPaused || slide === TOTAL_SLIDES - 1) return;
@@ -216,7 +233,6 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     };
   }, [slide, isPaused, nextSlide]);
 
-  // Slayt değiştiğinde progress'i sıfırla
   useEffect(() => {
     setProgress(0);
   }, [slide]);
@@ -271,7 +287,14 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     ctx.font = '900 54px sans-serif';
     ctx.fillText('🎬 SINEVIA WRAPPED', 80, 130);
 
-    const periodLabel = period === 'all' ? 'TÜM ZAMANLARIN ÖZETİ' : period === 'year' ? `${currentYear} YILI ÖZETİ` : 'SON 30 GÜNÜN ÖZETİ';
+    const periodLabel =
+      period === 'all'
+        ? 'GÜNCEL TÜM ZAMANLAR'
+        : period === 'year'
+        ? `${currentYear} YILI ÖZETİ`
+        : period === 'month'
+        ? 'SON 30 GÜNÜN ÖZETİ'
+        : 'DAHA ÖNCE İZLENENLER ARŞİVİ';
     ctx.fillStyle = '#94a3b8';
     ctx.font = 'bold 28px sans-serif';
     ctx.fillText(`${periodLabel}  •  SEVİYE ${data.level} (${(data.totalXp || 0).toLocaleString()} XP)`, 80, 185);
@@ -289,7 +312,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
 
     const cards = [
       { label: 'TOPLAM SÜRE', val: `${stats.totalHours} Saat`, sub: `${stats.totalMins.toLocaleString()} Dakika (${stats.totalDays} Gün)`, color: '#f59e0b' },
-      { label: 'İZLENEN FİLM', val: `${stats.movieCount} Film`, sub: `Rekor Seri: ${stats.maxStreak} Gün`, color: '#38bdf8' },
+      { label: 'İZLENEN FİLM', val: `${stats.movieCount} Film`, sub: period === 'past' ? 'Nostalji Arşivi' : `Rekor Seri: ${stats.maxStreak} Gün`, color: '#38bdf8' },
       { label: 'İZLENEN DİZİ', val: `${stats.episodeCount} Bölüm`, sub: `${stats.uniqueSeriesCount} Farklı Dizi`, color: '#a855f7' },
       { label: 'KAZANILAN ROZET', val: `${stats.totalUnlockedTiers} Kupa`, sub: `Seviye ${data.level} Sinefil`, color: '#10b981' },
     ];
@@ -323,7 +346,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     ctx.fillText(`🎥 Favori Yönetmen: ${stats.favDirector ? `${stats.favDirector[0]} (${stats.favDirector[1]} yapım)` : 'Belirlenmedi'}`, 120, 1155);
     ctx.fillText(`🌟 Favori Oyuncu: ${stats.favActor ? `${stats.favActor[0]} (${stats.favActor[1]} yapım)` : 'Belirlenmedi'}`, 120, 1215);
     ctx.fillStyle = '#fbbf24';
-    ctx.fillText(`🏷️ Favori Damgan: ${stats.topTag ? `${stats.topTag[0]} (${stats.topTag[1]} kez)` : 'Henüz seçilmedi'}`, 120, 1275);
+    ctx.fillText(`🏷 Favori Damgan: ${stats.topTag ? `${stats.topTag[0]} (${stats.topTag[1]} kez)` : 'Henüz seçilmedi'}`, 120, 1275);
 
     drawBox(80, 1345, 920, 420, 32, 'rgba(20, 20, 30, 0.85)', 'rgba(245, 158, 11, 0.35)');
     ctx.fillStyle = '#f59e0b';
@@ -375,10 +398,10 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/90 backdrop-blur-xl p-2 sm:p-4 animate-fade-in" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full max-w-md h-[92dvh] max-h-[820px] bg-gradient-to-br ${bgThemes[slide]} border border-white/15 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between transition-colors duration-700 select-none`}
+        className={`relative w-full max-w-md h-[90svh] sm:h-[92dvh] max-h-[820px] bg-gradient-to-br ${bgThemes[slide]} border border-white/15 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between transition-colors duration-700 select-none`}
       >
         {/* ÜST STORY İLERLEME ÇUBUKLARI */}
-        <div className="relative z-30 pt-3.5 px-3.5 space-y-2.5 bg-gradient-to-b from-black/70 to-transparent pb-3">
+        <div className="relative z-30 pt-3 px-3 sm:pt-3.5 sm:px-3.5 space-y-2 bg-gradient-to-b from-black/70 to-transparent pb-2.5 shrink-0">
           <div className="flex gap-1.5">
             {Array.from({ length: TOTAL_SLIDES }).map((_, idx) => (
               <button
@@ -396,20 +419,24 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
             ))}
           </div>
 
-          <div className="flex items-center justify-between">
-            {/* FİLTRE BUTONLARI ARTIK SADECE 1. SLAYTTA GÖZÜKÜR */}
+          <div className="flex items-center justify-between gap-1.5">
             {slide === 0 ? (
-              <div className="flex items-center gap-1 bg-black/50 backdrop-blur-md p-1 rounded-xl border border-white/10 animate-fade-in">
+              <div className="flex items-center gap-1 bg-black/50 backdrop-blur-md p-1 rounded-xl border border-white/10 animate-fade-in overflow-x-auto hide-scrollbar">
                 {([
-                  { id: 'all', label: 'Tüm Zamanlar' },
+                  { id: 'all', label: 'Güncel' },
                   { id: 'year', label: `${currentYear}` },
-                  { id: 'month', label: 'Son 30 Gün' },
+                  { id: 'month', label: '30 Gün' },
+                  { id: 'past', label: 'Önceden' },
                 ] as const).map((p) => (
                   <button
                     key={p.id}
                     onClick={() => { setPeriod(p.id); setSlide(0); setProgress(0); }}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
-                      period === p.id ? 'bg-gold-500 text-ink-950 shadow-sm' : 'text-ink-300 hover:text-white'
+                    className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all whitespace-nowrap ${
+                      period === p.id
+                        ? p.id === 'past'
+                          ? 'bg-violet-500 text-white shadow-sm'
+                          : 'bg-gold-500 text-ink-950 shadow-sm'
+                        : 'text-ink-300 hover:text-white'
                     }`}
                   >
                     {p.label}
@@ -422,7 +449,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
               </div>
             )}
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <button
                 onClick={() => setIsPaused(!isPaused)}
                 className="w-8 h-8 rounded-full bg-black/50 hover:bg-black/80 text-white border border-white/15 flex items-center justify-center transition-colors"
@@ -442,57 +469,63 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
         </div>
 
         {/* SLAYT İÇERİKLERİ */}
-        <div className="relative z-20 flex-1 overflow-y-auto px-6 py-2 flex flex-col justify-center custom-scrollbar">
+        <div className="relative z-20 flex-1 overflow-y-auto px-4 sm:px-6 py-2 flex flex-col justify-center custom-scrollbar">
           {/* SLAYT 0: EKRAN BAŞINDAKİ MESAİN */}
           {slide === 0 && (
-            <div className="space-y-6 text-center animate-fade-in">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gold-500/20 border border-gold-500/40 text-gold-300 text-xs font-black uppercase tracking-widest">
-                <Clock size={14} /> Sinevia Zaman Kapsülü
+            <div className="space-y-4 sm:space-y-6 text-center animate-fade-in">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/20 border border-gold-500/40 text-gold-300 text-[11px] font-black uppercase tracking-widest">
+                <Clock size={13} /> Sinevia Zaman Kapsülü
               </div>
-              <h2 className="text-3xl font-black text-white leading-tight">
-                Ekran Başındaki <span className="text-gold-400">Sinema Mesain</span>
+              <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight">
+                {period === 'past' ? (
+                  <>Geçmişteki <span className="text-violet-400">Sinema Arşivin</span></>
+                ) : (
+                  <>Ekran Başındaki <span className="text-gold-400">Sinema Mesain</span></>
+                )}
               </h2>
 
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-3xl p-6 space-y-2 shadow-xl">
-                <div className="text-5xl font-black text-gold-400 tracking-tight">
+              <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-3xl p-4 sm:p-6 space-y-2 shadow-xl">
+                <div className="text-4xl sm:text-5xl font-black text-gold-400 tracking-tight">
                   {stats.totalMins.toLocaleString('tr-TR')}
                 </div>
-                <div className="text-xs font-black uppercase tracking-widest text-ink-300">Dakika Kesintisiz İzleme</div>
+                <div className="text-xs font-black uppercase tracking-widest text-ink-300">Dakika İzleme Süresi</div>
                 <p className="text-xs text-ink-400 pt-2 border-t border-white/10">
                   Hiç uyumadan arka arkaya izleseydin tam <strong className="text-white">{stats.totalHours} saat</strong> ({stats.totalDays} gün) sürerdi!
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-black/40 border border-white/10 rounded-2xl p-4">
-                  <Film size={20} className="text-gold-400 mx-auto mb-1" />
-                  <div className="text-2xl font-black text-white">{stats.movieCount}</div>
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5 sm:p-4">
+                  <Film size={18} className="text-gold-400 mx-auto mb-1" />
+                  <div className="text-xl sm:text-2xl font-black text-white">{stats.movieCount}</div>
                   <div className="text-[11px] text-ink-400 font-bold">Film Bitirdin</div>
                 </div>
-                <div className="bg-black/40 border border-white/10 rounded-2xl p-4">
-                  <Tv size={20} className="text-azure-400 mx-auto mb-1" />
-                  <div className="text-2xl font-black text-white">{stats.episodeCount}</div>
-                  <div className="text-[11px] text-ink-400 font-bold">Dizi Bölümü ({stats.uniqueSeriesCount} Dizi)</div>
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5 sm:p-4">
+                  <Tv size={18} className="text-azure-400 mx-auto mb-1" />
+                  <div className="text-xl sm:text-2xl font-black text-white">{stats.episodeCount}</div>
+                  <div className="text-[11px] text-ink-400 font-bold">Bölüm ({stats.uniqueSeriesCount} Dizi)</div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-center gap-2 text-xs font-bold text-orange-300 bg-orange-500/15 border border-orange-500/30 py-2.5 px-4 rounded-2xl">
-                <Flame size={16} /> En Uzun Günlük Serin: {stats.maxStreak} Gün Aralıksız!
-              </div>
+              {period !== 'past' && (
+                <div className="flex items-center justify-center gap-2 text-xs font-bold text-orange-300 bg-orange-500/15 border border-orange-500/30 py-2.5 px-4 rounded-2xl">
+                  <Flame size={15} /> En Uzun Günlük Serin: {stats.maxStreak} Gün Aralıksız!
+                </div>
+              )}
             </div>
           )}
 
           {/* SLAYT 1: SİNEMA DNA'N */}
           {slide === 1 && (
-            <div className="space-y-5 animate-fade-in">
-              <div className="text-center space-y-1.5">
+            <div className="space-y-4 sm:space-y-5 animate-fade-in">
+              <div className="text-center space-y-1">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-azure-500/20 border border-azure-500/40 text-azure-300 text-xs font-black uppercase tracking-widest">
                   <Sparkles size={13} /> Sinema DNA'n
                 </div>
-                <h2 className="text-2xl font-black text-white">Seni Sen Yapan Türler & İsimler</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-white">Seni Sen Yapan Türler & İsimler</h2>
               </div>
 
-              <div className="bg-black/40 border border-white/10 rounded-2xl p-4 space-y-3">
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5 sm:p-4 space-y-2.5">
                 <div className="text-[11px] font-black uppercase tracking-wider text-azure-400">En Çok Tükettiğin Türler</div>
                 {stats.topGenres.length === 0 ? (
                   <p className="text-xs text-ink-400">Henüz tür verisi yok.</p>
@@ -511,29 +544,29 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5">
-                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-gold-400 mb-1">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-3">
+                  <div className="flex items-center gap-1 text-[10px] font-black uppercase text-gold-400 mb-1">
                     <User size={12} /> Favori Yönetmen
                   </div>
-                  <div className="text-sm font-black text-white truncate">{stats.favDirector ? stats.favDirector[0] : 'Belirlenmedi'}</div>
-                  <div className="text-[11px] text-ink-400">{stats.favDirector ? `${stats.favDirector[1]} yapım izlendi` : '-'}</div>
+                  <div className="text-xs sm:text-sm font-black text-white truncate">{stats.favDirector ? stats.favDirector[0] : 'Belirlenmedi'}</div>
+                  <div className="text-[10px] text-ink-400">{stats.favDirector ? `${stats.favDirector[1]} yapım` : '-'}</div>
                 </div>
-                <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5">
-                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-gold-400 mb-1">
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-3">
+                  <div className="flex items-center gap-1 text-[10px] font-black uppercase text-gold-400 mb-1">
                     <Users size={12} /> Favori Oyuncu
                   </div>
-                  <div className="text-sm font-black text-white truncate">{stats.favActor ? stats.favActor[0] : 'Belirlenmedi'}</div>
-                  <div className="text-[11px] text-ink-400">{stats.favActor ? `${stats.favActor[1]} yapımda rol aldı` : '-'}</div>
+                  <div className="text-xs sm:text-sm font-black text-white truncate">{stats.favActor ? stats.favActor[0] : 'Belirlenmedi'}</div>
+                  <div className="text-[10px] text-ink-400">{stats.favActor ? `${stats.favActor[1]} yapım` : '-'}</div>
                 </div>
               </div>
 
               {stats.topKeywords.length > 0 && (
-                <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5">
-                  <div className="text-[10px] font-black uppercase text-emerald-400 mb-2">Ruhunu Yansıtan Temalar</div>
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-3">
+                  <div className="text-[10px] font-black uppercase text-emerald-400 mb-1.5">Ruhunu Yansıtan Temalar</div>
                   <div className="flex flex-wrap gap-1.5">
                     {stats.topKeywords.map((kw) => (
-                      <span key={kw} className="text-xs font-bold bg-white/10 text-white px-2.5 py-1 rounded-lg">#{kw}</span>
+                      <span key={kw} className="text-[11px] font-bold bg-white/10 text-white px-2 py-0.5 rounded-lg">#{kw}</span>
                     ))}
                   </div>
                 </div>
@@ -543,12 +576,12 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
 
           {/* SLAYT 2: ZİRVEDEKİLER */}
           {slide === 2 && (
-            <div className="space-y-5 animate-fade-in">
-              <div className="text-center space-y-1.5">
+            <div className="space-y-4 sm:space-y-5 animate-fade-in">
+              <div className="text-center space-y-1">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-black uppercase tracking-widest">
                   <Crown size={13} /> Başyapıtlar Vitrini
                 </div>
-                <h2 className="text-2xl font-black text-white">Unutamadığın Zirve Yapımlar</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-white">Unutamadığın Zirve Yapımlar</h2>
               </div>
 
               {stats.topPicks.length === 0 ? (
@@ -556,22 +589,22 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                   Bu dönemde henüz puanlanmış bir yapım yok.
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {stats.topPicks.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-3.5 bg-black/40 border border-white/15 rounded-2xl p-3 shadow-lg">
-                      <div className="w-12 h-18 rounded-xl bg-ink-900 overflow-hidden flex-shrink-0 border border-white/10 flex items-center justify-center">
+                    <div key={idx} className="flex items-center gap-3 bg-black/40 border border-white/15 rounded-2xl p-2.5 sm:p-3 shadow-lg">
+                      <div className="w-11 h-16 rounded-xl bg-ink-900 overflow-hidden flex-shrink-0 border border-white/10 flex items-center justify-center">
                         {item.posterUrl ? (
                           <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
                         ) : (
-                          <Film size={20} className="text-ink-500" />
+                          <Film size={18} className="text-ink-500" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[10px] font-black uppercase text-gold-400">#{idx + 1} En Yüksek Puanlı {item.kind}</div>
-                        <div className="text-sm font-black text-white truncate mt-0.5">{item.title}</div>
+                        <div className="text-xs sm:text-sm font-black text-white truncate mt-0.5">{item.title}</div>
                       </div>
-                      <div className="px-3 py-1.5 rounded-xl bg-gold-500 text-ink-950 font-black text-sm flex items-center gap-1 flex-shrink-0">
-                        <Star size={14} className="fill-current" /> {item.rating}
+                      <div className="px-2.5 py-1 rounded-xl bg-gold-500 text-ink-950 font-black text-xs sm:text-sm flex items-center gap-1 flex-shrink-0">
+                        <Star size={13} className="fill-current" /> {item.rating}
                       </div>
                     </div>
                   ))}
@@ -579,7 +612,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
               )}
 
               {stats.worstPick && (
-                <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-3.5 flex items-center justify-between">
+                <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-3 flex items-center justify-between">
                   <div className="min-w-0 pr-2">
                     <div className="text-[10px] font-black uppercase text-red-400">En Büyük Hayal Kırıklığın 💀</div>
                     <div className="text-xs font-bold text-white truncate mt-0.5">{stats.worstPick.title}</div>
@@ -594,27 +627,27 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
 
           {/* SLAYT 3: NASIL BİR ELEŞTİRMENSİN? */}
           {slide === 3 && (
-            <div className="space-y-5 animate-fade-in">
-              <div className="text-center space-y-1.5">
+            <div className="space-y-4 sm:space-y-5 animate-fade-in">
+              <div className="text-center space-y-1">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-widest">
                   <SlidersHorizontal size={13} /> Jüri Koltuğu
                 </div>
-                <h2 className="text-2xl font-black text-white">Nasıl Bir Eleştirmensin?</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-white">Nasıl Bir Eleştirmensin?</h2>
               </div>
 
-              <div className="bg-black/40 border border-white/10 rounded-3xl p-5 text-center space-y-2">
+              <div className="bg-black/40 border border-white/10 rounded-3xl p-4 sm:p-5 text-center space-y-2">
                 <div className="text-xs font-bold text-ink-400 uppercase">Genel Puan Ortalaman</div>
-                <div className="text-4xl font-black text-emerald-400">{stats.avgRating.toFixed(1)} <span className="text-lg text-ink-400">/ 10</span></div>
+                <div className="text-3xl sm:text-4xl font-black text-emerald-400">{stats.avgRating.toFixed(1)} <span className="text-base sm:text-lg text-ink-400">/ 10</span></div>
                 <div className="inline-block px-3 py-1 rounded-full bg-white/10 text-white text-xs font-black">{stats.criticTitle}</div>
               </div>
 
               {stats.topTag && (
-                <div className="bg-black/40 border border-gold-500/30 rounded-2xl p-4 flex items-center justify-between">
+                <div className="bg-black/40 border border-gold-500/30 rounded-2xl p-3.5 flex items-center justify-between">
                   <div>
                     <div className="text-[10px] font-black uppercase text-gold-400 flex items-center gap-1">
                       <Tag size={12} /> En Çok Vurduğun Damga
                     </div>
-                    <div className="text-sm font-black text-white mt-1">{stats.topTag[0]}</div>
+                    <div className="text-xs sm:text-sm font-black text-white mt-1">{stats.topTag[0]}</div>
                   </div>
                   <div className="text-xs font-black bg-gold-500/20 text-gold-300 px-3 py-1.5 rounded-xl">
                     {stats.topTag[1]} Kez
@@ -623,7 +656,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
               )}
 
               {stats.critList.length > 0 && (
-                <div className="bg-black/40 border border-white/10 rounded-2xl p-4 space-y-2.5">
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5 space-y-2">
                   <div className="text-[10px] font-black uppercase text-azure-400">Detaylı Kriter Karnen</div>
                   {stats.critList.map((c) => (
                     <div key={c.name} className="flex items-center justify-between text-xs">
@@ -636,41 +669,43 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
             </div>
           )}
 
-          {/* SLAYT 4: İZLEME KARAKTERİN (PERSONA) */}
+          {/* SLAYT 4: İZLEME KARAKTERİN */}
           {slide === 4 && (
-            <div className="space-y-6 text-center animate-fade-in">
+            <div className="space-y-5 text-center animate-fade-in">
               <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-black uppercase tracking-widest">
                 ✨ Sinefil Ruhu
               </div>
-              <h2 className="text-2xl font-black text-white">Senin İzleme Karakterin</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-white">Senin İzleme Karakterin</h2>
 
-              <div className="bg-black/40 border border-white/15 rounded-3xl p-7 space-y-4 shadow-2xl">
-                <div className="text-7xl animate-bounce">{stats.persona.icon}</div>
-                <div className="text-2xl font-black text-gold-400">{stats.persona.title}</div>
+              <div className="bg-black/40 border border-white/15 rounded-3xl p-5 sm:p-7 space-y-3 sm:space-y-4 shadow-2xl">
+                <div className="text-6xl sm:text-7xl animate-bounce">{stats.persona.icon}</div>
+                <div className="text-xl sm:text-2xl font-black text-gold-400">{stats.persona.title}</div>
                 <p className="text-xs sm:text-sm text-ink-200 leading-relaxed">{stats.persona.desc}</p>
               </div>
 
-              <div className="bg-black/30 border border-white/10 rounded-2xl p-3.5 text-xs text-ink-300">
-                Bir günde kırdığın izleme rekoru: <strong className="text-white">{stats.maxDaily} Yapım / Bölüm</strong>
-              </div>
+              {period !== 'past' && (
+                <div className="bg-black/30 border border-white/10 rounded-2xl p-3 text-xs text-ink-300">
+                  Bir günde kırdığın izleme rekoru: <strong className="text-white">{stats.maxDaily} Yapım / Bölüm</strong>
+                </div>
+              )}
             </div>
           )}
 
           {/* SLAYT 5: ŞÖHRETLER MÜZESİ */}
           {slide === 5 && (
-            <div className="space-y-5 text-center animate-fade-in">
+            <div className="space-y-4 sm:space-y-5 text-center animate-fade-in">
               <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-black uppercase tracking-widest">
                 <Award size={14} /> Şöhretler Müzesi
               </div>
-              <h2 className="text-2xl font-black text-white">Seviyen & Koleksiyon Kupaların</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-white">Seviyen & Koleksiyon Kupaların</h2>
 
-              <div className="bg-black/40 border border-gold-500/40 rounded-3xl p-6 space-y-2 shadow-xl">
+              <div className="bg-black/40 border border-gold-500/40 rounded-3xl p-5 sm:p-6 space-y-2 shadow-xl">
                 <div className="text-xs font-black uppercase tracking-widest text-gold-400">Ulaştığın Sinevia Seviyesi</div>
-                <div className="text-5xl font-black text-white">SEVİYE {data.level}</div>
+                <div className="text-4xl sm:text-5xl font-black text-white">SEVİYE {data.level}</div>
                 <div className="text-xs font-bold text-emerald-400">Toplam {(data.totalXp || 0).toLocaleString('tr-TR')} XP Kazanıldı</div>
               </div>
 
-              <div className="bg-black/40 border border-white/10 rounded-2xl p-4 space-y-3 text-left">
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5 sm:p-4 space-y-3 text-left">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black uppercase text-ink-300">Açılan Kupa Kademesi</span>
                   <span className="text-sm font-black text-gold-400">{stats.totalUnlockedTiers} Kupa</span>
@@ -678,8 +713,8 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                 {stats.rareBadges.length > 0 && (
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
                     {stats.rareBadges.map((b, i) => (
-                      <div key={i} className="bg-white/5 rounded-xl p-2.5 flex items-center gap-2">
-                        <span className="text-xl">{b.icon}</span>
+                      <div key={i} className="bg-white/5 rounded-xl p-2 flex items-center gap-2">
+                        <span className="text-lg">{b.icon}</span>
                         <div className="min-w-0">
                           <div className="text-[11px] font-bold text-white truncate">{b.name}</div>
                           <div className="text-[9px] font-black uppercase text-gold-400">{b.tier}</div>
@@ -694,12 +729,12 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
 
           {/* SLAYT 6: FİNAL PAYLAŞIM KARTI */}
           {slide === 6 && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="bg-black/55 border-2 border-gold-500/50 rounded-3xl p-5 space-y-4 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="space-y-3.5 animate-fade-in">
+              <div className="bg-black/55 border-2 border-gold-500/50 rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-gold-400">🎬 SINEVIA WRAPPED</div>
-                    <div className="text-lg font-black text-white mt-0.5">{stats.persona.icon} {stats.persona.title}</div>
+                    <div className="text-base sm:text-lg font-black text-white mt-0.5">{stats.persona.icon} {stats.persona.title}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-xs font-black bg-gold-500 text-ink-950 px-2.5 py-1 rounded-lg">LVL {data.level}</div>
@@ -707,22 +742,22 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5 text-left">
+                <div className="grid grid-cols-2 gap-2 text-left">
                   <div className="bg-white/5 rounded-xl p-2.5">
                     <div className="text-[10px] text-ink-400 font-bold">TOPLAM SÜRE</div>
-                    <div className="text-base font-black text-gold-400">{stats.totalHours} Saat <span className="text-[10px] text-ink-300">({stats.totalDays} Gün)</span></div>
+                    <div className="text-sm sm:text-base font-black text-gold-400">{stats.totalHours} Saat <span className="text-[10px] text-ink-300">({stats.totalDays}G)</span></div>
                   </div>
                   <div className="bg-white/5 rounded-xl p-2.5">
                     <div className="text-[10px] text-ink-400 font-bold">İZLENEN YAPIM</div>
-                    <div className="text-base font-black text-azure-400">{stats.movieCount} Film • {stats.episodeCount} Böl.</div>
+                    <div className="text-sm sm:text-base font-black text-azure-400">{stats.movieCount} Film • {stats.episodeCount} Böl.</div>
                   </div>
                   <div className="bg-white/5 rounded-xl p-2.5">
                     <div className="text-[10px] text-ink-400 font-bold">FAVORİ TÜRÜN</div>
-                    <div className="text-sm font-black text-white truncate">{stats.topGenres[0]?.[0] || 'Belirlenmedi'}</div>
+                    <div className="text-xs sm:text-sm font-black text-white truncate">{stats.topGenres[0]?.[0] || 'Belirlenmedi'}</div>
                   </div>
                   <div className="bg-white/5 rounded-xl p-2.5">
                     <div className="text-[10px] text-ink-400 font-bold">JÜRİ ORTALAMAN</div>
-                    <div className="text-sm font-black text-emerald-400">★ {stats.avgRating.toFixed(1)} / 10</div>
+                    <div className="text-xs sm:text-sm font-black text-emerald-400">★ {stats.avgRating.toFixed(1)} / 10</div>
                   </div>
                 </div>
 
@@ -741,9 +776,9 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
 
               <button
                 onClick={handleDownloadImage}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-amber-500 hover:from-gold-400 hover:to-amber-400 text-ink-950 font-black py-3.5 rounded-2xl shadow-xl shadow-gold-500/25 transition-all hover:scale-[1.02] text-sm"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-amber-500 hover:from-gold-400 hover:to-amber-400 text-ink-950 font-black py-3 rounded-2xl shadow-xl shadow-gold-500/25 transition-all hover:scale-[1.02] text-xs sm:text-sm"
               >
-                <Download size={18} />
+                <Download size={17} />
                 📸 Story Olarak İndir (PNG) & Paylaş
               </button>
             </div>
@@ -751,7 +786,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
         </div>
 
         {/* ALT GEZİNME BUTONLARI */}
-        <div className="relative z-30 p-4 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent">
+        <div className="relative z-30 p-3.5 sm:p-4 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent shrink-0">
           <button
             onClick={() => { prevSlide(); setProgress(0); }}
             disabled={slide === 0}

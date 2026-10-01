@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { X, Shuffle, Film, Tv, Sparkles, Clock, Calendar, Star, PlayCircle, ExternalLink, Search, Youtube, RotateCcw, Eye, Filter, Zap, User, Users } from 'lucide-react';
+import {
+  X, Shuffle, Film, Tv, Sparkles, Clock, Calendar, Star, PlayCircle,
+  ExternalLink, Search, Youtube, RotateCcw, Eye, Filter, Zap, User, Users,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import MediaDetailModal from './MediaDetailModal';
 import type { DetailModalTarget } from './MediaDetailModal';
@@ -32,9 +35,16 @@ export default function PickModal({
 }: PickModalProps) {
   const { data: appData } = useApp();
 
-  // Başlangıç modunu mevcut içerik sayısına göre akıllı belirle
+  // Eskiden izlenenler sırasındaki filmler çark aday havuzuna girmez
+  const cleanUnwatchedMovies = useMemo(
+    () => unwatchedMovies.filter((m) => !m.inPastQueue),
+    [unwatchedMovies]
+  );
+
+  const effectiveMovieCount = cleanUnwatchedMovies.length;
+
   const [mode, setMode] = useState<ModeFilter>(() => {
-    if (movieCount > 0 && seriesCount > 0) return 'all';
+    if (effectiveMovieCount > 0 && seriesCount > 0) return 'all';
     if (seriesCount > 0) return 'series';
     return 'movie';
   });
@@ -43,7 +53,6 @@ export default function PickModal({
   const [durationFilter, setDurationFilter] = useState<DurationFilter>('any');
   const [phase, setPhase] = useState<ModalPhase>('setup');
 
-  // Rulet / Slot animasyonu state'leri
   const [rollingItem, setRollingItem] = useState<PickedItem | null>(null);
   const [winner, setWinner] = useState<PickedItem | null>(null);
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
@@ -56,24 +65,22 @@ export default function PickModal({
     };
   }, []);
 
-  // Seçilen moda göre mevcut tüm türleri çıkar
   const availableGenres = useMemo(() => {
     const genreSet = new Set<string>();
     if (mode === 'all' || mode === 'movie') {
-      unwatchedMovies.forEach((m) => m.genres.forEach((g) => genreSet.add(g)));
+      cleanUnwatchedMovies.forEach((m) => m.genres.forEach((g) => genreSet.add(g)));
     }
     if (mode === 'all' || mode === 'series') {
       nextEpisodes.forEach((s) => s.series.genres.forEach((g) => genreSet.add(g)));
     }
     return Array.from(genreSet).sort((a, b) => a.localeCompare(b, 'tr'));
-  }, [mode, unwatchedMovies, nextEpisodes]);
+  }, [mode, cleanUnwatchedMovies, nextEpisodes]);
 
-  // Filtrelenmiş aday havuzu
   const candidatePool = useMemo<PickedItem[]>(() => {
     const pool: PickedItem[] = [];
 
     if (mode === 'all' || mode === 'movie') {
-      unwatchedMovies.forEach((m) => {
+      cleanUnwatchedMovies.forEach((m) => {
         if (selectedGenre && !m.genres.includes(selectedGenre)) return;
         if (durationFilter !== 'any') {
           const rt = m.runtime || 115;
@@ -93,9 +100,8 @@ export default function PickModal({
     }
 
     return pool;
-  }, [mode, unwatchedMovies, nextEpisodes, selectedGenre, durationFilter]);
+  }, [mode, cleanUnwatchedMovies, nextEpisodes, selectedGenre, durationFilter]);
 
-  // Ruleti Başlatma (Yavaşlayan Slot Makinesi Efekti)
   const startRoulette = () => {
     if (candidatePool.length === 0) return;
 
@@ -109,7 +115,6 @@ export default function PickModal({
     let cumulativeDelay = 0;
 
     for (let i = 0; i < totalSteps; i++) {
-      // Başta çok hızlı (45ms), sona doğru yavaşlayan (ease-in) gecikme eğrisi
       const stepDelay = 45 + Math.floor(Math.pow(i / totalSteps, 2.6) * 240);
       cumulativeDelay += stepDelay;
 
@@ -131,7 +136,6 @@ export default function PickModal({
     }
   };
 
-  // Yardımcı: PickedItem'dan görüntü verilerini çıkarma
   const extractMeta = (item: PickedItem) => {
     if (item.kind === 'movie') {
       const m = item.movie;
@@ -173,7 +177,6 @@ export default function PickModal({
     }
   };
 
-  // Kazanan için izleme ve fragman linklerini oluştur
   const getWatchLinks = (item: PickedItem) => {
     const meta = extractMeta(item);
     const links: { href: string; text: string; logo: string | null; icon: any; isTrailer?: boolean }[] = [];
@@ -217,7 +220,7 @@ export default function PickModal({
     });
 
     if (appData.altWatchTemplate && (meta.imdbId || appData.altWatchTemplate.includes('{slug}') || appData.altWatchTemplate.includes('{title}'))) {
-      const charMap: Record<string, string> = { 'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u' };
+      const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
       const slug = meta.title
         .toLocaleLowerCase('tr-TR')
         .replace(/[çğıöşü]/g, (match) => charMap[match])
@@ -245,7 +248,7 @@ export default function PickModal({
 
   return (
     <div
-      className="fixed inset-0 z-[75] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[75] flex items-center justify-center p-2.5 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <style>{`
@@ -264,9 +267,8 @@ export default function PickModal({
 
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-2xl bg-ink-950/95 border border-ink-700/80 rounded-[2rem] overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.85)] flex flex-col max-h-[92vh] animate-fade-in-up"
+        className="relative w-full max-w-2xl bg-ink-950/95 border border-ink-700/80 rounded-3xl sm:rounded-[2rem] overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.85)] flex flex-col max-h-[90svh] sm:max-h-[92vh] animate-fade-in-up"
       >
-        {/* DİNAMİK FLU POSTER VEYA NEON IŞIK ARKA PLANI */}
         {activeBgPoster ? (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-25 transition-all duration-300">
             <img
@@ -284,126 +286,119 @@ export default function PickModal({
         )}
 
         {/* ÜST BAŞLIK BARI */}
-        <div className="relative z-10 flex items-center justify-between px-6 pt-5 pb-4 border-b border-ink-800/60">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-gold-500/25 to-azure-500/20 border border-gold-500/40 flex items-center justify-center shadow-lg">
-              <Shuffle size={22} className="text-gold-400" />
+        <div className="relative z-10 flex items-center justify-between px-4 pt-3.5 pb-3 sm:px-6 sm:pt-5 sm:pb-4 border-b border-ink-800/60 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-gold-500/25 to-azure-500/20 border border-gold-500/40 flex items-center justify-center shadow-lg flex-shrink-0">
+              <Shuffle size={19} className="text-gold-400" />
             </div>
-            <div>
-              <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gold-400">
-                <Sparkles size={11} /> Sinema Ruleti & Karar Stüdyosu
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gold-400">
+                <Sparkles size={10} /> Sinema Ruleti & Karar Stüdyosu
               </div>
-              <h2 className="text-lg sm:text-xl font-black text-ink-50 leading-tight">
+              <h2 className="text-base sm:text-xl font-black text-ink-50 leading-tight truncate">
                 Bugün Ne İzlesem?
               </h2>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-ink-900 hover:bg-ink-800 text-ink-400 hover:text-white border border-ink-800 flex items-center justify-center transition-all hover:scale-110"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-ink-900 hover:bg-ink-800 text-ink-400 hover:text-white border border-ink-800 flex items-center justify-center transition-all flex-shrink-0"
           >
-            <X size={18} />
+            <X size={17} />
           </button>
         </div>
 
         {/* İÇERİK GÖVDESİ */}
-        <div className="relative z-10 flex-1 overflow-y-auto p-5 sm:p-6 custom-scrollbar">
-          
-          {/* =========================================================
-              AŞAMA 1: FİLTRE VE RULET HAZIRLIK EKRANI (SETUP)
-              ========================================================= */}
+        <div className="relative z-10 flex-1 overflow-y-auto p-3.5 sm:p-6 custom-scrollbar">
+          {/* AŞAMA 1: FİLTRE VE RULET HAZIRLIK EKRANI */}
           {phase === 'setup' && (
-            <div className="space-y-6 animate-fade-in">
-              
-              {/* Üst Bilgi & Aday Sayacı Kartı */}
-              <div className="bg-ink-900/60 border border-ink-800 rounded-2xl p-4 flex items-center justify-between gap-4">
+            <div className="space-y-4 sm:space-y-6 animate-fade-in">
+              <div className="bg-ink-900/60 border border-ink-800 rounded-2xl p-3 sm:p-4 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-xs font-bold text-ink-200">
                     Kütüphanendeki İzlenmemiş Aday Havuzu
                   </div>
                   <p className="text-[11px] text-ink-400 mt-0.5">
-                    İstersen aşağıdaki filtrelerle ruh haline göre daralt, istersen doğrudan çarkı çevir!
+                    İstersen aşağıdaki filtrelerle daralt, istersen doğrudan çarkı çevir!
                   </p>
                 </div>
-                <div className="flex flex-col items-center justify-center bg-ink-950 border border-gold-500/30 px-4 py-2 rounded-xl flex-shrink-0">
-                  <span className="text-2xl font-black text-gold-400 leading-none">
+                <div className="flex flex-col items-center justify-center bg-ink-950 border border-gold-500/30 px-3.5 py-2 rounded-xl flex-shrink-0">
+                  <span className="text-xl sm:text-2xl font-black text-gold-400 leading-none">
                     {candidatePool.length}
                   </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-400 mt-1">
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-ink-400 mt-1">
                     Aday
                   </span>
                 </div>
               </div>
 
-              {/* 1. Format Seçimi (Hem Film Hem Dizi Varsa Gösterilir) */}
-              {movieCount > 0 && seriesCount > 0 && (
+              {effectiveMovieCount > 0 && seriesCount > 0 && (
                 <div className="space-y-2">
                   <label className="text-[11px] font-black uppercase tracking-wider text-ink-400 flex items-center gap-1.5">
-                    <Filter size={13} className="text-gold-400" /> Ne İzlemek İstiyorsun?
+                    <Filter size={12} className="text-gold-400" /> Ne İzlemek İstiyorsun?
                   </label>
-                  <div className="grid grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setMode('all')}
-                      className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 ${
+                      className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all flex flex-col gap-1 ${
                         mode === 'all'
-                          ? 'bg-gold-500/15 border-gold-500 text-ink-50 shadow-md scale-[1.02]'
+                          ? 'bg-gold-500/15 border-gold-500 text-ink-50 shadow-md'
                           : 'bg-ink-900/50 border-ink-800 text-ink-400 hover:bg-ink-800/60'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <Sparkles size={16} className="text-gold-400" />
-                        <span className="text-[10px] font-bold bg-ink-950 px-2 py-0.5 rounded-full">
-                          {movieCount + seriesCount}
+                        <Sparkles size={15} className="text-gold-400" />
+                        <span className="text-[10px] font-bold bg-ink-950 px-1.5 py-0.5 rounded-full">
+                          {effectiveMovieCount + seriesCount}
                         </span>
                       </div>
-                      <span className="text-xs font-black mt-1">Karışık Şans</span>
+                      <span className="text-[11px] sm:text-xs font-black mt-0.5 truncate">Karışık</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setMode('movie')}
-                      className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 ${
+                      className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all flex flex-col gap-1 ${
                         mode === 'movie'
-                          ? 'bg-gold-500/15 border-gold-500 text-ink-50 shadow-md scale-[1.02]'
+                          ? 'bg-gold-500/15 border-gold-500 text-ink-50 shadow-md'
                           : 'bg-ink-900/50 border-ink-800 text-ink-400 hover:bg-ink-800/60'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <Film size={16} className="text-gold-400" />
-                        <span className="text-[10px] font-bold bg-ink-950 px-2 py-0.5 rounded-full">
-                          {movieCount}
+                        <Film size={15} className="text-gold-400" />
+                        <span className="text-[10px] font-bold bg-ink-950 px-1.5 py-0.5 rounded-full">
+                          {effectiveMovieCount}
                         </span>
                       </div>
-                      <span className="text-xs font-black mt-1">Sadece Film</span>
+                      <span className="text-[11px] sm:text-xs font-black mt-0.5 truncate">Sadece Film</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setMode('series')}
-                      className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 ${
+                      className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all flex flex-col gap-1 ${
                         mode === 'series'
-                          ? 'bg-azure-500/15 border-azure-500 text-ink-50 shadow-md scale-[1.02]'
+                          ? 'bg-azure-500/15 border-azure-500 text-ink-50 shadow-md'
                           : 'bg-ink-900/50 border-ink-800 text-ink-400 hover:bg-ink-800/60'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <Tv size={16} className="text-azure-400" />
-                        <span className="text-[10px] font-bold bg-ink-950 px-2 py-0.5 rounded-full">
+                        <Tv size={15} className="text-azure-400" />
+                        <span className="text-[10px] font-bold bg-ink-950 px-1.5 py-0.5 rounded-full">
                           {seriesCount}
                         </span>
                       </div>
-                      <span className="text-xs font-black mt-1">Sadece Dizi</span>
+                      <span className="text-[11px] sm:text-xs font-black mt-0.5 truncate">Sadece Dizi</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* 2. Süre Modu (Film Seçiliyse Gösterilir) */}
-              {(mode === 'all' || mode === 'movie') && movieCount > 0 && (
+              {(mode === 'all' || mode === 'movie') && effectiveMovieCount > 0 && (
                 <div className="space-y-2">
                   <label className="text-[11px] font-black uppercase tracking-wider text-ink-400 flex items-center gap-1.5">
-                    <Clock size={13} className="text-gold-400" /> Ne Kadar Vaktin Var? (Film Süresi)
+                    <Clock size={12} className="text-gold-400" /> Ne Kadar Vaktin Var? (Film Süresi)
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
@@ -433,17 +428,16 @@ export default function PickModal({
                 </div>
               )}
 
-              {/* 3. Tür Filtresi */}
               {availableGenres.length > 0 && (
                 <div className="space-y-2">
                   <label className="text-[11px] font-black uppercase tracking-wider text-ink-400 flex items-center gap-1.5">
-                    <Zap size={13} className="text-gold-400" /> Ruh Halin Hangi Türde?
+                    <Zap size={12} className="text-gold-400" /> Ruh Halin Hangi Türde?
                   </label>
-                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                  <div className="flex sm:flex-wrap gap-1.5 overflow-x-auto hide-scrollbar pb-1 sm:max-h-32 sm:overflow-y-auto">
                     <button
                       type="button"
                       onClick={() => setSelectedGenre(null)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
                         selectedGenre === null
                           ? 'bg-gold-500 text-ink-950 border-gold-400 shadow-md'
                           : 'bg-ink-900 text-ink-400 border-ink-800 hover:bg-ink-800 hover:text-ink-200'
@@ -458,7 +452,7 @@ export default function PickModal({
                           key={g}
                           type="button"
                           onClick={() => setSelectedGenre(active ? null : g)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                          className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
                             active
                               ? 'bg-gold-500 text-ink-950 border-gold-400 shadow-md'
                               : 'bg-ink-900 text-ink-400 border-ink-800 hover:bg-ink-800 hover:text-ink-200'
@@ -472,20 +466,19 @@ export default function PickModal({
                 </div>
               )}
 
-              {/* Aday Havuzu Posteri Önizleme Şeridi */}
               {candidatePool.length > 0 ? (
-                <div className="bg-ink-900/30 border border-ink-800/60 rounded-2xl p-3.5 space-y-2">
+                <div className="bg-ink-900/30 border border-ink-800/60 rounded-2xl p-3 space-y-2">
                   <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-ink-500">
                     <span>Çarkta Dönecek Adaylardan Bazıları</span>
                     <span>{candidatePool.length} Yapım Hazır</span>
                   </div>
-                  <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar py-1">
+                  <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar py-0.5">
                     {candidatePool.slice(0, 14).map((item, idx) => {
                       const meta = extractMeta(item);
                       return (
                         <div
                           key={idx}
-                          className="w-11 aspect-[2/3] rounded-lg overflow-hidden bg-ink-900 border border-ink-700/60 flex-shrink-0 shadow-sm"
+                          className="w-10 sm:w-11 aspect-[2/3] rounded-lg overflow-hidden bg-ink-900 border border-ink-700/60 flex-shrink-0 shadow-sm"
                           title={meta.title}
                         >
                           {meta.posterUrl ? (
@@ -502,7 +495,7 @@ export default function PickModal({
                 </div>
               ) : (
                 <div className="text-center py-8 bg-ink-900/40 rounded-2xl border border-ink-800">
-                  <p className="text-sm font-bold text-ink-300">
+                  <p className="text-xs sm:text-sm font-bold text-ink-300">
                     Seçtiğin kriterlere uygun izlenmemiş yapım bulunamadı.
                   </p>
                   <button
@@ -518,24 +511,21 @@ export default function PickModal({
                 </div>
               )}
 
-              {/* DEV RULET BAŞLATMA BUTONU */}
               <button
                 type="button"
                 disabled={candidatePool.length === 0}
                 onClick={startRoulette}
-                className="w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base text-ink-950 bg-gradient-to-r from-gold-500 via-amber-400 to-gold-500 hover:from-gold-400 hover:to-amber-300 shadow-[0_10px_35px_rgba(245,158,11,0.35)] transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2.5"
+                className="w-full py-3.5 sm:py-4 px-5 rounded-2xl font-black text-xs sm:text-base text-ink-950 bg-gradient-to-r from-gold-500 via-amber-400 to-gold-500 hover:from-gold-400 hover:to-amber-300 shadow-[0_10px_35px_rgba(245,158,11,0.35)] transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
               >
-                <Shuffle size={20} strokeWidth={2.5} />
+                <Shuffle size={18} strokeWidth={2.5} />
                 <span>KADER ÇARKINI DÖNDÜR ({candidatePool.length} ADAY)</span>
               </button>
             </div>
           )}
 
-          {/* =========================================================
-              AŞAMA 2: 3B POSTER SLOT / RULET ANİMASYONU (SPINNING)
-              ========================================================= */}
+          {/* AŞAMA 2: 3B POSTER SLOT / RULET ANİMASYONU */}
           {phase === 'spinning' && rollingItem && (
-            <div className="py-8 flex flex-col items-center justify-center text-center space-y-6 animate-fade-in">
+            <div className="py-6 sm:py-8 flex flex-col items-center justify-center text-center space-y-5 animate-fade-in">
               {(() => {
                 const meta = extractMeta(rollingItem);
                 return (
@@ -544,19 +534,17 @@ export default function PickModal({
                       <Sparkles size={14} /> Kader Çarkı Dönüyor...
                     </div>
 
-                    {/* Lazer Tarayıcılı Poster Çerçevesi */}
-                    <div className="relative w-44 sm:w-52 aspect-[2/3] rounded-3xl overflow-hidden bg-ink-900 border-2 border-gold-500 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform scale-105 transition-all duration-75">
+                    <div className="relative w-36 sm:w-52 aspect-[2/3] rounded-3xl overflow-hidden bg-ink-900 border-2 border-gold-500 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform scale-105 transition-all duration-75">
                       {meta.posterUrl ? (
                         <img src={meta.posterUrl} alt={meta.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-ink-600">
-                          {meta.isMovie ? <Film size={48} /> : <Tv size={48} />}
+                          {meta.isMovie ? <Film size={42} /> : <Tv size={42} />}
                         </div>
                       )}
 
-                      {/* Hareketli Neon Lazer Çizgisi */}
                       <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-gold-400 to-transparent shadow-[0_0_15px_#fbbf24] animate-scanline pointer-events-none" />
-                      
+
                       <div className="absolute bottom-2 inset-x-2 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-xl border border-white/15">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gold-400">
                           {meta.badge}
@@ -565,7 +553,7 @@ export default function PickModal({
                     </div>
 
                     <div className="space-y-1 max-w-md px-4">
-                      <h3 className="text-xl sm:text-2xl font-black text-ink-50 truncate">
+                      <h3 className="text-lg sm:text-2xl font-black text-ink-50 truncate">
                         {meta.title}
                       </h3>
                       <p className="text-xs font-bold text-ink-400">
@@ -578,21 +566,18 @@ export default function PickModal({
             </div>
           )}
 
-          {/* =========================================================
-              AŞAMA 3: KAZANAN SİNEMA KARTI EKRANI (RESULT)
-              ========================================================= */}
+          {/* AŞAMA 3: KAZANAN SİNEMA KARTI EKRANI */}
           {phase === 'result' && winner && (
-            <div className="space-y-6 animate-fade-in-up">
+            <div className="space-y-4 sm:space-y-6 animate-fade-in-up">
               {(() => {
                 const meta = extractMeta(winner);
                 const watchLinks = getWatchLinks(winner);
 
                 return (
                   <>
-                    {/* Üst Rozet */}
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
-                        <Sparkles size={14} /> Günün Seçimi Belirlendi!
+                      <div className="inline-flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-black uppercase tracking-widest">
+                        <Sparkles size={13} /> Günün Seçimi Belirlendi!
                       </div>
                       <button
                         type="button"
@@ -603,10 +588,7 @@ export default function PickModal({
                       </button>
                     </div>
 
-                    {/* Kazanan Gövde Kartı */}
-                    <div className="bg-ink-900/75 border border-gold-500/40 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row gap-5 items-center sm:items-start animate-winner-glow">
-                      
-                      {/* Sol: Kazanan Poster */}
+                    <div className="bg-ink-900/75 border border-gold-500/40 rounded-2xl sm:rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 sm:gap-5 items-center sm:items-start animate-winner-glow">
                       <div
                         onClick={() =>
                           setDetailTarget(
@@ -616,43 +598,41 @@ export default function PickModal({
                           )
                         }
                         title="Sinema Kartını Gör"
-                        className="w-36 sm:w-44 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-gold-500/60 shadow-2xl relative group cursor-pointer"
+                        className="w-32 sm:w-44 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-gold-500/60 shadow-2xl relative group cursor-pointer"
                       >
                         {meta.posterUrl ? (
                           <img src={meta.posterUrl} alt={meta.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-ink-600">
-                            {meta.isMovie ? <Film size={40} /> : <Tv size={40} />}
+                            {meta.isMovie ? <Film size={36} /> : <Tv size={36} />}
                           </div>
                         )}
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                          <Eye size={20} className="text-gold-400" />
+                          <Eye size={18} className="text-gold-400" />
                           <span className="text-[10px] font-black text-white uppercase">Tam Künye</span>
                         </div>
                       </div>
 
-                      {/* Sağ: Detaylar ve İzleme Linkleri */}
                       <div className="flex-1 min-w-0 text-center sm:text-left flex flex-col justify-between w-full">
                         <div>
-                          <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-gold-500/20 text-gold-300 border border-gold-500/30 mb-2">
+                          <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-gold-500/20 text-gold-300 border border-gold-500/30 mb-1.5">
                             {meta.isMovie ? <Film size={11} /> : <Tv size={11} />}
                             {meta.badge}
                           </div>
 
-                          <h3 className="text-xl sm:text-2xl font-black text-ink-50 leading-tight">
+                          <h3 className="text-lg sm:text-2xl font-black text-ink-50 leading-tight">
                             {meta.title}
                           </h3>
 
-                          {/* Yıl ve Süre */}
-                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 mt-2 text-xs text-ink-300 font-semibold">
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-1.5 text-xs text-ink-300 font-semibold">
                             {meta.year && (
                               <span className="flex items-center gap-1">
-                                <Calendar size={13} className="text-gold-400" /> {meta.year}
+                                <Calendar size={12} className="text-gold-400" /> {meta.year}
                               </span>
                             )}
                             {meta.runtime && (
                               <span className="flex items-center gap-1">
-                                <Clock size={13} className="text-gold-400" /> {meta.runtime} dk
+                                <Clock size={12} className="text-gold-400" /> {meta.runtime} dk
                               </span>
                             )}
                             {meta.genres.length > 0 && (
@@ -662,10 +642,9 @@ export default function PickModal({
                             )}
                           </div>
 
-                          {/* Yönetmen & Oyuncular */}
                           {((meta.directorsOrCreators && meta.directorsOrCreators.length > 0) ||
                             (meta.cast && meta.cast.length > 0)) && (
-                            <div className="mt-2.5 space-y-1 text-[11px] text-ink-400">
+                            <div className="mt-2 space-y-1 text-[11px] text-ink-400">
                               {meta.directorsOrCreators && meta.directorsOrCreators.length > 0 && (
                                 <div className="flex items-center justify-center sm:justify-start gap-1">
                                   <User size={12} className="text-gold-400 flex-shrink-0" />
@@ -685,17 +664,15 @@ export default function PickModal({
                             </div>
                           )}
 
-                          {/* Konu Özeti */}
                           {meta.overview && (
-                            <p className="mt-3 text-xs text-ink-300 leading-relaxed line-clamp-3 bg-ink-950/60 p-3 rounded-xl border border-ink-800/80 text-left">
+                            <p className="mt-2.5 text-xs text-ink-300 leading-relaxed line-clamp-3 bg-ink-950/60 p-2.5 sm:p-3 rounded-xl border border-ink-800/80 text-left">
                               {meta.overview}
                             </p>
                           )}
                         </div>
 
-                        {/* Doğrudan İzleme ve Fragman Butonları */}
-                        <div className="mt-4 pt-3 border-t border-ink-800/60">
-                          <div className="text-[10px] font-black uppercase tracking-wider text-ink-400 mb-2">
+                        <div className="mt-3.5 pt-2.5 border-t border-ink-800/60">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-ink-400 mb-1.5">
                             Hemen İzle veya Fragmana Bak:
                           </div>
                           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5">
@@ -708,9 +685,9 @@ export default function PickModal({
                                     href={link.href}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105"
+                                    className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md"
                                   >
-                                    <Icon size={14} /> {link.text}
+                                    <Icon size={13} /> {link.text}
                                   </a>
                                 );
                               }
@@ -720,7 +697,7 @@ export default function PickModal({
                                   href={link.href}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105"
+                                  className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all"
                                 >
                                   {link.logo ? (
                                     <img src={link.logo} alt={link.text} className="w-3.5 h-3.5 rounded-sm object-cover" />
@@ -733,30 +710,28 @@ export default function PickModal({
                             })}
                           </div>
                         </div>
-
                       </div>
                     </div>
 
-                    {/* ALT AKSİYON BUTONLARI */}
-                    <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
+                    <div className="grid grid-cols-2 sm:flex items-center gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => {
                           onPick(winner);
                           onClose();
                         }}
-                        className="w-full sm:flex-1 py-3.5 px-5 rounded-xl font-black text-xs sm:text-sm text-ink-950 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 shadow-xl shadow-gold-500/20 transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+                        className="col-span-2 sm:flex-1 py-3 sm:py-3.5 px-5 rounded-xl font-black text-xs sm:text-sm text-ink-950 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 shadow-xl shadow-gold-500/20 transition-all flex items-center justify-center gap-2"
                       >
-                        <Star size={17} className="fill-current" />
+                        <Star size={16} className="fill-current" />
                         <span>İzledim & Puanla</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={startRoulette}
-                        className="w-full sm:w-auto py-3.5 px-5 rounded-xl font-bold text-xs sm:text-sm bg-ink-800 hover:bg-ink-700 text-ink-100 border border-ink-700 transition-all flex items-center justify-center gap-2"
+                        className="py-3 sm:py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm bg-ink-800 hover:bg-ink-700 text-ink-100 border border-ink-700 transition-all flex items-center justify-center gap-1.5"
                       >
-                        <RotateCcw size={16} />
+                        <RotateCcw size={15} />
                         <span>Tekrar Çevir</span>
                       </button>
 
@@ -769,10 +744,10 @@ export default function PickModal({
                               : { type: 'series', data: winner.series }
                           )
                         }
-                        className="w-full sm:w-auto py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm bg-ink-900 hover:bg-ink-800 text-gold-400 border border-gold-500/30 transition-all flex items-center justify-center gap-1.5"
+                        className="py-3 sm:py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm bg-ink-900 hover:bg-ink-800 text-gold-400 border border-gold-500/30 transition-all flex items-center justify-center gap-1.5"
                         title="Tam Sinema Kartını Aç"
                       >
-                        <Eye size={16} />
+                        <Eye size={15} />
                         <span>Detay</span>
                       </button>
                     </div>
@@ -781,11 +756,9 @@ export default function PickModal({
               })()}
             </div>
           )}
-
         </div>
       </div>
 
-      {/* TAM SİNEMA KARTI (DETAY MODALI) */}
       {detailTarget && (
         <MediaDetailModal
           target={detailTarget}

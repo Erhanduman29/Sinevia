@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Plus, Boxes, Clock, Search, Loader2, Image as ImageIcon, Users, User, History, Check } from 'lucide-react';
-import { useApp, resolveTMDBGenres, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { useApp, resolveTMDBGenres } from '../context/AppContext';
 import { normalize } from '../lib/utils';
 import { searchTMDB, type TMDBResult } from '../lib/tmdb';
 import type { WatchProvider } from '../types';
@@ -81,12 +81,7 @@ export default function AddMovieModal({ onClose }: Props) {
     if (!title.trim()) return;
     let collectionId: string | null = null;
 
-    if (assignToPastCollection) {
-      const existingPast = data.collections.find(
-        (c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)
-      );
-      collectionId = existingPast ? existingPast.id : addCollection(PAST_WATCH_COLLECTION_NAME);
-    } else if (useCollection) {
+    if (useCollection) {
       if (collectionMode === 'new' && newCollectionName.trim()) {
         const existing = data.collections.find((c) => normalize(c.name) === normalize(newCollectionName));
         if (existing) {
@@ -117,7 +112,8 @@ export default function AddMovieModal({ onClose }: Props) {
         cast,
         studios,
         keywords,
-        originalLanguage
+        originalLanguage,
+        inPastQueue: assignToPastCollection,
       }
     );
     if (ok) onClose();
@@ -292,10 +288,7 @@ export default function AddMovieModal({ onClose }: Props) {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setAssignToPastCollection(!assignToPastCollection);
-                  if (!assignToPastCollection) setUseCollection(false);
-                }}
+                onClick={() => setAssignToPastCollection(!assignToPastCollection)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
                   assignToPastCollection
                     ? 'border-violet-500 bg-violet-500/20 text-violet-200 font-semibold'
@@ -309,10 +302,7 @@ export default function AddMovieModal({ onClose }: Props) {
 
               <button
                 type="button"
-                onClick={() => {
-                  setUseCollection(!useCollection);
-                  if (!useCollection) setAssignToPastCollection(false);
-                }}
+                onClick={() => setUseCollection(!useCollection)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all ${
                   useCollection
                     ? 'border-ink-500 bg-ink-800 text-ink-100'
@@ -323,7 +313,7 @@ export default function AddMovieModal({ onClose }: Props) {
                 <span className="text-sm font-medium">Koleksiyon / Seri</span>
               </button>
             </div>
-            {useCollection && !assignToPastCollection && (
+            {useCollection && (
               <div className="mt-3 space-y-3 pl-2 border-l-2 border-ink-700">
                 <div className="flex gap-2">
                   <button

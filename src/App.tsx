@@ -16,8 +16,35 @@ import LevelUpModal from './components/LevelUpModal';
 import SeasonCompleteModal from './components/SeasonCompleteModal';
 import XpGainOverlay from './components/XpGainOverlay';
 
+const ACTIVE_TAB_STORAGE_KEY = 'sinevia_active_tab';
+const VALID_TABS: TabId[] = [
+  'home',
+  'movies',
+  'series',
+  'history',
+  'achievements',
+  'stats',
+  'settings',
+  'ai',
+];
+
+function isValidTab(val: any): val is TabId {
+  return typeof val === 'string' && VALID_TABS.includes(val as TabId);
+}
+
+function getInitialTab(): TabId {
+  try {
+    const hashTab = window.location.hash.replace('#', '').trim();
+    if (isValidTab(hashTab)) return hashTab;
+
+    const savedTab = localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+    if (isValidTab(savedTab)) return savedTab;
+  } catch {}
+  return 'home';
+}
+
 function AppContent() {
-  const [activeTab, setActiveTab] = useState<TabId>('home');
+  const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
   const {
     toasts,
     achievementToasts,
@@ -28,12 +55,36 @@ function AppContent() {
     xpGainData,
   } = useApp();
 
+  // Sekme her değiştiğinde localStorage ve URL hash'ini güncelle (Sayfa yenilendiğinde aynı sekmede kalır)
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
+      if (window.location.hash !== `#${activeTab}`) {
+        window.history.replaceState(null, '', `#${activeTab}`);
+      }
+    } catch {}
+  }, [activeTab]);
+
   useEffect(() => {
     const handleNavigation = (e: any) => {
-      if (e.detail) setActiveTab(e.detail);
+      if (isValidTab(e.detail)) {
+        setActiveTab(e.detail);
+      }
     };
+
+    const handleHashChange = () => {
+      const hashTab = window.location.hash.replace('#', '').trim();
+      if (isValidTab(hashTab)) {
+        setActiveTab(hashTab);
+      }
+    };
+
     window.addEventListener('navigate-tab', handleNavigation);
-    return () => window.removeEventListener('navigate-tab', handleNavigation);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('navigate-tab', handleNavigation);
+      window.removeEventListener('hashchange', handleHashChange);
+    };
   }, []);
 
   return (

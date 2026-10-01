@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search, User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers, Building2, Tag, Edit2, CheckCircle2, Play, Pause, Timer, Zap, Lock } from 'lucide-react';
+import {
+  X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search,
+  User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers,
+  Building2, Tag, Edit2, CheckCircle2, Play, Pause, Timer, Zap, Lock, History,
+} from 'lucide-react';
 import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
 import RatingModal from './RatingModal';
@@ -17,7 +21,7 @@ interface MediaDetailModalProps {
 export default function MediaDetailModal({ target, onClose }: MediaDetailModalProps) {
   const {
     data: appData, startWatchingMovie, togglePauseWatchingMovie,
-    cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, updateHistoryRating
+    cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, updateHistoryRating,
   } = useApp();
 
   const [isMainNoteExpanded, setIsMainNoteExpanded] = useState(false);
@@ -31,7 +35,9 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
     initialNote?: string;
     initialDetailedRating?: Record<string, number>;
     initialReviewTags?: string[];
-    onSubmit: (rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => void;
+    initialIsPastWatch?: boolean;
+    allowPastWatch?: boolean;
+    onSubmit: (rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   } | null>(null);
 
   const isMovie = target.type === 'movie';
@@ -56,6 +62,11 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
   const cast = isMovie ? liveMovie!.cast : liveSeries!.cast;
   const studios = isMovie ? liveMovie!.studios : liveSeries!.studios;
   const keywords = isMovie ? liveMovie!.keywords : liveSeries!.keywords;
+
+  const isPastWatchMovie = Boolean(
+    isMovie && (liveHistoryItem?.isPastWatch || liveMovie?.isPastWatch)
+  );
+  const isInPastQueue = Boolean(isMovie && !liveMovie?.watched && liveMovie?.inPastQueue);
 
   const nextEpisodeToWatch = !isMovie && liveSeries ? getNextUnwatchedEpisode(liveSeries.episodes) : null;
 
@@ -99,19 +110,21 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
       initialNote: liveHistoryItem ? liveHistoryItem.note : liveMovie.note,
       initialDetailedRating: liveHistoryItem ? liveHistoryItem.detailedRating : liveMovie.detailedRating,
       initialReviewTags: liveHistoryItem ? liveHistoryItem.reviewTags : liveMovie.reviewTags,
-      onSubmit: (r, n, dr, tags) => {
+      initialIsPastWatch: Boolean(liveHistoryItem?.isPastWatch || liveMovie.isPastWatch || liveMovie.inPastQueue),
+      allowPastWatch: true,
+      onSubmit: (r, n, dr, tags, isPast) => {
         if (liveHistoryItem) {
-          updateHistoryRating(liveHistoryItem.id, r, n, dr, tags);
+          updateHistoryRating(liveHistoryItem.id, r, n, dr, tags, isPast);
         } else if (liveMovie.watched) {
           const hist = appData.history.find((h) => (h.itemId === liveMovie.id || h.id === liveMovie.id) && (h.kind === 'movie' || h.type === 'movie'));
-          if (hist) updateHistoryRating(hist.id, r, n, dr, tags);
-          else watchMovie(liveMovie.id, r, n, dr, tags);
+          if (hist) updateHistoryRating(hist.id, r, n, dr, tags, isPast);
+          else watchMovie(liveMovie.id, r, n, dr, tags, isPast);
         } else {
-          watchMovie(liveMovie.id, r, n, dr, tags);
+          watchMovie(liveMovie.id, r, n, dr, tags, isPast);
         }
         setRatingModalConfig(null);
         onClose();
-      }
+      },
     });
   };
 
@@ -124,6 +137,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
       initialNote: ep.note,
       initialDetailedRating: ep.detailedRating,
       initialReviewTags: ep.reviewTags,
+      allowPastWatch: false,
       onSubmit: (r, n, dr, tags) => {
         if (isAlreadyWatched) {
           const hist = appData.history.find((h) => h.itemId === ep.id || h.id === ep.id);
@@ -134,12 +148,13 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
         }
         setRatingModalConfig(null);
         onClose();
-      }
+      },
     });
   };
 
   const handleOpenHistoryItemRating = () => {
     if (!liveHistoryItem) return;
+    const isHistMovie = liveHistoryItem.kind === 'movie' || liveHistoryItem.type === 'movie';
     setRatingModalConfig({
       title: liveHistoryItem.title,
       subtitle: liveHistoryItem.season != null ? `${liveHistoryItem.season}. Sezon ${liveHistoryItem.episode}. Bölüm (Puanı Düzenle)` : 'Puanı Düzenle',
@@ -147,11 +162,13 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
       initialNote: liveHistoryItem.note,
       initialDetailedRating: liveHistoryItem.detailedRating,
       initialReviewTags: liveHistoryItem.reviewTags,
-      onSubmit: (r, n, dr, tags) => {
-        updateHistoryRating(liveHistoryItem.id, r, n, dr, tags);
+      initialIsPastWatch: Boolean(liveHistoryItem.isPastWatch || liveMovie?.isPastWatch),
+      allowPastWatch: isHistMovie,
+      onSubmit: (r, n, dr, tags, isPast) => {
+        updateHistoryRating(liveHistoryItem.id, r, n, dr, tags, isPast);
         setRatingModalConfig(null);
         onClose();
-      }
+      },
     });
   };
 
@@ -198,12 +215,12 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center px-3 pt-16 pb-4 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl bg-ink-900/95 border border-ink-700/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[calc(100vh-5rem)] sm:max-h-[90vh] animate-fade-in-up"
+        className="relative w-full max-w-4xl bg-ink-900/95 border border-ink-700/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90svh] sm:max-h-[90vh] animate-fade-in-up"
       >
         {posterUrl && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
@@ -214,38 +231,50 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
 
         <button
           onClick={onClose}
-          className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 z-30 w-10 h-10 rounded-full bg-ink-950/90 hover:bg-ink-800 text-ink-200 hover:text-white border border-ink-700/80 flex items-center justify-center transition-all hover:scale-110 shadow-lg"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-30 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-ink-950/90 hover:bg-ink-800 text-ink-200 hover:text-white border border-ink-700/80 flex items-center justify-center transition-all hover:scale-110 shadow-lg"
           title="Kapat"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
 
-        <div className="relative z-10 flex-1 overflow-y-auto p-5 sm:p-8 space-y-6 custom-scrollbar">
-          <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-            <div className="w-40 sm:w-52 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-ink-700/60 shadow-2xl relative group">
+        <div className="relative z-10 flex-1 overflow-y-auto p-4 sm:p-8 space-y-5 sm:space-y-6 custom-scrollbar">
+          <div className="flex flex-col md:flex-row gap-4 sm:gap-6 items-center md:items-start">
+            <div className="w-32 sm:w-48 md:w-52 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-ink-700/60 shadow-2xl relative group">
               {posterUrl ? (
                 <img src={posterUrl} alt={title} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-ink-600 gap-2">
-                  {isMovie ? <Film size={48} /> : <Tv size={48} />}
+                  {isMovie ? <Film size={40} /> : <Tv size={40} />}
                   <span className="text-xs font-medium">Afiş Yok</span>
                 </div>
               )}
-              <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border border-white/10 flex items-center gap-1">
-                {isMovie ? <Film size={11} className="text-gold-400" /> : <Tv size={11} className="text-azure-400" />}
+              <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border border-white/10 flex items-center gap-1">
+                {isMovie ? <Film size={10} className="text-gold-400" /> : <Tv size={10} className="text-azure-400" />}
                 {isMovie ? 'Film' : 'Dizi'}
               </div>
             </div>
 
             <div className="flex-1 min-w-0 flex flex-col text-center md:text-left w-full">
-              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pr-0 md:pr-10">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 sm:gap-4 pr-0 md:pr-10">
                 <div>
-                  {collectionName && (
-                    <div className="inline-flex items-center gap-1.5 text-xs font-bold text-gold-400 bg-gold-500/10 border border-gold-500/30 px-2.5 py-0.5 rounded-full mb-2">
-                      <Layers size={12} /> {collectionName} Koleksiyonu
-                    </div>
-                  )}
-                  <h2 className="text-2xl sm:text-3xl font-black text-ink-50 tracking-tight leading-tight">{title}</h2>
+                  <div className="flex items-center justify-center md:justify-start gap-1.5 flex-wrap mb-1.5">
+                    {collectionName && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gold-400 bg-gold-500/10 border border-gold-500/30 px-2.5 py-0.5 rounded-full">
+                        <Layers size={11} /> {collectionName}
+                      </span>
+                    )}
+                    {isPastWatchMovie && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-violet-300 bg-violet-500/20 border border-violet-500/35 px-2.5 py-0.5 rounded-full">
+                        <History size={11} /> Daha Önce İzlendi
+                      </span>
+                    )}
+                    {isInPastQueue && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-2.5 py-0.5 rounded-full">
+                        <History size={11} /> Eskiden İzlenenler Sırasında
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-xl sm:text-3xl font-black text-ink-50 tracking-tight leading-tight">{title}</h2>
                   {liveHistoryItem && liveHistoryItem.season != null && (
                     <div className="mt-1.5 inline-block text-xs font-bold text-azure-300 bg-azure-500/20 border border-azure-500/30 px-2.5 py-1 rounded-lg">
                       İzlenen: {liveHistoryItem.season}. Sezon {liveHistoryItem.episode}. Bölüm
@@ -256,8 +285,8 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 <div className="flex flex-col items-center md:items-end gap-2 flex-shrink-0 mx-auto md:mx-0">
                   {displayRating !== null && displayRating !== undefined && (
                     <div className="flex flex-col items-center md:items-end">
-                      <div className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl font-black text-xl shadow-lg ${ratingBgClass(displayRating)}`}>
-                        <Star size={20} className="fill-current" />
+                      <div className={`flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-black text-lg sm:text-xl shadow-lg ${ratingBgClass(displayRating)}`}>
+                        <Star size={18} className="fill-current" />
                         <span>{displayRating}</span>
                         <span className="text-xs opacity-75 font-bold">/ 10</span>
                       </div>
@@ -296,13 +325,13 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                             type="button"
                             onClick={() => startWatchingMovie(liveMovie.id, false)}
                             title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'Geri Sayımı Başlat'}
-                            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
                               anotherTimerActive
                                 ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed'
                                 : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
                             }`}
                           >
-                            {anotherTimerActive ? <Lock size={13} /> : <Play size={13} className="fill-current" />} Geri Sayımı Başlat
+                            {anotherTimerActive ? <Lock size={13} /> : <Play size={13} className="fill-current" />} Sayacı Başlat
                           </button>
                         )
                       )}
@@ -310,7 +339,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                       <button
                         type="button"
                         onClick={handleOpenMovieRating}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
+                        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
                           liveMovie.watched || liveHistoryItem
                             ? 'bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 hover:scale-105'
                             : timerInfo && !timerInfo.canRateWithTimer
@@ -343,10 +372,10 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                     <button
                       type="button"
                       onClick={() => handleOpenEpisodeRating(nextEpisodeToWatch, false)}
-                      className="flex items-center gap-1.5 bg-gradient-to-r from-azure-500 to-azure-600 hover:from-azure-400 hover:to-azure-500 text-white px-4 py-2 rounded-xl text-xs font-black transition-all shadow-lg shadow-azure-500/20 hover:scale-105"
+                      className="flex items-center gap-1.5 bg-gradient-to-r from-azure-500 to-azure-600 hover:from-azure-400 hover:to-azure-500 text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all shadow-lg shadow-azure-500/20 hover:scale-105"
                     >
                       <Star size={14} className="fill-current" />
-                      Sıradaki: {nextEpisodeToWatch.season}. Sezon {nextEpisodeToWatch.episode}. Bölüm Puanla
+                      Sıradaki: S{nextEpisodeToWatch.season} B{nextEpisodeToWatch.episode} Puanla
                     </button>
                   )}
 
@@ -358,7 +387,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-3 text-xs text-ink-300 font-medium">
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 sm:gap-3 mt-3 text-xs text-ink-300 font-medium">
                 {year && (
                   <span className="flex items-center gap-1.5 bg-ink-800/70 px-2.5 py-1 rounded-lg border border-ink-700/50">
                     <Calendar size={13} className="text-gold-400" /> {year}
@@ -366,28 +395,28 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 )}
                 {runtime && (
                   <span className="flex items-center gap-1.5 bg-ink-800/70 px-2.5 py-1 rounded-lg border border-ink-700/50">
-                    <Clock size={13} className="text-gold-400" /> {runtime} dakika
+                    <Clock size={13} className="text-gold-400" /> {runtime} dk
                   </span>
                 )}
-                {isMovie && actualRuntime && runtime && actualRuntime < runtime && (
+                {isMovie && !isPastWatchMovie && actualRuntime && runtime && actualRuntime < runtime && (
                   <span className="flex items-center gap-1.5 bg-emerald-500/15 text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-500/30 font-bold">
-                    <Zap size={13} className="text-emerald-400" /> {actualRuntime} dk'da bitti ({runtime - actualRuntime} dk tasarruf)
+                    <Zap size={13} className="text-emerald-400" /> {actualRuntime} dk'da bitti ({runtime - actualRuntime} dk kâr)
                   </span>
                 )}
                 {!isMovie && liveSeries && (
                   <span className="flex items-center gap-1.5 bg-ink-800/70 px-2.5 py-1 rounded-lg border border-ink-700/50">
-                    <Tv size={13} className="text-azure-400" /> {watchedEpisodes.length} / {liveSeries.episodes.length} Bölüm İzlendi
+                    <Tv size={13} className="text-azure-400" /> {watchedEpisodes.length} / {liveSeries.episodes.length} Bölüm
                   </span>
                 )}
-                {watchedAt && (
+                {watchedAt && !isPastWatchMovie && (
                   <span className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                    <Sparkles size={13} /> İzlendi: {liveHistoryItem ? formatDateTime(watchedAt) : formatDateShort(watchedAt)}
+                    <Sparkles size={13} /> {liveHistoryItem ? formatDateTime(watchedAt) : formatDateShort(watchedAt)}
                   </span>
                 )}
               </div>
 
               {genres && genres.length > 0 && (
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 mt-3">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 mt-2.5">
                   {genres.map((g) => (
                     <span key={g} className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-gold-500/10 text-gold-300 border border-gold-500/20">{g}</span>
                   ))}
@@ -395,14 +424,14 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
               )}
 
               {reviewTags && reviewTags.length > 0 && (
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 mt-3">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 mt-2.5">
                   {reviewTags.map((tag) => (
-                    <span key={tag} className="text-xs font-black px-3 py-1 rounded-xl bg-gold-500/20 text-gold-300 border border-gold-500/40 shadow-sm">{tag}</span>
+                    <span key={tag} className="text-[11px] sm:text-xs font-black px-2.5 py-1 rounded-xl bg-gold-500/20 text-gold-300 border border-gold-500/40 shadow-sm">{tag}</span>
                   ))}
                 </div>
               )}
 
-              <div className="mt-5 bg-ink-950/60 border border-ink-800/80 rounded-2xl p-4 text-left shadow-inner">
+              <div className="mt-4 bg-ink-950/60 border border-ink-800/80 rounded-2xl p-3.5 sm:p-4 text-left shadow-inner">
                 <div className="text-[10px] font-black uppercase tracking-widest text-ink-400 mb-1.5">Konu & Özet</div>
                 {overview ? (
                   <p className="text-xs sm:text-sm text-ink-200 leading-relaxed">{overview}</p>
@@ -413,13 +442,13 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                 )}
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center justify-center md:justify-start gap-2">
+              <div className="mt-3.5 flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2">
                 {watchLinks.map((link, idx) => {
                   const Icon = link.icon;
                   if (link.isTrailer) {
                     return (
-                      <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-600/20 hover:scale-105">
-                        <Icon size={15} /> {link.text}
+                      <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-600/20">
+                        <Icon size={14} /> {link.text}
                       </a>
                     );
                   }
@@ -429,9 +458,9 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                       href={link.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-105"
+                      className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold transition-all"
                     >
-                      {link.logo ? <img src={link.logo} alt={link.text} className="w-4 h-4 rounded-sm object-cover" /> : <Icon size={14} />}
+                      {link.logo ? <img src={link.logo} alt={link.text} className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={13} />}
                       {link.text}
                     </a>
                   );
@@ -441,29 +470,29 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
           </div>
 
           {(displayNote || (detailedRating && Object.keys(detailedRating).length > 0)) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-ink-800/60">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 pt-2 border-t border-ink-800/60">
               {displayNote && (
                 <div
                   onClick={() => setIsMainNoteExpanded(!isMainNoteExpanded)}
                   title={isMainNoteExpanded ? 'Küçültmek için tıkla' : 'Tamamını okumak için tıkla'}
-                  className="bg-ink-950/70 hover:bg-ink-950 border border-gold-500/30 rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-colors"
+                  className="bg-ink-950/70 hover:bg-ink-950 border border-gold-500/30 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between cursor-pointer transition-colors"
                 >
                   <div>
                     <div className="flex items-center justify-between text-xs font-black uppercase tracking-widest text-gold-400 mb-2">
-                      <span className="flex items-center gap-2"><StickyNote size={14} /> Kişisel İnceleme & Notun</span>
-                      <span className="text-[10px] text-ink-500 font-semibold">{isMainNoteExpanded ? 'Küçült' : 'Tıkla & Büyüt'}</span>
+                      <span className="flex items-center gap-1.5"><StickyNote size={14} /> Kişisel İnceleme & Notun</span>
+                      <span className="text-[10px] text-ink-500 font-semibold">{isMainNoteExpanded ? 'Küçült' : 'Büyüt'}</span>
                     </div>
-                    <p className={`text-sm text-ink-100 italic leading-relaxed ${isMainNoteExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-1'}`}>"{displayNote}"</p>
+                    <p className={`text-xs sm:text-sm text-ink-100 italic leading-relaxed ${isMainNoteExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-2'}`}>"{displayNote}"</p>
                   </div>
                 </div>
               )}
 
               {detailedRating && Object.keys(detailedRating).length > 0 && (
-                <div className="bg-ink-950/70 border border-ink-800 rounded-2xl p-4">
+                <div className="bg-ink-950/70 border border-ink-800 rounded-2xl p-3.5 sm:p-4">
                   <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-azure-400 mb-3">
                     <SlidersHorizontal size={14} /> Detaylı Kriter Analizi
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {Object.entries(detailedRating).map(([critId, score]) => {
                       const critObj = appData.criteria?.find((c) => c.id === critId);
                       const critName = critObj ? critObj.name : critId;
@@ -487,7 +516,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
           )}
 
           {((directorsOrCreators && directorsOrCreators.length > 0) || (cast && cast.length > 0) || (studios && studios.length > 0) || (keywords && keywords.length > 0)) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-ink-800/60">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4 pt-2 border-t border-ink-800/60">
               {directorsOrCreators && directorsOrCreators.length > 0 && (
                 <div className="bg-ink-950/40 border border-ink-800/60 rounded-2xl p-3.5">
                   <div className="text-[10px] font-black uppercase tracking-widest text-ink-400 flex items-center gap-1.5 mb-2">
@@ -521,7 +550,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {cast.map((actor) => (
-                      <span key={actor} className="text-xs font-medium bg-ink-800/80 text-ink-100 px-3 py-1 rounded-xl border border-ink-700/50">{actor}</span>
+                      <span key={actor} className="text-xs font-medium bg-ink-800/80 text-ink-100 px-2.5 py-1 rounded-xl border border-ink-700/50">{actor}</span>
                     ))}
                   </div>
                 </div>
@@ -607,8 +636,10 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
             initialNote={ratingModalConfig.initialNote}
             initialDetailedRating={ratingModalConfig.initialDetailedRating}
             initialReviewTags={ratingModalConfig.initialReviewTags}
-            onRate={(rating, note, detailedRating, reviewTags) => {
-              ratingModalConfig.onSubmit(rating, note, detailedRating, reviewTags);
+            initialIsPastWatch={ratingModalConfig.initialIsPastWatch}
+            allowPastWatch={ratingModalConfig.allowPastWatch}
+            onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
+              ratingModalConfig.onSubmit(rating, note, detailedRating, reviewTags, isPastWatch);
             }}
             onClose={() => setRatingModalConfig(null)}
           />

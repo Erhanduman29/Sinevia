@@ -4,7 +4,7 @@ import {
   ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock,
   CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye,
   FolderPlus, X, Play, Pause, Timer, Zap, Lock, EyeOff, ChevronsUpDown, History,
-  CheckSquare, Square, ArrowRightLeft,
+  CheckSquare, Square, ArrowRightLeft, SlidersHorizontal,
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { ratingBgClass, formatDateShort, normalize } from '../lib/utils';
@@ -20,12 +20,13 @@ import type { Movie } from '../types';
 
 type SortMode = 'az' | 'year' | 'rating' | 'added';
 type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past';
+const PAST_QUEUE_MODAL_ID = '__PAST_QUEUE__';
 
 export default function MoviesPage() {
   const {
     data, editMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie,
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie,
-    setMovieCollection, addCollection, showToast,
+    setMovieCollection, setMoviePastQueue, addCollection, showToast,
   } = useApp();
 
   const [showAdd, setShowAdd] = useState(false);
@@ -38,8 +39,8 @@ export default function MoviesPage() {
   const [detailMovieId, setDetailMovieId] = useState<string | null>(null);
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
   const [isCollectionsSectionOpen, setIsCollectionsSectionOpen] = useState(true);
-  // Eskiden İzlenenler koleksiyonu ayrıdır ve ekranı doldurmaması için varsayılan olarak kapalıdır
   const [isPastCollectionOpen, setIsPastCollectionOpen] = useState(false);
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
 
   const [collectionTargetMovie, setCollectionTargetMovie] = useState<Movie | null>(null);
   const [newCollectionName, setNewCollectionName] = useState('');
@@ -47,7 +48,6 @@ export default function MoviesPage() {
   const [collectionSearch, setCollectionSearch] = useState('');
   const [bulkSelectedMovieIds, setBulkSelectedMovieIds] = useState<Set<string>>(new Set());
 
-  // Koleksiyondan toplu aktarma onay penceresi state'i
   const [confirmMoveColTarget, setConfirmMoveColTarget] = useState<{
     id: string;
     name: string;
@@ -55,11 +55,10 @@ export default function MoviesPage() {
     fromModal?: boolean;
   } | null>(null);
 
-  // "Eskiden İzlenenler" koleksiyonundan başka koleksiyona veya bağımsız listeye toplu taşıma modalı state'leri
   const [showMoveFromPastModal, setShowMoveFromPastModal] = useState(false);
   const [pastMoveSearch, setPastMoveSearch] = useState('');
   const [pastMoveSelectedIds, setPastMoveSelectedIds] = useState<Set<string>>(new Set());
-  const [pastMoveDestinationMode, setPastMoveDestinationMode] = useState<'standalone' | 'existing' | 'new'>('standalone');
+  const [pastMoveDestinationMode, setPastMoveDestinationMode] = useState<'remove_queue' | 'existing' | 'new'>('remove_queue');
   const [pastMoveTargetColId, setPastMoveTargetColId] = useState<string>('');
   const [pastMoveNewColName, setPastMoveNewColName] = useState<string>('');
 
@@ -69,7 +68,6 @@ export default function MoviesPage() {
   const [search, setSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Canlı geri sayım için her saniye güncellenen saat
   const [nowMs, setNowMs] = useState(() => Date.now());
   const activeTimerMovie = useMemo(() => data.movies.find((m) => !m.watched && m.startedAt) || null, [data.movies]);
 
@@ -83,17 +81,6 @@ export default function MoviesPage() {
     () => (detailMovieId ? data.movies.find((m) => m.id === detailMovieId) || null : null),
     [data.movies, detailMovieId]
   );
-
-  // "Eskiden İzlenenler" özel koleksiyonunu bul
-  const pastCollection = useMemo(
-    () => data.collections.find((c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)) || null,
-    [data.collections]
-  );
-
-  const isMovieInPastCollection = (movie: Movie) => {
-    if (!movie.collectionId || !pastCollection) return false;
-    return movie.collectionId === pastCollection.id;
-  };
 
   const handleRequestRate = (movie: Movie) => {
     if (!canRateMovieWithTimer(movie.id)) return;
@@ -146,7 +133,7 @@ export default function MoviesPage() {
   }, [data.movies]);
 
   const eligibleMovies = useMemo(() => {
-    const unwatched = data.movies.filter((m) => !m.watched && !isMovieInPastCollection(m));
+    const unwatched = data.movies.filter((m) => !m.watched && !m.inPastQueue);
     const standalone = unwatched.filter((m) => !m.collectionId);
     const collectionGroups = new Map<string, Movie[]>();
     unwatched.filter((m) => m.collectionId).forEach((m) => {
@@ -160,7 +147,7 @@ export default function MoviesPage() {
       if (sorted.length > 0) sequentialCollectionMovies.push(sorted[0]);
     });
     return [...standalone, ...sequentialCollectionMovies];
-  }, [data.movies, pastCollection]);
+  }, [data.movies]);
 
   const toggleGenre = (g: string) => {
     setSelectedGenres((prev) => {
@@ -174,10 +161,21 @@ export default function MoviesPage() {
   const clearGenres = () => setSelectedGenres(new Set());
   const searchMatches = (m: Movie) => !search.trim() || m.title.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR'));
 
+  const activeFilterCount =
+    (search.trim() !== '' ? 1 : 0) +
+    selectedGenres.size +
+    (sortMode !== 'added' ? 1 : 0);
+
+  const resetAllFilters = () => {
+    setSearch('');
+    setSelectedGenres(new Set());
+    setSortMode('added');
+  };
+
   const sortMovies = (movies: Movie[]): Movie[] => {
     let filtered = movies;
     if (watchedFilter === 'unwatched') filtered = filtered.filter((m) => !m.watched);
-    else if (watchedFilter === 'watched') filtered = filtered.filter((m) => m.watched);
+    else if (watchedFilter === 'watched') filtered = filtered.filter((m) => m.watched && !m.isPastWatch);
     else if (watchedFilter === 'past') filtered = filtered.filter((m) => m.watched && m.isPastWatch);
 
     if (selectedGenres.size > 0) filtered = filtered.filter((m) => Array.from(selectedGenres).every((g) => m.genres.includes(g)));
@@ -193,7 +191,13 @@ export default function MoviesPage() {
     });
   };
 
-  const standaloneMovies = data.movies.filter((m) => !m.collectionId);
+  const baseBottomListMovies = useMemo(() => {
+    if (watchedFilter === 'past') {
+      return data.movies.filter((m) => m.watched && m.isPastWatch);
+    }
+    return data.movies.filter((m) => !m.collectionId && !m.inPastQueue && !m.isPastWatch);
+  }, [data.movies, watchedFilter]);
+
   const collectionMovies = data.movies.filter((m) => m.collectionId);
   const collectionMap = useMemo(() => {
     const map = new Map<string, Movie[]>();
@@ -205,15 +209,12 @@ export default function MoviesPage() {
     return map;
   }, [collectionMovies]);
 
-  // "Eskiden İzlenenler" koleksiyonunun içindeki tüm puanlanmamış filmler (filtrelerden bağımsız ham liste)
   const allPastColUnratedMovies = useMemo(() => {
-    if (!pastCollection) return [];
-    return (collectionMap.get(pastCollection.id) || [])
-      .filter((m) => !m.watched)
+    return data.movies
+      .filter((m) => !m.watched && m.inPastQueue)
       .sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10));
-  }, [pastCollection, collectionMap]);
+  }, [data.movies]);
 
-  // "Eskiden İzlenenler" koleksiyonunun içindeki arama/tür filtresine uygun puanlanmamış filmler
   const pastCollectionUnratedMovies = useMemo(() => {
     let filtered = allPastColUnratedMovies;
     if (selectedGenres.size > 0) {
@@ -225,22 +226,18 @@ export default function MoviesPage() {
     return filtered;
   }, [allPastColUnratedMovies, selectedGenres, search]);
 
-  // Normal koleksiyonlar ("Eskiden İzlenenler" koleksiyonu buradan tamamen ayrıldı)
   const filteredCollections = useMemo(() => {
     return data.collections.filter((coll) => {
       if (normalize(coll.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return false;
 
       const movies = collectionMap.get(coll.id) || [];
-      const isCompletelyWatched = movies.length > 0 && movies.every((m) => m.watched);
-      const hasPastWatchedMovie = movies.some((m) => m.watched && m.isPastWatch);
+      const hasUnwatched = movies.some((m) => !m.watched);
+      const hasNormalWatched = movies.some((m) => m.watched && !m.isPastWatch);
+      const hasPastWatched = movies.some((m) => m.watched && m.isPastWatch);
 
-      if (watchedFilter === 'past') {
-        if (!hasPastWatchedMovie) return false;
-      } else if (watchedFilter === 'watched') {
-        if (!isCompletelyWatched) return false;
-      } else if (watchedFilter === 'unwatched') {
-        if (isCompletelyWatched) return false;
-      }
+      if (watchedFilter === 'unwatched' && !hasUnwatched) return false;
+      if (watchedFilter === 'watched' && !hasNormalWatched) return false;
+      if (watchedFilter === 'past' && !hasPastWatched) return false;
 
       if (selectedGenres.size > 0) {
         const hasGenreMatch = movies.some((m) => Array.from(selectedGenres).every((g) => m.genres.includes(g)));
@@ -309,12 +306,10 @@ export default function MoviesPage() {
     setCollectionTargetMovie(null);
   };
 
-  // Bir koleksiyondaki tüm izlenmemiş filmleri "Eskiden İzlenenler"e aktarmadan önce onay iste
   const requestMoveEntireCollectionToPast = (sourceColId: string, sourceColName: string, fromModal = false) => {
-    if (!pastCollection) return;
-    const moviesToMove = (collectionMap.get(sourceColId) || []).filter((m) => !m.watched);
+    const moviesToMove = (collectionMap.get(sourceColId) || []).filter((m) => !m.watched && !m.inPastQueue);
     if (moviesToMove.length === 0) {
-      showToast(`"${sourceColName}" içinde taşınacak izlenmemiş film yok.`, 'info');
+      showToast(`"${sourceColName}" içindeki izlenmemiş filmler zaten Eskiden İzlenenler sırasında.`, 'info');
       return;
     }
     setConfirmMoveColTarget({
@@ -325,9 +320,8 @@ export default function MoviesPage() {
     });
   };
 
-  // Onay verildiğinde koleksiyon aktarımını uygula
   const executeConfirmedCollectionMove = () => {
-    if (!confirmMoveColTarget || !pastCollection) return;
+    if (!confirmMoveColTarget) return;
     const { id: sourceColId, name: sourceColName, fromModal } = confirmMoveColTarget;
     const moviesToMove = (collectionMap.get(sourceColId) || []).filter((m) => !m.watched);
 
@@ -339,21 +333,23 @@ export default function MoviesPage() {
       });
       showToast(`"${sourceColName}" içindeki ${moviesToMove.length} film seçime eklendi`, 'info');
     } else {
-      moviesToMove.forEach((m) => setMovieCollection(m.id, pastCollection.id));
+      moviesToMove.forEach((m) => setMoviePastQueue(m.id, true));
       setIsPastCollectionOpen(true);
-      showToast(`"${sourceColName}" koleksiyonundaki ${moviesToMove.length} film Eskiden İzlenenler'e aktarıldı!`, 'success');
+      showToast(`"${sourceColName}" koleksiyonundaki ${moviesToMove.length} film (kendi koleksiyonundan silinmeden) Eskiden İzlenenler sırasına eklendi!`, 'success');
     }
     setConfirmMoveColTarget(null);
   };
 
-  // Çoklu film seçme modalını açar ve mevcut koleksiyondaki filmleri işaretli getirir
   const openBulkCollectionModal = (colId: string) => {
     setAddMoviesToCollectionId(colId);
     setCollectionSearch('');
-    const currentInCol = data.movies
-      .filter((m) => m.collectionId === colId && (!pastCollection || colId !== pastCollection.id || !m.watched))
-      .map((m) => m.id);
-    setBulkSelectedMovieIds(new Set(currentInCol));
+    if (colId === PAST_QUEUE_MODAL_ID) {
+      const currentInQueue = data.movies.filter((m) => !m.watched && m.inPastQueue).map((m) => m.id);
+      setBulkSelectedMovieIds(new Set(currentInQueue));
+    } else {
+      const currentInCol = data.movies.filter((m) => m.collectionId === colId).map((m) => m.id);
+      setBulkSelectedMovieIds(new Set(currentInCol));
+    }
   };
 
   const toggleBulkMovieSelection = (movieId: string) => {
@@ -365,9 +361,8 @@ export default function MoviesPage() {
     });
   };
 
-  // Çoklu seçim modalında bir koleksiyona tıklandığında onay uyarısı vererek o koleksiyondaki tüm filmleri seçime ekle / çıkar
   const toggleSelectWholeCollectionInModal = (colId: string, colName: string) => {
-    const isTargetPastCol = Boolean(pastCollection && addMoviesToCollectionId === pastCollection.id);
+    const isTargetPastCol = addMoviesToCollectionId === PAST_QUEUE_MODAL_ID;
     const colMovies = (collectionMap.get(colId) || []).filter((m) => (isTargetPastCol ? !m.watched : true));
     if (colMovies.length === 0) return;
 
@@ -378,14 +373,49 @@ export default function MoviesPage() {
         colMovies.forEach((m) => next.delete(m.id));
         return next;
       });
-    } else {
+    } else if (isTargetPastCol) {
       requestMoveEntireCollectionToPast(colId, colName, true);
+    } else {
+      setBulkSelectedMovieIds((prev) => {
+        const next = new Set(prev);
+        colMovies.forEach((m) => next.add(m.id));
+        return next;
+      });
     }
   };
 
-  // Çoklu seçim modalındaki seçimleri kaydet ve uygula
   const handleApplyBulkCollectionSelection = () => {
     if (!addMoviesToCollectionId) return;
+
+    if (addMoviesToCollectionId === PAST_QUEUE_MODAL_ID) {
+      let addedCount = 0;
+      let removedCount = 0;
+
+      data.movies.forEach((m) => {
+        if (m.watched) return;
+        const shouldBeInQueue = bulkSelectedMovieIds.has(m.id);
+        const isCurrentlyInQueue = Boolean(m.inPastQueue);
+
+        if (shouldBeInQueue && !isCurrentlyInQueue) {
+          setMoviePastQueue(m.id, true);
+          addedCount++;
+        } else if (!shouldBeInQueue && isCurrentlyInQueue) {
+          setMoviePastQueue(m.id, false);
+          removedCount++;
+        }
+      });
+
+      if (addedCount > 0 || removedCount > 0) {
+        showToast(
+          `Eskiden İzlenenler: ${addedCount} film eklendi${removedCount > 0 ? `, ${removedCount} film çıkarıldı` : ''} (Koleksiyon bağları korundu)`,
+          'success'
+        );
+        if (addedCount > 0) setIsPastCollectionOpen(true);
+      }
+      setAddMoviesToCollectionId(null);
+      return;
+    }
+
     const targetColId = addMoviesToCollectionId;
     const targetColName = data.collections.find((c) => c.id === targetColId)?.name || 'Koleksiyon';
 
@@ -410,18 +440,14 @@ export default function MoviesPage() {
         `${targetColName}: ${addedCount} film eklendi${removedCount > 0 ? `, ${removedCount} film çıkarıldı` : ''}`,
         'success'
       );
-      if (pastCollection && targetColId === pastCollection.id && addedCount > 0) {
-        setIsPastCollectionOpen(true);
-      }
     }
     setAddMoviesToCollectionId(null);
   };
 
-  // "Eskiden İzlenenler" içindeki filmleri başka bir koleksiyona veya bağımsız listeye toplu taşıma modalını aç
   const openMoveFromPastModal = () => {
     setPastMoveSearch('');
     setPastMoveSelectedIds(new Set());
-    setPastMoveDestinationMode('standalone');
+    setPastMoveDestinationMode('remove_queue');
     const regularCols = data.collections.filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME));
     setPastMoveTargetColId(regularCols[0]?.id || '');
     setPastMoveNewColName('');
@@ -440,8 +466,18 @@ export default function MoviesPage() {
   const handleExecuteMoveFromPast = () => {
     if (pastMoveSelectedIds.size === 0) return;
 
+    if (pastMoveDestinationMode === 'remove_queue') {
+      pastMoveSelectedIds.forEach((movieId) => {
+        setMoviePastQueue(movieId, false);
+      });
+      showToast(`${pastMoveSelectedIds.size} film Eskiden İzlenenler sırasından çıkarılıp normal izleneceklere döndürüldü!`, 'success');
+      setShowMoveFromPastModal(false);
+      setPastMoveSelectedIds(new Set());
+      return;
+    }
+
     let finalDestColId: string | null = null;
-    let destLabel = 'Bağımsız Filmler (İzlenecekler)';
+    let destLabel = 'Koleksiyon';
 
     if (pastMoveDestinationMode === 'existing') {
       if (!pastMoveTargetColId) {
@@ -460,43 +496,41 @@ export default function MoviesPage() {
     }
 
     pastMoveSelectedIds.forEach((movieId) => {
+      setMoviePastQueue(movieId, false);
       setMovieCollection(movieId, finalDestColId);
     });
 
-    showToast(`${pastMoveSelectedIds.size} film ➔ ${destLabel} kısmına taşındı!`, 'success');
+    showToast(`${pastMoveSelectedIds.size} film ➔ ${destLabel} koleksiyonuna taşındı!`, 'success');
     setShowMoveFromPastModal(false);
     setPastMoveSelectedIds(new Set());
   };
 
-  const sortedStandalone = sortMovies(standaloneMovies);
+  const sortedBottomMovies = sortMovies(baseBottomListMovies);
   const totalUnwatched = data.movies.filter((m) => !m.watched).length;
-  const totalWatched = data.movies.filter((m) => m.watched).length;
+  const totalWatched = data.movies.filter((m) => m.watched && !m.isPastWatch).length;
   const totalPastWatched = data.movies.filter((m) => m.watched && m.isPastWatch).length;
 
-  // Çoklu seçim modalında listelenecek filmler
   const modalSelectableMovies = useMemo(() => {
     if (!addMoviesToCollectionId) return [];
-    const isTargetPastCol = Boolean(pastCollection && addMoviesToCollectionId === pastCollection.id);
+    const isTargetPastCol = addMoviesToCollectionId === PAST_QUEUE_MODAL_ID;
     return data.movies.filter((m) => {
       if (isTargetPastCol && m.watched) return false;
       if (!collectionSearch.trim()) return true;
       return m.title.toLocaleLowerCase('tr-TR').includes(collectionSearch.toLocaleLowerCase('tr-TR'));
     });
-  }, [data.movies, addMoviesToCollectionId, pastCollection, collectionSearch]);
+  }, [data.movies, addMoviesToCollectionId, collectionSearch]);
 
-  // Çoklu seçim modalında hızlı aktarım için diğer koleksiyonlar
   const modalOtherCollections = useMemo(() => {
     if (!addMoviesToCollectionId) return [];
-    const isTargetPastCol = Boolean(pastCollection && addMoviesToCollectionId === pastCollection.id);
+    const isTargetPastCol = addMoviesToCollectionId === PAST_QUEUE_MODAL_ID;
     return data.collections.filter((c) => {
       if (c.id === addMoviesToCollectionId) return false;
       if (normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return false;
       const movies = (collectionMap.get(c.id) || []).filter((m) => (isTargetPastCol ? !m.watched : true));
       return movies.length > 0;
     });
-  }, [data.collections, collectionMap, addMoviesToCollectionId, pastCollection]);
+  }, [data.collections, collectionMap, addMoviesToCollectionId]);
 
-  // "Eskiden İzlenenler"den taşıma modalında filtrelenmiş filmler
   const filteredPastMoviesForMove = useMemo(() => {
     if (!pastMoveSearch.trim()) return allPastColUnratedMovies;
     const q = pastMoveSearch.toLocaleLowerCase('tr-TR');
@@ -509,80 +543,100 @@ export default function MoviesPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold text-ink-100 flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-700/20 border border-gold-500/30 flex items-center justify-center">
-            <Projector size={22} className="text-gold-300" />
-          </div>
-          Filmler
-        </h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowDna(true)} className="flex items-center gap-2 bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-400 border border-emerald-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm">
-            <Dna size={18} />
-            <span className="hidden sm:inline">DNA Sentezle</span>
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-700/20 border border-gold-500/30 flex items-center justify-center">
+              <Projector size={20} className="text-gold-300" />
+            </div>
+            Filmler
+          </h1>
+
+          <button
+            onClick={() => setShowAdd(true)}
+            className="sm:hidden flex items-center gap-1.5 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-3.5 py-2 rounded-xl text-xs font-black shadow-lg shadow-gold-500/20"
+          >
+            <Plus size={16} strokeWidth={2.5} /> Film Ekle
           </button>
-          <button onClick={handleSyncTMDB} disabled={isSyncing} className="flex items-center gap-2 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm disabled:opacity-50">
-            <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">{isSyncing ? 'Taranıyor...' : 'Eksikleri Bul'}</span>
+        </div>
+
+        <div className="grid grid-cols-3 sm:flex items-center gap-1.5 sm:gap-2">
+          <button
+            onClick={() => setShowDna(true)}
+            className="flex items-center justify-center gap-1.5 bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-400 border border-emerald-500/30 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl sm:rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm"
+          >
+            <Dna size={15} className="flex-shrink-0" />
+            <span className="truncate">DNA</span>
           </button>
-          <button onClick={() => setShowPick(true)} className="flex items-center gap-2 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-3.5 py-2.5 rounded-lg font-semibold transition-all shadow-sm">
-            <Shuffle size={18} />
-            <span className="hidden sm:inline">Bugün Ne İzlesem</span>
+          <button
+            onClick={handleSyncTMDB}
+            disabled={isSyncing}
+            className="flex items-center justify-center gap-1.5 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl sm:rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw size={15} className={`flex-shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span className="truncate">{isSyncing ? 'Taranıyor' : 'Eksik Bul'}</span>
           </button>
-          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-2.5 rounded-lg font-semibold hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg shadow-gold-500/20">
-            <Plus size={20} /> Film Ekle
+          <button
+            onClick={() => setShowPick(true)}
+            className="flex items-center justify-center gap-1.5 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl sm:rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm"
+          >
+            <Shuffle size={15} className="flex-shrink-0" />
+            <span className="truncate">Ne İzlesem</span>
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-2.5 rounded-lg font-semibold hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg shadow-gold-500/20"
+          >
+            <Plus size={18} /> Film Ekle
           </button>
         </div>
       </div>
 
-      {/* AKTİF İZLEME SAYACI BANNER'I */}
       {activeTimerMovie && (() => {
         const info = getMovieTimerInfo(activeTimerMovie, nowMs);
         return (
-          <div className="bg-gradient-to-r from-emerald-950/80 via-ink-900 to-ink-950 border border-emerald-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
-                <Timer size={20} className={info.isPaused ? 'text-amber-400' : 'text-emerald-400 animate-pulse'} />
+          <div className="bg-gradient-to-r from-emerald-950/80 via-ink-900 to-ink-950 border border-emerald-500/40 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
+                <Timer size={18} className={info.isPaused ? 'text-amber-400' : 'text-emerald-400 animate-pulse'} />
               </div>
-              <div>
-                <div className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                  <span>{info.isPaused ? '⏸️ Sayaç Duraklatıldı' : '⏳ Canlı Geri Sayım Aktif'}</span>
-                  <span className="text-white">• {activeTimerMovie.title}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 truncate">
+                  <span>{info.isPaused ? '⏸️ Duraklatıldı' : '⏳ Sayaç Aktif'}</span>
+                  <span className="text-white truncate">• {activeTimerMovie.title}</span>
                 </div>
-                <div className="text-[11px] text-ink-300 mt-0.5">
-                  Kalan Süre: <strong className="text-emerald-300 font-mono text-xs">{info.formattedRemaining}</strong> • Geçen: <strong>{info.elapsedMins} dk</strong> / {info.maxMins} dk
-                  {!info.canRateWithTimer && (
-                    <span className="text-amber-400 ml-2">(En az {info.minRequiredMins} dk geçmeden puanlanamaz)</span>
-                  )}
+                <div className="text-[11px] text-ink-300 mt-0.5 flex flex-wrap items-center gap-x-2">
+                  <span>Kalan: <strong className="text-emerald-300 font-mono">{info.formattedRemaining}</strong></span>
+                  <span>• Geçen: <strong>{info.elapsedMins}/{info.maxMins} dk</strong></span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
               <button
                 type="button"
                 onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-ink-800 hover:bg-ink-700 text-amber-300 border border-amber-500/30 text-xs font-bold"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-ink-800 hover:bg-ink-700 text-amber-300 border border-amber-500/30 text-xs font-bold"
               >
-                {info.isPaused ? <><Play size={13} className="fill-current" /> Devam Et</> : <><Pause size={13} /> Duraklat</>}
+                {info.isPaused ? <><Play size={12} className="fill-current" /> Devam</> : <><Pause size={12} /> Duraklat</>}
               </button>
               <button
                 type="button"
                 onClick={() => handleRequestRate(activeTimerMovie)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
                   info.canRateWithTimer
                     ? 'bg-gold-500 hover:bg-gold-400 text-ink-950 shadow-md'
                     : 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
                 }`}
               >
-                {info.canRateWithTimer ? <><Star size={13} className="fill-current" /> Bitir & Puanla</> : <><Lock size={12} /> Kilitli ({info.minRequiredMins - info.elapsedMins} dk)</>}
+                {info.canRateWithTimer ? <><Star size={12} className="fill-current" /> Bitir & Puanla</> : <><Lock size={11} /> {info.minRequiredMins - info.elapsedMins} dk</>}
               </button>
               <button
                 type="button"
                 onClick={() => cancelWatchingMovie(activeTimerMovie.id)}
                 title="Sayacı İptal Et"
-                className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
+                className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 flex-shrink-0"
               >
                 <X size={15} />
               </button>
@@ -591,122 +645,202 @@ export default function MoviesPage() {
         );
       })()}
 
-      <div className="space-y-3">
-        <div className="flex flex-wrap bg-ink-800/50 rounded-lg p-1 border border-ink-700/50 w-fit gap-1">
-          <button onClick={() => setWatchedFilter('all')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${watchedFilter === 'all' ? 'bg-ink-700 text-ink-100' : 'text-ink-400 hover:text-ink-300'}`}>
-            Tümü ({data.movies.length})
-          </button>
-          <button onClick={() => setWatchedFilter('unwatched')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${watchedFilter === 'unwatched' ? 'bg-gold-500/20 text-gold-400' : 'text-ink-400 hover:text-ink-300'}`}>
-            İzlenecekler ({totalUnwatched})
-          </button>
-          <button onClick={() => setWatchedFilter('watched')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${watchedFilter === 'watched' ? 'bg-green-500/20 text-green-400' : 'text-ink-400 hover:text-ink-300'}`}>
-            İzlenenler ({totalWatched})
-          </button>
-          <button onClick={() => setWatchedFilter('past')} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${watchedFilter === 'past' ? 'bg-violet-500/25 text-violet-300' : 'text-ink-400 hover:text-violet-300'}`}>
-            <History size={13} /> Daha Önce İzlenenler ({totalPastWatched})
-          </button>
-        </div>
-
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Film ara..."
-            className="w-full bg-ink-800/80 border border-ink-700 rounded-lg pl-10 pr-4 py-2 text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-gold-500/30 transition-all"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 text-xs text-ink-500"><Filter size={14} /></div>
-          <button onClick={() => setSortMode('added')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sortMode === 'added' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'}`}>
-            <CalendarPlus size={14} /> Eklenme
-          </button>
-          <button onClick={() => setSortMode('az')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sortMode === 'az' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'}`}>
-            <ArrowDownAZ size={14} /> A-Z
-          </button>
-          <button onClick={() => setSortMode('year')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sortMode === 'year' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'}`}>
-            <CalendarDays size={14} /> Yıl
-          </button>
-          <button onClick={() => setSortMode('rating')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sortMode === 'rating' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-800/50 border border-ink-700/50 text-ink-400 hover:text-ink-200'}`}>
-            <StarIcon size={14} /> Puan
-          </button>
-        </div>
-
-        {allGenres.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 items-center">
-            <button onClick={clearGenres} className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedGenres.size === 0 ? 'bg-gold-500 text-ink-950' : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'}`}>
-              Tümü
+      <div className="space-y-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex overflow-x-auto hide-scrollbar bg-ink-900/80 rounded-xl p-1 border border-ink-700/60 gap-1 w-full sm:w-auto">
+            <button
+              onClick={() => setWatchedFilter('all')}
+              className={`whitespace-nowrap px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold rounded-lg transition-all flex-shrink-0 ${
+                watchedFilter === 'all' ? 'bg-ink-700 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-300'
+              }`}
+            >
+              Tümü ({data.movies.length})
             </button>
-            {allGenres.map((g) => {
-              const active = selectedGenres.has(g);
-              return (
-                <button key={g} onClick={() => toggleGenre(g)} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${active ? 'bg-gold-500 text-ink-950' : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'}`}>
-                  {active && <Check size={11} />}
-                  {g}
+            <button
+              onClick={() => setWatchedFilter('unwatched')}
+              className={`whitespace-nowrap px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold rounded-lg transition-all flex-shrink-0 ${
+                watchedFilter === 'unwatched' ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30' : 'text-ink-400 hover:text-ink-300'
+              }`}
+            >
+              İzlenecek ({totalUnwatched})
+            </button>
+            <button
+              onClick={() => setWatchedFilter('watched')}
+              className={`whitespace-nowrap px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold rounded-lg transition-all flex-shrink-0 ${
+                watchedFilter === 'watched' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-ink-400 hover:text-ink-300'
+              }`}
+            >
+              İzlenen ({totalWatched})
+            </button>
+            <button
+              onClick={() => setWatchedFilter('past')}
+              className={`whitespace-nowrap flex items-center justify-center gap-1 px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold rounded-lg transition-all flex-shrink-0 ${
+                watchedFilter === 'past' ? 'bg-violet-500/25 text-violet-300 border border-violet-500/35' : 'text-ink-400 hover:text-violet-300'
+              }`}
+            >
+              <History size={12} className="flex-shrink-0 hidden xs:inline" />
+              <span>Önceden ({totalPastWatched})</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsFilterPanelOpen((prev) => !prev)}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                isFilterPanelOpen || activeFilterCount > 0
+                  ? 'bg-gold-500/15 text-gold-300 border-gold-500/40 shadow-sm'
+                  : 'bg-ink-900/70 hover:bg-ink-800 text-ink-300 border-ink-700/60'
+              }`}
+            >
+              <SlidersHorizontal size={14} className="text-gold-400" />
+              <span>Ara & Filtrele</span>
+              {activeFilterCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-gold-500 text-ink-950 text-[10px] font-black">
+                  {activeFilterCount}
+                </span>
+              )}
+              {isFilterPanelOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                title="Arama ve filtreleri sıfırla"
+                className="p-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-bold transition-colors"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {isFilterPanelOpen && (
+          <div className="bg-ink-900/75 backdrop-blur-md border border-ink-700/70 rounded-2xl p-3 sm:p-4 space-y-3 shadow-xl animate-fade-in">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Film veya koleksiyon adı ara..."
+                className="w-full bg-ink-950/90 border border-ink-700 rounded-xl pl-9 pr-8 py-2 text-base sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white p-1"
+                >
+                  <X size={14} />
                 </button>
-              );
-            })}
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
+              <div className="flex items-center gap-1 text-[11px] font-bold text-ink-400 mr-1 flex-shrink-0">
+                <Filter size={12} /> Sırala:
+              </div>
+              <button onClick={() => setSortMode('added')} className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${sortMode === 'added' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'}`}>
+                <CalendarPlus size={13} /> Eklenme
+              </button>
+              <button onClick={() => setSortMode('az')} className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${sortMode === 'az' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'}`}>
+                <ArrowDownAZ size={13} /> A-Z
+              </button>
+              <button onClick={() => setSortMode('year')} className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${sortMode === 'year' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'}`}>
+                <CalendarDays size={13} /> Yıl
+              </button>
+              <button onClick={() => setSortMode('rating')} className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${sortMode === 'rating' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'}`}>
+                <StarIcon size={13} /> Puan
+              </button>
+            </div>
+
+            {allGenres.length > 0 && (
+              <div className="flex sm:flex-wrap gap-1.5 items-center overflow-x-auto hide-scrollbar pt-1 border-t border-ink-800/70">
+                <button
+                  onClick={clearGenres}
+                  className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+                    selectedGenres.size === 0 ? 'bg-gold-500 text-ink-950' : 'bg-ink-950 text-ink-400 hover:bg-ink-800 hover:text-ink-200 border border-ink-800'
+                  }`}
+                >
+                  Tüm Türler
+                </button>
+                {allGenres.map((g) => {
+                  const active = selectedGenres.has(g);
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => toggleGenre(g)}
+                      className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+                        active ? 'bg-gold-500 text-ink-950' : 'bg-ink-950 text-ink-400 hover:bg-ink-800 hover:text-ink-200 border border-ink-800'
+                      }`}
+                    >
+                      {active && <Check size={11} />}
+                      {g}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* =========================================================
-          AYRI BÖLÜM: ESKİDEN İZLENENLER KOLEKSİYONU (PUANLANMAYI BEKLEYENLER)
-          ========================================================= */}
-      {pastCollection && watchedFilter !== 'watched' && watchedFilter !== 'past' && (
+      {watchedFilter !== 'watched' && watchedFilter !== 'past' && (
         <div className="bg-ink-900/60 backdrop-blur-sm border border-violet-500/35 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all">
-          <div className="w-full flex items-center justify-between px-4 py-3 hover:bg-ink-800/40 transition-colors gap-2 flex-wrap">
+          <div className="w-full flex items-center justify-between px-3.5 py-2.5 sm:px-4 sm:py-3 hover:bg-ink-800/40 transition-colors gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setIsPastCollectionOpen((prev) => !prev)}
-              className="flex items-center gap-2.5 flex-1 text-left min-w-0"
+              className="flex items-center gap-2 flex-1 text-left min-w-0"
             >
               {isPastCollectionOpen ? (
-                <ChevronDown size={18} className="text-violet-400 flex-shrink-0" />
+                <ChevronDown size={17} className="text-violet-400 flex-shrink-0" />
               ) : (
-                <ChevronRight size={18} className="text-violet-400 flex-shrink-0" />
+                <ChevronRight size={17} className="text-violet-400 flex-shrink-0" />
               )}
-              <History size={18} className="text-violet-400 flex-shrink-0" />
-              <span className="font-semibold text-sm text-ink-100 truncate">
-                {pastCollection.name} Koleksiyonu
+              <History size={16} className="text-violet-400 flex-shrink-0" />
+              <span className="font-bold text-xs sm:text-sm text-ink-100 truncate">
+                Eskiden İzlenenler
               </span>
-              <span className="text-[11px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full flex-shrink-0">
-                {pastCollectionUnratedMovies.length} puanlanacak film
+              <span className="text-[10px] sm:text-[11px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full flex-shrink-0">
+                {pastCollectionUnratedMovies.length}
               </span>
             </button>
 
-            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               {allPastColUnratedMovies.length > 0 && (
                 <button
                   type="button"
                   onClick={openMoveFromPastModal}
-                  className="flex items-center gap-1 text-[11px] font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-2.5 py-1 rounded-lg transition-colors"
-                  title="Buradaki filmleri seçerek başka bir koleksiyona veya bağımsız film listesine topluca taşı"
+                  className="flex items-center gap-1 text-[11px] font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-2 sm:px-2.5 py-1 rounded-lg transition-colors"
+                  title="Buradaki filmleri seçerek sıradan çıkar veya başka bir koleksiyona topluca taşı"
                 >
-                  <ArrowRightLeft size={12} /> Toplu Taşı / Çıkar
+                  <ArrowRightLeft size={11} />
+                  <span>Taşı</span>
                 </button>
               )}
 
               <button
                 type="button"
-                onClick={() => openBulkCollectionModal(pastCollection.id)}
-                className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2.5 py-1 rounded-lg transition-colors"
+                onClick={() => openBulkCollectionModal(PAST_QUEUE_MODAL_ID)}
+                className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2 sm:px-2.5 py-1 rounded-lg transition-colors"
                 title="Listeden çoklu film veya koleksiyon seçerek buraya ekle"
               >
-                <Plus size={12} /> Çoklu Film / Koleksiyon Ekle
+                <Plus size={12} />
+                <span>Film Seç</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsPastCollectionOpen((prev) => !prev)}
-                className="flex items-center gap-1.5 text-xs font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-3 py-1 rounded-lg transition-all"
+                className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2.5 py-1 rounded-lg transition-all"
               >
                 {isPastCollectionOpen ? (
-                  <><EyeOff size={13} /> Kapat</>
+                  <><EyeOff size={12} /> <span className="hidden xs:inline">Kapat</span></>
                 ) : (
-                  <><Eye size={13} /> Aç</>
+                  <><Eye size={12} /> <span className="hidden xs:inline">Aç</span></>
                 )}
               </button>
             </div>
@@ -716,87 +850,100 @@ export default function MoviesPage() {
             <div className="border-t border-violet-500/25 animate-fade-in">
               {pastCollectionUnratedMovies.length === 0 ? (
                 <div className="p-4 text-xs text-ink-400 text-center">
-                  Bu koleksiyonda puanlanmayı bekleyen film yok. Sağ üstteki <strong>"+ Çoklu Film / Koleksiyon Ekle"</strong> butonundan birden fazla filmi veya koleksiyonu tek seferde buraya aktarabilirsin.
+                  Bu koleksiyonda puanlanmayı bekleyen film yok. Sağ üstteki <strong>"+ Film Seç"</strong> butonundan birden fazla filmi veya koleksiyonu kendi serisinden silinmeden buraya ekleyebilirsin.
                 </div>
               ) : (
-                pastCollectionUnratedMovies.map((m) => (
-                  <MovieRow
-                    key={m.id}
-                    movie={m}
-                    nowMs={nowMs}
-                    anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
-                    collectionName={pastCollection.name}
-                    onDelete={(movie) => setDeleteTarget(movie)}
-                    onRate={handleRequestRate}
-                    onStartWatch={startWatchingMovie}
-                    onTogglePause={togglePauseWatchingMovie}
-                    onCancelWatch={cancelWatchingMovie}
-                    onUnwatch={unwatchMovie}
-                    onEdit={(movie) => setEditTarget(movie)}
-                    onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
-                    onSelectDetail={(movie) => setDetailMovieId(movie.id)}
-                    altWatchTemplate={data.altWatchTemplate}
-                  />
-                ))
+                <div className="p-2 sm:p-3 space-y-2.5">
+                  {pastCollectionUnratedMovies.map((m) => {
+                    const origColName = m.collectionId
+                      ? data.collections.find((c) => c.id === m.collectionId)?.name
+                      : undefined;
+                    return (
+                      <MovieRow
+                        key={m.id}
+                        movie={m}
+                        nowMs={nowMs}
+                        anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
+                        collectionName={origColName}
+                        onDelete={(movie) => setDeleteTarget(movie)}
+                        onRate={handleRequestRate}
+                        onStartWatch={startWatchingMovie}
+                        onTogglePause={togglePauseWatchingMovie}
+                        onCancelWatch={cancelWatchingMovie}
+                        onUnwatch={unwatchMovie}
+                        onEdit={(movie) => setEditTarget(movie)}
+                        onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
+                        onSelectDetail={(movie) => setDetailMovieId(movie.id)}
+                        altWatchTemplate={data.altWatchTemplate}
+                      />
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
         </div>
       )}
 
-      {/* NORMAL KOLEKSİYONLAR LİSTESİ (AÇILIR/KAPANIR VE İZLENME DURUMUNA GÖRE FİLTRELENİR) */}
       {filteredCollections.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap bg-ink-900/50 border border-ink-800/80 px-3.5 py-2.5 rounded-xl">
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-2 bg-ink-900/50 border border-ink-800/80 px-3.5 py-2.5 rounded-xl">
             <button
               type="button"
               onClick={() => setIsCollectionsSectionOpen((prev) => !prev)}
-              className="flex items-center gap-2 text-sm font-semibold text-ink-200 hover:text-gold-400 uppercase tracking-wide transition-colors"
+              className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-ink-200 hover:text-gold-400 uppercase tracking-wide transition-colors min-w-0"
             >
-              {isCollectionsSectionOpen ? <ChevronDown size={17} className="text-gold-400" /> : <ChevronRight size={17} className="text-gold-400" />}
-              <Boxes size={16} className="text-gold-400" />
-              <span>Koleksiyonlar</span>
-              <span className="text-[11px] font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-2 py-0.5 rounded-full">
+              {isCollectionsSectionOpen ? <ChevronDown size={16} className="text-gold-400 flex-shrink-0" /> : <ChevronRight size={16} className="text-gold-400 flex-shrink-0" />}
+              <Boxes size={15} className="text-gold-400 flex-shrink-0" />
+              <span className="truncate">Koleksiyonlar</span>
+              <span className="text-[10px] sm:text-[11px] font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-2 py-0.5 rounded-full flex-shrink-0">
                 {filteredCollections.length}
               </span>
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               {isCollectionsSectionOpen && (
                 <button
                   type="button"
                   onClick={handleToggleAllCollectionsExpand}
-                  className="flex items-center gap-1 text-xs font-semibold text-ink-300 hover:text-gold-300 bg-ink-800/80 hover:bg-ink-700 border border-ink-700/70 px-2.5 py-1 rounded-lg transition-all"
+                  className="flex items-center gap-1 text-[11px] font-semibold text-ink-300 hover:text-gold-300 bg-ink-800/80 hover:bg-ink-700 border border-ink-700/70 px-2 sm:px-2.5 py-1 rounded-lg transition-all"
                 >
-                  <ChevronsUpDown size={13} className="text-gold-400" />
-                  <span>{allFilteredExpanded ? 'Tümünü Daralt' : 'Tümünü Genişlet'}</span>
+                  <ChevronsUpDown size={12} className="text-gold-400" />
+                  <span>{allFilteredExpanded ? 'Daralt' : 'Genişlet'}</span>
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={() => setIsCollectionsSectionOpen((prev) => !prev)}
-                className="flex items-center gap-1.5 text-xs font-bold text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 px-3 py-1 rounded-lg transition-all"
+                className="flex items-center gap-1 text-[11px] font-bold text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 px-2.5 py-1 rounded-lg transition-all"
               >
                 {isCollectionsSectionOpen ? (
-                  <><EyeOff size={13} /> Koleksiyonları Gizle</>
+                  <><EyeOff size={12} /> <span>Gizle</span></>
                 ) : (
-                  <><Eye size={13} /> Koleksiyonları Göster</>
+                  <><Eye size={12} /> <span>Göster</span></>
                 )}
               </button>
             </div>
           </div>
 
           {isCollectionsSectionOpen && (
-            <div className="space-y-3 animate-fade-in">
+            <div className="space-y-2.5 animate-fade-in">
               {filteredCollections.map((coll) => {
                 const movies = collectionMap.get(coll.id) || [];
+                // KOLEKSİYON İÇİ FİLTRELEME MANTIĞI: İzlenenler sekmesinde sadece güncel izlenenler listelenir!
                 const visibleMovies = [...movies]
-                  .filter((m) => (watchedFilter === 'past' ? m.watched && m.isPastWatch : true))
+                  .filter((m) => {
+                    if (watchedFilter === 'unwatched') return !m.watched;
+                    if (watchedFilter === 'watched') return m.watched && !m.isPastWatch;
+                    if (watchedFilter === 'past') return m.watched && m.isPastWatch;
+                    return true;
+                  })
                   .sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10));
-                const watchedInCol = visibleMovies.filter((m) => m.watched).length;
-                const unwatchedInCol = visibleMovies.length - watchedInCol;
-                const isCompletelyWatched = visibleMovies.length > 0 && watchedInCol === visibleMovies.length;
+                  
+                const watchedInCol = movies.filter((m) => m.watched).length;
+                const notInPastQueueUnwatched = movies.filter((m) => !m.watched && !m.inPastQueue).length;
+                const isCompletelyWatched = movies.length > 0 && watchedInCol === movies.length;
                 const isExpanded = expandedCollections.has(coll.id);
 
                 return (
@@ -806,47 +953,47 @@ export default function MoviesPage() {
                       isCompletelyWatched ? 'border-green-500/30 hover:border-green-500/50' : 'border-ink-700/50 hover:border-ink-600/50'
                     }`}
                   >
-                    <div className="w-full flex items-center justify-between p-4 hover:bg-ink-800/40 transition-colors gap-2 flex-wrap">
+                    <div className="w-full flex items-center justify-between p-3 sm:p-4 hover:bg-ink-800/40 transition-colors gap-2 flex-wrap">
                       <button type="button" onClick={() => toggleCollection(coll.id)} className="flex items-center gap-2.5 flex-1 text-left min-w-0">
                         {isExpanded ? <ChevronDown size={18} className="text-ink-500 flex-shrink-0" /> : <ChevronRight size={18} className="text-ink-500 flex-shrink-0" />}
-                        <Boxes size={18} className={isCompletelyWatched ? 'text-green-400 flex-shrink-0' : 'text-gold-400 flex-shrink-0'} />
-                        <span className="font-semibold text-ink-100 truncate">{coll.name}</span>
+                        <Boxes size={16} className={isCompletelyWatched ? 'text-green-400 flex-shrink-0' : 'text-gold-400 flex-shrink-0'} />
+                        <span className="font-semibold text-xs sm:text-sm text-ink-100 truncate">{coll.name}</span>
                         {isCompletelyWatched && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full flex-shrink-0">
-                            <Check size={11} /> Tamamlandı
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                            <Check size={10} /> <span className="hidden sm:inline">Tamamlandı</span>
                           </span>
                         )}
                       </button>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {pastCollection && unwatchedInCol > 0 && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {notInPastQueueUnwatched > 0 && (
                           <button
                             type="button"
                             onClick={() => requestMoveEntireCollectionToPast(coll.id, coll.name, false)}
-                            className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2.5 py-1 rounded-lg transition-colors"
-                            title="Bu koleksiyondaki izlenmemiş tüm filmleri Eskiden İzlenenler koleksiyonuna aktar"
+                            className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2 py-1 rounded-lg transition-colors"
+                            title="Bu koleksiyondaki izlenmemiş filmleri kendi koleksiyonundan silmeden Eskiden İzlenenler sırasına ekle"
                           >
-                            <History size={12} /> <span className="hidden sm:inline">Eskiden İzlenenlere Aktar</span>
+                            <History size={12} /> <span className="hidden md:inline">Eskiden İzlenenlere Aktar</span>
                           </button>
                         )}
                         <button
                           type="button"
                           onClick={() => openBulkCollectionModal(coll.id)}
-                          className="flex items-center gap-1 text-[11px] font-bold text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 px-2.5 py-1 rounded-lg transition-colors"
+                          className="flex items-center gap-1 text-[11px] font-bold text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 px-2 py-1 rounded-lg transition-colors"
                           title="Listeden bu koleksiyona çoklu film ekle"
                         >
-                          <Plus size={12} /> Film Ekle
+                          <Plus size={12} /> <span className="hidden sm:inline">Film Ekle</span>
                         </button>
-                        <span className="text-xs text-ink-400 bg-ink-800/60 px-2.5 py-1 rounded-full">
-                          {watchedInCol}/{visibleMovies.length} film
+                        <span className="text-[11px] font-bold text-ink-400 bg-ink-800/60 px-2 py-1 rounded-full">
+                          {watchedInCol}/{movies.length}
                         </span>
                       </div>
                     </div>
 
                     {isExpanded && (
-                      <div className="border-t border-ink-700/40">
+                      <div className="border-t border-ink-700/40 bg-ink-950/20 p-2 sm:p-3 space-y-2.5">
                         {visibleMovies.length === 0 ? (
-                          <div className="p-4 text-xs text-ink-500 text-center">Bu koleksiyonda henüz film yok. Sağ üstteki "+ Film Ekle" butonundan ekleyebilirsin.</div>
+                          <div className="p-4 text-xs text-ink-500 text-center">Bu koleksiyonda bu filtreye uygun film yok.</div>
                         ) : (
                           visibleMovies.map((m) => (
                             <MovieRow
@@ -870,34 +1017,6 @@ export default function MoviesPage() {
                         )}
                       </div>
                     )}
-
-                    {!isExpanded && visibleMovies.length > 0 && (
-                      <div className="px-4 pb-4 flex items-center gap-2 overflow-x-auto hide-scrollbar pt-1">
-                        {visibleMovies.map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            title={`${m.title} - Detayları Gör`}
-                            onClick={() => setDetailMovieId(m.id)}
-                            className="w-10 sm:w-12 aspect-[2/3] flex-shrink-0 rounded-md overflow-hidden border border-ink-700/50 shadow-sm relative group cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500"
-                          >
-                            {m.posterUrl ? (
-                              <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                            ) : (
-                              <div className="w-full h-full bg-ink-800 flex items-center justify-center"><ImageIcon size={14} className="text-ink-600" /></div>
-                            )}
-                            {m.watched && (
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px] group-hover:opacity-0 transition-opacity">
-                                <Check size={16} className="text-green-400 drop-shadow-md" />
-                              </div>
-                            )}
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <Eye size={14} className="text-white" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -906,28 +1025,27 @@ export default function MoviesPage() {
         </div>
       )}
 
-      {/* BAĞIMSIZ FİLMLER LİSTESİ */}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h2 className="text-sm font-semibold text-ink-400 uppercase tracking-wide">
+          <h2 className="text-xs sm:text-sm font-semibold text-ink-400 uppercase tracking-wide">
             {watchedFilter === 'past' ? 'Daha Önce İzlenen Filmler' : 'Bağımsız Filmler'}
           </h2>
-          {pastCollection && watchedFilter === 'unwatched' && sortedStandalone.length > 0 && (
+          {watchedFilter === 'unwatched' && sortedBottomMovies.length > 0 && (
             <button
               type="button"
-              onClick={() => openBulkCollectionModal(pastCollection.id)}
-              className="flex items-center gap-1.5 text-xs font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-3 py-1 rounded-lg transition-colors"
+              onClick={() => openBulkCollectionModal(PAST_QUEUE_MODAL_ID)}
+              className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2.5 py-1 rounded-lg transition-colors"
             >
-              <CheckSquare size={13} /> Filmleri Seçip Eskiden İzlenenlere Ekle
+              <CheckSquare size={12} /> <span>Toplu Seç & Eskiden İzlenenlere Ekle</span>
             </button>
           )}
         </div>
-        {sortedStandalone.length === 0 ? (
+        {sortedBottomMovies.length === 0 ? (
           <div className="text-center py-12 text-ink-500">
             <Projector size={40} className="mx-auto mb-3 opacity-40" />
-            <p>
+            <p className="text-sm">
               {watchedFilter === 'past'
-                ? 'Daha önce izlenen film yok.'
+                ? 'Daha önce izlenen bağımsız film yok.'
                 : watchedFilter === 'watched'
                 ? 'İzlenen bağımsız film yok.'
                 : watchedFilter === 'unwatched'
@@ -936,30 +1054,38 @@ export default function MoviesPage() {
             </p>
           </div>
         ) : (
-          sortedStandalone.map((m) => (
-            <MovieRow
-              key={m.id}
-              movie={m}
-              nowMs={nowMs}
-              anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
-              onDelete={(movie) => setDeleteTarget(movie)}
-              onRate={handleRequestRate}
-              onStartWatch={startWatchingMovie}
-              onTogglePause={togglePauseWatchingMovie}
-              onCancelWatch={cancelWatchingMovie}
-              onUnwatch={unwatchMovie}
-              onEdit={(movie) => setEditTarget(movie)}
-              onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
-              onSelectDetail={(movie) => setDetailMovieId(movie.id)}
-              altWatchTemplate={data.altWatchTemplate}
-            />
-          ))
+          <div className="space-y-2.5">
+            {sortedBottomMovies.map((m) => {
+              const colName = m.collectionId
+                ? data.collections.find((c) => c.id === m.collectionId)?.name
+                : undefined;
+              return (
+                <MovieRow
+                  key={m.id}
+                  movie={m}
+                  nowMs={nowMs}
+                  anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
+                  collectionName={colName}
+                  onDelete={(movie) => setDeleteTarget(movie)}
+                  onRate={handleRequestRate}
+                  onStartWatch={startWatchingMovie}
+                  onTogglePause={togglePauseWatchingMovie}
+                  onCancelWatch={cancelWatchingMovie}
+                  onUnwatch={unwatchMovie}
+                  onEdit={(movie) => setEditTarget(movie)}
+                  onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
+                  onSelectDetail={(movie) => setDetailMovieId(movie.id)}
+                  altWatchTemplate={data.altWatchTemplate}
+                />
+              );
+            })}
+          </div>
         )}
       </div>
 
       {/* TEKİL FİLM KOLEKSİYON DEĞİŞTİRME / TAŞIMA MODALI */}
       {collectionTargetMovie && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCollectionTargetMovie(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={() => setCollectionTargetMovie(null)}>
           <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in-up">
             <div className="flex items-center justify-between p-4 border-b border-ink-800">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -974,7 +1100,37 @@ export default function MoviesPage() {
               <button onClick={() => setCollectionTargetMovie(null)} className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800"><X size={18} /></button>
             </div>
 
-            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <div className="p-4 space-y-4 max-h-[75svh] overflow-y-auto custom-scrollbar">
+              {!collectionTargetMovie.watched && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !collectionTargetMovie.inPastQueue;
+                    setMoviePastQueue(collectionTargetMovie.id, nextVal);
+                    showToast(
+                      nextVal
+                        ? `"${collectionTargetMovie.title}" Eskiden İzlenenler sırasına eklendi`
+                        : `"${collectionTargetMovie.title}" Eskiden İzlenenler sırasından çıkarıldı`,
+                      'info'
+                    );
+                    setCollectionTargetMovie(null);
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                    collectionTargetMovie.inPastQueue
+                      ? 'bg-violet-500/20 border-violet-500 text-violet-200 font-bold'
+                      : 'bg-ink-950/60 hover:bg-ink-800 border-ink-800 text-ink-200 font-semibold'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-xs">
+                    <History size={15} className="text-violet-400" />
+                    {collectionTargetMovie.inPastQueue
+                      ? 'Eskiden İzlenenler Sırasından Çıkar'
+                      : 'Eskiden İzlenenler Sırasına Ekle'}
+                  </span>
+                  {collectionTargetMovie.inPastQueue && <Check size={15} className="text-violet-300" />}
+                </button>
+              )}
+
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black uppercase tracking-wider text-ink-400 flex items-center gap-1.5">
                   <FolderPlus size={13} className="text-gold-400" /> Yeni Koleksiyon Oluştur ve Ata
@@ -985,7 +1141,7 @@ export default function MoviesPage() {
                     value={newCollectionName}
                     onChange={(e) => setNewCollectionName(e.target.value)}
                     placeholder="Yeni koleksiyon adı yaz..."
-                    className="flex-1 bg-ink-950 border border-ink-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-ink-500 focus:outline-none focus:border-gold-500"
+                    className="flex-1 bg-ink-950 border border-ink-700 rounded-xl px-3.5 py-2 text-base sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-gold-500"
                     onKeyDown={(e) => { if (e.key === 'Enter') handleCreateAndAssignCollection(); }}
                   />
                   <button type="button" disabled={!newCollectionName.trim()} onClick={handleCreateAndAssignCollection} className="bg-gold-500 hover:bg-gold-400 text-ink-950 font-black px-4 py-2 rounded-xl text-xs transition-all disabled:opacity-40">
@@ -995,12 +1151,12 @@ export default function MoviesPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="text-[11px] font-black uppercase tracking-wider text-ink-400">Mevcut Koleksiyonlar ({data.collections.length})</div>
-                {data.collections.length === 0 ? (
+                <div className="text-[11px] font-black uppercase tracking-wider text-ink-400">Mevcut Koleksiyonlar ({regularCollectionsList.length})</div>
+                {regularCollectionsList.length === 0 ? (
                   <p className="text-xs text-ink-500 py-3 text-center bg-ink-950/50 rounded-xl border border-ink-800">Henüz hiç koleksiyon yok.</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {data.collections.map((col) => {
+                    {regularCollectionsList.map((col) => {
                       const isCurrent = collectionTargetMovie.collectionId === col.id;
                       const count = (collectionMap.get(col.id) || []).length;
                       return (
@@ -1036,40 +1192,37 @@ export default function MoviesPage() {
         </div>
       )}
 
-      {/* =========================================================
-          ESKİDEN İZLENENLER KOLEKSİYONUNDAN BAŞKA KOLEKSİYONA / FİLM LİSTESİNE TOPLU TAŞIMA MODALI
-          ========================================================= */}
+      {/* ESKİDEN İZLENENLER KOLEKSİYONUNDAN BAŞKA KOLEKSİYONA / FİLM LİSTESİNE TOPLU TAŞIMA MODALI */}
       {showMoveFromPastModal && (() => {
         const allVisiblePastSelected =
           filteredPastMoviesForMove.length > 0 &&
           filteredPastMoviesForMove.every((m) => pastMoveSelectedIds.has(m.id));
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowMoveFromPastModal(false)}>
-            <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[88vh] animate-fade-in-up">
-              <div className="flex items-center justify-between p-4 border-b border-ink-800">
-                <div>
-                  <h3 className="text-sm font-black text-white flex items-center gap-2">
-                    <ArrowRightLeft size={17} className="text-amber-400" />
-                    Eskiden İzlenenler'den Toplu Taşı / Çıkar
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={() => setShowMoveFromPastModal(false)}>
+            <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[88svh] animate-fade-in-up">
+              <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800">
+                <div className="min-w-0 pr-2">
+                  <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                    <ArrowRightLeft size={16} className="text-amber-400 flex-shrink-0" />
+                    <span className="truncate">Eskiden İzlenenler'den Toplu Taşı / Çıkar</span>
                   </h3>
-                  <p className="text-xs text-ink-400 mt-0.5">
-                    Buradaki filmleri seçerek bağımsız film listesine (İzleneceklere) veya başka bir koleksiyona topluca aktarabilirsin
+                  <p className="text-[11px] text-ink-400 mt-0.5">
+                    Seçtiğin filmleri sıradan çıkarabilir veya başka bir koleksiyona aktarabilirsin
                   </p>
                 </div>
-                <button onClick={() => setShowMoveFromPastModal(false)} className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800"><X size={18} /></button>
+                <button onClick={() => setShowMoveFromPastModal(false)} className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800 flex-shrink-0"><X size={18} /></button>
               </div>
 
-              {/* ARAMA VE TÜMÜNÜ SEÇ */}
               <div className="p-3 border-b border-ink-800 bg-ink-950/40 flex items-center gap-2">
                 <div className="relative flex-1">
-                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
                   <input
                     type="text"
                     value={pastMoveSearch}
                     onChange={(e) => setPastMoveSearch(e.target.value)}
-                    placeholder="Eskiden izlenenler içindeki filmlerde ara..."
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-ink-500 focus:outline-none focus:border-amber-500"
+                    placeholder="Filmlerde ara..."
+                    className="w-full bg-ink-900 border border-ink-700 rounded-xl pl-8 pr-3 py-2 text-base sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 {filteredPastMoviesForMove.length > 0 && (
@@ -1086,16 +1239,15 @@ export default function MoviesPage() {
                         return next;
                       });
                     }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 text-xs font-bold whitespace-nowrap transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-2 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 text-xs font-bold whitespace-nowrap transition-colors"
                   >
-                    {allVisiblePastSelected ? <CheckSquare size={14} className="text-amber-400" /> : <Square size={14} />}
-                    <span>{allVisiblePastSelected ? 'Seçimi Kaldır' : 'Tümünü Seç'}</span>
+                    {allVisiblePastSelected ? <CheckSquare size={13} className="text-amber-400" /> : <Square size={13} />}
+                    <span>{allVisiblePastSelected ? 'Kaldır' : 'Tümü'}</span>
                   </button>
                 )}
               </div>
 
-              {/* FİLM SEÇİM LİSTESİ */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-1.5 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-1.5 custom-scrollbar">
                 {filteredPastMoviesForMove.length === 0 ? (
                   <div className="text-center py-8 text-xs text-ink-500">
                     Aramaya uygun film bulunamadı.
@@ -1103,39 +1255,45 @@ export default function MoviesPage() {
                 ) : (
                   filteredPastMoviesForMove.map((m) => {
                     const isSelected = pastMoveSelectedIds.has(m.id);
+                    const origColName = m.collectionId
+                      ? data.collections.find((c) => c.id === m.collectionId)?.name
+                      : null;
                     return (
                       <button
                         key={m.id}
                         type="button"
                         onClick={() => togglePastMoveMovie(m.id)}
-                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                        className={`w-full flex items-center justify-between p-2 sm:p-2.5 rounded-xl border text-left transition-all ${
                           isSelected
                             ? 'bg-amber-500/20 border-amber-500/50 text-white'
                             : 'bg-ink-950/50 hover:bg-ink-800/70 border-ink-800/80 text-ink-200'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <div className="flex-shrink-0">
                             {isSelected ? (
-                              <CheckSquare size={18} className="text-amber-400" />
+                              <CheckSquare size={17} className="text-amber-400" />
                             ) : (
-                              <Square size={18} className="text-ink-500" />
+                              <Square size={17} className="text-ink-500" />
                             )}
                           </div>
-                          <div className="w-8 h-11 rounded bg-ink-900 overflow-hidden flex-shrink-0 border border-ink-700">
+                          <div className="w-7 h-10 rounded bg-ink-900 overflow-hidden flex-shrink-0 border border-ink-700">
                             {m.posterUrl ? (
                               <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>
+                              <div className="w-full h-full flex items-center justify-center"><ImageIcon size={11} className="text-ink-600" /></div>
                             )}
                           </div>
                           <div className="min-w-0">
                             <div className="text-xs font-bold truncate">{m.title}</div>
-                            <div className="text-[10px] text-ink-400">{m.year || 'Yıl yok'}</div>
+                            <div className="text-[10px] text-ink-400 truncate">
+                              {m.year || 'Yıl yok'}
+                              {origColName ? ` · ${origColName}` : ' · Bağımsız'}
+                            </div>
                           </div>
                         </div>
-                        <div className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 flex-shrink-0 ${isSelected ? 'bg-amber-500 text-ink-950' : 'bg-ink-800 text-ink-300'}`}>
-                          {isSelected ? <><Check size={12} /> Seçildi</> : <><Plus size={12} /> Seç</>}
+                        <div className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 flex-shrink-0 ${isSelected ? 'bg-amber-500 text-ink-950' : 'bg-ink-800 text-ink-300'}`}>
+                          {isSelected ? <><Check size={11} /> Seçildi</> : 'Seç'}
                         </div>
                       </button>
                     );
@@ -1143,46 +1301,41 @@ export default function MoviesPage() {
                 )}
               </div>
 
-              {/* HEDEF SEÇİMİ (BAĞIMSIZ LİSTE / MEVCUT KOLEKSİYON / YENİ KOLEKSİYON) */}
-              <div className="p-3.5 border-t border-ink-800 bg-ink-950/70 space-y-3">
-                <div className="text-[11px] font-black uppercase tracking-wider text-ink-300">
-                  Seçilen Filmler Nereye Taşınsın?
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="p-3 border-t border-ink-800 bg-ink-950/70 space-y-2.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setPastMoveDestinationMode('standalone')}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border text-center transition-all ${
-                      pastMoveDestinationMode === 'standalone'
+                    onClick={() => setPastMoveDestinationMode('remove_queue')}
+                    className={`px-2 py-2 rounded-xl text-[11px] font-bold border text-center transition-all truncate ${
+                      pastMoveDestinationMode === 'remove_queue'
                         ? 'bg-amber-500 text-ink-950 border-amber-400 shadow-sm'
                         : 'bg-ink-900 text-ink-300 border-ink-800 hover:bg-ink-800'
                     }`}
                   >
-                    Bağımsız Film Listesine
+                    Sıradan Çıkar
                   </button>
                   <button
                     type="button"
                     onClick={() => setPastMoveDestinationMode('existing')}
                     disabled={regularCollectionsList.length === 0}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border text-center transition-all disabled:opacity-40 ${
+                    className={`px-2 py-2 rounded-xl text-[11px] font-bold border text-center transition-all truncate disabled:opacity-40 ${
                       pastMoveDestinationMode === 'existing'
                         ? 'bg-amber-500 text-ink-950 border-amber-400 shadow-sm'
                         : 'bg-ink-900 text-ink-300 border-ink-800 hover:bg-ink-800'
                     }`}
                   >
-                    Mevcut Koleksiyona
+                    Koleksiyona
                   </button>
                   <button
                     type="button"
                     onClick={() => setPastMoveDestinationMode('new')}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border text-center transition-all ${
+                    className={`px-2 py-2 rounded-xl text-[11px] font-bold border text-center transition-all truncate ${
                       pastMoveDestinationMode === 'new'
                         ? 'bg-amber-500 text-ink-950 border-amber-400 shadow-sm'
                         : 'bg-ink-900 text-ink-300 border-ink-800 hover:bg-ink-800'
                     }`}
                   >
-                    Yeni Koleksiyona
+                    Yeni Koleksiyon
                   </button>
                 </div>
 
@@ -1190,7 +1343,7 @@ export default function MoviesPage() {
                   <select
                     value={pastMoveTargetColId}
                     onChange={(e) => setPastMoveTargetColId(e.target.value)}
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white focus:outline-none focus:border-amber-500"
                   >
                     {regularCollectionsList.map((col) => (
                       <option key={col.id} value={col.id}>
@@ -1206,11 +1359,11 @@ export default function MoviesPage() {
                     value={pastMoveNewColName}
                     onChange={(e) => setPastMoveNewColName(e.target.value)}
                     placeholder="Yeni koleksiyon adı yazın..."
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-ink-500 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white placeholder-ink-500 focus:outline-none focus:border-amber-500"
                   />
                 )}
 
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-0.5">
                   <button
                     type="button"
                     onClick={() => setShowMoveFromPastModal(false)}
@@ -1224,7 +1377,7 @@ export default function MoviesPage() {
                     onClick={handleExecuteMoveFromPast}
                     className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-ink-950 font-black text-xs transition-colors disabled:opacity-40"
                   >
-                    Seçilen {pastMoveSelectedIds.size} Filmi Taşı
+                    Uygula ({pastMoveSelectedIds.size} Film)
                   </button>
                 </div>
               </div>
@@ -1235,35 +1388,38 @@ export default function MoviesPage() {
 
       {/* KOLEKSİYON İÇİNE ÇOKLU FİLM VE KOLEKSİYON SEÇME MODALI */}
       {addMoviesToCollectionId && (() => {
-        const targetCol = data.collections.find((c) => c.id === addMoviesToCollectionId);
-        const isTargetPast = Boolean(pastCollection && addMoviesToCollectionId === pastCollection.id);
+        const isTargetPast = addMoviesToCollectionId === PAST_QUEUE_MODAL_ID;
+        const targetColName = isTargetPast
+          ? 'Eskiden İzlenenler'
+          : data.collections.find((c) => c.id === addMoviesToCollectionId)?.name || 'Koleksiyon';
         const allVisibleSelected =
           modalSelectableMovies.length > 0 &&
           modalSelectableMovies.every((m) => bulkSelectedMovieIds.has(m.id));
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setAddMoviesToCollectionId(null)}>
-            <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[86vh] animate-fade-in-up">
-              <div className="flex items-center justify-between p-4 border-b border-ink-800">
-                <div>
-                  <h3 className="text-sm font-black text-white flex items-center gap-2">
-                    {isTargetPast ? <History size={17} className="text-violet-400" /> : <Boxes size={17} className="text-gold-400" />}
-                    {targetCol?.name} Koleksiyonuna Çoklu Ekle
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={() => setAddMoviesToCollectionId(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[88svh] animate-fade-in-up">
+              <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800">
+                <div className="min-w-0 pr-2">
+                  <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                    {isTargetPast ? <History size={16} className="text-violet-400 flex-shrink-0" /> : <Boxes size={16} className="text-gold-400 flex-shrink-0" />}
+                    <span className="truncate">{targetColName} İçin Çoklu Seç</span>
                   </h3>
-                  <p className="text-xs text-ink-400 mt-0.5">
-                    İster üstten komple bir koleksiyonu seç, ister alttan istediğin filmleri topluca işaretle
+                  <p className="text-[11px] text-ink-400 mt-0.5">
+                    {isTargetPast
+                      ? 'Seçtiğin filmler kendi koleksiyonlarından silinmeden Eskiden İzlenenler sırasına eklenir'
+                      : 'Üstten koleksiyon veya alttan istediğin filmleri topluca seç'}
                   </p>
                 </div>
-                <button onClick={() => setAddMoviesToCollectionId(null)} className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800"><X size={18} /></button>
+                <button onClick={() => setAddMoviesToCollectionId(null)} className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800 flex-shrink-0"><X size={18} /></button>
               </div>
 
-              {/* HIZLI KOLEKSİYON SEÇİMİ (KOMPLE KOLEKSİYON AKTARMA - ONAY UYARILI) */}
               {modalOtherCollections.length > 0 && (
-                <div className="p-3.5 border-b border-ink-800 bg-ink-950/60 space-y-2">
-                  <div className="text-[11px] font-black uppercase tracking-wider text-gold-400 flex items-center gap-1.5">
-                    <Boxes size={13} /> Koleksiyon Olarak Toplu Seç ({modalOtherCollections.length})
+                <div className="p-3 border-b border-ink-800 bg-ink-950/60 space-y-1.5">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-gold-400 flex items-center gap-1">
+                    <Boxes size={12} /> Koleksiyon Olarak Toplu Seç ({modalOtherCollections.length})
                   </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar">
+                  <div className="flex gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
                     {modalOtherCollections.map((col) => {
                       const colMovies = (collectionMap.get(col.id) || []).filter((m) => (isTargetPast ? !m.watched : true));
                       const isAllColSelected = colMovies.length > 0 && colMovies.every((m) => bulkSelectedMovieIds.has(m.id));
@@ -1272,16 +1428,16 @@ export default function MoviesPage() {
                           key={col.id}
                           type="button"
                           onClick={() => toggleSelectWholeCollectionInModal(col.id, col.name)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                          className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
                             isAllColSelected
                               ? 'bg-violet-500 text-white border-violet-400 shadow-sm'
                               : 'bg-ink-900 hover:bg-ink-800 text-ink-200 border-ink-700'
                           }`}
                         >
-                          {isAllColSelected ? <CheckSquare size={13} /> : <Square size={13} className="text-ink-400" />}
+                          {isAllColSelected ? <CheckSquare size={12} /> : <Square size={12} className="text-ink-400" />}
                           <span>{col.name}</span>
                           <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isAllColSelected ? 'bg-black/25 text-white' : 'bg-ink-800 text-ink-400'}`}>
-                            {colMovies.length} film
+                            {colMovies.length}
                           </span>
                         </button>
                       );
@@ -1290,16 +1446,15 @@ export default function MoviesPage() {
                 </div>
               )}
 
-              {/* ARAMA VE TÜMÜNÜ SEÇ BARI */}
               <div className="p-3 border-b border-ink-800 bg-ink-950/40 flex items-center gap-2">
                 <div className="relative flex-1">
-                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
                   <input
                     type="text"
                     value={collectionSearch}
                     onChange={(e) => setCollectionSearch(e.target.value)}
                     placeholder="Listendeki filmlerde ara..."
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-ink-500 focus:outline-none focus:border-gold-500"
+                    className="w-full bg-ink-900 border border-ink-700 rounded-xl pl-8 pr-3 py-2 text-base sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-gold-500"
                   />
                 </div>
                 {modalSelectableMovies.length > 0 && (
@@ -1316,16 +1471,15 @@ export default function MoviesPage() {
                         return next;
                       });
                     }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 text-xs font-bold whitespace-nowrap transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-2 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 text-xs font-bold whitespace-nowrap transition-colors"
                   >
-                    {allVisibleSelected ? <CheckSquare size={14} className="text-gold-400" /> : <Square size={14} />}
-                    <span>{allVisibleSelected ? 'Seçimi Kaldır' : 'Tümünü Seç'}</span>
+                    {allVisibleSelected ? <CheckSquare size={13} className="text-gold-400" /> : <Square size={13} />}
+                    <span>{allVisibleSelected ? 'Kaldır' : 'Tümü'}</span>
                   </button>
                 )}
               </div>
 
-              {/* ÇOKLU SEÇİM FİLM LİSTESİ */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-1.5 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-1.5 custom-scrollbar">
                 {modalSelectableMovies.length === 0 ? (
                   <div className="text-center py-8 text-xs text-ink-500">
                     Aramaya uygun izlenmemiş film bulunamadı.
@@ -1342,7 +1496,7 @@ export default function MoviesPage() {
                         key={m.id}
                         type="button"
                         onClick={() => toggleBulkMovieSelection(m.id)}
-                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                        className={`w-full flex items-center justify-between p-2 sm:p-2.5 rounded-xl border text-left transition-all ${
                           isSelected
                             ? isTargetPast
                               ? 'bg-violet-500/20 border-violet-500/50 text-white'
@@ -1350,31 +1504,31 @@ export default function MoviesPage() {
                             : 'bg-ink-950/50 hover:bg-ink-800/70 border-ink-800/80 text-ink-200'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <div className="flex-shrink-0">
                             {isSelected ? (
-                              <CheckSquare size={18} className={isTargetPast ? 'text-violet-400' : 'text-gold-400'} />
+                              <CheckSquare size={17} className={isTargetPast ? 'text-violet-400' : 'text-gold-400'} />
                             ) : (
-                              <Square size={18} className="text-ink-500" />
+                              <Square size={17} className="text-ink-500" />
                             )}
                           </div>
-                          <div className="w-8 h-11 rounded bg-ink-900 overflow-hidden flex-shrink-0 border border-ink-700">
+                          <div className="w-7 h-10 rounded bg-ink-900 overflow-hidden flex-shrink-0 border border-ink-700">
                             {m.posterUrl ? (
                               <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>
+                              <div className="w-full h-full flex items-center justify-center"><ImageIcon size={11} className="text-ink-600" /></div>
                             )}
                           </div>
                           <div className="min-w-0">
                             <div className="text-xs font-bold truncate">{m.title}</div>
-                            <div className="text-[10px] text-ink-400">
+                            <div className="text-[10px] text-ink-400 truncate">
                               {m.year || 'Yıl yok'}
-                              {otherColName ? ` · Mevcut Koleksiyon: ${otherColName}` : ''}
+                              {otherColName ? ` · ${otherColName}` : ''}
                             </div>
                           </div>
                         </div>
                         <div
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 flex-shrink-0 ${
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 flex-shrink-0 ${
                             isSelected
                               ? isTargetPast
                                 ? 'bg-violet-500 text-white'
@@ -1382,7 +1536,7 @@ export default function MoviesPage() {
                               : 'bg-ink-800 text-ink-300'
                           }`}
                         >
-                          {isSelected ? <><Check size={12} /> Seçildi</> : <><Plus size={12} /> Seç</>}
+                          {isSelected ? <><Check size={11} /> Seçildi</> : 'Seç'}
                         </div>
                       </button>
                     );
@@ -1407,7 +1561,7 @@ export default function MoviesPage() {
                       : 'bg-gold-500 hover:bg-gold-400 text-ink-950'
                   }`}
                 >
-                  Seçilenleri Kaydet ({bulkSelectedMovieIds.size} Film)
+                  Kaydet ({bulkSelectedMovieIds.size} Film)
                 </button>
               </div>
             </div>
@@ -1419,7 +1573,7 @@ export default function MoviesPage() {
       {confirmMoveColTarget && (
         <ConfirmDialog
           title="Koleksiyondan Toplu Aktarım"
-          message={`"${confirmMoveColTarget.name}" koleksiyonundaki ${confirmMoveColTarget.count} adet izlenmemiş film "Eskiden İzlenenler" koleksiyonuna aktarılacak. Onaylıyor musun?`}
+          message={`"${confirmMoveColTarget.name}" koleksiyonundaki ${confirmMoveColTarget.count} adet izlenmemiş film (kendi koleksiyonundan silinmeden) "Eskiden İzlenenler" sırasına eklenecek. Onaylıyor musun?`}
           onConfirm={executeConfirmedCollectionMove}
           onCancel={() => setConfirmMoveColTarget(null)}
         />
@@ -1442,7 +1596,7 @@ export default function MoviesPage() {
         <RatingModal
           title={pickedMovie.title}
           subtitle={pickedMovie.year ? `Çıkış Yılı: ${pickedMovie.year}` : 'Film'}
-          initialIsPastWatch={Boolean(pickedMovie.isPastWatch || isMovieInPastCollection(pickedMovie))}
+          initialIsPastWatch={Boolean(pickedMovie.isPastWatch || pickedMovie.inPastQueue)}
           onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
             watchMovie(pickedMovie.id, rating, note, detailedRating, reviewTags, isPastWatch);
             setPickedMovie(null);
@@ -1452,18 +1606,21 @@ export default function MoviesPage() {
       )}
 
       {showAdd && <AddMovieModal onClose={() => setShowAdd(false)} />}
+      
       {ratingTarget && (
         <RatingModal
           title={ratingTarget.title}
           subtitle={ratingTarget.year ? `Çıkış Yılı: ${ratingTarget.year}` : 'Film'}
-          initialIsPastWatch={Boolean(ratingTarget.isPastWatch || isMovieInPastCollection(ratingTarget))}
+          initialIsPastWatch={Boolean(ratingTarget.isPastWatch || ratingTarget.inPastQueue)}
           onRate={(rating, note, detailedRating, reviewTags, isPastWatch) =>
             watchMovie(ratingTarget.id, rating, note, detailedRating, reviewTags, isPastWatch)
           }
           onClose={() => setRatingTarget(null)}
         />
       )}
+
       {editTarget && <EditMovieModal movie={editTarget} onClose={() => setEditTarget(null)} />}
+      
       {deleteTarget && (
         <ConfirmDialog
           title="Film Sil"
@@ -1472,6 +1629,7 @@ export default function MoviesPage() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+      
       {detailMovie && <MediaDetailModal target={{ type: 'movie', data: detailMovie }} onClose={() => setDetailMovieId(null)} />}
     </div>
   );
@@ -1526,29 +1684,28 @@ function MovieRow({
   const timerInfo = !movie.watched && movie.startedAt ? getMovieTimerInfo(movie, nowMs) : null;
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-ink-800/40 transition-colors group border-b border-ink-800/40 last:border-0 relative">
+    <div className="bg-ink-900/40 border border-ink-800/60 rounded-2xl p-3 sm:p-4 hover:border-gold-500/30 transition-all group flex flex-col gap-3 mb-2.5">
       <div className="flex gap-3 sm:gap-4 flex-1 min-w-0">
         <button
           type="button"
           onClick={() => onSelectDetail(movie)}
           title="Sinema Kartını & Detayları Gör"
-          className="w-16 sm:w-20 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500"
+          className="w-16 sm:w-20 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500 self-start"
         >
           {movie.posterUrl ? (
             <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
           ) : (
-            <ImageIcon size={20} className="text-ink-600" />
+            <ImageIcon size={18} className="text-ink-600" />
           )}
           <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
-            <div className="w-7 h-7 rounded-full bg-gold-500/90 text-ink-950 flex items-center justify-center shadow-md transform scale-75 group-hover/poster:scale-100 transition-transform">
-              <Eye size={15} />
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gold-500/90 text-ink-950 flex items-center justify-center shadow-md">
+              <Eye size={14} />
             </div>
-            <span className="text-[9px] font-black text-white uppercase tracking-wider">İncele</span>
           </div>
         </button>
 
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-          <div className="flex flex-wrap items-center gap-2 mb-1">
+        <div className="flex-1 min-w-0 flex flex-col justify-start pt-0.5">
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
             <button
               type="button"
               onClick={() => onSelectDetail(movie)}
@@ -1559,7 +1716,12 @@ function MovieRow({
             </button>
             {movie.watched && movie.isPastWatch && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
-                <History size={10} /> Önceden İzlendi
+                <History size={10} /> Önceden
+              </span>
+            )}
+            {!movie.watched && movie.inPastQueue && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-violet-500/15 text-violet-300 border border-violet-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+                <History size={10} /> Eskiden Sırada
               </span>
             )}
             {collectionName && (
@@ -1567,28 +1729,28 @@ function MovieRow({
                 type="button"
                 onClick={() => onAssignCollection(movie)}
                 title="Koleksiyonu Değiştir"
-                className="text-[10px] text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 whitespace-nowrap transition-colors"
+                className="text-[10px] text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 max-w-[140px] sm:max-w-none truncate transition-colors"
               >
-                <Boxes size={10} /> {collectionName}
+                <Boxes size={10} className="flex-shrink-0" /> <span className="truncate">{collectionName}</span>
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-[10px] sm:text-xs text-ink-400 mb-1">
-            {movie.year && <span className="flex items-center gap-1"><Calendar size={12} /> {movie.year}</span>}
-            {movie.runtime && <span className="flex items-center gap-1"><Clock size={12} /> {movie.runtime} dk</span>}
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-[11px] sm:text-xs text-ink-400 mb-1.5">
+            {movie.year && <span className="flex items-center gap-1"><Calendar size={11} /> {movie.year}</span>}
+            {movie.runtime && <span className="flex items-center gap-1"><Clock size={11} /> {movie.runtime} dk</span>}
             {movie.watched && !movie.isPastWatch && movie.actualRuntime && movie.runtime && movie.actualRuntime < movie.runtime && (
-              <span className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded font-bold text-[10px]" title={`Orijinal süre: ${movie.runtime} dk | Senin bitirme süren: ${movie.actualRuntime} dk`}>
-                <Zap size={10} /> {movie.actualRuntime} dk'da bitti
+              <span className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded font-bold text-[10px]">
+                <Zap size={10} /> {movie.actualRuntime} dk
               </span>
             )}
           </div>
 
-          {movie.genres.length > 0 && <div className="text-[10px] sm:text-xs text-ink-500 truncate mb-2">{movie.genres.join(' · ')}</div>}
+          {movie.genres.length > 0 && <div className="text-[11px] sm:text-xs text-ink-500 truncate mb-2">{movie.genres.join(' · ')}</div>}
 
-          <div className="flex items-center gap-2 flex-wrap mt-auto">
+          <div className="flex items-center gap-1.5 flex-wrap mt-auto">
             {movie.watched && movie.rating !== null && (
-              <div className="flex items-center gap-1.5 mr-2">
+              <div className="flex items-center gap-1.5 mr-1">
                 <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold shadow-sm ${ratingBgClass(movie.rating)}`}>{movie.rating}</span>
                 {!movie.isPastWatch && movie.watchedAt && (
                   <span className="text-[10px] text-ink-500 hidden sm:inline">{formatDateShort(movie.watchedAt)}</span>
@@ -1605,10 +1767,10 @@ function MovieRow({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1.5 bg-ink-800/80 hover:bg-gold-900/30 text-gold-400 border border-gold-500/30 px-2 py-1 sm:py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold transition-all hover:scale-105"
+                  className="inline-flex items-center gap-1 bg-ink-800/80 hover:bg-gold-900/30 text-gold-400 border border-gold-500/30 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
                 >
-                  {link.logo ? <img src={link.logo} alt="Platform" className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={12} />}
-                  {link.text}
+                  {link.logo ? <img src={link.logo} alt="Platform" className="w-3 h-3 rounded-sm object-cover" /> : <Icon size={11} />}
+                  <span>{link.text}</span>
                 </a>
               );
             })}
@@ -1616,83 +1778,85 @@ function MovieRow({
         </div>
       </div>
 
-      <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 sm:gap-1.5 pt-3 sm:pt-0 mt-1 sm:mt-0 border-t border-ink-800/50 sm:border-0 flex-shrink-0">
-        <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
-          {movie.watched ? (
-            <button onClick={() => onUnwatch(movie.id)} className="flex-1 sm:flex-none text-xs text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 rounded-lg transition-colors border border-ink-700/50">
-              Geri Al
-            </button>
-          ) : (
-            <>
-              {timerInfo ? (
-                <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-2.5 py-1.5 rounded-lg text-[11px] font-bold">
-                  <Timer size={13} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
-                  <span className="font-mono" title={`Geçen: ${timerInfo.elapsedMins} dk | Kalan: ${timerInfo.formattedRemaining}`}>
-                    {timerInfo.formattedRemaining}
-                  </span>
+      <div className="bg-ink-950/50 rounded-xl p-2 flex flex-col sm:flex-row items-center justify-between gap-2 border border-ink-800/40">
+        <div className="flex items-center gap-1.5 w-full sm:w-auto justify-between sm:justify-start">
+          <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
+            {movie.watched ? (
+              <button onClick={() => onUnwatch(movie.id)} className="text-xs text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 rounded-lg transition-colors border border-ink-700/50 font-semibold w-full sm:w-auto text-center">
+                Geri Al
+              </button>
+            ) : (
+              <>
+                {timerInfo ? (
+                  <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-2.5 py-1.5 rounded-lg text-[11px] font-bold w-full sm:w-auto justify-center">
+                    <Timer size={12} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
+                    <span className="font-mono">{timerInfo.formattedRemaining}</span>
+                    <button
+                      type="button"
+                      onClick={() => onTogglePause(movie.id)}
+                      title={timerInfo.isPaused ? 'Devam Et' : 'Duraklat'}
+                      className="ml-1 text-amber-300 hover:text-white"
+                    >
+                      {timerInfo.isPaused ? <Play size={11} className="fill-current" /> : <Pause size={11} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onCancelWatch(movie.id)}
+                      title="Sayacı İptal Et"
+                      className="ml-0.5 text-ink-400 hover:text-red-400"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => onTogglePause(movie.id)}
-                    title={timerInfo.isPaused ? 'Devam Et' : 'Duraklat'}
-                    className="ml-1 text-amber-300 hover:text-white"
+                    onClick={() => onStartWatch(movie.id, false)}
+                    title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'Geri Sayımı Başlat'}
+                    className={`flex items-center justify-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-all font-bold border w-full sm:w-auto ${
+                      anotherTimerActive
+                        ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed'
+                        : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
+                    }`}
                   >
-                    {timerInfo.isPaused ? <Play size={12} className="fill-current" /> : <Pause size={12} />}
+                    {anotherTimerActive ? <Lock size={11} /> : <Play size={11} className="fill-current" />} Başlat
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onCancelWatch(movie.id)}
-                    title="Sayacı İptal Et"
-                    className="ml-0.5 text-ink-400 hover:text-red-400"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ) : (
+                )}
+
                 <button
-                  type="button"
-                  onClick={() => onStartWatch(movie.id, false)}
-                  title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'Geri Sayımı Başlat'}
-                  className={`flex items-center justify-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-all font-bold border ${
-                    anotherTimerActive
-                      ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed'
-                      : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
+                  onClick={() => onRate(movie)}
+                  title={timerInfo && !timerInfo.canRateWithTimer ? `En az ${timerInfo.minRequiredMins} dk geçmeden puanlanamaz!` : 'Filmi Puanla'}
+                  className={`flex items-center justify-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-all font-bold w-full sm:w-auto ${
+                    timerInfo && !timerInfo.canRateWithTimer
+                      ? 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 shadow-md shadow-gold-500/10'
                   }`}
                 >
-                  {anotherTimerActive ? <Lock size={11} /> : <Play size={12} className="fill-current" />} Başlat
+                  {timerInfo && !timerInfo.canRateWithTimer ? <><Lock size={11} /> Puanla</> : <><Star size={13} /> Puanla</>}
                 </button>
-              )}
-
-              <button
-                onClick={() => onRate(movie)}
-                title={timerInfo && !timerInfo.canRateWithTimer ? `En az ${timerInfo.minRequiredMins} dk geçmeden puanlanamaz!` : 'Filmi Puanla'}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 text-xs px-3.5 py-1.5 rounded-lg transition-all font-bold ${
-                  timerInfo && !timerInfo.canRateWithTimer
-                    ? 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 shadow-md shadow-gold-500/10'
-                }`}
-              >
-                {timerInfo && !timerInfo.canRateWithTimer ? <><Lock size={12} /> Puanla</> : <><Star size={14} /> Puanla</>}
-              </button>
-            </>
-          )}
-
-          <div className="flex items-center gap-1 ml-auto sm:ml-0">
-            <button
-              onClick={() => onAssignCollection(movie)}
-              title="Koleksiyona Ekle / Değiştir"
-              className={`p-1.5 rounded-lg transition-colors border ${
-                movie.collectionId ? 'text-gold-400 bg-gold-500/10 border-gold-500/30 hover:bg-gold-500/20' : 'text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 border-transparent hover:border-ink-700'
-              }`}
-            >
-              <Boxes size={15} />
-            </button>
-            <button onClick={() => onEdit(movie)} title="Filmi Düzenle" className="text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700">
-              <Edit2 size={15} />
-            </button>
-            <button onClick={() => onDelete(movie)} title="Filmi Sil" className="text-ink-500 hover:text-red-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700">
-              <Trash2 size={16} />
-            </button>
+              </>
+            )}
           </div>
+        </div>
+
+        <div className="flex items-center gap-1 w-full sm:w-auto justify-end">
+          <button
+            onClick={() => onAssignCollection(movie)}
+            title="Koleksiyona Ekle / Değiştir"
+            className={`p-1.5 rounded-lg transition-colors border ${
+              movie.collectionId || movie.inPastQueue
+                ? 'text-gold-400 bg-gold-500/10 border-gold-500/30 hover:bg-gold-500/20'
+                : 'text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 border-transparent hover:border-ink-700'
+            }`}
+          >
+            <Boxes size={15} />
+          </button>
+          <button onClick={() => onEdit(movie)} title="Filmi Düzenle" className="text-ink-500 hover:text-gold-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700">
+            <Edit2 size={15} />
+          </button>
+          <button onClick={() => onDelete(movie)} title="Filmi Sil" className="text-ink-500 hover:text-red-400 bg-ink-900/50 hover:bg-ink-800 p-1.5 rounded-lg transition-colors border border-transparent hover:border-ink-700">
+            <Trash2 size={15} />
+          </button>
         </div>
       </div>
     </div>
