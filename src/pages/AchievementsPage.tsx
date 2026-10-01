@@ -18,25 +18,55 @@ const RANK_TIERS = [
     minLevel: 5, maxLevel: 9, title: 'Film Meraklısı', subtitle: 'Kült yapımların ve seçkin hikayelerin kaşifi',
     color: 'text-sky-400', border: 'border-sky-500/40', badgeBg: 'bg-sky-500/15', bgGlow: 'bg-sky-500/20',
     gradient: 'from-blue-600 via-sky-500 to-cyan-300', barGradient: 'from-blue-700 via-sky-500 to-cyan-300',
-    strokeColor: '#38bdf8', icon: Icons.Award,
+    strokeColor: '#38bdf8', icon: Icons.Popcorn,
   },
   {
-    minLevel: 10, maxLevel: 19, title: 'Tutkulu Sinefil', subtitle: 'Yönetmen imzalarını ve alt metinleri okuyan göz',
+    minLevel: 10, maxLevel: 14, title: 'Düzenli Seyirci', subtitle: 'Sinema artık hayatının ayrılmaz bir parçası',
+    color: 'text-emerald-400', border: 'border-emerald-500/40', badgeBg: 'bg-emerald-500/15', bgGlow: 'bg-emerald-500/20',
+    gradient: 'from-emerald-600 via-green-500 to-teal-300', barGradient: 'from-emerald-700 via-green-500 to-teal-300',
+    strokeColor: '#34d399', icon: Icons.Eye,
+  },
+  {
+    minLevel: 15, maxLevel: 19, title: 'Tutkulu Sinefil', subtitle: 'Yönetmen imzalarını ve alt metinleri okuyan göz',
     color: 'text-violet-400', border: 'border-violet-500/40', badgeBg: 'bg-violet-500/15', bgGlow: 'bg-violet-500/20',
     gradient: 'from-violet-600 via-purple-500 to-fuchsia-400', barGradient: 'from-violet-700 via-purple-500 to-fuchsia-300',
-    strokeColor: '#a78bfa', icon: Icons.Shield,
+    strokeColor: '#a78bfa', icon: Icons.Heart,
   },
   {
-    minLevel: 20, maxLevel: 39, title: 'Sinema Otoritesi', subtitle: 'Eleştirileri ve arşiviyle referans noktası',
+    minLevel: 20, maxLevel: 29, title: 'Sinema Otoritesi', subtitle: 'Eleştirileri ve arşiviyle referans noktası',
     color: 'text-gold-400', border: 'border-gold-500/50', badgeBg: 'bg-gold-500/15', bgGlow: 'bg-gold-500/25',
     gradient: 'from-amber-600 via-gold-500 to-yellow-300', barGradient: 'from-amber-600 via-gold-500 to-yellow-200',
-    strokeColor: '#f59e0b', icon: Icons.Crown,
+    strokeColor: '#f59e0b', icon: Icons.Award,
   },
   {
-    minLevel: 40, maxLevel: 999, title: 'Sinevia Efsanesi', subtitle: 'Yedinci sanatın zirvesine ulaşmış ölümsüz otorite',
+    minLevel: 30, maxLevel: 39, title: 'Eleştirmenler Birliği', subtitle: 'Puanları kanun sayılan acımasız vizyoner',
+    color: 'text-rose-400', border: 'border-rose-500/50', badgeBg: 'bg-rose-500/15', bgGlow: 'bg-rose-500/30',
+    gradient: 'from-red-600 via-rose-500 to-pink-400', barGradient: 'from-red-700 via-rose-500 to-pink-400',
+    strokeColor: '#fb7185', icon: Icons.PenTool,
+  },
+  {
+    minLevel: 40, maxLevel: 49, title: 'Sinevia Efsanesi', subtitle: 'Yedinci sanatın zirvesine ulaşmış saygın usta',
     color: 'text-cyan-300', border: 'border-cyan-400/50', badgeBg: 'bg-cyan-500/15', bgGlow: 'bg-cyan-500/25',
     gradient: 'from-cyan-500 via-teal-400 to-emerald-300', barGradient: 'from-cyan-600 via-teal-400 to-emerald-200',
-    strokeColor: '#22d3ee', icon: Icons.Gem,
+    strokeColor: '#22d3ee', icon: Icons.Crown,
+  },
+  {
+    minLevel: 50, maxLevel: 59, title: 'Evren Fatihi', subtitle: 'Tüm kurgusal evrenlere hükmeden mitik koleksiyoner',
+    color: 'text-fuchsia-300', border: 'border-fuchsia-400/60', badgeBg: 'bg-fuchsia-500/20', bgGlow: 'bg-fuchsia-500/35',
+    gradient: 'from-fuchsia-600 via-pink-500 to-purple-400', barGradient: 'from-fuchsia-700 via-pink-500 to-purple-300',
+    strokeColor: '#f0abfc', icon: Icons.Globe2,
+  },
+  {
+    minLevel: 60, maxLevel: 74, title: 'Kozmik Yönetmen', subtitle: 'Sinema tarihini yeniden yazan yıldızlarüstü irade',
+    color: 'text-indigo-300', border: 'border-indigo-400/60', badgeBg: 'bg-indigo-500/20', bgGlow: 'bg-indigo-500/40',
+    gradient: 'from-indigo-600 via-blue-500 to-violet-400', barGradient: 'from-indigo-700 via-blue-500 to-violet-300',
+    strokeColor: '#818cf8', icon: Icons.Sparkles,
+  },
+  {
+    minLevel: 75, maxLevel: 999, title: 'Sinema Tanrısı', subtitle: 'Ölümsüzlüğe ulaşmış, evrenin nihai ekran yüzü',
+    color: 'text-zinc-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]', border: 'border-zinc-200/70', badgeBg: 'bg-zinc-100/20', bgGlow: 'bg-zinc-300/40',
+    gradient: 'from-zinc-400 via-zinc-100 to-white', barGradient: 'from-zinc-500 via-zinc-200 to-white',
+    strokeColor: '#ffffff', icon: Icons.Gem,
   },
 ];
 
@@ -170,6 +200,8 @@ export default function AchievementsPage() {
   const trophyCompletionPct = totalPossibleTiers > 0 ? Math.round((unlockedTiersCount / totalPossibleTiers) * 100) : 0;
   const isTestMode = data.showLockedNames;
 
+  // Görünür rank kartlarını (aşağıdaki küçük 5'li listeyi) ekran boyutuna göre sığdırmak için 
+  // mobil (veya tüm ekranlarda) dinamik gösterebilirsin. Biz 10 taneyi scroll ile sığdıralım.
   return (
     <div className="space-y-4 md:space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -284,13 +316,13 @@ export default function AchievementsPage() {
               {nextRank ? (
                 <span className={userPersona.color}>Sonraki Unvan: {nextRank.title} (Sv.{nextRank.minLevel})</span>
               ) : (
-                <span className="text-cyan-300">Maksimum Unvana Ulaşıldı! 👑</span>
+                <span className="text-zinc-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">Maksimum Unvana Ulaşıldı! 👑</span>
               )}
             </div>
           </div>
 
-          {/* Sağ: Kupa Koleksiyonu Kasası (5 Ana Kademe: Bronz, Gümüş, Altın, Platin, Elmas) */}
-          <div className="w-full xl:w-80 bg-ink-950/80 border border-gold-500/30 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between gap-3 flex-shrink-0 shadow-xl">
+          {/* Sağ: Kupa Koleksiyonu Kasası */}
+          <div className="w-full xl:w-[22rem] bg-ink-950/80 border border-gold-500/30 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between gap-3 flex-shrink-0 shadow-xl">
             <div className="hidden sm:flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-gold-400 block">Toplanan Kupalar</span>
@@ -308,50 +340,61 @@ export default function AchievementsPage() {
               <div className="h-full bg-gradient-to-r from-amber-600 via-gold-500 to-yellow-300 rounded-full transition-all duration-700" style={{ width: `${Math.max(2, trophyCompletionPct)}%` }} />
             </div>
 
-            <div className="grid grid-cols-5 gap-1.5 sm:pt-1 sm:border-t border-ink-800/80 text-center">
+            {/* Yeni Zümrüt Kademesinin Eklendiği Butonlar */}
+            <div className="grid grid-cols-6 gap-1 sm:pt-1 sm:border-t border-ink-800/80 text-center">
               {[
-                { key: 'bronze', label: 'Bronz', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/25' },
+                { key: 'bronze', label: 'Bronz', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/25' },
                 { key: 'silver', label: 'Gümüş', color: 'text-slate-200', bg: 'bg-slate-400/10 border-slate-400/25' },
                 { key: 'gold', label: 'Altın', color: 'text-yellow-300', bg: 'bg-yellow-500/10 border-yellow-500/25' },
                 { key: 'platinum', label: 'Platin', color: 'text-cyan-200', bg: 'bg-cyan-400/10 border-cyan-400/25' },
+                { key: 'emerald', label: 'Zümrüt', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/25' },
                 { key: 'diamond', label: 'Elmas', color: 'text-sky-300', bg: 'bg-sky-500/10 border-sky-500/25' },
               ].map((gem) => (
                 <button
                   key={gem.key}
                   type="button"
                   onClick={() => setActiveTier(activeTier === gem.key ? null : gem.key)}
-                  className={`rounded-xl py-1.5 px-1 border transition-all ${gem.bg} ${activeTier === gem.key ? 'ring-2 ring-gold-400 scale-105' : 'hover:brightness-125'}`}
+                  className={`rounded-xl py-1.5 px-0.5 border transition-all ${gem.bg} ${activeTier === gem.key ? 'ring-2 ring-gold-400 scale-105' : 'hover:brightness-125'}`}
                   title={`${gem.label} Kupalarını Filtrele`}
                 >
-                  <div className={`text-xs sm:text-sm font-black leading-none ${gem.color}`}>{tierStats[gem.key]?.unlocked || 0}</div>
-                  <div className="text-[9px] sm:text-[10px] font-bold text-ink-300 mt-1 truncate">{gem.label}</div>
+                  <div className={`text-[10px] sm:text-xs font-black leading-none ${gem.color}`}>{tierStats[gem.key]?.unlocked || 0}</div>
+                  <div className="text-[8px] sm:text-[9px] font-bold text-ink-300 mt-1 truncate">{gem.label}</div>
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* 5 KADEMELİ UNVAN EVRİM HARİTASI */}
-        <div className="hidden sm:block relative z-10 mt-5 pt-4 border-t border-ink-800/80">
-          <div className="grid grid-cols-5 gap-2">
+        {/* DİNAMİK UNVAN EVRİM HARİTASI (TÜM ALANI KAPLAYAN VE ORTALANAN KUTULAR) */}
+        <div className="hidden sm:block relative z-10 mt-5 pt-4 border-t border-ink-800/80 w-full">
+          <div className="flex gap-2 md:gap-3 pb-2 w-full justify-center">
             {RANK_TIERS.map((tier, idx) => {
+              // KAYAN PENCERE FİLTRESİ: Sadece 1 önceki, mevcut ve sonraki 2 kademeyi göster
+              if (idx < currentRankIndex - 1 || idx > currentRankIndex + 2) return null;
+
               const isUnlocked = lvl.level >= tier.minLevel;
               const isCurrent = idx === currentRankIndex;
               const TierIcon = tier.icon;
+              
               return (
                 <div
                   key={tier.title}
-                  className={`relative rounded-xl p-2.5 border transition-all flex items-center gap-2.5 ${
+                  // DEĞİŞİKLİK: flex-1 eklendi (Kutular tüm boş alanı eşit paylaşarak büyür).
+                  // min-w-max ile yazının sıkışması engellendi.
+                  className={`relative rounded-xl px-4 py-3 border transition-all flex items-center justify-center gap-3 flex-1 min-w-max ${
                     isCurrent ? `${tier.badgeBg}${tier.border} shadow-md scale-[1.02]` : isUnlocked ? 'bg-ink-900/70 border-ink-800/90 opacity-90' : 'bg-ink-950/40 border-ink-800/40 opacity-45'
                   }`}
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
-                    {isUnlocked ? <TierIcon size={14} className={tier.color} /> : <Icons.Lock size={12} className="text-ink-500" />}
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
+                    {isUnlocked ? <TierIcon size={16} className={tier.color} /> : <Icons.Lock size={14} className="text-ink-500" />}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className={`text-[11px] font-black truncate ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>{tier.title}</div>
-                    <div className="text-[9px] font-bold text-ink-500 flex items-center gap-1">
-                      <span>Seviye {tier.minLevel}+</span>
+                  
+                  <div className="flex flex-col items-start justify-center">
+                    <div className={`text-xs font-black whitespace-nowrap ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>
+                      {tier.title}
+                    </div>
+                    <div className="text-[10px] font-bold text-ink-500 flex items-center gap-1 mt-0.5">
+                      <span>Sv. {tier.minLevel}+</span>
                       {isUnlocked && <Icons.CheckCircle2 size={10} className="text-emerald-400" />}
                     </div>
                   </div>
