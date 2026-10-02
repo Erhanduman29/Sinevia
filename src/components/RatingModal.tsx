@@ -255,8 +255,8 @@ export default function RatingModal({
   const { positiveTags, negativeTags } = useMemo(() => {
     const all = Array.from(new Set([...availableTags, ...selectedTags]));
     return {
-      positiveTags: all.filter((t) => isPositiveTag(t)),
-      negativeTags: all.filter((t) => !isPositiveTag(t)),
+      positiveTags: all.filter((t) => isPositiveTag(t, data.tagSentiments)),
+      negativeTags: all.filter((t) => !isPositiveTag(t, data.tagSentiments)),
     };
   }, [availableTags, selectedTags]);
 

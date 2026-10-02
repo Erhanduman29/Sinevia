@@ -12,7 +12,7 @@ import { uid } from '../lib/utils';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 function CollapsibleSection({
-  title, icon, iconClass, desc, badge, defaultOpen = true, children,
+  title, icon, iconClass, desc, badge, defaultOpen = false, children,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -22,11 +22,23 @@ function CollapsibleSection({
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const storageKey = `sinevia_settings_section_${title}`;
+  const [open, setOpen] = useState(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored !== null) return stored === 'true';
+    } catch {}
+    return defaultOpen;
+  });
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try { localStorage.setItem(storageKey, String(next)); } catch {}
+  };
   return (
     <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl shadow-xl overflow-hidden">
       <button
-        onClick={() => setOpen(!open)}
+        onClick={toggle}
         className="w-full flex items-center justify-between gap-2 p-4 sm:p-5 hover:bg-ink-800/30 transition-colors text-left"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -53,7 +65,7 @@ function CollapsibleSection({
 
 export default function SettingsPage() {
   const {
-    data, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag,
+    data, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData, resetData,
     exportShareList, toggleLockedNames, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme,
@@ -93,8 +105,8 @@ export default function SettingsPage() {
 
   const [altTemplate, setAltTemplate] = useState(data.altWatchTemplate || '');
   const reviewTagsList = data.reviewTags && data.reviewTags.length > 0 ? data.reviewTags : DEFAULT_REVIEW_TAGS;
-  const positiveTags = reviewTagsList.filter((t) => isPositiveTag(t));
-  const negativeTags = reviewTagsList.filter((t) => !isPositiveTag(t));
+  const positiveTags = reviewTagsList.filter((t) => isPositiveTag(t, data.tagSentiments));
+  const negativeTags = reviewTagsList.filter((t) => !isPositiveTag(t, data.tagSentiments));
 
   const THEMES = [
     { id: 'default', name: 'Karanlık (Orijinal)', desc: 'Kehribar, Safir & Mor', icon: Moon, previewBg: '#0a0a0e', textMode: 'dark', colors: ['#f59e0b', '#0ea5e9', '#8b5cf6'] },
@@ -108,14 +120,7 @@ export default function SettingsPage() {
   const handleAddGenre = () => { if (!newGenre.trim()) return; addGenre(newGenre); setNewGenre(''); };
   const handleAddReviewTag = () => {
     if (!newReviewTag.trim()) return;
-    let tag = newReviewTag.trim();
-    const currentSentiment = isPositiveTag(tag);
-    if (newTagSentiment === 'negative' && currentSentiment) {
-      tag = '💩 ' + tag;
-    } else if (newTagSentiment === 'positive' && !currentSentiment) {
-      tag = '🔥 ' + tag;
-    }
-    addReviewTag(tag);
+    addReviewTag(newReviewTag.trim(), newTagSentiment);
     setNewReviewTag('');
   };
   const handleAddCollection = () => { if (!newCollection.trim()) return; addCollection(newCollection); setNewCollection(''); };
@@ -159,20 +164,14 @@ export default function SettingsPage() {
   };
 
   const applyReviewTagEdit = (oldTag: string) => {
-    let newName = editReviewTagName.trim();
+    const newName = editReviewTagName.trim();
     if (!newName) return;
-    const currentSentiment = isPositiveTag(newName);
-    if (editTagSentiment === 'negative' && currentSentiment) {
-      newName = '💩 ' + newName;
-    } else if (editTagSentiment === 'positive' && !currentSentiment) {
-      newName = '🔥 ' + newName;
-    }
-    renameReviewTag(oldTag, newName);
+    renameReviewTag(oldTag, newName, editTagSentiment);
     setEditingReviewTag(null);
   };
 
   const renderTagChip = (tag: string) => (
-    <div key={tag} className={`flex items-center gap-1.5 bg-ink-800 border rounded-xl pl-2.5 pr-2 py-1.5 transition-colors ${isPositiveTag(tag) ? 'border-emerald-700/40' : 'border-red-700/40'} hover:border-gold-500/50`}>
+    <div key={tag} className={`flex items-center gap-1.5 bg-ink-800 border rounded-xl pl-2.5 pr-2 py-1.5 transition-colors ${isPositiveTag(tag, data.tagSentiments) ? 'border-emerald-700/40' : 'border-red-700/40'} hover:border-gold-500/50`}>
       {editingReviewTag === tag ? (
         <>
           <input
@@ -195,7 +194,14 @@ export default function SettingsPage() {
       ) : (
         <>
           <span className="text-xs sm:text-sm font-medium text-ink-100">{tag}</span>
-          <button onClick={() => { setEditingReviewTag(tag); setEditReviewTagName(tag); setEditTagSentiment(isPositiveTag(tag) ? 'positive' : 'negative'); }} className="text-ink-400 hover:text-gold-400 transition-colors p-0.5"><Edit2 size={12} /></button>
+          <button
+            onClick={() => { const newSent = isPositiveTag(tag, data.tagSentiments) ? 'negative' : 'positive'; setTagSentiment(tag, newSent); }}
+            className={`p-0.5 rounded transition-colors ${isPositiveTag(tag, data.tagSentiments) ? 'text-emerald-500 hover:text-emerald-400' : 'text-red-500 hover:text-red-400'}`}
+            title={isPositiveTag(tag, data.tagSentiments) ? 'Övgü (değiştirmek için tıkla)' : 'Eleştiri (değiştirmek için tıkla)'}
+          >
+            {isPositiveTag(tag, data.tagSentiments) ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
+          </button>
+          <button onClick={() => { setEditingReviewTag(tag); setEditReviewTagName(tag); setEditTagSentiment(isPositiveTag(tag, data.tagSentiments) ? 'positive' : 'negative'); }} className="text-ink-400 hover:text-gold-400 transition-colors p-0.5"><Edit2 size={12} /></button>
           <button onClick={() => setDeleteReviewTagTarget(tag)} className="text-ink-400 hover:text-red-400 transition-colors p-0.5"><X size={13} /></button>
         </>
       )}
