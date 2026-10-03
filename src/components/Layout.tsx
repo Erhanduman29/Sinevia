@@ -19,7 +19,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
   // Akıllı Alt Bar (Auto-Hide) State ve Referansları
   const [isNavVisible, setIsNavVisible] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false); // YENİ: Modal açık mı kontrolü
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const lastScrollY = useRef(0);
 
   const navItems = [
@@ -41,39 +41,56 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     { id: 'achievements', icon: Trophy, label: 'Başarımlar' },
   ] as const;
 
-  // YENİ: Ekranda "fixed" olan herhangi bir Modal (Rating, Detail, Dna vs.) var mı dinleyicisi
+  // 1. KUSURSUZ MODAL ALGILAYICI
+  // Ekranda açılan herhangi bir tam ekran pencereyi (Rating, Detay vb.) yakalar
   useEffect(() => {
-    const observer = new MutationObserver(() => {
-      // Çoğu modalımızda "fixed inset-0 z-[...]" var. Onları yakalıyoruz.
-      // Layout'un kendi fixed elementleri dışında (z-[100], z-[50], z-[120] vb)
-      const hasModals = Array.from(document.querySelectorAll('.fixed')).some(el => {
+    const checkModals = () => {
+      const hasModals = Array.from(document.querySelectorAll('.fixed.inset-0')).some(el => {
         const zIndexMatch = el.className.match(/z-\[?(\d+)\]?/);
         if (zIndexMatch) {
-          const zIndex = parseInt(zIndexMatch[1]);
-          // Layout'un z-index'leri 60 ve altında. Üzerindeki her fixed'i Modal kabul ediyoruz
-          return zIndex > 60; 
+          // Sistemdeki ana bileşenler z-60 ve altındadır.
+          // Açılır pencereler ise genelde z-100, z-120 kullanır.
+          return parseInt(zIndexMatch[1], 10) > 60; 
         }
         return false;
       });
-
       setIsModalOpen(hasModals);
-    });
+    };
 
+    const observer = new MutationObserver(checkModals);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    
+    // İlk render kontrolü
+    checkModals();
 
     return () => observer.disconnect();
   }, []);
 
-  // Aşağı kaydırınca barı gizle, yukarı kaydırınca göster
+  // 2. YAVAŞ KAYDIRMAYA DUYARLI AKILLI SCROLL MOTORU
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (isModalOpen) return; // Modal açıksa scroll hesabı yapıp menüyü geri getirmesin
+    if (isModalOpen) return; // Açılır pencere varken bar görünmez kalmaya devam eder!
+
     const currentY = e.currentTarget.scrollTop;
-    if (currentY > lastScrollY.current + 15) {
-      setIsNavVisible(false); // Aşağı kaydırılıyor
-    } else if (currentY < lastScrollY.current - 15 || currentY < 20) {
-      setIsNavVisible(true); // Yukarı kaydırılıyor veya en üstte
+    
+    // Ekranın en tepesine gelindiyse barı zorla göster
+    if (currentY <= 20) {
+      setIsNavVisible(true);
+      lastScrollY.current = currentY;
+      return;
     }
-    lastScrollY.current = currentY;
+
+    const diff = currentY - lastScrollY.current;
+
+    // Sadece net bir yön değişimi (15px) olduğunda referansı güncelle
+    if (diff > 15) {
+      // Aşağı kaydırılıyor
+      setIsNavVisible(false);
+      lastScrollY.current = currentY;
+    } else if (diff < -15) {
+      // Yukarı kaydırılıyor
+      setIsNavVisible(true);
+      lastScrollY.current = currentY;
+    }
   };
 
   useEffect(() => {
