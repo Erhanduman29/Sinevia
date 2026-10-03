@@ -19,6 +19,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
   // Akıllı Alt Bar (Auto-Hide) State ve Referansları
   const [isNavVisible, setIsNavVisible] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false); // YENİ: Modal açık mı kontrolü
   const lastScrollY = useRef(0);
 
   const navItems = [
@@ -40,8 +41,32 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     { id: 'achievements', icon: Trophy, label: 'Başarımlar' },
   ] as const;
 
+  // YENİ: Ekranda "fixed" olan herhangi bir Modal (Rating, Detail, Dna vs.) var mı dinleyicisi
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      // Çoğu modalımızda "fixed inset-0 z-[...]" var. Onları yakalıyoruz.
+      // Layout'un kendi fixed elementleri dışında (z-[100], z-[50], z-[120] vb)
+      const hasModals = Array.from(document.querySelectorAll('.fixed')).some(el => {
+        const zIndexMatch = el.className.match(/z-\[?(\d+)\]?/);
+        if (zIndexMatch) {
+          const zIndex = parseInt(zIndexMatch[1]);
+          // Layout'un z-index'leri 60 ve altında. Üzerindeki her fixed'i Modal kabul ediyoruz
+          return zIndex > 60; 
+        }
+        return false;
+      });
+
+      setIsModalOpen(hasModals);
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, []);
+
   // Aşağı kaydırınca barı gizle, yukarı kaydırınca göster
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (isModalOpen) return; // Modal açıksa scroll hesabı yapıp menüyü geri getirmesin
     const currentY = e.currentTarget.scrollTop;
     if (currentY > lastScrollY.current + 15) {
       setIsNavVisible(false); // Aşağı kaydırılıyor
@@ -241,7 +266,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       {/* MOBİL: AKILLI (GİZLENEN) SABİT ALT NAVİGASYON BARI */}
       <nav
         className={`md:hidden fixed bottom-0 inset-x-0 h-[68px] bg-ink-950/95 backdrop-blur-2xl border-t border-ink-800/90 z-[58] grid grid-cols-5 px-1.5 shadow-[0_-8px_25px_rgba(0,0,0,0.6)] transition-transform duration-300 ease-in-out ${
-          isNavVisible ? 'translate-y-0' : 'translate-y-[120%]'
+          isNavVisible && !isModalOpen ? 'translate-y-0' : 'translate-y-[120%]'
         }`}
       >
         {mobileBottomTabs.map((tab) => {
