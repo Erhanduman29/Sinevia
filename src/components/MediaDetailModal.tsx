@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search,
   User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers,
@@ -50,6 +50,12 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
     const interval = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [isMovie, liveMovie?.startedAt, liveMovie?.watched]);
+
+  // YENİ: Film haftalık planda kayıtlı mı kontrol et
+  const isPlanned = useMemo(() => {
+    if (!isMovie || !liveMovie) return false;
+    return (appData.weeklyPlan || []).some(p => p.movieId === liveMovie.id);
+  }, [isMovie, liveMovie, appData.weeklyPlan]);
 
   const title = isMovie ? liveMovie!.title : liveSeries!.title;
   const year = isMovie ? liveMovie!.year : liveSeries!.year;
@@ -297,9 +303,17 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                   )}
 
                   {isMovie && liveMovie && (
-                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <div className="flex items-center gap-2 flex-wrap justify-center mt-2">
                       {!liveMovie.watched && !liveHistoryItem && (
-                        timerInfo ? (
+                        isPlanned ? (
+                          // YENİ: HAFTALIK PLANA EKLENMİŞ FİLM İÇİN KİLİTLİ BUTON
+                          <div 
+                            title="Bu film haftalık planda. Puanlamak veya izlemek için Planlayıcı sekmesine gidin."
+                            className="flex items-center justify-center gap-1 text-[11px] px-3.5 py-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold w-full md:w-auto whitespace-nowrap cursor-not-allowed"
+                          >
+                            <Lock size={12} /> Takvime Planlandı
+                          </div>
+                        ) : timerInfo ? (
                           <div className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3 py-2 rounded-xl text-xs font-bold">
                             <Timer size={14} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
                             <span className="font-mono">{timerInfo.formattedRemaining}</span>
@@ -336,25 +350,27 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                         )
                       )}
 
-                      <button
-                        type="button"
-                        onClick={handleOpenMovieRating}
-                        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
-                          liveMovie.watched || liveHistoryItem
-                            ? 'bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 hover:scale-105'
-                            : timerInfo && !timerInfo.canRateWithTimer
-                            ? 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black shadow-gold-500/20 hover:scale-105'
-                        }`}
-                      >
-                        {liveMovie.watched || liveHistoryItem ? (
-                          <><Edit2 size={13} /> Puanı / Notu Düzenle</>
-                        ) : timerInfo && !timerInfo.canRateWithTimer ? (
-                          <><Lock size={13} /> Kilitli ({timerInfo.minRequiredMins - timerInfo.elapsedMins} dk)</>
-                        ) : (
-                          <><Star size={14} className="fill-current" /> Puanla</>
-                        )}
-                      </button>
+                      {!isPlanned && (
+                        <button
+                          type="button"
+                          onClick={handleOpenMovieRating}
+                          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
+                            liveMovie.watched || liveHistoryItem
+                              ? 'bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 hover:scale-105'
+                              : timerInfo && !timerInfo.canRateWithTimer
+                              ? 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black shadow-gold-500/20 hover:scale-105'
+                          }`}
+                        >
+                          {liveMovie.watched || liveHistoryItem ? (
+                            <><Edit2 size={13} /> Puanı / Notu Düzenle</>
+                          ) : timerInfo && !timerInfo.canRateWithTimer ? (
+                            <><Lock size={13} /> Kilitli ({timerInfo.minRequiredMins - timerInfo.elapsedMins} dk)</>
+                          ) : (
+                            <><Star size={14} className="fill-current" /> Puanla</>
+                          )}
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -362,7 +378,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                     <button
                       type="button"
                       onClick={handleOpenHistoryItemRating}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-ink-800 hover:bg-ink-700 text-azure-400 border border-azure-500/30 transition-all shadow-md hover:scale-105"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-ink-800 hover:bg-ink-700 text-azure-400 border border-azure-500/30 transition-all shadow-md hover:scale-105 mt-2"
                     >
                       <Edit2 size={13} /> Bölüm Puanını Düzenle
                     </button>
@@ -372,7 +388,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                     <button
                       type="button"
                       onClick={() => handleOpenEpisodeRating(nextEpisodeToWatch, false)}
-                      className="flex items-center gap-1.5 bg-gradient-to-r from-azure-500 to-azure-600 hover:from-azure-400 hover:to-azure-500 text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all shadow-lg shadow-azure-500/20 hover:scale-105"
+                      className="flex items-center gap-1.5 bg-gradient-to-r from-azure-500 to-azure-600 hover:from-azure-400 hover:to-azure-500 text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all shadow-lg shadow-azure-500/20 hover:scale-105 mt-2"
                     >
                       <Star size={14} className="fill-current" />
                       Sıradaki: S{nextEpisodeToWatch.season} B{nextEpisodeToWatch.episode} Puanla
@@ -380,7 +396,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                   )}
 
                   {!isMovie && liveSeries && !nextEpisodeToWatch && liveSeries.episodes.length > 0 && (
-                    <div className="flex items-center gap-1 text-xs font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-xl">
+                    <div className="flex items-center gap-1 text-xs font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-xl mt-2">
                       <CheckCircle2 size={14} /> Tüm Bölümler Puanlandı
                     </div>
                   )}

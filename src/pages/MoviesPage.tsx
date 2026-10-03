@@ -83,7 +83,6 @@ export default function MoviesPage() {
   );
 
   const handleRequestRate = (movie: Movie) => {
-    // Eskiden Sırada olan filmler için süre kontrolü yapılmaz
     if (!movie.inPastQueue && !canRateMovieWithTimer(movie.id)) return;
     setRatingTarget(movie);
   };
@@ -237,11 +236,7 @@ export default function MoviesPage() {
       const hasPastWatched = movies.some((m) => m.watched && m.isPastWatch);
 
       if (watchedFilter === 'unwatched' && !hasUnwatched) return false;
-      
-      // İzlenenler filtresindeyken, koleksiyonda izlenmemiş film varsa gösterme
       if (watchedFilter === 'watched' && (hasUnwatched || !hasNormalWatched)) return false;
-      
-      // Geçmiş İzlenenler filtresindeyken, koleksiyonda izlenmemiş film varsa gösterme
       if (watchedFilter === 'past' && (hasUnwatched || !hasPastWatched)) return false;
 
       if (selectedGenres.size > 0) {
@@ -546,6 +541,13 @@ export default function MoviesPage() {
     () => data.collections.filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME)),
     [data.collections]
   );
+
+  // YENİ: Planlanmış (WeeklyPlan) filmlerin ID'lerini buluyoruz.
+  const plannedMovieIds = useMemo(() => {
+    const ids = new Set<string>();
+    (data.weeklyPlan || []).forEach(p => ids.add(p.movieId));
+    return ids;
+  }, [data.weeklyPlan]);
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -869,6 +871,7 @@ export default function MoviesPage() {
                         movie={m}
                         nowMs={nowMs}
                         anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
+                        isPlanned={plannedMovieIds.has(m.id)} // YENİ
                         collectionName={origColName}
                         onDelete={(movie) => setDeleteTarget(movie)}
                         onRate={handleRequestRate}
@@ -936,7 +939,6 @@ export default function MoviesPage() {
             <div className="space-y-2.5 animate-fade-in">
               {filteredCollections.map((coll) => {
                 const movies = collectionMap.get(coll.id) || [];
-                // Koleksiyon içindeki TÜM filmleri sırasına göre gösterir
                 const visibleMovies = [...movies].sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10));
                   
                 const watchedInCol = movies.filter((m) => m.watched).length;
@@ -1027,6 +1029,7 @@ export default function MoviesPage() {
                               movie={m}
                               nowMs={nowMs}
                               anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
+                              isPlanned={plannedMovieIds.has(m.id)} // YENİ
                               collectionName={coll.name}
                               onDelete={(movie) => setDeleteTarget(movie)}
                               onRate={handleRequestRate}
@@ -1091,6 +1094,7 @@ export default function MoviesPage() {
                   movie={m}
                   nowMs={nowMs}
                   anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
+                  isPlanned={plannedMovieIds.has(m.id)} // YENİ
                   collectionName={colName}
                   onDelete={(movie) => setDeleteTarget(movie)}
                   onRate={handleRequestRate}
@@ -1109,7 +1113,6 @@ export default function MoviesPage() {
         )}
       </div>
 
-      {/* TEKİL FİLM KOLEKSİYON DEĞİŞTİRME / TAŞIMA MODALI */}
       {collectionTargetMovie && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={() => setCollectionTargetMovie(null)}>
           <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in-up">
@@ -1218,7 +1221,6 @@ export default function MoviesPage() {
         </div>
       )}
 
-      {/* ESKİDEN İZLENENLER KOLEKSİYONUNDAN BAŞKA KOLEKSİYONA / FİLM LİSTESİNE TOPLU TAŞIMA MODALI */}
       {showMoveFromPastModal && (() => {
         const allVisiblePastSelected =
           filteredPastMoviesForMove.length > 0 &&
@@ -1412,7 +1414,6 @@ export default function MoviesPage() {
         );
       })()}
 
-      {/* KOLEKSİYON İÇİNE ÇOKLU FİLM VE KOLEKSİYON SEÇME MODALI */}
       {addMoviesToCollectionId && (() => {
         const isTargetPast = addMoviesToCollectionId === PAST_QUEUE_MODAL_ID;
         const targetColName = isTargetPast
@@ -1595,16 +1596,6 @@ export default function MoviesPage() {
         );
       })()}
 
-      {/* KOLEKSİYONDAN TOPLU AKTARIM ONAY UYARISI */}
-      {confirmMoveColTarget && (
-        <ConfirmDialog
-          title="Koleksiyondan Toplu Aktarım"
-          message={`"${confirmMoveColTarget.name}" koleksiyonundaki ${confirmMoveColTarget.count} adet izlenmemiş film (kendi koleksiyonundan silinmeden) "Eskiden İzlenenler" sırasına eklenecek. Onaylıyor musun?`}
-          onConfirm={executeConfirmedCollectionMove}
-          onCancel={() => setConfirmMoveColTarget(null)}
-        />
-      )}
-
       {showPick && (
         <PickModal
           movieCount={eligibleMovies.length}
@@ -1662,11 +1653,12 @@ export default function MoviesPage() {
 }
 
 function MovieRow({
-  movie, nowMs, anotherTimerActive, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, altWatchTemplate,
+  movie, nowMs, anotherTimerActive, isPlanned, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, altWatchTemplate,
 }: {
   movie: Movie;
   nowMs: number;
   anotherTimerActive: boolean;
+  isPlanned?: boolean; // YENİ: Film takvimde planlanmış mı kontrolü
   collectionName?: string;
   onDelete: (movie: Movie) => void;
   onRate: (movie: Movie) => void;
@@ -1822,6 +1814,14 @@ function MovieRow({
             >
               <Star size={11} className="fill-current" /> Puanla
             </button>
+          ) : isPlanned ? (
+            // YENİ: HAFTALIK PLANA EKLENEN FİLMLER İÇİN KİLİTLİ BUTON
+            <div 
+              title="Bu film haftalık planda. Puanlamak veya izlemek için Planlayıcı sekmesine gidin."
+              className="flex items-center justify-center gap-1 text-[11px] px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold w-full md:w-auto whitespace-nowrap cursor-not-allowed"
+            >
+              <Lock size={11} /> Takvime Planlandı
+            </div>
           ) : (
             <>
               {timerInfo ? (

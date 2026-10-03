@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   CalendarClock, Plus, X, Search, Clock, Star, Trash2, Image as ImageIcon,
-  Film, Sparkles, Play, Pause, Timer, Lock,
+  Film, Sparkles, Play, Pause, Timer, Lock, Edit2,
   CheckCircle2, Hourglass, ArrowRight, CalendarDays,
   LayoutList, Activity, AlertCircle, GripVertical, CalendarPlus,
   Target, Zap, Flame
@@ -65,6 +65,10 @@ export default function WeeklyPlanPage() {
   
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
   const [showAdd, setShowAdd] = useState<{ presetDate?: string } | null>(null);
+  
+  // YENİ: EditPlanModal için State
+  const [editPlanTarget, setEditPlanTarget] = useState<{ item: WeeklyPlanItem; presetDate?: string } | null>(null);
+  
   const [ratingTarget, setRatingTarget] = useState<{ item: WeeklyPlanItem; movie: Movie } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WeeklyPlanItem | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -135,8 +139,7 @@ export default function WeeklyPlanPage() {
 
   const handleSnooze = (item: WeeklyPlanItem) => {
     const tomorrowStr = toDateStr(addDays(today, 1));
-    updatePlanItem(item.id, tomorrowStr as any, item.time);
-    showToast(`"${item.title}" yarına ertelendi!`, 'info');
+    setEditPlanTarget({ item, presetDate: tomorrowStr });
   };
 
   const handleDragStart = (e: React.DragEvent, item: WeeklyPlanItem) => {
@@ -157,8 +160,7 @@ export default function WeeklyPlanPage() {
   const handleDrop = (e: React.DragEvent, dateStr: string) => {
     e.preventDefault(); setDragOverDate(null);
     if (draggedItem && draggedItem.date !== dateStr) {
-      updatePlanItem(draggedItem.id, dateStr as any, draggedItem.time);
-      showToast('Film tarihi güncellendi!', 'success');
+      setEditPlanTarget({ item: draggedItem, presetDate: dateStr });
     }
   };
 
@@ -213,7 +215,7 @@ export default function WeeklyPlanPage() {
             ) : isMissed ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-black text-red-400 bg-red-500/10 px-2 py-1 rounded-lg"><AlertCircle size={10} /> Kaçırıldı</div>
-                <button onClick={() => handleSnooze(item)} className="flex items-center gap-1 text-[9px] sm:text-[10px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2 py-1 rounded-lg transition-colors"><CalendarPlus size={10} /> Ertele</button>
+                <button onClick={() => handleSnooze(item)} className="flex items-center gap-1 text-[9px] sm:text-[10px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2 py-1 rounded-lg transition-colors"><CalendarPlus size={10} /> Ertele / Taşı</button>
               </div>
             ) : timerInfo ? (
               <div className="flex items-center gap-1 flex-wrap">
@@ -226,7 +228,8 @@ export default function WeeklyPlanPage() {
               <div className="flex items-center gap-1.5">
                 <button onClick={() => startWatchingMovie(movie.id)} disabled={anotherTimerActive} title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'Geri Sayımı Başlat'} className={`flex items-center justify-center gap-1 text-[9px] sm:text-[10px] font-black px-2 py-1.5 rounded-lg border transition-all ${anotherTimerActive ? 'bg-ink-900/50 text-ink-600 border-ink-800 cursor-not-allowed' : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'}`}>{anotherTimerActive ? <Lock size={10} /> : <Play size={10} className="fill-current" />}</button>
                 <button onClick={() => handleRequestRate(item, movie)} className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 text-ink-950 text-[9px] sm:text-[10px] font-black px-2 py-1.5 rounded-lg transition-all shadow-sm"><Star size={10} className="fill-current" /> Puanla</button>
-                <button onClick={() => setDeleteTarget(item)} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors ml-auto"><Trash2 size={12} /></button>
+                <button onClick={() => setEditPlanTarget({ item })} className="p-1.5 rounded-lg bg-ink-800 hover:bg-ink-700 text-ink-300 transition-colors shadow-sm"><Edit2 size={12} /></button>
+                <button onClick={() => setDeleteTarget(item)} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"><Trash2 size={12} /></button>
               </div>
             )}
           </div>
@@ -280,7 +283,7 @@ export default function WeeklyPlanPage() {
             ) : isMissed ? (
               <>
                 <span className="text-[10px] sm:text-[11px] font-black text-red-400 bg-red-500/10 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border border-red-500/20 flex items-center gap-1.5"><AlertCircle size={10} sm-size={12} /> Kaçırıldı</span>
-                <button onClick={() => handleSnooze(item)} className="text-[10px] sm:text-[11px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg transition-colors shadow-sm">Yarına Ertele</button>
+                <button onClick={() => handleSnooze(item)} className="text-[10px] sm:text-[11px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg transition-colors shadow-sm">Ertele / Taşı</button>
               </>
             ) : timerInfo ? (
               <>
@@ -306,7 +309,10 @@ export default function WeeklyPlanPage() {
                 <button onClick={() => handleRequestRate(item, movie)} className="flex items-center gap-1 sm:gap-1.5 bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 text-[9px] sm:text-[11px] font-black px-2.5 py-1.5 sm:px-3 rounded-lg transition-all shadow-sm">
                   <Star size={10} sm-size={12} className="fill-current" /> Puanla
                 </button>
-                <button onClick={() => setDeleteTarget(item)} className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors ml-auto">
+                <button onClick={() => setEditPlanTarget({ item })} className="p-1.5 sm:p-2 rounded-lg bg-ink-800 hover:bg-ink-700 text-ink-300 transition-colors ml-auto">
+                  <Edit2 size={12} sm-size={14} />
+                </button>
+                <button onClick={() => setDeleteTarget(item)} className="p-1.5 sm:p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors ml-1.5">
                   <Trash2 size={12} sm-size={14} />
                 </button>
               </>
@@ -574,7 +580,7 @@ export default function WeeklyPlanPage() {
                                       ) : isMissed ? (
                                          <>
                                            <span className="text-[10px] font-black text-red-400 flex items-center gap-1 bg-red-500/10 px-1.5 py-1 rounded"><AlertCircle size={10} /> Kaçırıldı</span>
-                                           <button onClick={() => handleSnooze(item)} className="text-[10px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2 py-1 rounded transition-colors ml-1 shadow-sm">Yarına Ertele</button>
+                                           <button onClick={() => handleSnooze(item)} className="text-[10px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2 py-1 rounded transition-colors ml-1 shadow-sm">Ertele / Taşı</button>
                                          </>
                                       ) : timerInfo ? (
                                          <>
@@ -587,7 +593,8 @@ export default function WeeklyPlanPage() {
                                          <>
                                            <button onClick={() => startWatchingMovie(movie.id)} disabled={anotherTimerActive} className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-md transition-all border shadow-sm ${anotherTimerActive ? 'bg-ink-900/50 text-ink-600 border-ink-800 cursor-not-allowed' : 'bg-ink-800 hover:bg-emerald-900/40 text-emerald-400 border-emerald-500/30'}`}>{anotherTimerActive ? <Lock size={10} /> : <Play size={10} className="fill-current" />} Başlat</button>
                                            <button onClick={() => handleRequestRate(item, movie)} className="flex items-center gap-1 bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 text-ink-950 text-[10px] font-black px-2 py-1 rounded-md transition-all shadow-sm"><Star size={10} className="fill-current" /> Puanla</button>
-                                           <button onClick={() => setDeleteTarget(item)} className="p-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors ml-auto"><Trash2 size={12} /></button>
+                                           <button onClick={() => setEditPlanTarget({ item })} className="p-1.5 rounded-md bg-ink-800 hover:bg-ink-700 text-ink-300 transition-colors ml-auto shadow-sm"><Edit2 size={12} /></button>
+                                           <button onClick={() => setDeleteTarget(item)} className="p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors ml-1.5 shadow-sm"><Trash2 size={12} /></button>
                                          </>
                                       )}
                                    </div>
@@ -613,6 +620,15 @@ export default function WeeklyPlanPage() {
       )}
 
       {showAdd && <AddPlanModal presetDate={showAdd.presetDate} onClose={() => setShowAdd(null)} />}
+      
+      {/* YENİ: DÜZENLEME / TAŞIMA MODALI */}
+      {editPlanTarget && (
+        <EditPlanModal 
+          item={editPlanTarget.item} 
+          presetDate={editPlanTarget.presetDate} 
+          onClose={() => setEditPlanTarget(null)} 
+        />
+      )}
 
       {ratingTarget && (
         <RatingModal
@@ -851,6 +867,130 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
               Kaydet & Kapat
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// YENİ BİLEŞEN: DÜZENLEME VE TAŞIMA İÇİN
+function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; presetDate?: string; onClose: () => void }) {
+  const { data, updatePlanItem, showToast } = useApp();
+  const movie = data.movies.find(m => m.id === item.movieId);
+
+  const [date, setDate] = useState(presetDate || item.date);
+  const [time, setTime] = useState(item.time);
+
+  if (!movie) return null;
+
+  const dayPlans = useMemo(() => {
+    return (data.weeklyPlan || [])
+      .filter((p) => p.date === date && p.id !== item.id)
+      .sort((a, b) => a.time.localeCompare(b.time));
+  }, [data.weeklyPlan, date, item.id]);
+
+  const endTimePreview = computeEndTime(time, movie.runtime);
+
+  const handleConfirm = () => {
+    const hasOverlap = dayPlans.some((p) => {
+      const m = data.movies.find(x => x.id === p.movieId);
+      const pDur = p.runtime || m?.runtime || 115;
+      return checkOverlap(time, movie.runtime || 115, p.time, pDur);
+    });
+
+    if (hasOverlap) {
+      showToast('Seçtiğiniz saatte başka bir film var! Lütfen kırmızı işaretli saatleri kontrol edin.', 'warning');
+      return;
+    }
+
+    updatePlanItem(item.id, date as any, time);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-[0_0_30px_rgba(139,92,246,0.1)] flex flex-col max-h-[90svh] animate-fade-in-up">
+        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-violet-500/10 to-transparent">
+          <h3 className="text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md">
+            <div className="w-6 h-6 rounded border border-violet-500/30 bg-violet-500/20 text-violet-400 flex items-center justify-center"><Edit2 size={12} /></div>
+            Maratonu Düzenle / Taşı
+          </h3>
+          <button onClick={onClose} className="text-ink-400 hover:text-white p-1.5 rounded-full hover:bg-ink-800 transition-colors"><X size={16} /></button>
+        </div>
+
+        <div className="p-3.5 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar flex-1">
+          <div className="flex items-center gap-3 bg-gradient-to-r from-violet-500/10 to-transparent border border-violet-500/30 rounded-xl p-2.5 sm:p-3 shadow-inner mb-4">
+            <div className="w-10 h-14 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm border border-ink-700/50">
+              {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] sm:text-sm font-black text-white truncate drop-shadow-sm mb-1">{movie.title}</div>
+              <div className="text-[9px] sm:text-[10px] font-bold text-violet-300 bg-violet-500/10 w-fit px-1.5 py-0.5 rounded border border-violet-500/20">{movie.year}{movie.runtime ? ` • ${movie.runtime} dk` : ''}</div>
+            </div>
+          </div>
+
+          <div className="flex gap-2.5 sm:gap-3 mb-4">
+            <div className="space-y-1.5 flex-1">
+              <label className="h-4 flex items-center text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-ink-400 ml-1">Tarih</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 shadow-inner transition-all" />
+            </div>
+            <div className="space-y-1.5 flex-1">
+              <label className="h-4 flex items-center text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 shadow-inner transition-all" />
+            </div>
+          </div>
+
+          <div className="bg-ink-950/60 border border-ink-800 rounded-xl p-2.5 sm:p-3 shadow-inner">
+            <div className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-ink-400 mb-2 flex items-center gap-1.5">
+              <CalendarDays size={10} className="text-violet-400" /> 
+              Seçili Günün Dolu Saatleri
+            </div>
+            
+            {dayPlans.length === 0 ? (
+              <div className="text-[10px] sm:text-[11px] text-emerald-400/80 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-2 rounded-lg flex items-center gap-1.5">
+                <CheckCircle2 size={12}/> Başka plan yok!
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-24 sm:max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                {dayPlans.map(p => {
+                  const m = data.movies.find(x => x.id === p.movieId);
+                  const pDur = p.runtime || m?.runtime || 115;
+                  const pEnd = computeEndTime(p.time, pDur);
+                  const isOverlapping = checkOverlap(time, movie.runtime || 115, p.time, pDur);
+                  
+                  return (
+                    <div key={p.id} className={`flex items-center justify-between px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-lg border transition-colors ${isOverlapping ? 'bg-red-500/10 border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.15)]' : 'bg-ink-900 border-ink-800/50'}`}>
+                       <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                         {isOverlapping ? <AlertCircle size={10} className="text-red-400 flex-shrink-0 animate-pulse"/> : <Film size={10} className="text-ink-500 flex-shrink-0"/>}
+                         <span className={`text-[10px] sm:text-[11px] font-bold truncate ${isOverlapping ? 'text-red-300' : 'text-ink-200'}`}>{p.title}</span>
+                       </div>
+                       <span className={`text-[8px] sm:text-[9px] font-black flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-violet-500/10 text-violet-400 border-violet-500/20'}`}>
+                         {p.time} - {pEnd}
+                       </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {endTimePreview && (
+            <div className="mt-3 flex items-center justify-between">
+               <div className="text-[9px] sm:text-[10px] text-ink-500 font-bold bg-ink-950 px-1.5 py-0.5 rounded border border-ink-800">Süre: {movie.runtime || 115} dk</div>
+               <div className="text-[10px] sm:text-[11px] font-bold text-ink-300 flex items-center gap-1">
+                 Tahmini Bitiş: <strong className="text-emerald-400 text-[11px] sm:text-xs">{endTimePreview}</strong>
+               </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-3 border-t border-ink-800/80 bg-ink-950/90 flex items-center gap-2 backdrop-blur-md">
+          <button onClick={onClose} className="px-4 py-2.5 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold text-[11px] transition-colors">
+            İptal
+          </button>
+          <button disabled={!date || !time} onClick={handleConfirm} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-azure-600 hover:from-violet-500 hover:to-azure-500 text-white font-black text-[11px] transition-all disabled:opacity-40 shadow-[0_0_15px_rgba(139,92,246,0.2)]">
+            Değişiklikleri Kaydet
+          </button>
         </div>
       </div>
     </div>
