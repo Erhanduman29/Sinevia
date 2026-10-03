@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { QuestProvider } from './context/QuestContext'; // YENİ: QuestProvider eklendi
 import Layout from './components/Layout';
 import type { TabId } from './components/Layout';
 import HomePage from './pages/HomePage';
@@ -57,7 +58,6 @@ function AppContent() {
     xpGainData,
   } = useApp();
 
-  // Sekme her değiştiğinde localStorage ve URL hash'ini güncelle (Sayfa yenilendiğinde aynı sekmede kalır)
   useEffect(() => {
     try {
       localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
@@ -101,7 +101,6 @@ function AppContent() {
       {activeTab === 'settings' && <SettingsPage />}
       {activeTab === 'ai' && <AIPage />}
 
-      {/* Tüm bildirim, başarım ve XP animasyonları z-[200] ile her zaman tüm pencerelerin üstünde görünür */}
       <div className="relative z-[200]">
         {xpGainData && (
           <XpGainOverlay key={`${xpGainData.oldTotal}-${xpGainData.newTotal}`} />
@@ -129,7 +128,9 @@ function AppContent() {
 export default function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <QuestProvider>  {/* GÖREV SİSTEMİ TÜM UYGULAMAYI SARMALADI */}
+        <AppContent />
+      </QuestProvider>
     </AppProvider>
   );
 }

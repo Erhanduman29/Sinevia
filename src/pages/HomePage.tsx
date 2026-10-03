@@ -4,13 +4,21 @@ import {
   Shuffle, Projector, Tv, Sparkles, Trophy, Star, Crown, Search, TrendingUp, Zap,
   Clock, Bot, Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
   ChevronRight, Target, Film, RefreshCw, User, Users, Shield, Award, Gem, Lock,
-  CheckCircle2, Timer, Play, Pause, X, Compass, Layers,
+  CheckCircle2, Timer, Play, Pause, X, Compass, Layers, Crosshair, ShieldAlert
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { useQuests } from '../context/QuestContext';
+import { QUEST_DEFS, RARITY_STYLES } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
 import { ACHIEVEMENT_DEFS, TIER_COLORS } from '../lib/achievements';
 import { getNextUnwatchedEpisode, ratingBgClass, formatDateShort, todayStr, normalize } from '../lib/utils';
 import PickModal from '../components/PickModal';
+import RatingModal from '../components/RatingModal';
+import BulkAddModal from '../components/BulkAddModal';
+import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
+import MediaDetailModal from '../components/MediaDetailModal';
+import type { DetailModalTarget } from '../components/MediaDetailModal';
+import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
 
 const RANK_TIERS = [
   {
@@ -74,20 +82,14 @@ const RANK_TIERS = [
     strokeColor: '#ffffff', icon: Icons.Gem,
   },
 ] as const;
-import RatingModal from '../components/RatingModal';
-import BulkAddModal from '../components/BulkAddModal';
-import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
-import MediaDetailModal from '../components/MediaDetailModal';
-import type { DetailModalTarget } from '../components/MediaDetailModal';
-import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
-
-
 
 export default function HomePage() {
   const {
     data, startWatchingMovie, togglePauseWatchingMovie,
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode,
   } = useApp();
+
+  const { questState } = useQuests(); 
 
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
   const [showPick, setShowPick] = useState(false);
@@ -102,7 +104,6 @@ export default function HomePage() {
     | null
   >(null);
 
-  // Canlı Geri Sayım Sayacı Kontrolü
   const activeTimerMovie = useMemo(() => data.movies.find((m) => !m.watched && m.startedAt) || null, [data.movies]);
 
   useEffect(() => {
@@ -145,7 +146,6 @@ export default function HomePage() {
     return [...standalone, ...sequentialCollectionMovies];
   }, [data.movies, pastColIds]);
 
-  // Tüm izlenebilir sıradaki bölümler (Çark/PickModal için)
   const allNextEpisodes = useMemo(() => {
     return data.series
       .map((s) => {
@@ -159,7 +159,6 @@ export default function HomePage() {
       .filter((x): x is { series: Series; episode: Episode; watchedCount: number; totalCount: number; pct: number } => x !== null);
   }, [data.series]);
 
-  // İZLEMEYE DEVAM ET: Sadece başlanmış (en az 1 bölümü izlenmiş) devam eden diziler
   const ongoingSeries = useMemo(() => {
     return allNextEpisodes.filter((x) => x.watchedCount > 0);
   }, [allNextEpisodes]);
@@ -171,7 +170,6 @@ export default function HomePage() {
     return eligibleMovies[idx];
   }, [eligibleMovies, spotlightOffset]);
 
-  // Güncel İstatistikler (Önceden izlenen filmler Ana Sayfa metriklerini değiştirmez)
   const quickMetrics = useMemo(() => {
     const watchedMovies = data.movies.filter((m) => m.watched && !m.isPastWatch);
     const movieMinutes = watchedMovies.reduce((sum, m) => {
@@ -188,7 +186,7 @@ export default function HomePage() {
       ? (ratedHistory.reduce((sum, h) => sum + (h.rating || 0), 0) / ratedHistory.length).toFixed(1)
       : '-';
 
-    const tierCounts = { bronze: 0, silver: 0, gold: 0, platinum: 0, diamond: 0, secret: 0, total: 0 };
+    const tierCounts = { bronze: 0, silver: 0, gold: 0, platinum: 0, emerald: 0, diamond: 0, secret: 0, total: 0 };
     (data.achievements || []).forEach((a) => {
       (a.unlockedTiers || []).forEach((t) => {
         if (t in tierCounts) (tierCounts as any)[t]++;
@@ -301,6 +299,9 @@ export default function HomePage() {
     }
   };
 
+  const activeBadgeDef = questState.activeBadgeId ? QUEST_DEFS.find(q => q.id === questState.activeBadgeId) : null;
+  const activeQuestDef = questState.activeQuestId ? QUEST_DEFS.find(q => q.id === questState.activeQuestId) : null;
+
   return (
     <div className="space-y-6 sm:space-y-8 animate-fade-in">
       {/* =========================================================
@@ -314,9 +315,8 @@ export default function HomePage() {
           style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)', backgroundSize: '24px 24px' }}
         />
 
-        {/* ÜST BAR: GÖSTERİŞLİ SERİ ROZETİ & KUPA KASASI ÖZETİ */}
+        {/* ÜST BAR: GÖSTERİŞLİ SERİ ROZETİ & BÜYÜTÜLMÜŞ KUPA KASASI ÖZETİ */}
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 sm:pb-5 mb-4 sm:mb-6 border-b border-ink-800/80">
-          {/* Sol Üst: Büyütülmüş ve Gösterişli Günlük Seri Kartı */}
           <div className="flex items-center gap-3 bg-gradient-to-r from-orange-500/20 via-red-500/15 to-amber-500/10 border border-orange-500/40 px-4 py-2 rounded-2xl shadow-[0_0_25px_rgba(249,115,22,0.18)] w-fit">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-orange-500 via-amber-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30 flex-shrink-0">
               <Flame size={20} className="text-white fill-white animate-pulse" />
@@ -336,40 +336,42 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Sağ Üst: Kupa Rozetleri (Bronz, Gümüş, Altın, Platin, Elmas) */}
           <button
             type="button"
             onClick={() => navigateTo('achievements')}
-            className="flex items-center justify-between md:justify-end gap-1.5 sm:gap-2 bg-ink-950/90 hover:bg-ink-900 border border-ink-800 hover:border-gold-500/40 px-3 sm:px-3.5 py-2 rounded-2xl transition-all group overflow-x-auto hide-scrollbar"
+            className="flex items-center justify-between md:justify-end gap-2 sm:gap-3 bg-ink-950/90 hover:bg-ink-900 border border-ink-800 hover:border-gold-500/40 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl transition-all group overflow-x-auto hide-scrollbar"
             title="Başarımlar ve Kupa Kasasına Git"
           >
-            <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-black whitespace-nowrap">
-              <span className="px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30">
+            <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-black whitespace-nowrap">
+              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm">
                 Bronz: {quickMetrics.tierCounts.bronze}
               </span>
-              <span className="px-2 py-0.5 rounded-lg bg-slate-400/15 text-slate-200 border border-slate-400/30">
+              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-slate-400/15 text-slate-200 border border-slate-400/30 shadow-sm">
                 Gümüş: {quickMetrics.tierCounts.silver}
               </span>
-              <span className="px-2 py-0.5 rounded-lg bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">
+              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-yellow-500/15 text-yellow-300 border border-yellow-500/30 shadow-sm">
                 Altın: {quickMetrics.tierCounts.gold}
               </span>
-              <span className="px-2 py-0.5 rounded-lg bg-cyan-400/15 text-cyan-200 border border-cyan-400/30">
+              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-cyan-400/15 text-cyan-200 border border-cyan-400/30 shadow-sm">
                 Platin: {quickMetrics.tierCounts.platinum}
               </span>
-              <span className="px-2 py-0.5 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/30">
+              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm">
+                Zümrüt: {quickMetrics.tierCounts.emerald}
+              </span>
+              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-sm">
                 Elmas: {quickMetrics.tierCounts.diamond}
               </span>
             </div>
-            <ChevronRight size={14} className="text-ink-500 group-hover:text-gold-400 flex-shrink-0" />
+            <ChevronRight size={16} className="text-ink-500 group-hover:text-gold-400 flex-shrink-0 ml-1" />
           </button>
         </div>
 
         {/* ORTA BÖLÜM: RÜTBE ARMASI & XP MOTORU */}
-        <div className="relative z-10 flex flex-col lg:flex-row items-center gap-4 sm:gap-6 lg:gap-8">
-          <div className="flex flex-row items-center gap-3.5 sm:gap-5 flex-shrink-0 w-full lg:w-auto justify-start">
-            <div className="relative w-16 h-16 sm:w-28 sm:h-28 flex items-center justify-center flex-shrink-0">
+        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-8">
+          <div className="flex flex-row items-center gap-4 sm:gap-6 flex-shrink-0 w-full lg:w-auto justify-start">
+            <div className="relative w-20 h-20 sm:w-32 sm:h-32 flex items-center justify-center flex-shrink-0">
               <div className={`absolute inset-1 sm:inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-lg sm:blur-xl animate-pulse`} />
-              <svg className="w-16 h-16 sm:w-28 sm:h-28 -rotate-90 transform" viewBox="0 0 108 108">
+              <svg className="w-20 h-20 sm:w-32 sm:h-32 -rotate-90 transform" viewBox="0 0 108 108">
                 <circle cx="54" cy="54" r={circleRadius} stroke="currentColor" strokeWidth="7" fill="transparent" className="text-ink-950" />
                 <circle
                   cx="54" cy="54" r={circleRadius} stroke={userPersona.strokeColor} strokeWidth="7"
@@ -379,59 +381,70 @@ export default function HomePage() {
               </svg>
               <div className={`absolute inset-2.5 sm:inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}>
                 <div className="w-full h-full bg-ink-950 rounded-full flex flex-col items-center justify-center">
-                  <PersonaIcon className={`${userPersona.color} w-5 h-5 sm:w-[30px] sm:h-[30px]`} />
-                  <span className="hidden sm:block text-[10px] font-black text-ink-400 uppercase mt-0.5">
+                  <PersonaIcon className={`${userPersona.color} w-6 h-6 sm:w-9 sm:h-9`} />
+                  <span className="hidden sm:block text-[10px] font-black text-ink-400 uppercase mt-1">
                     %{Math.floor(lvl.progress)}
                   </span>
                 </div>
               </div>
-              <div className={`hidden sm:block absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}>
+              <div className={`hidden sm:block absolute -bottom-2 px-3 py-1 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-sm shadow-lg border border-white/30`}>
                 SV. {lvl.level}
               </div>
             </div>
 
-            <div className="text-left flex-1 min-w-0">
-              <div className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-0.5 sm:mb-1 truncate ${userPersona.color}`}>
+            <div className="text-left flex-1 min-w-0 flex flex-col items-start">
+              <div className={`text-xs sm:text-sm font-black uppercase tracking-widest mb-1 truncate ${userPersona.color}`}>
                 {userPersona.title}
               </div>
-              <div className="text-2xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none">
+              <div className="text-3xl sm:text-5xl font-black text-ink-50 tracking-tight leading-none mb-4">
                 Seviye {lvl.level}
               </div>
-              <p className="hidden sm:block text-xs text-ink-400 mt-1.5 max-w-[240px] leading-relaxed">
-                {userPersona.subtitle}
-              </p>
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2 sm:mt-3">
-                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-ink-950/90 border border-ink-800 text-ink-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg">
-                  <Clock size={11} className="text-gold-400" /> {quickMetrics.totalHours} Saat
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-ink-950/90 border border-ink-800 text-ink-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg">
-                  <Star size={11} className="text-gold-400 fill-current" /> Ort: {quickMetrics.avgRating}
-                </span>
-              </div>
+
+              {/* BÜYÜTÜLMÜŞ: ROZET VİTRİNİ (EQUIPPED BADGE) */}
+              {activeBadgeDef ? (
+                <div onClick={() => navigateTo('achievements')} className="inline-flex items-center gap-3 sm:gap-4 bg-ink-900 border border-ink-700/80 px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl shadow-lg group relative transition-transform hover:scale-105 cursor-pointer" title={`${activeBadgeDef.title} (${activeBadgeDef.rarity})`}>
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-xl sm:text-2xl border shadow-sm flex-shrink-0 ${RARITY_STYLES[activeBadgeDef.rarity].bg} ${RARITY_STYLES[activeBadgeDef.rarity].border}`}>
+                    {activeBadgeDef.icon}
+                  </div>
+                  <div className="flex flex-col pr-2">
+                    <span className={`text-[10px] sm:text-xs font-black uppercase tracking-widest ${RARITY_STYLES[activeBadgeDef.rarity].color} leading-none mb-1`}>
+                      {activeBadgeDef.rarity} Rozet
+                    </span>
+                    <span className="text-sm sm:text-base font-black text-white truncate max-w-[160px] sm:max-w-[200px] leading-tight">
+                      {activeBadgeDef.title}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => navigateTo('achievements')} className="inline-flex items-center gap-3 sm:gap-4 bg-ink-900/50 border border-dashed border-ink-700/50 px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl hover:bg-ink-800 transition-colors">
+                  <ShieldAlert size={20} className="text-ink-500" />
+                  <span className="text-xs sm:text-sm font-bold text-ink-400">Rozet Yuvası Boş</span>
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="flex-1 w-full bg-ink-950/70 border border-ink-800/90 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-inner space-y-2.5 sm:space-y-3.5">
+          <div className="flex-1 w-full bg-ink-950/70 border border-ink-800/90 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-inner space-y-3 sm:space-y-4">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">Deneyim Puanı (XP) Havuzu</span>
-                <div className="text-sm sm:text-xl font-black text-ink-50 flex items-baseline gap-1.5">
+                <span className="hidden sm:block text-[10px] sm:text-xs font-black uppercase tracking-widest text-ink-400">Deneyim Puanı (XP) Havuzu</span>
+                <div className="text-base sm:text-2xl font-black text-ink-50 flex items-baseline gap-1.5">
                   <span>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</span>
-                  <span className="text-[10px] sm:text-xs font-bold text-ink-400">(%{Math.floor(lvl.progress)})</span>
+                  <span className="text-xs font-bold text-ink-400">(%{Math.floor(lvl.progress)})</span>
                 </div>
               </div>
               <div className="text-right">
-                <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">Seviye {lvl.level + 1} Hedefi</span>
-                <span className={`text-xs sm:text-sm font-black ${userPersona.color}`}>
+                <span className="hidden sm:block text-[10px] sm:text-xs font-black uppercase tracking-widest text-ink-400">Seviye {lvl.level + 1} Hedefi</span>
+                <span className={`text-sm sm:text-base font-black ${userPersona.color}`}>
                   {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı
                 </span>
               </div>
             </div>
 
-            <div className="relative h-3 sm:h-5 w-full bg-ink-900 rounded-lg sm:rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
+            <div className="relative h-4 sm:h-6 w-full bg-ink-900 rounded-lg sm:rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
               <div className={`h-full rounded-md sm:rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`} style={{ width: `${Math.max(3, lvl.progress)}%` }}>
                 <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_25%,rgba(255,255,255,0.35)_50%,transparent_75%)] bg-[length:200%_100%] animate-pulse" />
-                <div className="absolute right-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_#fff]" />
+                <div className="absolute right-0 top-0 bottom-0 w-1 sm:w-1.5 bg-white shadow-[0_0_10px_#fff]" />
               </div>
               <div className="hidden sm:grid absolute inset-0 grid-cols-20 pointer-events-none">
                 {Array.from({ length: 20 }).map((_, idx) => (
@@ -440,8 +453,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="pt-0.5 sm:pt-2">
-              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-ink-400 sm:mb-2">
+            <div className="pt-1 sm:pt-3">
+              <div className="flex items-center justify-between text-[10px] sm:text-xs font-black uppercase tracking-wider text-ink-400 sm:mb-2.5">
                 <span className="hidden sm:inline">Unvan Evrim Haritası</span>
                 {nextRank ? (
                   <span className={userPersona.color}>Sonraki Unvan: {nextRank.title} ({nextRank.minLevel - lvl.level} Seviye Kaldı)</span>
@@ -449,27 +462,21 @@ export default function HomePage() {
                   <span className="text-cyan-300">Maksimum Unvana Ulaşıldı! 👑</span>
                 )}
               </div>
-
-              <div className="hidden sm:grid sm:grid-cols-5 gap-2">
+              <div className="hidden sm:grid sm:grid-cols-5 gap-2.5">
                 {RANK_TIERS.map((tier, idx) => {
                   const isUnlocked = lvl.level >= tier.minLevel;
                   const isCurrent = idx === currentRankIndex;
                   const TierIcon = tier.icon;
                   return (
-                    <div
-                      key={tier.title}
-                      className={`relative rounded-xl p-2 border transition-all flex items-center gap-2 ${
-                        isCurrent ? `${tier.badgeBg} ${tier.border} shadow-md scale-[1.02]` : isUnlocked ? 'bg-ink-900/70 border-ink-800/90 opacity-90' : 'bg-ink-950/40 border-ink-800/40 opacity-45'
-                      }`}
-                    >
-                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
-                        {isUnlocked ? <TierIcon size={13} className={tier.color} /> : <Lock size={11} className="text-ink-500" />}
+                    <div key={tier.title} className={`relative rounded-xl p-2.5 border transition-all flex items-center gap-2 ${isCurrent ? `${tier.badgeBg} ${tier.border} shadow-md scale-[1.02]` : isUnlocked ? 'bg-ink-900/70 border-ink-800/90 opacity-90' : 'bg-ink-950/40 border-ink-800/40 opacity-45'}`}>
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
+                        {isUnlocked ? <TierIcon size={14} className={tier.color} /> : <Lock size={12} className="text-ink-500" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className={`text-[10px] font-black truncate ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>{tier.title}</div>
-                        <div className="text-[9px] font-bold text-ink-500 flex items-center gap-1">
+                        <div className={`text-[10px] sm:text-xs font-black truncate ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>{tier.title}</div>
+                        <div className="text-[10px] font-bold text-ink-500 flex items-center gap-1 mt-0.5">
                           <span>Sv.{tier.minLevel}+</span>
-                          {isUnlocked && <CheckCircle2 size={9} className="text-emerald-400" />}
+                          {isUnlocked && <CheckCircle2 size={10} className="text-emerald-400" />}
                         </div>
                       </div>
                     </div>
@@ -480,44 +487,52 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* AKTİF GÖREV BİLDİRİM ŞERİDİ (AÇIKLAMA EKLENDİ) */}
+        {activeQuestDef && (
+          <div className="relative z-10 mt-6 pt-4 border-t border-ink-800/80 animate-fade-in-up">
+            <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 bg-ink-950 border-2 rounded-2xl p-3 sm:px-6 sm:py-4 shadow-xl ${RARITY_STYLES[activeQuestDef.rarity].border} ${RARITY_STYLES[activeQuestDef.rarity].bg}`}>
+              <div className="flex items-center gap-4 w-full sm:w-auto">
+                <div className="w-12 h-12 rounded-xl bg-ink-900 border flex items-center justify-center text-2xl flex-shrink-0 shadow-md border-ink-700">
+                  {activeQuestDef.icon}
+                </div>
+                <div className="flex-1">
+                  <div className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-0.5 ${RARITY_STYLES[activeQuestDef.rarity].color}`}>
+                    <Crosshair size={14} /> AKTİF KONTRAT DEVAM EDİYOR
+                  </div>
+                  <div className="text-base sm:text-lg font-black text-white drop-shadow-md">{activeQuestDef.title}</div>
+                  <div className="text-xs sm:text-sm font-medium text-ink-300 mt-1 max-w-lg leading-relaxed">{activeQuestDef.description}</div>
+                </div>
+              </div>
+              <div className="text-xs sm:text-sm text-ink-300 font-bold bg-ink-900 px-4 py-2 rounded-xl border border-ink-800 w-full sm:w-auto text-center shadow-inner">
+                Şartı sağla, <strong className="text-emerald-400 text-sm sm:text-base">+{activeQuestDef.xpReward} XP</strong> kazan.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ALT BAR: 4'LÜ HIZLI KOMUT BUTONLARI */}
-        <div className="relative z-10 mt-4 sm:mt-6 pt-3.5 sm:pt-5 border-t border-ink-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-          <button
-            onClick={() => setShowPick(true)}
-            className="flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm hover:from-gold-400 hover:to-gold-500 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-gold-500/20 group"
-          >
-            <Shuffle size={16} className="group-hover:rotate-180 transition-transform duration-500" />
+        <div className="relative z-10 mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-ink-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <button onClick={() => setShowPick(true)} className="flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-3 sm:py-4 rounded-xl font-black text-xs sm:text-sm hover:from-gold-400 hover:to-gold-500 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-gold-500/20 group">
+            <Shuffle size={18} className="group-hover:rotate-180 transition-transform duration-500" />
             <span>Ne İzlesem?</span>
           </button>
-
-          <button
-            onClick={() => setShowDnaModal(true)}
-            className="flex items-center justify-center gap-1.5 sm:gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] group"
-          >
-            <Dna size={16} className="text-emerald-400 group-hover:rotate-45 transition-transform" />
+          <button onClick={() => setShowDnaModal(true)} className="flex items-center justify-center gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-4 py-3 sm:py-4 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] group">
+            <Dna size={18} className="text-emerald-400 group-hover:rotate-45 transition-transform" />
             <span>DNA Sentezle</span>
           </button>
-
-          <button
-            onClick={() => setShowBulkAdd('movie')}
-            className="flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-violet-600/25 via-fuchsia-600/20 to-purple-600/25 hover:from-violet-500/35 hover:to-fuchsia-500/35 text-violet-200 border border-violet-500/40 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] shadow-lg shadow-violet-500/10 group"
-          >
-            <Compass size={16} className="text-fuchsia-400 group-hover:rotate-90 transition-transform duration-500" />
+          <button onClick={() => setShowBulkAdd('movie')} className="flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600/25 via-fuchsia-600/20 to-purple-600/25 hover:from-violet-500/35 hover:to-fuchsia-500/35 text-violet-200 border border-violet-500/40 px-4 py-3 sm:py-4 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] shadow-lg shadow-violet-500/10 group">
+            <Compass size={18} className="text-fuchsia-400 group-hover:rotate-90 transition-transform duration-500" />
             <span>Katalogdan Keşfet</span>
           </button>
-
-          <button
-            onClick={() => navigateTo('ai')}
-            className="flex items-center justify-center gap-1.5 sm:gap-2 bg-azure-500/15 hover:bg-azure-500/25 text-azure-300 border border-azure-500/30 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] group"
-          >
-            <Bot size={16} className="text-azure-400 group-hover:scale-110 transition-transform" />
+          <button onClick={() => navigateTo('ai')} className="flex items-center justify-center gap-2 bg-azure-500/15 hover:bg-azure-500/25 text-azure-300 border border-azure-500/30 px-4 py-3 sm:py-4 rounded-xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] group">
+            <Bot size={18} className="text-azure-400 group-hover:scale-110 transition-transform" />
             <span>AI Asistan</span>
           </button>
         </div>
       </div>
 
       {/* =========================================================
-          CANLI GERİ SAYIM AKTİF BANNER'I (ANA SAYFADA DA GÖZÜKÜR)
+          CANLI GERİ SAYIM AKTİF BANNER'I
           ========================================================= */}
       {activeTimerMovie && (() => {
         const info = getMovieTimerInfo(activeTimerMovie, nowMs);
@@ -542,30 +557,13 @@ export default function HomePage() {
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button
-                type="button"
-                onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ink-800 hover:bg-ink-700 text-amber-300 border border-amber-500/30 text-xs font-bold transition-colors"
-              >
+              <button onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ink-800 hover:bg-ink-700 text-amber-300 border border-amber-500/30 text-xs font-bold transition-colors">
                 {info.isPaused ? <><Play size={13} className="fill-current" /> Devam Et</> : <><Pause size={13} /> Duraklat</>}
               </button>
-              <button
-                type="button"
-                onClick={() => handleRequestRateMovie(activeTimerMovie)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all ${
-                  info.canRateWithTimer
-                    ? 'bg-gold-500 hover:bg-gold-400 text-ink-950 shadow-md'
-                    : 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
-                }`}
-              >
+              <button onClick={() => handleRequestRateMovie(activeTimerMovie)} className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all ${info.canRateWithTimer ? 'bg-gold-500 hover:bg-gold-400 text-ink-950 shadow-md' : 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'}`}>
                 {info.canRateWithTimer ? <><Star size={13} className="fill-current" /> Bitir & Puanla</> : <><Lock size={12} /> Kilitli ({info.minRequiredMins - info.elapsedMins} dk)</>}
               </button>
-              <button
-                type="button"
-                onClick={() => cancelWatchingMovie(activeTimerMovie.id)}
-                title="Sayacı İptal Et"
-                className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-colors"
-              >
+              <button onClick={() => cancelWatchingMovie(activeTimerMovie.id)} title="Sayacı İptal Et" className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -602,32 +600,21 @@ export default function HomePage() {
               </div>
 
               {eligibleMovies.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setSpotlightOffset((prev) => prev + 1)}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-ink-200 hover:text-gold-300 bg-ink-900/90 hover:bg-ink-800 px-3.5 py-1.5 rounded-xl border border-ink-700/80 hover:border-gold-500/40 transition-all group"
-                >
+                <button onClick={() => setSpotlightOffset((prev) => prev + 1)} className="inline-flex items-center gap-1.5 text-xs font-bold text-ink-200 hover:text-gold-300 bg-ink-900/90 hover:bg-ink-800 px-3.5 py-1.5 rounded-xl border border-ink-700/80 hover:border-gold-500/40 transition-all group">
                   <RefreshCw size={13} className="group-hover:rotate-180 transition-transform duration-500 text-gold-400" /> Başka Film Öner
                 </button>
               )}
             </div>
 
             <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center md:items-stretch">
-              <button
-                type="button"
-                onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}
-                title="Sinema Kartını Gör"
-                className="w-40 sm:w-48 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-gold-500/40 shadow-2xl relative group/poster cursor-pointer self-center md:self-start"
-              >
+              <button onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })} title="Sinema Kartını Gör" className="w-40 sm:w-48 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-gold-500/40 shadow-2xl relative group/poster cursor-pointer self-center md:self-start">
                 {spotlightMovie.posterUrl ? (
                   <img src={spotlightMovie.posterUrl} alt={spotlightMovie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-500" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-ink-600"><Projector size={40} /></div>
                 )}
                 <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5">
-                  <div className="w-10 h-10 rounded-full bg-gold-500 text-ink-950 flex items-center justify-center shadow-lg">
-                    <Eye size={19} />
-                  </div>
+                  <div className="w-10 h-10 rounded-full bg-gold-500 text-ink-950 flex items-center justify-center shadow-lg"><Eye size={19} /></div>
                   <span className="text-[10px] font-black text-white uppercase tracking-wider">Sinema Kartı</span>
                 </div>
               </button>
@@ -635,56 +622,27 @@ export default function HomePage() {
               <div className="flex-1 min-w-0 text-center md:text-left flex flex-col justify-between w-full">
                 <div className="space-y-3">
                   <div>
-                    <h3 className="text-2xl sm:text-3xl font-black text-ink-50 tracking-tight leading-tight">
-                      {spotlightMovie.title}
-                    </h3>
-
+                    <h3 className="text-2xl sm:text-3xl font-black text-ink-50 tracking-tight leading-tight">{spotlightMovie.title}</h3>
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-2.5 text-xs text-ink-200 font-semibold">
-                      {spotlightMovie.year && (
-                        <span className="flex items-center gap-1.5 bg-ink-950/80 px-2.5 py-1 rounded-lg border border-ink-800">
-                          <Calendar size={13} className="text-gold-400" /> {spotlightMovie.year}
-                        </span>
-                      )}
-                      {spotlightMovie.runtime && (
-                        <span className="flex items-center gap-1.5 bg-ink-950/80 px-2.5 py-1 rounded-lg border border-ink-800">
-                          <Clock size={13} className="text-gold-400" /> {spotlightMovie.runtime} dk
-                        </span>
-                      )}
-                      {spotlightMovie.directors && spotlightMovie.directors.length > 0 && (
-                        <span className="flex items-center gap-1.5 bg-ink-950/80 px-2.5 py-1 rounded-lg border border-ink-800">
-                          <User size={13} className="text-gold-400" /> {spotlightMovie.directors[0]}
-                        </span>
-                      )}
-                      {spotlightMovie.cast && spotlightMovie.cast.length > 0 && (
-                        <span className="flex items-center gap-1.5 bg-ink-950/80 px-2.5 py-1 rounded-lg border border-ink-800">
-                          <Users size={13} className="text-azure-400" /> {spotlightMovie.cast.slice(0, 2).join(', ')}
-                        </span>
-                      )}
+                      {spotlightMovie.year && <span className="flex items-center gap-1.5 bg-ink-950/80 px-2.5 py-1 rounded-lg border border-ink-800"><Calendar size={13} className="text-gold-400" /> {spotlightMovie.year}</span>}
+                      {spotlightMovie.runtime && <span className="flex items-center gap-1.5 bg-ink-950/80 px-2.5 py-1 rounded-lg border border-ink-800"><Clock size={13} className="text-gold-400" /> {spotlightMovie.runtime} dk</span>}
+                      {spotlightMovie.directors && spotlightMovie.directors.length > 0 && <span className="flex items-center gap-1.5 bg-ink-950/80 px-2.5 py-1 rounded-lg border border-ink-800"><User size={13} className="text-gold-400" /> {spotlightMovie.directors[0]}</span>}
+                      {spotlightMovie.cast && spotlightMovie.cast.length > 0 && <span className="flex items-center gap-1.5 bg-ink-950/80 px-2.5 py-1 rounded-lg border border-ink-800"><Users size={13} className="text-azure-400" /> {spotlightMovie.cast.slice(0, 2).join(', ')}</span>}
                     </div>
                   </div>
 
                   {spotlightMovie.genres.length > 0 && (
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5">
-                      {spotlightMovie.genres.map((g) => (
-                        <span key={g} className="text-[11px] font-bold px-3 py-0.5 rounded-full bg-gold-500/15 text-gold-300 border border-gold-500/30">
-                          {g}
-                        </span>
-                      ))}
+                      {spotlightMovie.genres.map((g) => <span key={g} className="text-[11px] font-bold px-3 py-0.5 rounded-full bg-gold-500/15 text-gold-300 border border-gold-500/30">{g}</span>)}
                     </div>
                   )}
 
                   <div className="bg-ink-950/70 border border-ink-800/90 rounded-2xl p-3.5 text-left shadow-inner">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-gold-400/90 mb-1">
-                      Film Konusu & Özet
-                    </div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-gold-400/90 mb-1">Film Konusu & Özet</div>
                     {spotlightMovie.overview ? (
-                      <div className="max-h-24 sm:max-h-28 overflow-y-auto pr-2 custom-scrollbar text-xs sm:text-sm text-ink-200 leading-relaxed">
-                        {spotlightMovie.overview}
-                      </div>
+                      <div className="max-h-24 sm:max-h-28 overflow-y-auto pr-2 custom-scrollbar text-xs sm:text-sm text-ink-200 leading-relaxed">{spotlightMovie.overview}</div>
                     ) : (
-                      <p className="text-xs text-ink-500 italic">
-                        Bu film için henüz özet bilgisi çekilmemiş. Filmler sekmesindeki "Eksikleri Bul" butonuyla özeti indirebilirsin.
-                      </p>
+                      <p className="text-xs text-ink-500 italic">Bu film için henüz özet bilgisi çekilmemiş. Filmler sekmesindeki "Eksikleri Bul" butonuyla özeti indirebilirsin.</p>
                     )}
                   </div>
                 </div>
@@ -693,50 +651,21 @@ export default function HomePage() {
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5">
                     {getMovieWatchLinks(spotlightMovie).map((link, idx) => {
                       const Icon = link.icon;
-                      if (link.isTrailer) {
-                        return (
-                          <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105">
-                            <Icon size={14} /> {link.text}
-                          </a>
-                        );
-                      }
-                      return (
-                        <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105">
-                          {link.logo ? <img src={link.logo} alt={link.text} className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={13} />}
-                          {link.text}
-                        </a>
-                      );
+                      if (link.isTrailer) return <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105"><Icon size={14} /> {link.text}</a>;
+                      return <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105">{link.logo ? <img src={link.logo} alt={link.text} className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={13} />} {link.text}</a>;
                     })}
                   </div>
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     {!isSpotlightTimerActive && (
-                      <button
-                        type="button"
-                        onClick={() => startWatchingMovie(spotlightMovie.id, false)}
-                        disabled={Boolean(activeTimerMovie)}
-                        className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all ${
-                          activeTimerMovie
-                            ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed'
-                            : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/35'
-                        }`}
-                        title="Canlı geri sayımı başlat"
-                      >
+                      <button onClick={() => startWatchingMovie(spotlightMovie.id, false)} disabled={Boolean(activeTimerMovie)} className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all ${activeTimerMovie ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed' : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/35'}`} title="Canlı geri sayımı başlat">
                         <Play size={13} className="fill-current" /> Başlat
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-100 border border-ink-700 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all"
-                    >
+                    <button onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-100 border border-ink-700 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all">
                       <Eye size={15} /> Künye
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRequestRateMovie(spotlightMovie)}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-gold-500/20 transition-all hover:scale-105"
-                    >
+                    <button onClick={() => handleRequestRateMovie(spotlightMovie)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-gold-500/20 transition-all hover:scale-105">
                       <Star size={15} className="fill-current" /> Puanla
                     </button>
                   </div>
@@ -754,69 +683,28 @@ export default function HomePage() {
         <div className="space-y-3 animate-fade-in-up">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-base sm:text-lg font-black text-ink-100 flex items-center gap-2">
-              <Tv size={20} className="text-azure-400" />
-              İzlemeye Devam Et
-              <span className="text-xs font-bold bg-azure-500/20 text-azure-300 px-2.5 py-0.5 rounded-full border border-azure-500/30">
-                {ongoingSeries.length} Devam Eden Dizi
-              </span>
+              <Tv size={20} className="text-azure-400" /> İzlemeye Devam Et
+              <span className="text-xs font-bold bg-azure-500/20 text-azure-300 px-2.5 py-0.5 rounded-full border border-azure-500/30">{ongoingSeries.length} Devam Eden Dizi</span>
             </h2>
-            <button onClick={() => navigateTo('series')} className="text-xs font-bold text-azure-400 hover:underline flex items-center gap-1">
-              Tüm Diziler <ChevronRight size={14} />
-            </button>
+            <button onClick={() => navigateTo('series')} className="text-xs font-bold text-azure-400 hover:underline flex items-center gap-1">Tüm Diziler <ChevronRight size={14} /></button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {ongoingSeries.slice(0, 6).map(({ series, episode, watchedCount, totalCount, pct }) => (
-              <div
-                key={series.id}
-                className="bg-ink-900/70 backdrop-blur-sm border border-ink-700/60 hover:border-azure-500/40 rounded-2xl p-3.5 flex gap-3.5 items-center shadow-lg transition-all group"
-              >
-                <button
-                  type="button"
-                  onClick={() => setDetailTarget({ type: 'series', data: series })}
-                  title="Sinema Kartını Gör"
-                  className="w-16 aspect-[2/3] flex-shrink-0 rounded-xl overflow-hidden bg-ink-950 border border-ink-700/60 relative group/poster cursor-pointer"
-                >
-                  {series.posterUrl ? (
-                    <img src={series.posterUrl} alt={series.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-ink-600"><Tv size={20} /></div>
-                  )}
-                  <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex items-center justify-center">
-                    <Eye size={16} className="text-azure-400" />
-                  </div>
+              <div key={series.id} className="bg-ink-900/70 backdrop-blur-sm border border-ink-700/60 hover:border-azure-500/40 rounded-2xl p-3.5 flex gap-3.5 items-center shadow-lg transition-all group">
+                <button onClick={() => setDetailTarget({ type: 'series', data: series })} title="Sinema Kartını Gör" className="w-16 aspect-[2/3] flex-shrink-0 rounded-xl overflow-hidden bg-ink-950 border border-ink-700/60 relative group/poster cursor-pointer">
+                  {series.posterUrl ? <img src={series.posterUrl} alt={series.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" /> : <div className="w-full h-full flex items-center justify-center text-ink-600"><Tv size={20} /></div>}
+                  <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex items-center justify-center"><Eye size={16} className="text-azure-400" /></div>
                 </button>
 
                 <div className="flex-1 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => setDetailTarget({ type: 'series', data: series })}
-                    className="font-black text-sm text-ink-100 hover:text-azure-400 truncate block text-left w-full transition-colors"
-                  >
-                    {series.title}
-                  </button>
-
-                  <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-azure-300 bg-azure-500/15 border border-azure-500/30 px-2 py-0.5 rounded-md mt-1">
-                    <span>Sıradaki: {episode.season}. Sezon {episode.episode}. Bölüm</span>
-                  </div>
-
+                  <button onClick={() => setDetailTarget({ type: 'series', data: series })} className="font-black text-sm text-ink-100 hover:text-azure-400 truncate block text-left w-full transition-colors">{series.title}</button>
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-azure-300 bg-azure-500/15 border border-azure-500/30 px-2 py-0.5 rounded-md mt-1"><span>Sıradaki: {episode.season}. Sezon {episode.episode}. Bölüm</span></div>
                   <div className="mt-2.5 space-y-1">
-                    <div className="flex justify-between text-[10px] font-bold text-ink-400">
-                      <span>{watchedCount} / {totalCount} Bölüm</span>
-                      <span className="text-azure-400">%{pct}</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800">
-                      <div className="h-full bg-gradient-to-r from-azure-500 to-indigo-500 rounded-full transition-all duration-500" style={{ width: `${Math.max(4, pct)}%` }} />
-                    </div>
+                    <div className="flex justify-between text-[10px] font-bold text-ink-400"><span>{watchedCount} / {totalCount} Bölüm</span><span className="text-azure-400">%{pct}</span></div>
+                    <div className="h-1.5 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800"><div className="h-full bg-gradient-to-r from-azure-500 to-indigo-500 rounded-full transition-all duration-500" style={{ width: `${Math.max(4, pct)}%` }} /></div>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setPickedItem({ kind: 'series', series, episode })}
-                    className="mt-2.5 w-full py-1.5 px-3 rounded-lg bg-azure-500/20 hover:bg-azure-500 text-azure-300 hover:text-white border border-azure-500/30 text-xs font-black transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <Star size={12} className="fill-current" /> Bölümü Puanla
-                  </button>
+                  <button onClick={() => setPickedItem({ kind: 'series', series, episode })} className="mt-2.5 w-full py-1.5 px-3 rounded-lg bg-azure-500/20 hover:bg-azure-500 text-azure-300 hover:text-white border border-azure-500/30 text-xs font-black transition-all flex items-center justify-center gap-1.5"><Star size={12} className="fill-current" /> Bölümü Puanla</button>
                 </div>
               </div>
             ))}
@@ -865,14 +753,9 @@ export default function HomePage() {
           {closestAchievements.length > 0 && (
             <div className="bg-ink-900/60 border border-ink-700/60 rounded-3xl p-5 space-y-4 shadow-xl">
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-black text-ink-100 flex items-center gap-2">
-                  <Target size={18} className="text-gold-400" /> Kazanmaya En Yakın Kupalar
-                </h3>
-                <button onClick={() => navigateTo('achievements')} className="text-xs font-bold text-gold-400 hover:underline flex items-center gap-1">
-                  Tümü <ChevronRight size={14} />
-                </button>
+                <h3 className="text-base font-black text-ink-100 flex items-center gap-2"><Target size={18} className="text-gold-400" /> Kazanmaya En Yakın Kupalar</h3>
+                <button onClick={() => navigateTo('achievements')} className="text-xs font-bold text-gold-400 hover:underline flex items-center gap-1">Tümü <ChevronRight size={14} /></button>
               </div>
-
               <div className="space-y-3">
                 {closestAchievements.map((ach) => {
                   const tierInfo = (TIER_COLORS as any)[ach.tier];
@@ -889,19 +772,11 @@ export default function HomePage() {
                             <div className="text-[11px] text-ink-400 truncate">{ach.desc}</div>
                           </div>
                         </div>
-                        <span className="text-[10px] font-black text-gold-400 bg-gold-500/10 border border-gold-500/20 px-2 py-0.5 rounded-md flex-shrink-0">
-                          +{ach.xp} XP
-                        </span>
+                        <span className="text-[10px] font-black text-gold-400 bg-gold-500/10 border border-gold-500/20 px-2 py-0.5 rounded-md flex-shrink-0">+{ach.xp} XP</span>
                       </div>
-
                       <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] font-bold text-ink-400">
-                          <span>İlerleme: {ach.current} / {ach.target}</span>
-                          <span className="text-gold-400">%{ach.pct}</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800">
-                          <div className={`h-full rounded-full ${tierInfo?.bg || 'bg-gold-500'}`} style={{ width: `${ach.pct}%` }} />
-                        </div>
+                        <div className="flex justify-between text-[10px] font-bold text-ink-400"><span>İlerleme: {ach.current} / {ach.target}</span><span className="text-gold-400">%{ach.pct}</span></div>
+                        <div className="h-1.5 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800"><div className={`h-full rounded-full ${tierInfo?.bg || 'bg-gold-500'}`} style={{ width: `${ach.pct}%` }} /></div>
                       </div>
                     </div>
                   );
@@ -913,51 +788,24 @@ export default function HomePage() {
           {recentWatched.length > 0 && (
             <div className="bg-ink-900/60 border border-ink-700/60 rounded-3xl p-5 space-y-4 shadow-xl">
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-black text-ink-100 flex items-center gap-2">
-                  <Clock size={18} className="text-azure-400" /> Son İzlenenler & Günlük
-                </h3>
-                <button onClick={() => navigateTo('history')} className="text-xs font-bold text-azure-400 hover:underline flex items-center gap-1">
-                  Tüm Geçmiş <ChevronRight size={14} />
-                </button>
+                <h3 className="text-base font-black text-ink-100 flex items-center gap-2"><Clock size={18} className="text-azure-400" /> Son İzlenenler & Günlük</h3>
+                <button onClick={() => navigateTo('history')} className="text-xs font-bold text-azure-400 hover:underline flex items-center gap-1">Tüm Geçmiş <ChevronRight size={14} /></button>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {recentWatched.map((h) => {
                   const isMovie = h.kind === 'movie' || h.type === 'movie';
-                  const poster = isMovie
-                    ? data.movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl
-                    : data.series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.posterUrl;
-
+                  const poster = isMovie ? data.movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl : data.series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.posterUrl;
                   return (
-                    <button
-                      key={h.id}
-                      type="button"
-                      onClick={() => openHistoryItemDetail(h)}
-                      className="bg-ink-950/70 hover:bg-ink-800/60 border border-ink-800/80 hover:border-gold-500/30 rounded-2xl p-3 flex items-center gap-3 text-left transition-all group"
-                    >
+                    <button key={h.id} type="button" onClick={() => openHistoryItemDetail(h)} className="bg-ink-950/70 hover:bg-ink-800/60 border border-ink-800/80 hover:border-gold-500/30 rounded-2xl p-3 flex items-center gap-3 text-left transition-all group">
                       <div className="w-11 aspect-[2/3] rounded-lg overflow-hidden bg-ink-900 border border-ink-700/60 flex-shrink-0 relative">
-                        {poster ? (
-                          <img src={poster} alt={h.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-ink-600">
-                            {isMovie ? <Film size={15} /> : <Tv size={15} />}
-                          </div>
-                        )}
+                        {poster ? <img src={poster} alt={h.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-ink-600">{isMovie ? <Film size={15} /> : <Tv size={15} />}</div>}
                       </div>
-
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-black text-ink-100 truncate group-hover:text-gold-400 transition-colors">{h.title}</div>
-                        <div className="text-[10px] text-ink-400 mt-0.5 truncate">
-                          {h.season != null ? `${h.season}. Sezon ${h.episode}. Bölüm` : h.year || 'Film'}
-                        </div>
+                        <div className="text-[10px] text-ink-400 mt-0.5 truncate">{h.season != null ? `${h.season}. Sezon ${h.episode}. Bölüm` : h.year || 'Film'}</div>
                         <div className="text-[10px] text-ink-500 mt-1">{formatDateShort(h.watchedAt)}</div>
                       </div>
-
-                      {h.rating !== null && (
-                        <span className={`text-xs px-2 py-1 rounded-lg font-black flex-shrink-0 ${ratingBgClass(h.rating)}`}>
-                          {h.rating}
-                        </span>
-                      )}
+                      {h.rating !== null && <span className={`text-xs px-2 py-1 rounded-lg font-black flex-shrink-0 ${ratingBgClass(h.rating)}`}>{h.rating}</span>}
                     </button>
                   );
                 })}
@@ -975,25 +823,15 @@ export default function HomePage() {
           <div className="absolute top-0 right-0 w-48 h-48 bg-azure-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           <div className="flex items-start gap-4 relative z-10">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-azure-500 to-indigo-600 p-0.5 shadow-lg shadow-azure-500/30 shrink-0">
-              <div className="w-full h-full bg-ink-950 rounded-[14px] flex items-center justify-center">
-                <Bot className="text-azure-400" size={28} />
-              </div>
+              <div className="w-full h-full bg-ink-950 rounded-[14px] flex items-center justify-center"><Bot className="text-azure-400" size={28} /></div>
             </div>
             <div>
-              <div className="text-[10px] font-black uppercase tracking-widest text-azure-400 mb-1 flex items-center gap-1.5">
-                <Sparkles size={12} /> Yeni Nesil Özellik
-              </div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-azure-400 mb-1 flex items-center gap-1.5"><Sparkles size={12} /> Yeni Nesil Özellik</div>
               <h3 className="text-xl font-black text-ink-50 mb-1 tracking-tight">Sinevia AI ile Tanış</h3>
-              <p className="text-xs sm:text-sm text-ink-300 leading-relaxed">
-                Ne izleyeceğini bulamıyor musun? Asistanına nasıl bir şey aradığını söyle, sana özel yapımları anında kütüphanene eklesin.
-              </p>
+              <p className="text-xs sm:text-sm text-ink-300 leading-relaxed">Ne izleyeceğini bulamıyor musun? Asistanına nasıl bir şey aradığını söyle, sana özel yapımları anında kütüphanene eklesin.</p>
             </div>
           </div>
-
-          <button
-            onClick={() => navigateTo('ai')}
-            className="w-full bg-gradient-to-r from-azure-600 to-indigo-600 hover:from-azure-500 hover:to-indigo-500 text-white font-black py-3.5 px-6 rounded-xl shadow-lg shadow-azure-500/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 relative z-10 text-sm"
-          >
+          <button onClick={() => navigateTo('ai')} className="w-full bg-gradient-to-r from-azure-600 to-indigo-600 hover:from-azure-500 hover:to-indigo-500 text-white font-black py-3.5 px-6 rounded-xl shadow-lg shadow-azure-500/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 relative z-10 text-sm">
             <Bot size={18} /> Asistanla Sohbet Et
           </button>
         </div>
@@ -1002,25 +840,15 @@ export default function HomePage() {
           <div className="absolute top-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none" />
           <div className="flex items-start gap-4 relative z-10">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-0.5 shadow-lg shadow-emerald-500/30 shrink-0">
-              <div className="w-full h-full bg-ink-950 rounded-[14px] flex items-center justify-center">
-                <Dna className="text-emerald-400" size={28} />
-              </div>
+              <div className="w-full h-full bg-ink-950 rounded-[14px] flex items-center justify-center"><Dna className="text-emerald-400" size={28} /></div>
             </div>
             <div>
-              <div className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1 flex items-center gap-1.5">
-                <Sparkles size={12} /> Çapraz Tavsiye Motoru
-              </div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1 flex items-center gap-1.5"><Sparkles size={12} /> Çapraz Tavsiye Motoru</div>
               <h3 className="text-xl font-black text-ink-50 mb-1 tracking-tight">Film DNA Laboratuvarı</h3>
-              <p className="text-xs sm:text-sm text-ink-300 leading-relaxed">
-                İki favori filmini seç, DNA'larını çaprazla ve genetik olarak sana en uygun yapımı kütüphanenden sentezle.
-              </p>
+              <p className="text-xs sm:text-sm text-ink-300 leading-relaxed">İki favori filmini seç, DNA'larını çaprazla ve genetik olarak sana en uygun yapımı kütüphanenden sentezle.</p>
             </div>
           </div>
-
-          <button
-            onClick={() => setShowDnaModal(true)}
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black py-3.5 px-6 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 relative z-10 text-sm"
-          >
+          <button onClick={() => setShowDnaModal(true)} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black py-3.5 px-6 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 relative z-10 text-sm">
             <Dna size={18} /> DNA Sentezle
           </button>
         </div>
@@ -1030,84 +858,37 @@ export default function HomePage() {
           7. SİSTEM NASIL ÇALIŞIR?
           ========================================================= */}
       <div>
-        <div className="flex items-center gap-3 mb-5 pl-2">
-          <Sparkles className="text-gold-400" size={22} />
-          <h3 className="text-lg sm:text-xl font-bold text-ink-50">Sistem Nasıl Çalışır?</h3>
-        </div>
-
+        <div className="flex items-center gap-3 mb-5 pl-2"><Sparkles className="text-gold-400" size={22} /><h3 className="text-lg sm:text-xl font-bold text-ink-50">Sistem Nasıl Çalışır?</h3></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-ink-900/40 backdrop-blur-sm border border-ink-700/40 rounded-2xl p-5 hover:bg-ink-800/40 transition-colors group">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20 group-hover:scale-110 transition-transform">
-              <Search size={20} className="text-blue-400" />
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/20 group-hover:scale-110 transition-transform"><Search size={20} className="text-blue-400" /></div>
             <h4 className="font-bold text-ink-50 mb-2">1. Ara ve Seç</h4>
             <p className="text-sm text-ink-400 leading-relaxed">Katalogdan veya yapay zeka asistanıyla filmleri bul, sepetine at ve arşivle.</p>
           </div>
-
           <div className="bg-ink-900/40 backdrop-blur-sm border border-ink-700/40 rounded-2xl p-5 hover:bg-ink-800/40 transition-colors group">
-            <div className="w-10 h-10 rounded-xl bg-gold-500/10 flex items-center justify-center mb-4 border border-gold-500/20 group-hover:scale-110 transition-transform">
-              <Shuffle size={20} className="text-gold-400" />
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-gold-500/10 flex items-center justify-center mb-4 border border-gold-500/20 group-hover:scale-110 transition-transform"><Shuffle size={20} className="text-gold-400" /></div>
             <h4 className="font-bold text-ink-50 mb-2">2. Karar Veremiyor Musun?</h4>
             <p className="text-sm text-ink-400 leading-relaxed">Kütüphanenden seçtiğin türlere ve süreye göre çarkı çevir, izleyeceğin yapımı belirle.</p>
           </div>
-
           <div className="bg-ink-900/40 backdrop-blur-sm border border-ink-700/40 rounded-2xl p-5 hover:bg-ink-800/40 transition-colors group">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 border border-emerald-500/20 group-hover:scale-110 transition-transform">
-              <Star size={20} className="text-emerald-400" />
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 border border-emerald-500/20 group-hover:scale-110 transition-transform"><Star size={20} className="text-emerald-400" /></div>
             <h4 className="font-bold text-ink-50 mb-2">3. Puanla ve Arşivle</h4>
             <p className="text-sm text-ink-400 leading-relaxed">İzlediğin yapımlara 10 üzerinden puan ver, değerlendirme başlıklarını ve notlarını kaydet.</p>
           </div>
-
           <div className="bg-ink-900/40 backdrop-blur-sm border border-ink-700/40 rounded-2xl p-5 hover:bg-ink-800/40 transition-colors group">
-            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center mb-4 border border-violet-500/20 group-hover:scale-110 transition-transform">
-              <TrendingUp size={20} className="text-violet-400" />
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center mb-4 border border-violet-500/20 group-hover:scale-110 transition-transform"><TrendingUp size={20} className="text-violet-400" /></div>
             <h4 className="font-bold text-ink-50 mb-2">4. Seviye Atla</h4>
             <p className="text-sm text-ink-400 leading-relaxed">İzledikçe XP kazan, gizli başarımları aç ve profilini bir Sinevia Efsanesine dönüştür.</p>
           </div>
         </div>
       </div>
 
-      {/* MODALLAR */}
       {showBulkAdd && <BulkAddModal initialTab={showBulkAdd} onClose={() => setShowBulkAdd(false)} />}
-
-      {showPick && (
-        <PickModal
-          movieCount={eligibleMovies.length}
-          seriesCount={allNextEpisodes.length}
-          unwatchedMovies={eligibleMovies}
-          nextEpisodes={allNextEpisodes}
-          onPick={(item) => setPickedItem(item)}
-          onClose={() => setShowPick(false)}
-        />
-      )}
-
+      {showPick && <PickModal movieCount={eligibleMovies.length} seriesCount={allNextEpisodes.length} unwatchedMovies={eligibleMovies} nextEpisodes={allNextEpisodes} onPick={(item) => setPickedItem(item)} onClose={() => setShowPick(false)} />}
       {showDnaModal && <DnaSynthesizerModal onClose={() => setShowDnaModal(false)} />}
-
       {pickedItem && (
-        <RatingModal
-          title={pickedItem.kind === 'movie' ? pickedItem.movie.title : pickedItem.series.title}
-          subtitle={
-            pickedItem.kind === 'movie'
-              ? pickedItem.movie.year ? `Çıkış Yılı: ${pickedItem.movie.year}` : 'Film'
-              : `${pickedItem.episode.season}. Sezon ${pickedItem.episode.episode}. Bölüm`
-          }
-          initialIsPastWatch={pickedItem.kind === 'movie' ? Boolean(pickedItem.movie.isPastWatch) : false}
-          allowPastWatch={pickedItem.kind === 'movie'}
-          onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
-            if (pickedItem.kind === 'movie') {
-              watchMovie(pickedItem.movie.id, rating, note, detailedRating, reviewTags, isPastWatch);
-            } else {
-              watchEpisode(pickedItem.series.id, pickedItem.episode.id, rating, note, detailedRating, reviewTags);
-            }
-            setPickedItem(null);
-          }}
-          onClose={() => setPickedItem(null)}
-        />
+        <RatingModal title={pickedItem.kind === 'movie' ? pickedItem.movie.title : pickedItem.series.title} subtitle={pickedItem.kind === 'movie' ? pickedItem.movie.year ? `Çıkış Yılı: ${pickedItem.movie.year}` : 'Film' : `${pickedItem.episode.season}. Sezon ${pickedItem.episode.episode}. Bölüm`} initialIsPastWatch={pickedItem.kind === 'movie' ? Boolean(pickedItem.movie.isPastWatch) : false} allowPastWatch={pickedItem.kind === 'movie'} onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => { if (pickedItem.kind === 'movie') { watchMovie(pickedItem.movie.id, rating, note, detailedRating, reviewTags, isPastWatch); } else { watchEpisode(pickedItem.series.id, pickedItem.episode.id, rating, note, detailedRating, reviewTags); } setPickedItem(null); }} onClose={() => setPickedItem(null)} />
       )}
-
       {detailTarget && <MediaDetailModal target={detailTarget} onClose={() => setDetailTarget(null)} />}
     </div>
   );

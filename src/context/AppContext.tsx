@@ -30,11 +30,10 @@ export interface MovieExtraData { keywords?: string[]; directors?: string[]; cas
 export interface SeriesExtraData { keywords?: string[]; creators?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; }
 interface ExtendedAppData extends AppData { aiChatHistory?: AIMessage[]; theme?: string; reviewTags: string[]; tagSentiments?: Record<string, 'positive' | 'negative'>; }
 
-// ⏱️ CANLI GERİ SAYIM VE ENGELLEYİCİ HESAPLAMA YARDIMCISI
 export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
   const maxMins = movie.runtime && movie.runtime > 0 ? movie.runtime : 115;
   const totalSec = maxMins * 60;
-  const minRequiredMins = Math.max(5, Math.ceil(maxMins * 0.15)); // En az %15 (veya min 5 dk) izleme şartı
+  const minRequiredMins = Math.max(5, Math.ceil(maxMins * 0.15));
 
   if (!movie.startedAt) {
     return { isActive: false, isPaused: false, elapsedSec: 0, remainingSec: totalSec, elapsedMins: 0, maxMins, minRequiredMins, canRateWithTimer: true, formattedRemaining: '' };
@@ -67,8 +66,6 @@ export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
   return { isActive: true, isPaused, elapsedSec, remainingSec, elapsedMins, maxMins, minRequiredMins, canRateWithTimer, formattedRemaining };
 }
 
-// ============== HAFTALIK PLAN ZAMAN YARDIMCILARI ==============
-// Bir plan öğesinin (tarih + saat + süre) dakika cinsinden [başlangıç, bitiş) aralığını verir.
 function planItemMinuteRange(time: string, runtime?: number): { start: number; end: number } {
   const [h, m] = time.split(':').map((n) => parseInt(n, 10) || 0);
   const start = h * 60 + m;
@@ -76,7 +73,6 @@ function planItemMinuteRange(time: string, runtime?: number): { start: number; e
   return { start, end };
 }
 
-// İki plan öğesi aynı tarihte ve saat aralıkları kesişiyor mu?
 function planItemsOverlap(dateA: string, timeA: string, runtimeA: number | undefined, dateB: string, timeB: string, runtimeB: number | undefined): boolean {
   if (dateA !== dateB) return false;
   const A = planItemMinuteRange(timeA, runtimeA);
@@ -84,7 +80,6 @@ function planItemsOverlap(dateA: string, timeA: string, runtimeA: number | undef
   return A.start < B.end && B.start < A.end;
 }
 
-// "HH:mm" formatında bitiş saatini hesaplar (ör. 20:00 başlangıç + 125 dk -> "22:05")
 export function computeEndTime(time: string, runtime?: number): string {
   const { end } = planItemMinuteRange(time, runtime);
   const normalizedEnd = ((end % 1440) + 1440) % 1440;
@@ -102,7 +97,6 @@ function createInitialAchievements(existingList?: AchievementProgress[]): Achiev
   });
 }
 
-// Eski "Eskiden İzlenenler" koleksiyon ID'sine bağlı filmleri yeni inPastQueue yapısına geçirir
 function migrateLegacyPastCollection(movies: Movie[] = [], collections: Collection[] = []): { movies: Movie[]; collections: Collection[] } {
   const pastColIds = new Set(
     collections
@@ -203,9 +197,7 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
     return !isNaN(t) && t > 1262304000000;
   }).sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
 
-  // Güncel izleme geçmişi (Önceden izlenen filmler mevcut izleme başarımlarını TETİKLEMEZ)
   const validHistory = allValidHistory.filter((h) => !h.isPastWatch);
-
   const moviesHistory = validHistory.filter((h) => h.type === 'movie' || h.kind === 'movie');
   const seriesHistory = validHistory.filter((h) => h.type === 'series' || h.kind === 'series');
 
@@ -233,11 +225,8 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   const newAchievements = createInitialAchievements(state.achievements);
   const progressMap = new Map(newAchievements.map((a) => [a.achievementId, a]));
 
-  // Normal izlenen filmler (Süre ve canlı sayaç başarımları için)
   const watchedMovies = state.movies.filter((m) => m.watched && !m.isPastWatch);
   const watchedMoviesWithRuntime = watchedMovies.filter((m) => m.runtime);
-
-  // Daha önceden (geçmişte) izlenen filmler (Sadece yeni Nostalji başarımları için)
   const pastWatchedMovies = state.movies.filter((m) => m.watched && m.isPastWatch);
 
   for (const def of ACHIEVEMENT_DEFS) {
@@ -418,8 +407,6 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'time_saver': currentVal = watchedMovies.filter((m) => m.actualRuntime != null && m.runtime != null && m.actualRuntime < m.runtime).reduce((sum, m) => sum + ((m.runtime || 0) - (m.actualRuntime || 0)), 0); break;
       case 'patient_purist': currentVal = watchedMovies.filter((m) => m.startedAt != null && m.actualRuntime != null && m.runtime != null && m.actualRuntime >= m.runtime).length; break;
       case 'secret_speedrunner': currentVal = watchedMovies.filter((m) => m.actualRuntime != null && m.runtime != null && m.runtime >= 90 && m.actualRuntime <= Math.floor(m.runtime / 2)).length; break;
-
-      // YENİ: DAHA ÖNCE (GEÇMİŞTE) İZLENEN FİLM BAŞARIMLARI
       case 'past_watcher': currentVal = pastWatchedMovies.length; break;
       case 'past_masterpiece': currentVal = pastWatchedMovies.filter((m) => m.rating === 10).length; break;
       case 'past_critic': currentVal = pastWatchedMovies.filter((m) => m.rating !== null && m.note && m.note.trim().length > 0).length; break;
@@ -515,13 +502,11 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
     }
     case 'DELETE_MOVIE':
       nextState.movies = state.movies.filter((m) => m.id !== action.id);
-      // Silinen filme ait bekleyen haftalık plan kayıtlarını da temizle
       nextState.weeklyPlan = (state.weeklyPlan || []).filter((p) => p.movieId !== action.id);
       break;
     case 'START_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: action.startedAt } : m)); break;
     case 'CANCEL_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: null } : m)); break;
     case 'WATCH_MOVIE':
-      // Puanlanan film Eskiden İzlenenler sırasından (inPastQueue: false) çıkarılır ama kendi collectionId'si (ör. Matrix) AYNEN KORUNUR!
       nextState.movies = state.movies.map((m) =>
         m.id === action.id
           ? {
@@ -574,7 +559,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
       nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => (e.id === action.episodeId ? { ...e, watched: false, rating: null, detailedRating: undefined, reviewTags: undefined, note: '', watchedAt: null } : e)) } : s));
       nextState.history = state.history.filter((h) => h.itemId !== action.episodeId && h.id !== action.episodeId); break;
     case 'DELETE_EPISODE': nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: s.episodes.filter((e) => e.id !== action.episodeId) } : s)); break;
-    case 'ADD_GENRE': if (!state.genres.some((g) => normalize(g) === normalize(action.genre))) nextState.genres = [...state.genres, action.genre]; break;
+    case 'ADD_GENRE': if (!state.genres.some((x) => normalize(x) === normalize(action.genre))) nextState.genres = [...state.genres, action.genre]; break;
     case 'DELETE_GENRE': nextState.genres = state.genres.filter((g) => g !== action.genre); break;
     case 'RENAME_GENRE':
       nextState.genres = state.genres.map((g) => (g === action.oldName ? action.newName : g));
@@ -630,8 +615,6 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
     case 'ADD_CRITERION': nextState.criteria = [...(state.criteria || []), action.criterion]; break;
     case 'EDIT_CRITERION': nextState.criteria = (state.criteria || []).map((c) => (c.id === action.id ? action.criterion : c)); break;
     case 'DELETE_CRITERION': nextState.criteria = (state.criteria || []).filter((c) => c.id !== action.id); break;
-
-    // ============== HAFTALIK İZLEME PLANI ==============
     case 'ADD_PLAN_ITEM':
       nextState.weeklyPlan = [...(state.weeklyPlan || []), action.item];
       break;
@@ -685,6 +668,7 @@ interface AppContextValue {
   addPlanItem: (movie: Movie, date: string, time: string) => boolean;
   deletePlanItem: (id: string) => void;
   updatePlanItem: (id: string, date: string, time: string) => boolean;
+  grantXp: (xp: number) => void; // YENİ: XP verme fonksiyonu arayüze eklendi
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -708,7 +692,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!parsedData.criteria) parsedData.criteria = defaultData().criteria;
         if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS;
         if (!parsedData.theme) parsedData.theme = 'default';
-        // Eski sürümdeki (dayOfWeek tabanlı) plan kayıtlarının yeni (date tabanlı) yapıyla çakışmasını önle
         if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) {
           parsedData.weeklyPlan = [];
         }
@@ -797,7 +780,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Film eklendi'); return true;
   }, [data.movies, showToast]);
 
-  // 🔒 ENGELLEYİCİ 1: Aynı anda sadece 1 filmin sayacı çalışabilir!
   const startWatchingMovie = useCallback((id: string, silent = false) => {
     const movie = data.movies.find((m) => m.id === id);
     if (!movie || movie.watched) return;
@@ -813,7 +795,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast(`⏳ "${movie.title}" için geri sayım başladı!`, 'info');
   }, [data.movies, showToast]);
 
-  // ⏸️ DURAKLAT / DEVAM ET KONTROLÜ
   const togglePauseWatchingMovie = useCallback((id: string) => {
     const movie = data.movies.find((m) => m.id === id);
     if (!movie || !movie.startedAt) return;
@@ -834,7 +815,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('İzleme sayacı iptal edildi', 'info');
   }, [showToast]);
 
-  // ⛔ ENGELLEYİCİ 2: Minimum izleme süresi (%15) geçmeden sayaçlı puanlamayı engeller!
   const canRateMovieWithTimer = useCallback((id: string): boolean => {
     const movie = data.movies.find((m) => m.id === id);
     if (!movie || !movie.startedAt) return true;
@@ -1080,9 +1060,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const dismissLevelUp = useCallback(() => setLevelUpData(null), []);
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
+  
+  // YENİ EKLENEN: Dışarıdan manuel XP vermek için
+  const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
 
-  // ============== HAFTALIK İZLEME PLANI AKSİYONLARI ==============
-  // Aynı tarihte, süre bakımından çakışan bir plan öğesi var mı? (bir film izlenmişse artık çakışma sayılmaz)
   const findPlanConflict = useCallback((date: string, time: string, runtime: number | undefined, excludeId?: string) => {
     return (data.weeklyPlan || []).find((p) => {
       if (p.id === excludeId) return false;
@@ -1135,7 +1116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.weeklyPlan, findPlanConflict, showToast]);
 
   return (
-    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem }}>
+    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp }}>
       {children}
     </AppContext.Provider>
   );
