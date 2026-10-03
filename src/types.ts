@@ -113,6 +113,19 @@ export interface AchievementProgress {
   tierDates?: Record<string, string>;
 }
 
+export interface WeeklyPlanItem {
+  id: string;
+  movieId: string;
+  title: string;
+  year?: string;
+  posterUrl?: string;
+  genres: string[];
+  runtime?: number;
+  date: string; // "YYYY-MM-DD"
+  time: string; // "HH:mm"
+  createdAt: string;
+}
+
 export interface AppData {
   movies: Movie[];
   series: Series[];
@@ -131,6 +144,7 @@ export interface AppData {
   dailyStreakDate: string | null;
   showLockedNames?: boolean;
   altWatchTemplate?: string;
+  weeklyPlan?: WeeklyPlanItem[];
   pendingToasts?: {
     achievementId: string;
     tier: string;

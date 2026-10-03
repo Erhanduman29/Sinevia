@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Film, Tv, History, Trophy, Settings, BarChart3, Bot,
-  Menu, X, LayoutDashboard, Sparkles,
+  Menu, X, LayoutDashboard, Sparkles, CalendarClock,
 } from 'lucide-react';
 import WrappedModal from './WrappedModal';
 
-export type TabId = 'home' | 'movies' | 'series' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
+export type TabId = 'home' | 'movies' | 'series' | 'plan' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -25,6 +25,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     { id: 'home', icon: LayoutDashboard, label: 'Ana Sayfa', shortLabel: 'Ana Sayfa' },
     { id: 'movies', icon: Film, label: 'Filmler', shortLabel: 'Filmler' },
     { id: 'series', icon: Tv, label: 'Diziler', shortLabel: 'Diziler' },
+    { id: 'plan', icon: CalendarClock, label: 'Haftalık Plan', shortLabel: 'Plan' },
     { id: 'history', icon: History, label: 'Geçmiş', shortLabel: 'Geçmiş' },
     { id: 'achievements', icon: Trophy, label: 'Başarımlar', shortLabel: 'Kupalar' },
     { id: 'stats', icon: BarChart3, label: 'İstatistik', shortLabel: 'İstatistik' },

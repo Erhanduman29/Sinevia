@@ -10,6 +10,7 @@ import AchievementsPage from './pages/AchievementsPage';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage';
 import AIPage from './pages/AIPage';
+import WeeklyPlanPage from './pages/WeeklyPlanPage';
 import Toasts from './components/Toasts';
 import AchievementToasts from './components/AchievementToasts';
 import LevelUpModal from './components/LevelUpModal';
@@ -21,6 +22,7 @@ const VALID_TABS: TabId[] = [
   'home',
   'movies',
   'series',
+  'plan',
   'history',
   'achievements',
   'stats',
@@ -92,6 +94,7 @@ function AppContent() {
       {activeTab === 'home' && <HomePage />}
       {activeTab === 'movies' && <MoviesPage />}
       {activeTab === 'series' && <SeriesPage />}
+      {activeTab === 'plan' && <WeeklyPlanPage />}
       {activeTab === 'history' && <HistoryPage />}
       {activeTab === 'achievements' && <AchievementsPage />}
       {activeTab === 'stats' && <StatsPage />}
