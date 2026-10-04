@@ -28,7 +28,7 @@ export const QUEUE_STEP_DURATION_MS = 4300;
 export interface AIMessage { id: string; sender: 'user' | 'ai'; text: string; timestamp: number; actionItems?: any[]; }
 export interface MovieExtraData { keywords?: string[]; directors?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; inPastQueue?: boolean; }
 export interface SeriesExtraData { keywords?: string[]; creators?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; }
-interface ExtendedAppData extends AppData { aiChatHistory?: AIMessage[]; theme?: string; reviewTags: string[]; tagSentiments?: Record<string, 'positive' | 'negative'>; }
+interface ExtendedAppData extends AppData { aiChatHistory?: AIMessage[]; theme?: string; reviewTags: string[]; tagSentiments?: Record<string, 'positive' | 'negative'>; notificationsEnabled?: boolean; }
 
 export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
   const maxMins = movie.runtime && movie.runtime > 0 ? movie.runtime : 115;
@@ -136,7 +136,7 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
     showLockedNames: false, aiChatHistory: [], theme: 'default',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
-    weeklyPlan: []
+    weeklyPlan: [], notificationsEnabled: false
   };
 }
 
@@ -184,7 +184,8 @@ type Action =
   | { type: 'UPDATE_ALT_TEMPLATE'; template: string } | { type: 'SET_THEME'; theme: string } | { type: 'GRANT_XP'; xp: number }
   | { type: 'ADD_PLAN_ITEM'; item: WeeklyPlanItem }
   | { type: 'DELETE_PLAN_ITEM'; id: string }
-  | { type: 'UPDATE_PLAN_ITEM'; id: string; date: string; time: string };
+  | { type: 'UPDATE_PLAN_ITEM'; id: string; date: string; time: string }
+  | { type: 'TOGGLE_NOTIFICATIONS'; enabled: boolean };
 
 const FIXED_BUGGED_ACHIEVEMENTS = new Set(['selective_critic', 'weekend_cinema', 'loyalty_test', 'break_taker', 'lost_colony', 'final_phobia', 'ghost_viewer', 'secret_critic']);
 
@@ -484,6 +485,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages };
   if (action.type === 'UPDATE_ALT_TEMPLATE') return { ...state, altWatchTemplate: action.template };
   if (action.type === 'SET_THEME') return { ...state, theme: action.theme };
+  if (action.type === 'TOGGLE_NOTIFICATIONS') return { ...state, notificationsEnabled: action.enabled }; // YENİ EKLENDİ
 
   let nextState = { ...state };
   switch (action.type) {
@@ -668,7 +670,8 @@ interface AppContextValue {
   addPlanItem: (movie: Movie, date: string, time: string) => boolean;
   deletePlanItem: (id: string) => void;
   updatePlanItem: (id: string, date: string, time: string) => boolean;
-  grantXp: (xp: number) => void; // YENİ: XP verme fonksiyonu arayüze eklendi
+  grantXp: (xp: number) => void; 
+  toggleNotifications: (enabled: boolean) => void; // YENİ: Bildirim butonu
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -695,6 +698,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) {
           parsedData.weeklyPlan = [];
         }
+        if (parsedData.notificationsEnabled === undefined) parsedData.notificationsEnabled = false;
         return parsedData;
       }
     } catch {}
@@ -706,6 +710,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProcessingToastRef = useRef(false);
   const [queueTick, setQueueTick] = useState(0);
+
+  // YENİ: BİLDİRİM İZLEME REFERANSLARI (Aynı bildirimi spamlama diye)
+  const notifiedTimerIds = useRef<Set<string>>(new Set());
+  const notifiedPlanIds = useRef<Set<string>>(new Set());
 
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => {
     toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id);
@@ -724,6 +732,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { document.body.setAttribute('data-theme', data.theme || 'default'); }, [data.theme]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
   useEffect(() => { dispatch({ type: 'SYNC_ACHIEVEMENTS' }); }, []);
+
+  // YENİ: AKILLI BİLDİRİM (PUSH) MOTORU
+  useEffect(() => {
+    if (!data.notificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+    
+    const interval = setInterval(() => {
+      const nowMs = Date.now();
+      const today = todayStr();
+      const d = new Date(nowMs);
+      const currentTotalMins = d.getHours() * 60 + d.getMinutes();
+
+      // 1. Canlı Sayaç Kontrolü (Süre bittiyse)
+      const activeMovie = data.movies.find(m => !m.watched && m.startedAt && !m.startedAt.startsWith('PAUSED:'));
+      if (activeMovie && !notifiedTimerIds.current.has(activeMovie.id)) {
+        const info = getMovieTimerInfo(activeMovie, nowMs);
+        if (info.remainingSec <= 0) {
+          new Notification('Sinevia - Süren Doldu! 🎬', {
+            body: `"${activeMovie.title}" filmi için izleme sayacı tamamlandı. Hemen puanlayıp XP ödülünü al!`,
+            icon: activeMovie.posterUrl || undefined
+          });
+          notifiedTimerIds.current.add(activeMovie.id);
+        }
+      }
+
+      // 2. Haftalık Plan Kontrolü (Tam 15 dk kala veya daha az kaldıysa 1 kere uyar)
+      const todaysPlans = (data.weeklyPlan || []).filter(p => p.date === today);
+      todaysPlans.forEach(p => {
+        if (notifiedPlanIds.current.has(p.id)) return;
+        const movie = data.movies.find(m => m.id === p.movieId);
+        if (movie?.watched) return;
+
+        const [ph, pm] = p.time.split(':').map(Number);
+        const planTotalMins = ph * 60 + pm;
+        const diff = planTotalMins - currentTotalMins;
+
+        // Film saati yaklaşıyorsa (0-15 dk arası kaldıysa ve daha önce uyarılmadıysa)
+        if (diff > 0 && diff <= 15) {
+          new Notification('Sinevia - Film Saati Yaklaşıyor! 🍿', {
+            body: `Mısırları patlat! "${p.title}" maratonuna ${diff} dakika kaldı. (${p.time})`,
+            icon: p.posterUrl || undefined
+          });
+          notifiedPlanIds.current.add(p.id);
+        }
+      });
+    }, 10000); // 10 saniyede bir durumu kontrol eder
+
+    return () => clearInterval(interval);
+  }, [data.notificationsEnabled, data.movies, data.weeklyPlan]);
 
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => {
     const id = uid(); setAchievementToasts({ type: 'add', toast: { ...item, id } });
@@ -764,6 +820,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
+  const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []); // YENİ
 
   const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
     if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
@@ -1061,7 +1118,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismissLevelUp = useCallback(() => setLevelUpData(null), []);
   const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
   
-  // YENİ EKLENEN: Dışarıdan manuel XP vermek için
   const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
 
   const findPlanConflict = useCallback((date: string, time: string, runtime: number | undefined, excludeId?: string) => {
@@ -1116,7 +1172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.weeklyPlan, findPlanConflict, showToast]);
 
   return (
-    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp }}>
+    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications }}>
       {children}
     </AppContext.Provider>
   );

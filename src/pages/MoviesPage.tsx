@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
 import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import MediaDetailModal from '../components/MediaDetailModal';
+import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { Movie } from '../types';
 
 type SortMode = 'az' | 'year' | 'rating' | 'added';
@@ -323,6 +324,7 @@ export default function MoviesPage() {
   const executeConfirmedCollectionMove = () => {
     if (!confirmMoveColTarget) return;
     const { id: sourceColId, name: sourceColName, fromModal } = confirmMoveColTarget;
+    // Tümüyle taşıyacağımız için sadece izlenmeyenleri alıyoruz
     const moviesToMove = (collectionMap.get(sourceColId) || []).filter((m) => !m.watched);
 
     if (fromModal) {
@@ -335,6 +337,7 @@ export default function MoviesPage() {
     } else {
       moviesToMove.forEach((m) => setMoviePastQueue(m.id, true));
       setIsPastCollectionOpen(true);
+      // UYARI EKRANINDAKİ SÖZÜMÜZÜ TUTTUK: Sadece inPastQueue true yaptık, koleksiyondan bağlarını koparmadık!
       showToast(`"${sourceColName}" koleksiyonundaki ${moviesToMove.length} film (kendi koleksiyonundan silinmeden) Eskiden İzlenenler sırasına eklendi!`, 'success');
     }
     setConfirmMoveColTarget(null);
@@ -542,7 +545,7 @@ export default function MoviesPage() {
     [data.collections]
   );
 
-  // YENİ: Planlanmış (WeeklyPlan) filmlerin ID'lerini buluyoruz.
+  // PLANLANMIŞ FİLMLER (MovieRow içine props olarak geçmek için)
   const plannedMovieIds = useMemo(() => {
     const ids = new Set<string>();
     (data.weeklyPlan || []).forEach(p => ids.add(p.movieId));
@@ -871,7 +874,7 @@ export default function MoviesPage() {
                         movie={m}
                         nowMs={nowMs}
                         anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
-                        isPlanned={plannedMovieIds.has(m.id)} // YENİ
+                        isPlanned={plannedMovieIds.has(m.id)}
                         collectionName={origColName}
                         onDelete={(movie) => setDeleteTarget(movie)}
                         onRate={handleRequestRate}
@@ -1029,7 +1032,7 @@ export default function MoviesPage() {
                               movie={m}
                               nowMs={nowMs}
                               anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
-                              isPlanned={plannedMovieIds.has(m.id)} // YENİ
+                              isPlanned={plannedMovieIds.has(m.id)}
                               collectionName={coll.name}
                               onDelete={(movie) => setDeleteTarget(movie)}
                               onRate={handleRequestRate}
@@ -1094,7 +1097,7 @@ export default function MoviesPage() {
                   movie={m}
                   nowMs={nowMs}
                   anotherTimerActive={Boolean(activeTimerMovie && activeTimerMovie.id !== m.id)}
-                  isPlanned={plannedMovieIds.has(m.id)} // YENİ
+                  isPlanned={plannedMovieIds.has(m.id)}
                   collectionName={colName}
                   onDelete={(movie) => setDeleteTarget(movie)}
                   onRate={handleRequestRate}
@@ -1638,6 +1641,17 @@ export default function MoviesPage() {
 
       {editTarget && <EditMovieModal movie={editTarget} onClose={() => setEditTarget(null)} />}
       
+      {/* KOLEKSİYONDAN TOPLU AKTARIM ONAY UYARISI */}
+      {confirmMoveColTarget && (
+        <ConfirmDialog
+          title="Koleksiyondan Toplu Aktarım"
+          message={`"${confirmMoveColTarget.name}" koleksiyonundaki ${confirmMoveColTarget.count} adet izlenmemiş film (kendi koleksiyonundan silinmeden) "Eskiden İzlenenler" sırasına eklenecek. Onaylıyor musun?`}
+          onConfirm={executeConfirmedCollectionMove}
+          onCancel={() => setConfirmMoveColTarget(null)}
+        />
+      )}
+
+      {/* TEKİL FİLM SİLME UYARISI */}
       {deleteTarget && (
         <ConfirmDialog
           title="Film Sil"
@@ -1658,7 +1672,7 @@ function MovieRow({
   movie: Movie;
   nowMs: number;
   anotherTimerActive: boolean;
-  isPlanned?: boolean; // YENİ: Film takvimde planlanmış mı kontrolü
+  isPlanned?: boolean;
   collectionName?: string;
   onDelete: (movie: Movie) => void;
   onRate: (movie: Movie) => void;
@@ -1798,7 +1812,7 @@ function MovieRow({
         </div>
       </div>
 
-      {/* Sağ Kısım: Aksiyon Butonları (Mobilde Altta, Bilgisayarda Sağda) */}
+      {/* Sağ Kısım: Aksiyon Butonları */}
       <div className="flex items-center justify-between md:justify-end gap-2 sm:gap-2 w-full md:w-auto bg-ink-950/40 md:bg-transparent p-2 md:p-0 rounded-xl md:rounded-none border border-ink-800/40 md:border-0 flex-shrink-0">
         
         <div className="flex items-center gap-1.5 flex-1 md:flex-none">
@@ -1815,7 +1829,6 @@ function MovieRow({
               <Star size={11} className="fill-current" /> Puanla
             </button>
           ) : isPlanned ? (
-            // YENİ: HAFTALIK PLANA EKLENEN FİLMLER İÇİN KİLİTLİ BUTON
             <div 
               title="Bu film haftalık planda. Puanlamak veya izlemek için Planlayıcı sekmesine gidin."
               className="flex items-center justify-center gap-1 text-[11px] px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold w-full md:w-auto whitespace-nowrap cursor-not-allowed"

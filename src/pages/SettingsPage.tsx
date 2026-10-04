@@ -3,8 +3,10 @@ import {
   Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X,
   AlertTriangle, Wrench, SlidersHorizontal, Smartphone, PlayCircle, Palette,
   Sparkles, Moon, Sun, Award, Share2, FolderPlus, ChevronDown, ThumbsUp, ThumbsDown,
+  Bell, BellRing, BellOff // YENİ İKONLAR
 } from 'lucide-react';
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
+import { useQuests } from '../context/QuestContext';
 import type { RatingCriterion } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ShareImportModal from '../components/ShareImportModal';
@@ -68,9 +70,10 @@ export default function SettingsPage() {
     data, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData, resetData,
     exportShareList, toggleLockedNames, addCriterion, editCriterion,
-    deleteCriterion, updateAltWatchTemplate, updateTheme,
+    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, showToast // YENİ
   } = useApp();
 
+  const { resetQuestData } = useQuests(); 
   const { isInstallable, installPWA } = usePWAInstall();
 
   const [newGenre, setNewGenre] = useState('');
@@ -78,7 +81,8 @@ export default function SettingsPage() {
   const [editingColl, setEditingColl] = useState<string | null>(null);
   const [editCollName, setEditCollName] = useState('');
   const [confirmDeleteColl, setConfirmDeleteColl] = useState<string | null>(null);
-  const [confirmReset, setConfirmReset] = useState(false);
+  
+  const [confirmResetStage, setConfirmResetStage] = useState<0 | 1 | 2>(0);
 
   const [editingGenre, setEditingGenre] = useState<string | null>(null);
   const [editGenreName, setEditGenreName] = useState('');
@@ -170,6 +174,13 @@ export default function SettingsPage() {
     setEditingReviewTag(null);
   };
 
+  const handleExecuteFullReset = () => {
+    resetQuestData(); 
+    resetData(); 
+    setConfirmResetStage(0);
+    window.location.reload(); 
+  };
+
   const renderTagChip = (tag: string) => (
     <div key={tag} className={`flex items-center gap-1.5 bg-ink-800 border rounded-xl pl-2.5 pr-2 py-1.5 transition-colors ${isPositiveTag(tag, data.tagSentiments) ? 'border-emerald-700/40' : 'border-red-700/40'} hover:border-gold-500/50`}>
       {editingReviewTag === tag ? (
@@ -209,13 +220,57 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 animate-fade-in pb-10">
       <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
         <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gold-500/20 border border-gold-500/30 flex items-center justify-center">
           <Settings size={20} className="text-gold-400" />
         </div>
         Ayarlar
       </h1>
+
+      {/* YENİ: CİHAZ BİLDİRİMLERİ (PUSH NOTIFICATIONS) */}
+      <CollapsibleSection
+        title="Akıllı Cihaz Bildirimleri"
+        icon={data.notificationsEnabled ? <BellRing size={18} className="text-emerald-400 flex-shrink-0 animate-pulse" /> : <BellOff size={18} className="text-ink-500 flex-shrink-0" />}
+        badge={
+          data.notificationsEnabled && (
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 flex-shrink-0">
+              Aktif
+            </span>
+          )
+        }
+        desc="Film saati yaklaştığında veya canlı izleme sayacı sıfırlandığında sistemin seni uyarmasına izin ver."
+      >
+        <div className="bg-ink-950/50 border border-ink-800 rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-white mb-1">Cihaz Bildirimleri (Push API)</h3>
+            <p className="text-xs text-ink-400">Planlanan filme 15 dk kala ve sayaç sıfırlandığında haber ver.</p>
+          </div>
+          <button
+            onClick={async () => {
+              if (data.notificationsEnabled) {
+                toggleNotifications(false);
+                showToast('Bildirimler kapatıldı.', 'info');
+              } else {
+                if (!('Notification' in window)) {
+                  showToast('Kullandığınız tarayıcı bildirimleri desteklemiyor.', 'error');
+                  return;
+                }
+                const perm = await Notification.requestPermission();
+                if (perm === 'granted') {
+                  toggleNotifications(true);
+                  showToast('Harika! Bildirim izni alındı. Artık maratonları kaçırmayacaksın.', 'success');
+                } else {
+                  showToast('Bildirim izni reddedildi. Tarayıcı ayarlarından izin vermelisin.', 'warning');
+                }
+              }
+            }}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${data.notificationsEnabled ? 'bg-emerald-500' : 'bg-ink-700'}`}
+          >
+            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
+      </CollapsibleSection>
 
       {/* GÖRSEL ATMOSFER & TEMA MOTORU */}
       <CollapsibleSection
@@ -688,27 +743,39 @@ export default function SettingsPage() {
         </button>
       </CollapsibleSection>
 
-      {/* VERİLERİ SIFIRLA */}
-      <div className="bg-red-950/20 border border-red-800/40 rounded-2xl p-4 sm:p-5 shadow-xl">
+      {/* İKİ AŞAMALI (ÇİFT ONAYLI) TÜM VERİLERİ SIFIRLAMA */}
+      <div className="bg-red-950/20 border border-red-800/40 rounded-2xl p-4 sm:p-5 shadow-xl transition-all">
         <h2 className="text-base sm:text-lg font-semibold text-red-400 mb-1 flex items-center gap-2">
           <AlertTriangle size={18} className="text-red-400" /> Verileri Sıfırla
         </h2>
-        <p className="text-xs sm:text-sm text-red-400/60 mb-3.5">Tüm filmler, diziler, geçmiş, başarım ve seviye verileri kalıcı olarak silinir. Bu işlem geri alınamaz.</p>
+        <p className="text-xs sm:text-sm text-red-400/60 mb-3.5">
+          Tüm filmler, diziler, geçmiş, başarımlar, XP, Seviyeler ve kazanılan Rozetler dahil olmak üzere her şey kalıcı olarak silinir. Bu işlem geri alınamaz.
+        </p>
 
-        {confirmReset ? (
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="text-xs sm:text-sm text-red-400 font-medium w-full sm:w-auto">Emin misin? Bu işlem geri alınamaz!</span>
-            <button onClick={() => { resetData(); setConfirmReset(false); }} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
-              <Trash2 size={16} /> Evet, Sıfırla
+        {confirmResetStage === 0 ? (
+          <button onClick={() => setConfirmResetStage(1)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
+            <Trash2 size={16} /> Tüm Verileri Sıfırla
+          </button>
+        ) : confirmResetStage === 1 ? (
+          <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-xl bg-red-950/40 border border-red-800/60">
+            <span className="text-xs sm:text-sm text-red-400 font-bold w-full sm:w-auto">Emin misin? Bu işlemin geri dönüşü yok!</span>
+            <button onClick={() => setConfirmResetStage(2)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
+              <AlertTriangle size={14} /> Evet, Eminim
             </button>
-            <button onClick={() => setConfirmReset(false)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-200 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
-              <X size={16} /> İptal
+            <button onClick={() => setConfirmResetStage(0)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-200 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
+              <X size={14} /> İptal Et
             </button>
           </div>
         ) : (
-          <button onClick={() => setConfirmReset(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
-            <Trash2 size={16} /> Tüm Verileri Sıfırla
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-xl bg-red-900 border border-red-500 animate-pulse">
+            <span className="text-xs sm:text-sm text-white font-black w-full sm:w-auto">SON UYARI! HER ŞEY SİLİNECEK!</span>
+            <button onClick={handleExecuteFullReset} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-black/40 hover:bg-black/60 text-red-300 px-4 py-2 rounded-xl font-black text-xs sm:text-sm transition-all border border-red-400">
+              SİSTEMİ TAMAMEN SIFIRLA
+            </button>
+            <button onClick={() => setConfirmResetStage(0)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-white px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
+              Geri Dön
+            </button>
+          </div>
         )}
       </div>
 

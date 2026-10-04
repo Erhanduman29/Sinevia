@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
   Hourglass, Activity, User, Users, Building2, SlidersHorizontal, Crown, Sparkles,
-  Eye, Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History,
+  Eye, Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon
 } from 'lucide-react';
 import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { ratingBgClass, normalize } from '../lib/utils';
@@ -30,6 +30,163 @@ const LANGUAGE_LABELS: Record<string, { name: string; flag: string }> = {
 };
 
 type StatsScopeMode = 'current' | 'past' | 'all';
+
+// RADAR CHART BİLEŞENİ
+function RadarChart({ data, maxScore = 10 }: { data: { name: string; score: number }[]; maxScore?: number }) {
+  if (data.length < 3) {
+    return <div className="text-center text-xs text-ink-500 py-8">Radar analizi için en az 3 farklı kritere detaylı puan vermiş olmalısın.</div>;
+  }
+
+  const size = 200;
+  const center = size / 2;
+  const radius = size / 2 - 30; // Etiketlere yer bırakmak için
+  
+  const angleSlice = (Math.PI * 2) / data.length;
+
+  const getPoint = (value: number, index: number) => {
+    const r = (value / maxScore) * radius;
+    const theta = index * angleSlice - Math.PI / 2; // Yukarıdan başla
+    return {
+      x: center + r * Math.cos(theta),
+      y: center + r * Math.sin(theta)
+    };
+  };
+
+  // Veri Poligonu Çizgileri
+  const dataPoints = data.map((d, i) => getPoint(d.score, i));
+  const polygonPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ') + ' Z';
+
+  return (
+    <div className="relative w-full max-w-[280px] mx-auto aspect-square flex items-center justify-center">
+      <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full overflow-visible drop-shadow-lg">
+        {/* Arka plan Ağları (Grid) */}
+        {[0.2, 0.4, 0.6, 0.8, 1].map((level) => {
+          const points = data.map((_, i) => getPoint(maxScore * level, i));
+          const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ') + ' Z';
+          return <path key={level} d={path} fill="none" stroke="currentColor" className="text-ink-700/50" strokeWidth="1" />;
+        })}
+
+        {/* Eksen Çizgileri */}
+        {data.map((_, i) => {
+          const p = getPoint(maxScore, i);
+          return <line key={i} x1={center} y1={center} x2={p.x} y2={p.y} stroke="currentColor" className="text-ink-700/50" strokeWidth="1" />;
+        })}
+
+        {/* Veri Poligonu Alanı */}
+        <path d={polygonPath} fill="currentColor" className="text-azure-500/30 transition-all duration-1000 ease-out" />
+        <path d={polygonPath} fill="none" stroke="currentColor" className="text-azure-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]" strokeWidth="2" strokeLinejoin="round" />
+
+        {/* Veri Noktaları */}
+        {dataPoints.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="4" fill="currentColor" className="text-white" />
+        ))}
+
+        {/* Etiketler (İsim ve Puan) */}
+        {data.map((d, i) => {
+          const p = getPoint(maxScore + 1.8, i); // Metni biraz dışarı it
+          let anchor = 'middle';
+          if (p.x < center - 10) anchor = 'end';
+          if (p.x > center + 10) anchor = 'start';
+          return (
+            <text key={i} x={p.x} y={p.y} textAnchor={anchor} dominantBaseline="middle" className="text-[9px] font-black fill-ink-200">
+              {d.name.substring(0, 12)}{d.name.length > 12 ? '..' : ''} <tspan className="fill-gold-400">({d.score.toFixed(1)})</tspan>
+            </text>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// HEATMAP BİLEŞENİ
+function ActivityHeatmap({ history }: { history: WatchHistoryItem[] }) {
+  const daysInYear = 364; // 52 hafta x 7 gün
+  
+  // Bugünü baz alarak son 1 yılı bul
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - daysInYear);
+
+  // Günleri doldur
+  const daysArray = Array.from({ length: daysInYear + 1 }, (_, i) => {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+    return d;
+  });
+
+  // İzleme haritası oluştur (Sadece izlenmiş günlerin sayısı)
+  const watchMap = new Map<string, number>();
+  history.forEach(h => {
+    if(!h.watchedAt) return;
+    const d = new Date(h.watchedAt).toISOString().split('T')[0];
+    watchMap.set(d, (watchMap.get(d) || 0) + 1);
+  });
+
+  const getHeatmapColor = (count: number) => {
+    if (count === 0) return 'bg-ink-900 border-ink-800';
+    if (count === 1) return 'bg-emerald-900/60 border-emerald-800/50';
+    if (count <= 3) return 'bg-emerald-600/80 border-emerald-500';
+    if (count <= 5) return 'bg-emerald-400 border-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.5)]';
+    return 'bg-gold-400 border-gold-300 shadow-[0_0_15px_rgba(250,204,21,0.8)]'; // Efsanevi Gün
+  };
+
+  // Sütunlar (Haftalar) halinde bölmek için
+  const weeks: (Date | null)[][] = [];
+  let currentWeek: (Date | null)[] = [];
+  
+  // Önceki günlerin haftanın günlerine tam uyması için boşluk bırak (Pazar = 0)
+  const firstDayOfWeek = daysArray[0].getDay();
+  for (let i = 0; i < firstDayOfWeek; i++) {
+    currentWeek.push(null);
+  }
+
+  daysArray.forEach((date) => {
+    currentWeek.push(date);
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  });
+  if (currentWeek.length > 0) {
+    while (currentWeek.length < 7) currentWeek.push(null);
+    weeks.push(currentWeek);
+  }
+
+  return (
+    <div className="overflow-x-auto custom-scrollbar pb-2 pt-1">
+      <div className="flex gap-1 min-w-max">
+        {weeks.map((week, wIndex) => (
+          <div key={wIndex} className="flex flex-col gap-1">
+            {week.map((date, dIndex) => {
+              if (!date) return <div key={`empty-${dIndex}`} className="w-3 h-3 sm:w-3.5 sm:h-3.5" />; // Boşluk
+              const dateStr = date.toISOString().split('T')[0];
+              const count = watchMap.get(dateStr) || 0;
+              const title = `${date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}: ${count} Yapım İzlendi`;
+
+              return (
+                <div
+                  key={dateStr}
+                  title={title}
+                  className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-[3px] border transition-colors cursor-help hover:scale-125 hover:z-10 ${getHeatmapColor(count)}`}
+                />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-end gap-1.5 mt-3 text-[9px] sm:text-[10px] text-ink-500 font-medium">
+        <span>Az</span>
+        <div className="w-2.5 h-2.5 rounded-[2px] bg-ink-900 border border-ink-800" />
+        <div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-900/60 border border-emerald-800/50" />
+        <div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-600/80 border border-emerald-500" />
+        <div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-400 border border-emerald-300" />
+        <div className="w-2.5 h-2.5 rounded-[2px] bg-gold-400 border border-gold-300" />
+        <span>Çok</span>
+      </div>
+    </div>
+  );
+}
 
 export default function StatsPage() {
   const { data } = useApp();
@@ -251,9 +408,9 @@ export default function StatsPage() {
     });
 
     const last14Days: { date: string; label: string; count: number }[] = [];
-    const today = new Date();
+    const todayObj = new Date();
     for (let i = 13; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      const d = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate() - i);
       const iso = d.toISOString().slice(0, 10);
       const label = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
       last14Days.push({ date: iso, label, count: dailyCountMap.get(iso) || 0 });
@@ -398,6 +555,9 @@ export default function StatsPage() {
       .filter((c) => c.count > 0)
       .sort((a, b) => b.avg - a.avg);
 
+    // YENİ: RADAR GRAFİĞİ İÇİN VERİ DÜZENLEME
+    const radarData = criteriaAverages.map(c => ({ name: c.name, score: c.avg }));
+
     const decadeMap = new Map<string, { count: number; ratingSum: number; ratedCount: number }>();
     watchedMoviesList.forEach((m) => {
       const y = parseInt(m.year || '', 10);
@@ -426,7 +586,8 @@ export default function StatsPage() {
       timeBuckets, totalTimeTracked, last14Days, max14DayCount,
       busiestDay, maxStreakEver, longestMovie, mostWatchedSeries, notesCount: notesWritten.length, totalNoteWords,
       reviewTagStats, maxReviewTagCount, totalTaggedItems, topLanguages, topDirectors, topCast, topStudios,
-      criteriaAverages, decades, maxDecadeCount,
+      criteriaAverages, radarData, decades, maxDecadeCount, // YENİ: radarData eklendi
+      scopedHistory // YENİ: Heatmap için
     };
   }, [data, statsMode]);
 
@@ -455,7 +616,7 @@ export default function StatsPage() {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in pb-10">
       {/* SAYFA BAŞLIĞI & MOBİL UYUMLU SEKMELİ İSTATİSTİK MODU SEÇİCİ */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -482,7 +643,6 @@ export default function StatsPage() {
           </div>
         </div>
 
-        {/* ÜSTTEN 3'LÜ SEKMELİ GÖRÜNÜM SEÇİCİ (MOBİLDE TEK SATIR 3 EŞİT SÜTUN) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-ink-900/70 border border-ink-700/60 p-1.5 sm:p-2 rounded-2xl">
           <div className="grid grid-cols-3 sm:flex items-center gap-1">
             <button
@@ -531,6 +691,26 @@ export default function StatsPage() {
               : 'Güncel ve daha önce izlediğin tüm yapımların birleşik istatistikleri.'}
           </span>
         </div>
+      </div>
+
+      {/* YENİ: 365 GÜNLÜK İZLEME ISI HARİTASI (HEATMAP) */}
+      <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm sm:text-lg font-bold text-ink-100 flex items-center gap-2">
+            <Calendar size={18} className="text-emerald-400" />
+            Yıllık İzleme Haritası
+          </h2>
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg shadow-inner">
+            Son 365 Gün
+          </span>
+        </div>
+        <p className="text-[11px] sm:text-xs text-ink-400 mb-4">Bu yıl hangi günlerde daha çok film izledin? Kutucukların parlaklığı o günkü sinefil gücünü temsil eder.</p>
+        
+        {stats.scopedHistory.length === 0 ? (
+          <p className="text-xs text-ink-500 py-6 text-center">Bu kapsamda henüz izleme verin bulunmuyor.</p>
+        ) : (
+          <ActivityHeatmap history={stats.scopedHistory} />
+        )}
       </div>
 
       {/* 1. EKRAN BAŞINDA GEÇEN TOPLAM ÖMÜR */}
@@ -1006,16 +1186,21 @@ export default function StatsPage() {
         </div>
       )}
 
-      {/* 8. DETAYLI KRİTER KARNESİ & DÖNEM ANALİZİ */}
+      {/* YENİ: 8. RADAR (SİNEFİL KİMLİĞİ) VE DETAYLI KRİTER KARNESİ BİRLEŞTİRMESİ */}
       {(stats.criteriaAverages.length > 0 || stats.decades.length > 0) && (
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl">
-            <h2 className="text-base sm:text-lg font-bold text-ink-100 mb-1 flex items-center gap-2"><SlidersHorizontal size={18} className="text-azure-400" /> Detaylı Kriter Karnesi</h2>
-            <p className="text-xs text-ink-400 mb-4">Alt kriterlerde verdiğin ortalama puanlar</p>
-            {stats.criteriaAverages.length === 0 ? (
-              <p className="text-xs text-ink-500 py-6 text-center">Henüz detaylı kriter puanlaması yapılmamış.</p>
-            ) : (
-              <div className="space-y-3">
+          <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col">
+            <h2 className="text-base sm:text-lg font-bold text-ink-100 flex items-center gap-2 mb-1">
+              <Hexagon size={18} className="text-azure-400" /> Sinefil Karakter Radarı
+            </h2>
+            <p className="text-xs text-ink-400 mb-6">Puanladığın kriterlerin karakteristik analiz ağı</p>
+            
+            <div className="flex-1 flex flex-col justify-center bg-ink-950/40 rounded-2xl border border-ink-800/60 py-6 mb-4">
+              <RadarChart data={stats.radarData} />
+            </div>
+
+            {stats.criteriaAverages.length > 0 && (
+              <div className="space-y-3 mt-auto">
                 {stats.criteriaAverages.map((crit) => {
                   const pct = Math.min(100, Math.max(5, (crit.avg / 10) * 100));
                   return (

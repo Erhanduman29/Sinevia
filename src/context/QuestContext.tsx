@@ -22,6 +22,7 @@ interface QuestContextValue {
   completeActiveQuest: (questId: string) => void;
   equipBadge: (questId: string | null) => void;
   togglePenalty: () => void; 
+  resetQuestData: () => void; // YENİ: Sıfırlama fonksiyonu arayüze eklendi
 }
 
 const defaultQuestState: QuestState = {
@@ -123,6 +124,11 @@ export function QuestProvider({ children }: { children: ReactNode }) {
 
   const equipBadge = (questId: string | null) => {
     setQuestState((prev) => ({ ...prev, activeBadgeId: questId }));
+  };
+
+  // YENİ: Tüm görev ve rozet verilerini fabrika ayarlarına döndürür
+  const resetQuestData = () => {
+    setQuestState(defaultQuestState);
   };
 
   // =========================================================================
@@ -319,7 +325,6 @@ export function QuestProvider({ children }: { children: ReactNode }) {
 
     if (isCompleted) {
       completeActiveQuest(qId);
-      // Başarım ekranını göster!
       setCelebratingQuestId(qId);
     }
 
@@ -332,7 +337,8 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       rejectActiveQuest,
       completeActiveQuest,
       equipBadge,
-      togglePenalty
+      togglePenalty,
+      resetQuestData // Arayüze eklendi
     }}>
       {children}
 
@@ -341,7 +347,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
         <QuestCelebrationOverlay 
           questId={celebratingQuestId} 
           onClaim={(xp) => {
-            grantXp(xp); // Kullanıcı butona bastığı an XP sistemine eklenir ve senin asıl animasyonun tetiklenir!
+            grantXp(xp); 
             setCelebratingQuestId(null);
           }} 
         />
@@ -351,17 +357,14 @@ export function QuestProvider({ children }: { children: ReactNode }) {
 }
 
 // ----------------------------------------------------------------------
-// SİNEMATİK KUTLAMA MODALI BİLEŞENİ (YENİ SÜRELER VE YAZILAR)
+// SİNEMATİK KUTLAMA MODALI BİLEŞENİ
 // ----------------------------------------------------------------------
 function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClaim: (xp: number) => void }) {
   const def = QUEST_DEFS.find(q => q.id === questId);
   const [phase, setPhase] = useState(0);
 
-  // 3 Aşamalı Animasyon Motoru
   useEffect(() => {
-    // Aşama 0: Okumak için tam 5 saniye süre
-    const t1 = setTimeout(() => setPhase(1), 5000);
-    // Aşama 1 -> 2: Rozet ekrana çarptıktan 2 saniye sonra buton gelsin
+    const t1 = setTimeout(() => setPhase(1), 3000);
     const t2 = setTimeout(() => setPhase(2), 5000);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
@@ -372,7 +375,6 @@ function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClai
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-3xl p-4 overflow-hidden select-none">
       
-      {/* AŞAMA 0: Siberpunk Ağ Doğrulama Ekranı */}
       {phase === 0 && (
         <div className="text-emerald-500 font-mono text-base md:text-xl animate-pulse tracking-[0.2em] md:tracking-[0.3em] text-center leading-relaxed">
           &gt; SİNEVİA AĞINA BAĞLANILDI...<br/>
@@ -382,14 +384,10 @@ function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClai
         </div>
       )}
 
-      {/* AŞAMA 1 ve 2: Gösterişli Rozet Patlaması */}
       {phase >= 1 && (
         <div className="relative z-10 flex flex-col items-center text-center w-full max-w-3xl">
-          
-          {/* Devasa Arka Plan Parlaması */}
           <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[500px] blur-[150px] opacity-40 pointer-events-none transition-all duration-1000 ${phase === 2 ? style.bg.split(' ')[0] : 'bg-transparent'}`} />
           
-          {/* Başlıklar */}
           <div className="animate-fade-in-up mb-10 relative z-20">
             <h2 className={`text-sm md:text-lg font-black tracking-[0.4em] uppercase mb-3 ${style.color}`}>
               {def.rarity} Sınıf Kontrat Tamamlandı
@@ -399,7 +397,6 @@ function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClai
             </h3>
           </div>
 
-          {/* Dev Rozet */}
           <div className={`relative transition-all duration-[1500ms] ease-out z-20 ${phase === 1 ? 'scale-[2] rotate-12 opacity-0' : 'scale-100 rotate-0 opacity-100'}`}>
             <div className={`w-56 h-56 md:w-72 md:h-72 rounded-[3.5rem] border-4 flex items-center justify-center text-[8rem] md:text-[10rem] shadow-[0_0_100px_rgba(0,0,0,0.9)] relative bg-ink-950 ${style.border}`}>
                <div className={`absolute inset-0 opacity-30 ${style.bg} rounded-[3.5rem] animate-pulse`} />
@@ -407,7 +404,6 @@ function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClai
             </div>
           </div>
 
-          {/* Ödül Tahsilat Butonu */}
           <div className={`mt-14 flex flex-col items-center transition-all duration-1000 z-20 ${phase === 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
             <button 
               onClick={() => onClaim(def.xpReward)}
