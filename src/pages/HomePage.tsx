@@ -127,7 +127,6 @@ export default function HomePage() {
     [data.collections]
   );
 
-  // YENİ: Planlanmış filmler Vitrin'de veya Ne İzlesem'de ÇIKMAYACAK!
   const plannedMovieIds = useMemo(() => {
     const ids = new Set<string>();
     (data.weeklyPlan || []).forEach(p => ids.add(p.movieId));
@@ -136,7 +135,6 @@ export default function HomePage() {
 
   const eligibleMovies = useMemo(() => {
     const unwatched = data.movies.filter(
-      // Planlanan filmler buradan tamamen filtrelendi
       (m) => !m.watched && (!m.collectionId || !pastColIds.has(m.collectionId)) && !plannedMovieIds.has(m.id)
     );
     const standalone = unwatched.filter((m) => !m.collectionId);
@@ -177,6 +175,11 @@ export default function HomePage() {
     const idx = (dateSeed + spotlightOffset) % eligibleMovies.length;
     return eligibleMovies[idx];
   }, [eligibleMovies, spotlightOffset]);
+
+  const isSpotlightPlanned = useMemo(() => {
+    if (!spotlightMovie) return false;
+    return (data.weeklyPlan || []).some(p => p.movieId === spotlightMovie.id);
+  }, [spotlightMovie, data.weeklyPlan]);
 
   const quickMetrics = useMemo(() => {
     const watchedMovies = data.movies.filter((m) => m.watched && !m.isPastWatch);
@@ -467,20 +470,33 @@ export default function HomePage() {
                   <span className="text-cyan-300">Maksimum Unvana Ulaşıldı! 👑</span>
                 )}
               </div>
-              <div className="hidden sm:grid sm:grid-cols-5 gap-2.5">
+              
+              {/* YENİ: KAYAN PENCERE FİLTRESİ (1 Önceki, Şuanki, 2 Sonraki) */}
+              <div className="flex gap-2.5 overflow-x-auto hide-scrollbar pb-1">
                 {RANK_TIERS.map((tier, idx) => {
+                  if (idx < currentRankIndex - 1 || idx > currentRankIndex + 2) return null;
+
                   const isUnlocked = lvl.level >= tier.minLevel;
                   const isCurrent = idx === currentRankIndex;
                   const TierIcon = tier.icon;
+                  
                   return (
-                    <div key={tier.title} className={`relative rounded-xl p-2.5 border transition-all flex items-center gap-2 ${isCurrent ? `${tier.badgeBg} ${tier.border} shadow-md scale-[1.02]` : isUnlocked ? 'bg-ink-900/70 border-ink-800/90 opacity-90' : 'bg-ink-950/40 border-ink-800/40 opacity-45'}`}>
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
-                        {isUnlocked ? <TierIcon size={14} className={tier.color} /> : <Lock size={12} className="text-ink-500" />}
+                    <div
+                      key={tier.title}
+                      className={`relative rounded-xl p-2.5 border transition-all flex items-center justify-center gap-2.5 flex-1 min-w-max ${
+                        isCurrent ? `${tier.badgeBg} ${tier.border} shadow-md scale-[1.02]` : isUnlocked ? 'bg-ink-900/70 border-ink-800/90 opacity-90' : 'bg-ink-950/40 border-ink-800/40 opacity-45'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
+                        {isUnlocked ? <TierIcon size={16} className={tier.color} /> : <Lock size={14} className="text-ink-500" />}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className={`text-[10px] sm:text-xs font-black truncate ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>{tier.title}</div>
+                      
+                      <div className="flex flex-col items-start justify-center">
+                        <div className={`text-[11px] sm:text-xs font-black whitespace-nowrap ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>
+                          {tier.title}
+                        </div>
                         <div className="text-[10px] font-bold text-ink-500 flex items-center gap-1 mt-0.5">
-                          <span>Sv.{tier.minLevel}+</span>
+                          <span>Sv. {tier.minLevel}+</span>
                           {isUnlocked && <CheckCircle2 size={10} className="text-emerald-400" />}
                         </div>
                       </div>
@@ -492,7 +508,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* AKTİF GÖREV BİLDİRİM ŞERİDİ */}
         {activeQuestDef && (
           <div className="relative z-10 mt-6 pt-4 border-t border-ink-800/80 animate-fade-in-up">
             <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 bg-ink-950 border-2 rounded-2xl p-3 sm:px-6 sm:py-4 shadow-xl ${RARITY_STYLES[activeQuestDef.rarity].border} ${RARITY_STYLES[activeQuestDef.rarity].bg}`}>
@@ -573,6 +588,7 @@ export default function HomePage() {
       })()}
 
       {spotlightMovie && (() => {
+        const isSpotlightTimerActive = activeTimerMovie?.id === spotlightMovie.id;
         const spotlightColName = spotlightMovie.collectionId ? data.collections.find((c) => c.id === spotlightMovie.collectionId)?.name : null;
 
         return (
@@ -654,15 +670,28 @@ export default function HomePage() {
                   </div>
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <button onClick={() => startWatchingMovie(spotlightMovie.id, false)} className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/35`} title="Canlı geri sayımı başlat">
-                      <Play size={13} className="fill-current" /> Başlat
-                    </button>
-                    <button onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-100 border border-ink-700 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all">
-                      <Eye size={15} /> Künye
-                    </button>
-                    <button onClick={() => handleRequestRateMovie(spotlightMovie)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-gold-500/20 transition-all hover:scale-105">
-                      <Star size={15} className="fill-current" /> Puanla
-                    </button>
+                    {isSpotlightPlanned ? (
+                      <div 
+                        title="Bu film haftalık planda. Puanlamak veya izlemek için Planlayıcı sekmesine gidin."
+                        className="flex items-center justify-center gap-1 text-[11px] px-4 py-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold w-full md:w-auto whitespace-nowrap cursor-not-allowed"
+                      >
+                        <Lock size={13} /> Takvime Planlandı
+                      </div>
+                    ) : (
+                      <>
+                        {!isSpotlightTimerActive && (
+                          <button onClick={() => startWatchingMovie(spotlightMovie.id, false)} disabled={Boolean(activeTimerMovie)} className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all ${activeTimerMovie ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed' : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/35'}`} title="Canlı geri sayımı başlat">
+                            <Play size={13} className="fill-current" /> Başlat
+                          </button>
+                        )}
+                        <button onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-100 border border-ink-700 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all">
+                          <Eye size={15} /> Künye
+                        </button>
+                        <button onClick={() => handleRequestRateMovie(spotlightMovie)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-gold-500/20 transition-all hover:scale-105">
+                          <Star size={15} className="fill-current" /> Puanla
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
