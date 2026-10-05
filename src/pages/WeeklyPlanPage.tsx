@@ -6,11 +6,14 @@ import {
   LayoutList, Activity, AlertCircle, GripVertical, CalendarPlus,
   Target, Zap, Flame
 } from 'lucide-react';
-import { useApp, getMovieTimerInfo, computeEndTime } from '../context/AppContext';
+import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
 import RatingModal from '../components/RatingModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import type { Movie, WeeklyPlanItem } from '../types';
+
+// Matematiksel beyni içeri aktarıyoruz
+import { formatDuration, checkOverlap, computeEndTime } from '../lib/plannerLogic';
 
 const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 const MONTH_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
@@ -39,36 +42,13 @@ function formatDayDate(d: Date): string {
   return `${String(d.getDate()).padStart(2, '0')} ${MONTH_SHORT[d.getMonth()]}`;
 }
 
-function formatDuration(totalMins: number): string {
-  if (totalMins <= 0) return '0 dk';
-  const h = Math.floor(totalMins / 60);
-  const m = totalMins % 60;
-  if (h === 0) return `${m} dk`;
-  if (m === 0) return `${h} sa`;
-  return `${h} sa ${m} dk`;
-}
-
-function checkOverlap(time1: string, dur1: number, time2: string, dur2: number) {
-  const t1 = time1.split(':').map(Number);
-  const start1 = t1[0] * 60 + t1[1];
-  const end1 = start1 + dur1;
-  
-  const t2 = time2.split(':').map(Number);
-  const start2 = t2[0] * 60 + t2[1];
-  const end2 = start2 + dur2;
-  
-  return start1 < end2 && end1 > start2;
-}
-
 export default function WeeklyPlanPage() {
   const { data, updatePlanItem, deletePlanItem, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, showToast } = useApp();
   
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
   const [showAdd, setShowAdd] = useState<{ presetDate?: string } | null>(null);
   
-  // YENİ: EditPlanModal için State
   const [editPlanTarget, setEditPlanTarget] = useState<{ item: WeeklyPlanItem; presetDate?: string } | null>(null);
-  
   const [ratingTarget, setRatingTarget] = useState<{ item: WeeklyPlanItem; movie: Movie } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WeeklyPlanItem | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -166,7 +146,8 @@ export default function WeeklyPlanPage() {
 
   const renderListCard = (item: WeeklyPlanItem, movie: Movie) => {
     const timerInfo = !movie.watched && movie.startedAt ? getMovieTimerInfo(movie, nowMs) : null;
-    const endTime = computeEndTime(item.time, movie.runtime || item.runtime);
+    // TYPESCRIPT DÜZELTMESİ: runtime tanımsızsa varsayılan 115 kullan
+    const endTime = computeEndTime(item.time, movie.runtime || item.runtime || 115);
     const anotherTimerActive = Boolean(activeTimerMovie && activeTimerMovie.id !== movie.id);
 
     const isPastDate = item.date < todayStrVal;
@@ -194,7 +175,7 @@ export default function WeeklyPlanPage() {
             <div className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black mb-1 ${isMissed ? 'text-red-400' : 'text-violet-300'}`}>
               <Clock size={10} /> {item.time} <ArrowRight size={10} className="text-ink-600 mx-0.5" /> {endTime}
             </div>
-            <div className={`text-[11px] sm:text-xs font-black truncate leading-tight ${movie.watched ? 'text-ink-400 line-through' : 'text-ink-50'}`}>{movie.title}</div>
+            <div className={`text-[11px] sm:text-xs font-black truncate leading-tight ${movie.watched ? 'text-ink-400 line-through' : 'text-white'}`}>{movie.title}</div>
             <div className="flex items-center gap-2 mt-1">
               {movie.year && <span className="text-[9px] font-medium text-ink-400 bg-ink-950 px-1.5 py-0.5 rounded-md">{movie.year}</span>}
             </div>
@@ -240,7 +221,8 @@ export default function WeeklyPlanPage() {
 
   const renderTimelineCard = (item: WeeklyPlanItem, movie: Movie) => {
     const timerInfo = !movie.watched && movie.startedAt ? getMovieTimerInfo(movie, nowMs) : null;
-    const endTime = computeEndTime(item.time, movie.runtime || item.runtime);
+    // TYPESCRIPT DÜZELTMESİ: runtime tanımsızsa varsayılan 115 kullan
+    const endTime = computeEndTime(item.time, movie.runtime || item.runtime || 115);
     const anotherTimerActive = Boolean(activeTimerMovie && activeTimerMovie.id !== movie.id);
 
     const isPastDate = item.date < todayStrVal;
@@ -413,7 +395,8 @@ export default function WeeklyPlanPage() {
                 <div className="text-xs sm:text-sm font-black text-white truncate drop-shadow-sm">{activeTimerMovie.title}</div>
                 <div className="text-[9px] sm:text-[10px] font-bold text-ink-300 mt-1 flex items-center gap-1.5 sm:gap-2">
                   <span className="bg-emerald-950 px-1.5 py-0.5 rounded text-emerald-300 border border-emerald-500/30 font-mono">Kalan: {info.formattedRemaining}</span>
-                  <span className="opacity-60 flex items-center gap-1"><Clock size={10}/> {planItem.time} - {computeEndTime(planItem.time, activeTimerMovie.runtime)}</span>
+                  {/* TYPESCRIPT DÜZELTMESİ: runtime tanımsızsa varsayılan 115 kullan */}
+                  <span className="opacity-60 flex items-center gap-1"><Clock size={10}/> {planItem.time} - {computeEndTime(planItem.time, activeTimerMovie.runtime || 115)}</span>
                 </div>
               </div>
             </div>
@@ -519,87 +502,27 @@ export default function WeeklyPlanPage() {
                       const movie = movieMap.get(item.movieId);
                       if (!movie) return null;
                       
-                      const timerInfo = !movie.watched && movie.startedAt ? getMovieTimerInfo(movie, nowMs) : null;
-                      const endTime = computeEndTime(item.time, movie.runtime || item.runtime);
-                      const anotherTimerActive = Boolean(activeTimerMovie && activeTimerMovie.id !== movie.id);
-                      
-                      const isPastDate = item.date < todayStrVal;
-                      const isPastTimeToday = item.date === todayStrVal && item.time < currentTimeStr;
-                      const isMissed = !movie.watched && (isPastDate || isPastTimeToday);
                       const isLast = idx === items.length - 1;
 
                       return (
                         <div key={item.id} className="flex gap-3 sm:gap-5 group">
                           <div className="w-14 sm:w-20 text-right flex-shrink-0 pt-3">
-                            <div className={`text-base sm:text-lg font-black ${isMissed ? 'text-red-400' : movie.watched ? 'text-emerald-500/50' : 'text-violet-400'}`}>{item.time}</div>
-                            <div className="text-[9px] sm:text-[10px] font-bold text-ink-600 mt-0.5">{endTime}</div>
+                            <div className={`text-base sm:text-lg font-black ${!movie.watched && (item.date < todayStrVal || (item.date === todayStrVal && item.time < currentTimeStr)) ? 'text-red-400' : movie.watched ? 'text-emerald-500/50' : 'text-violet-400'}`}>{item.time}</div>
+                            {/* TYPESCRIPT DÜZELTMESİ: runtime tanımsızsa varsayılan 115 kullan */}
+                            <div className="text-[9px] sm:text-[10px] font-bold text-ink-600 mt-0.5">{computeEndTime(item.time, movie.runtime || item.runtime || 115)}</div>
                           </div>
 
                           <div className="relative flex justify-center w-5">
                             <div className={`absolute top-0 w-px -z-10 ${isLast ? 'bottom-0' : '-bottom-3 sm:-bottom-4'} ${movie.watched ? 'bg-emerald-900/30' : 'bg-ink-800 group-hover:bg-violet-500/40'} transition-colors`}></div>
                             <div className={`w-1.5 h-1.5 rounded-full mt-4.5 relative z-10 transition-all duration-300 ${
                               movie.watched ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' :
-                              isMissed ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]' :
+                              !movie.watched && (item.date < todayStrVal || (item.date === todayStrVal && item.time < currentTimeStr)) ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]' :
                               'bg-ink-900 border-2 border-violet-500 group-hover:bg-violet-400 group-hover:shadow-[0_0_10px_rgba(139,92,246,0.5)]'
                             }`}></div>
                           </div>
 
                           <div className="flex-1 pb-1">
-                             <div className={`flex flex-row gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl border transition-all duration-300 backdrop-blur-sm ${
-                               movie.watched ? 'bg-emerald-950/10 border-emerald-900/30 opacity-70' :
-                               isMissed ? 'bg-red-950/10 border-red-900/30 hover:border-red-500/40 hover:bg-red-950/20 hover:shadow-sm' :
-                               'bg-ink-950/40 border-ink-800/40 hover:bg-ink-900/70 hover:border-violet-500/30 hover:shadow-md group-hover:-translate-y-0.5'
-                             }`}>
-                                <div className={`w-14 sm:w-16 flex-shrink-0 rounded-lg overflow-hidden aspect-[2/3] bg-ink-900 border relative ${isMissed ? 'border-red-500/30' : 'border-ink-800'}`}>
-                                  {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={14} className="text-ink-600" /></div>}
-                                  {movie.watched && <div className="absolute inset-0 bg-emerald-950/60 flex items-center justify-center"><CheckCircle2 size={20} className="text-emerald-400 drop-shadow-md" /></div>}
-                                </div>
-
-                                <div className="flex-1 flex flex-col justify-center min-w-0">
-                                   <div className="flex items-start justify-between gap-2">
-                                      <h4 className={`text-xs sm:text-sm font-black truncate leading-tight ${movie.watched ? 'text-ink-400 line-through' : 'text-white'}`}>{movie.title}</h4>
-                                   </div>
-                                   
-                                   <div className="flex items-center gap-1.5 mt-1 text-[10px] text-ink-400 font-medium">
-                                      {movie.year && <span className="bg-ink-900 px-1 py-0.5 rounded text-ink-300 border border-ink-800">{movie.year}</span>}
-                                      {movie.runtime && <span>{movie.runtime} dk</span>}
-                                   </div>
-
-                                   <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                                      {movie.watched ? (
-                                         <div className="flex items-center gap-2.5">
-                                           <span className="text-[11px] sm:text-xs font-black text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
-                                             <CheckCircle2 size={14} /> İzlendi
-                                           </span>
-                                           {movie.rating !== null && (
-                                             <span className={`text-[11px] sm:text-xs font-black flex items-center gap-1.5 px-2.5 py-1 rounded-lg border shadow-md text-white border-white/20 ${ratingBgClass(movie.rating)}`}>
-                                               <Star size={12} className="fill-current" /> {movie.rating}
-                                             </span>
-                                           )}
-                                         </div>
-                                      ) : isMissed ? (
-                                         <>
-                                           <span className="text-[10px] font-black text-red-400 flex items-center gap-1 bg-red-500/10 px-1.5 py-1 rounded"><AlertCircle size={10} /> Kaçırıldı</span>
-                                           <button onClick={() => handleSnooze(item)} className="text-[10px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2 py-1 rounded transition-colors ml-1 shadow-sm">Ertele / Taşı</button>
-                                         </>
-                                      ) : timerInfo ? (
-                                         <>
-                                          <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-1.5 py-1 rounded-md text-[10px] font-bold"><Timer size={10} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} /><span className="font-mono">{timerInfo.formattedRemaining}</span></div>
-                                          <button onClick={() => togglePauseWatchingMovie(movie.id)} className="text-amber-300 hover:text-white p-1 bg-ink-800 hover:bg-ink-700 rounded-md">{timerInfo.isPaused ? <Play size={10} className="fill-current" /> : <Pause size={10} />}</button>
-                                          <button onClick={() => cancelWatchingMovie(movie.id)} className="text-red-400 hover:text-white p-1 bg-red-500/10 hover:bg-red-500/20 rounded-md"><X size={10} /></button>
-                                          <button onClick={() => handleRequestRate(item, movie)} disabled={!timerInfo.canRateWithTimer} className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-md transition-all ${timerInfo.canRateWithTimer ? 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 text-ink-950' : 'bg-ink-800/60 text-ink-600 cursor-not-allowed'}`}>{timerInfo.canRateWithTimer ? <><Star size={10} className="fill-current" /> Puanla</> : <Lock size={10} />}</button>
-                                         </>
-                                      ) : (
-                                         <>
-                                           <button onClick={() => startWatchingMovie(movie.id)} disabled={anotherTimerActive} className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-md transition-all border shadow-sm ${anotherTimerActive ? 'bg-ink-900/50 text-ink-600 border-ink-800 cursor-not-allowed' : 'bg-ink-800 hover:bg-emerald-900/40 text-emerald-400 border-emerald-500/30'}`}>{anotherTimerActive ? <Lock size={10} /> : <Play size={10} className="fill-current" />} Başlat</button>
-                                           <button onClick={() => handleRequestRate(item, movie)} className="flex items-center gap-1 bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 text-ink-950 text-[10px] font-black px-2 py-1 rounded-md transition-all shadow-sm"><Star size={10} className="fill-current" /> Puanla</button>
-                                           <button onClick={() => setEditPlanTarget({ item })} className="p-1.5 rounded-md bg-ink-800 hover:bg-ink-700 text-ink-300 transition-colors ml-auto shadow-sm"><Edit2 size={12} /></button>
-                                           <button onClick={() => setDeleteTarget(item)} className="p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors ml-1.5 shadow-sm"><Trash2 size={12} /></button>
-                                         </>
-                                      )}
-                                   </div>
-                                </div>
-                             </div>
+                             {renderTimelineCard(item, movie)}
                           </div>
                         </div>
                       );
@@ -621,7 +544,6 @@ export default function WeeklyPlanPage() {
 
       {showAdd && <AddPlanModal presetDate={showAdd.presetDate} onClose={() => setShowAdd(null)} />}
       
-      {/* YENİ: DÜZENLEME / TAŞIMA MODALI */}
       {editPlanTarget && (
         <EditPlanModal 
           item={editPlanTarget.item} 
@@ -646,7 +568,7 @@ export default function WeeklyPlanPage() {
       {deleteTarget && (
         <ConfirmDialog
           title="Plandan Kaldır"
-          message={`"${deleteTarget.title}" haftalık plandan kaldırılacak. Emin misin?`}
+          message={`"${deleteTarget.title || 'Bu yapım'}" haftalık plandan kaldırılacak. Emin misin?`}
           onConfirm={() => { deletePlanItem(deleteTarget.id); setDeleteTarget(null); }}
           onCancel={() => setDeleteTarget(null)}
         />
@@ -678,7 +600,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
       .filter((m) => !genreFilter || m.genres?.includes(genreFilter));
   }, [data.movies, plannedMovieIds, search, collectionFilter, genreFilter]);
 
-  const endTimePreview = selectedMovie ? computeEndTime(time, selectedMovie.runtime) : null;
+  const endTimePreview = selectedMovie ? computeEndTime(time, selectedMovie.runtime || 115) : null;
 
   const dayPlans = useMemo(() => {
     return (data.weeklyPlan || [])
@@ -873,7 +795,6 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
   );
 }
 
-// YENİ BİLEŞEN: DÜZENLEME VE TAŞIMA İÇİN
 function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; presetDate?: string; onClose: () => void }) {
   const { data, updatePlanItem, showToast } = useApp();
   const movie = data.movies.find(m => m.id === item.movieId);
@@ -889,7 +810,7 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [data.weeklyPlan, date, item.id]);
 
-  const endTimePreview = computeEndTime(time, movie.runtime);
+  const endTimePreview = computeEndTime(time, movie.runtime || 115);
 
   const handleConfirm = () => {
     const hasOverlap = dayPlans.some((p) => {

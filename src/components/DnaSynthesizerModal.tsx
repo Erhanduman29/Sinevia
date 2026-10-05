@@ -31,6 +31,10 @@ import RatingModal from './RatingModal';
 import MediaDetailModal from './MediaDetailModal';
 import type { Movie } from '../types';
 
+// YENİ BEYNİMİZİ İÇERİ ALIYORUZ!
+import { calculateDnaSynthesis } from '../lib/dnaLogic';
+import type { SynthVariant, SynthTrait } from '../lib/dnaLogic';
+
 interface DnaSynthesizerModalProps {
   onClose: () => void;
 }
@@ -38,32 +42,6 @@ interface DnaSynthesizerModalProps {
 type Step = 'select' | 'synthesizing' | 'result';
 type Slot = 'A' | 'B' | null;
 type SelectionTab = 'library' | 'watched' | 'past';
-
-interface SynthTrait {
-  category: string;
-  label: string;
-  addedPct: number;
-  sourceLabel: string;
-  sourceType: 'both' | 'A' | 'B' | 'hybrid';
-}
-
-interface SynthVariant {
-  movie: Movie;
-  matchScore: number;
-  parentAPct: number;
-  parentBPct: number;
-  traits: SynthTrait[];
-}
-
-const STOP_WORDS = new Set([
-  'bir', 've', 'ile', 'için', 'bu', 'da', 'de', 'çok', 'daha', 'en', 'gibi', 'kadar',
-  'olan', 'olarak', 'sonra', 'önce', 'kendi', 'ise', 'ya', 'veya', 'ama', 'fakat',
-  'göre', 'tüm', 'bütün', 'her', 'hiç', 'bazı', 'biraz', 'şu', 'onu', 'bunu', 'ona',
-  'film', 'filmi', 'filmde', 'hikaye', 'hikayesi', 'hayat', 'hayatı', 'yaşam', 'insan',
-  'dünya', 'zaman', 'yılında', 'birlikte', 'ancak', 'karşı', 'arasında', 'üzerine',
-  'başlar', 'olaylar', 'anlatıyor', 'anlatır', 'konu', 'ediyor', 'sonunda', 'içinde',
-  'tarafından', 'büyük', 'küçük', 'yeni', 'eski', 'genç', 'adam', 'kadın', 'çocuk',
-]);
 
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45';
 
@@ -86,7 +64,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
 
   const [syncStatusText, setSyncStatusText] = useState<string>('');
 
-  // PENCERE AÇIKKEN ARKA PLANDAKİ KAYDIRMA ÇUBUĞUNU KİLİTLE
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => {
@@ -103,8 +80,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     [data.movies, movieBId]
   );
 
-  // KOLEKSİYON KURALI: Sadece izlenmemiş EN ESKİ (ilk) film sentezlenebilir
-  // ESKİDEN İZLENENLER KURALI: inPastQueue olanlar aday olamaz!
   const eligibleUnwatchedMovies = useMemo(() => {
     const unwatched = data.movies.filter((m) => !m.watched && !m.inPastQueue);
     const standalone = unwatched.filter((m) => !m.collectionId);
@@ -161,7 +136,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     );
   }, [data.movies, currentWatchedMovies, pastWatchedMovies, selectionTab, search]);
 
-  // Seçilen iki ebeveyn filmin kendi aralarındaki ortak genleri (Önizleme için)
   const sharedParentGenes = useMemo(() => {
     if (!movieA || !movieB) return [];
     const badges: string[] = [];
@@ -201,7 +175,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     return badges;
   }, [movieA, movieB]);
 
-  // Bir filmin TMDB üzerinden tam oyuncu ve yönetmen verisini çeken yardımcı fonksiyon
   const fetchFullCreditsForMovie = async (m: Movie): Promise<Movie> => {
     try {
       let targetTmdbId = m.tmdbId;
@@ -304,18 +277,12 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     setMovieBId(shuffled[1].id);
   };
 
-  // =========================================================
-  // SABİT ORANLI MATEMATİKSEL SENTEZ MOTORU
-  // =========================================================
   const handleSynthesize = async () => {
-    // Ebeveynler eksikse veya hiç havuz yoksa başlama
     if (!movieA || !movieB || eligibleUnwatchedMovies.length === 0) return;
     
     setStep('synthesizing');
 
-    // 1. Adım: Seçilen ebeveynlerin ve aday filmlerin oyuncu/yönetmen verisi eksikse TMDB'den çek
     const updatedMap = new Map<string, Movie>();
-
     const allInvolved = [movieA, movieB, ...eligibleUnwatchedMovies];
     const needsSync = allInvolved.filter(
       (m) =>
@@ -342,548 +309,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     const activeB = updatedMap.get(movieB.id) || movieB;
 
     setTimeout(() => {
-      // Sadece gerçekten oyuncu/yönetmen dizisi doluysa karşılaştırmaya al
-      const hasDirA = Array.isArray(activeA.directors) && activeA.directors.length > 0;
-      const hasDirB = Array.isArray(activeB.directors) && activeB.directors.length > 0;
-      const dirsA = new Set(hasDirA ? activeA.directors!.map((d) => d.trim()).filter(Boolean) : []);
-      const dirsB = new Set(hasDirB ? activeB.directors!.map((d) => d.trim()).filter(Boolean) : []);
+      // TMDB'den güncellenmiş hallerini yolluyoruz
+      const updatedCandidates = eligibleUnwatchedMovies.map(c => updatedMap.get(c.id) || c);
 
-      const hasCastA = Array.isArray(activeA.cast) && activeA.cast.length > 0;
-      const hasCastB = Array.isArray(activeB.cast) && activeB.cast.length > 0;
-      const castA = new Set(hasCastA ? activeA.cast!.map((c) => c.trim()).filter(Boolean) : []);
-      const castB = new Set(hasCastB ? activeB.cast!.map((c) => c.trim()).filter(Boolean) : []);
-
-      const genresA = new Set((activeA.genres || []).map((g) => g.trim()).filter(Boolean));
-      const genresB = new Set((activeB.genres || []).map((g) => g.trim()).filter(Boolean));
-
-      const hasKwA = Array.isArray(activeA.keywords) && activeA.keywords.length > 0;
-      const hasKwB = Array.isArray(activeB.keywords) && activeB.keywords.length > 0;
-      const kwA = new Set(hasKwA ? activeA.keywords!.map((k) => k.trim().toLowerCase()).filter(Boolean) : []);
-      const kwB = new Set(hasKwB ? activeB.keywords!.map((k) => k.trim().toLowerCase()).filter(Boolean) : []);
-
-      const hasStA = Array.isArray(activeA.studios) && activeA.studios.length > 0;
-      const hasStB = Array.isArray(activeB.studios) && activeB.studios.length > 0;
-      const studiosA = new Set(hasStA ? activeA.studios!.map((s) => s.trim()).filter(Boolean) : []);
-      const studiosB = new Set(hasStB ? activeB.studios!.map((s) => s.trim()).filter(Boolean) : []);
-
-      const extractKeywordsFromText = (text?: string) => {
-        const map = new Map<string, string>();
-        if (!text) return map;
-        const clean = text
-          .toLocaleLowerCase('tr-TR')
-          .replace(/[.,/#!$%^&*;:{}=\-_`~()'"?<>]/g, ' ');
-        clean.split(/\s+/).forEach((w) => {
-          if (w.length >= 5 && !STOP_WORDS.has(w)) {
-            const stem = w.slice(0, 5);
-            if (!map.has(stem)) map.set(stem, w);
-          }
-        });
-        return map;
-      };
-
-      const stemsA = extractKeywordsFromText(activeA.overview);
-      const stemsB = extractKeywordsFromText(activeB.overview);
-
-      const yearA = parseInt(activeA.year || '0', 10);
-      const yearB = parseInt(activeB.year || '0', 10);
-      const decadeA = yearA > 1900 ? Math.floor(yearA / 10) * 10 : 0;
-      const decadeB = yearB > 1900 ? Math.floor(yearB / 10) * 10 : 0;
-
-      const rtA = activeA.runtime || 0;
-      const rtB = activeB.runtime || 0;
-      const avgParentRuntime =
-        rtA > 0 && rtB > 0 ? Math.round((rtA + rtB) / 2) : rtA > 0 ? rtA : rtB > 0 ? rtB : 0;
-
-      const scoredCandidates: (SynthVariant & { sortRank: number })[] = [];
-
-      eligibleUnwatchedMovies.forEach((rawCand) => {
-        const candidate = updatedMap.get(rawCand.id) || rawCand;
-        // Eğer havuzdaki film zaten ebeveynlerden biriyse atla
-        if (candidate.id === activeA.id || candidate.id === activeB.id) return;
-
-        let pctFromA = 0;
-        let pctFromB = 0;
-        const traits: SynthTrait[] = [];
-
-        // ---------------------------------------------------------
-        // 1. YÖNETMEN KARŞILAŞTIRMASI
-        // ---------------------------------------------------------
-        const hasCandDirs = Array.isArray(candidate.directors) && candidate.directors.length > 0;
-        if (hasCandDirs && (hasDirA || hasDirB)) {
-          const dirsBoth: string[] = [];
-          const dirsOnlyA: string[] = [];
-          const dirsOnlyB: string[] = [];
-
-          candidate.directors!.forEach((d) => {
-            const cleanD = d.trim();
-            if (!cleanD) return;
-            const inA = dirsA.has(cleanD);
-            const inB = dirsB.has(cleanD);
-            if (inA && inB) {
-              dirsBoth.push(cleanD);
-            } else if (inA) {
-              dirsOnlyA.push(cleanD);
-            } else if (inB) {
-              dirsOnlyB.push(cleanD);
-            }
-          });
-
-          if (dirsBoth.length > 0) {
-            const pct = 30;
-            pctFromA += 15;
-            pctFromB += 15;
-            traits.push({
-              category: 'Ortak Yönetmen',
-              label: dirsBoth.join(', '),
-              addedPct: pct,
-              sourceLabel: 'Her İki Filmle Ortak',
-              sourceType: 'both',
-            });
-          } else {
-            if (dirsOnlyA.length > 0) {
-              const pct = 25;
-              pctFromA += pct;
-              traits.push({
-                category: 'Aynı Yönetmen',
-                label: dirsOnlyA.join(', '),
-                addedPct: pct,
-                sourceLabel: activeA.title,
-                sourceType: 'A',
-              });
-            }
-            if (dirsOnlyB.length > 0) {
-              const pct = 25;
-              pctFromB += pct;
-              traits.push({
-                category: 'Aynı Yönetmen',
-                label: dirsOnlyB.join(', '),
-                addedPct: pct,
-                sourceLabel: activeB.title,
-                sourceType: 'B',
-              });
-            }
-          }
-        }
-
-        // ---------------------------------------------------------
-        // 2. OYUNCU KARŞILAŞTIRMASI
-        // ---------------------------------------------------------
-        const hasCandCast = Array.isArray(candidate.cast) && candidate.cast.length > 0;
-        if (hasCandCast && (hasCastA || hasCastB)) {
-          const actorsBoth: string[] = [];
-          const actorsOnlyA: string[] = [];
-          const actorsOnlyB: string[] = [];
-
-          candidate.cast!.forEach((actor) => {
-            const cleanActor = actor.trim();
-            if (!cleanActor) return;
-            const inA = castA.has(cleanActor);
-            const inB = castB.has(cleanActor);
-            if (inA && inB) {
-              actorsBoth.push(cleanActor);
-            } else if (inA) {
-              actorsOnlyA.push(cleanActor);
-            } else if (inB) {
-              actorsOnlyB.push(cleanActor);
-            }
-          });
-
-          let castPctUsed = 0;
-
-          if (actorsBoth.length > 0) {
-            const pct = Math.min(30, actorsBoth.length * 15);
-            castPctUsed += pct;
-            pctFromA += pct / 2;
-            pctFromB += pct / 2;
-            traits.push({
-              category: 'Ortak Oyuncu',
-              label: actorsBoth.join(', '),
-              addedPct: pct,
-              sourceLabel: 'Her İki Filmde Oynuyor',
-              sourceType: 'both',
-            });
-          }
-
-          if (actorsOnlyA.length > 0 && castPctUsed < 30) {
-            const pct = Math.min(30 - castPctUsed, actorsOnlyA.length * 10);
-            castPctUsed += pct;
-            pctFromA += pct;
-            traits.push({
-              category: 'Ortak Oyuncu',
-              label: actorsOnlyA.join(', '),
-              addedPct: pct,
-              sourceLabel: activeA.title,
-              sourceType: 'A',
-            });
-          }
-
-          if (actorsOnlyB.length > 0 && castPctUsed < 30) {
-            const pct = Math.min(30 - castPctUsed, actorsOnlyB.length * 10);
-            castPctUsed += pct;
-            pctFromB += pct;
-            traits.push({
-              category: 'Ortak Oyuncu',
-              label: actorsOnlyB.join(', '),
-              addedPct: pct,
-              sourceLabel: activeB.title,
-              sourceType: 'B',
-            });
-          }
-        }
-
-        // ---------------------------------------------------------
-        // 3. TÜR KARŞILAŞTIRMASI
-        // ---------------------------------------------------------
-        const hasCandGenres = Array.isArray(candidate.genres) && candidate.genres.length > 0;
-        if (hasCandGenres) {
-          const genresBoth: string[] = [];
-          const genresOnlyA: string[] = [];
-          const genresOnlyB: string[] = [];
-
-          candidate.genres.forEach((g) => {
-            const cleanG = g.trim();
-            if (!cleanG) return;
-            const inA = genresA.has(cleanG);
-            const inB = genresB.has(cleanG);
-            if (inA && inB) {
-              genresBoth.push(cleanG);
-            } else if (inA) {
-              genresOnlyA.push(cleanG);
-            } else if (inB) {
-              genresOnlyB.push(cleanG);
-            }
-          });
-
-          let genrePctUsed = 0;
-
-          if (genresBoth.length > 0) {
-            const pct = Math.min(24, genresBoth.length * 8);
-            genrePctUsed += pct;
-            pctFromA += pct / 2;
-            pctFromB += pct / 2;
-            traits.push({
-              category: 'Ortak Tür',
-              label: genresBoth.join(', '),
-              addedPct: pct,
-              sourceLabel: 'Her İki Filmle Ortak',
-              sourceType: 'both',
-            });
-          }
-
-          if (genresOnlyA.length > 0 && genresOnlyB.length > 0 && genrePctUsed < 25) {
-            const pct = Math.min(25 - genrePctUsed, (genresOnlyA.length + genresOnlyB.length) * 5);
-            genrePctUsed += pct;
-            pctFromA += pct / 2;
-            pctFromB += pct / 2;
-            traits.push({
-              category: 'Çapraz Tür',
-              label: `${genresOnlyA.join(', ')} × ${genresOnlyB.join(', ')}`,
-              addedPct: pct,
-              sourceLabel: '1. ve 2. Film Melezi',
-              sourceType: 'hybrid',
-            });
-          } else if (genresOnlyA.length > 0 && genrePctUsed < 25) {
-            const pct = Math.min(25 - genrePctUsed, genresOnlyA.length * 5);
-            genrePctUsed += pct;
-            pctFromA += pct;
-            traits.push({
-              category: 'Aynı Tür',
-              label: genresOnlyA.join(', '),
-              addedPct: pct,
-              sourceLabel: activeA.title,
-              sourceType: 'A',
-            });
-          } else if (genresOnlyB.length > 0 && genrePctUsed < 25) {
-            const pct = Math.min(25 - genrePctUsed, genresOnlyB.length * 5);
-            genrePctUsed += pct;
-            pctFromB += pct;
-            traits.push({
-              category: 'Aynı Tür',
-              label: genresOnlyB.join(', '),
-              addedPct: pct,
-              sourceLabel: activeB.title,
-              sourceType: 'B',
-            });
-          }
-        }
-
-        // ---------------------------------------------------------
-        // 4. ANAHTAR KELİME / TEMA KARŞILAŞTIRMASI
-        // ---------------------------------------------------------
-        const hasCandKw = Array.isArray(candidate.keywords) && candidate.keywords.length > 0;
-        if (hasCandKw && (hasKwA || hasKwB)) {
-          const kwsBoth: string[] = [];
-          const kwsOnlyA: string[] = [];
-          const kwsOnlyB: string[] = [];
-
-          candidate.keywords!.forEach((k) => {
-            const cleanK = k.trim().toLowerCase();
-            if (!cleanK) return;
-            const inA = kwA.has(cleanK);
-            const inB = kwB.has(cleanK);
-            if (inA && inB) {
-              kwsBoth.push(k.trim());
-            } else if (inA) {
-              kwsOnlyA.push(k.trim());
-            } else if (inB) {
-              kwsOnlyB.push(k.trim());
-            }
-          });
-
-          const rawKwPct = kwsBoth.length * 6 + (kwsOnlyA.length + kwsOnlyB.length) * 4;
-          const kwPct = Math.min(20, rawKwPct);
-          
-          if (kwPct > 0) {
-            const allKws = [...kwsBoth, ...kwsOnlyA, ...kwsOnlyB];
-            const shareA = kwsBoth.length * 3 + kwsOnlyA.length * 4;
-            const shareB = kwsBoth.length * 3 + kwsOnlyB.length * 4;
-            const sumShare = shareA + shareB || 1;
-            
-            pctFromA += Math.round(kwPct * (shareA / sumShare));
-            pctFromB += kwPct - Math.round(kwPct * (shareA / sumShare));
-
-            traits.push({
-              category: 'Ortak Tema',
-              label: allKws.slice(0, 4).join(', '),
-              addedPct: kwPct,
-              sourceLabel:
-                kwsBoth.length > 0
-                  ? 'Her İki Filmle Ortak'
-                  : kwsOnlyA.length > 0 && kwsOnlyB.length > 0
-                  ? '1. ve 2. Film'
-                  : kwsOnlyA.length > 0
-                  ? activeA.title
-                  : activeB.title,
-              sourceType: kwsBoth.length > 0 ? 'both' : kwsOnlyA.length > 0 ? 'A' : 'B',
-            });
-          }
-        }
-
-        // ---------------------------------------------------------
-        // 5. KONU ÖZETİ KELİME KESİŞİMİ
-        // ---------------------------------------------------------
-        if (candidate.overview && (activeA.overview || activeB.overview)) {
-          const candStems = extractKeywordsFromText(candidate.overview);
-          const matchedWords: string[] = [];
-          let wA = 0;
-          let wB = 0;
-
-          candStems.forEach((origWord, stem) => {
-            const inA = stemsA.has(stem);
-            const inB = stemsB.has(stem);
-            if (inA || inB) {
-              matchedWords.push(origWord);
-              if (inA) wA++;
-              if (inB) wB++;
-            }
-          });
-
-          if (matchedWords.length > 0) {
-            const storyPct = Math.min(12, matchedWords.length * 3);
-            const wSum = wA + wB || 1;
-            
-            pctFromA += Math.round(storyPct * (wA / wSum));
-            pctFromB += storyPct - Math.round(storyPct * (wA / wSum));
-
-            traits.push({
-              category: 'Konu Benzerliği',
-              label: matchedWords.slice(0, 4).join(', '),
-              addedPct: storyPct,
-              sourceLabel: wA > 0 && wB > 0 ? 'Her İki Film' : wA > 0 ? activeA.title : activeB.title,
-              sourceType: wA > 0 && wB > 0 ? 'both' : wA > 0 ? 'A' : 'B',
-            });
-          }
-        }
-
-        // ---------------------------------------------------------
-        // 6. KOLEKSİYON / SERİ BAĞI
-        // ---------------------------------------------------------
-        if (candidate.collectionId) {
-          const inColA = candidate.collectionId === activeA.collectionId;
-          const inColB = candidate.collectionId === activeB.collectionId;
-          
-          if (inColA || inColB) {
-            const colPct = 15;
-            if (inColA && inColB) {
-              pctFromA += 7.5;
-              pctFromB += 7.5;
-            } else if (inColA) {
-              pctFromA += colPct;
-            } else {
-              pctFromB += colPct;
-            }
-            
-            traits.push({
-              category: 'Koleksiyon Serisi',
-              label: 'Serinin Sıradaki İlk Filmi',
-              addedPct: colPct,
-              sourceLabel: inColA ? activeA.title : activeB.title,
-              sourceType: inColA && inColB ? 'both' : inColA ? 'A' : 'B',
-            });
-          }
-        }
-
-        // ---------------------------------------------------------
-        // 7. YAPIMCI STÜDYO
-        // ---------------------------------------------------------
-        const hasCandSt = Array.isArray(candidate.studios) && candidate.studios.length > 0;
-        if (hasCandSt && (hasStA || hasStB)) {
-          const matchedStudios: string[] = [];
-          let stInA = false;
-          let stInB = false;
-
-          candidate.studios!.forEach((s) => {
-            const cleanS = s.trim();
-            if (!cleanS) return;
-            
-            if (studiosA.has(cleanS)) {
-              matchedStudios.push(cleanS);
-              stInA = true;
-            }
-            if (studiosB.has(cleanS)) {
-              if (!matchedStudios.includes(cleanS)) matchedStudios.push(cleanS);
-              stInB = true;
-            }
-          });
-
-          if (matchedStudios.length > 0) {
-            const stPct = matchedStudios.length >= 2 ? 8 : 5;
-            
-            if (stInA && stInB) {
-              pctFromA += stPct / 2;
-              pctFromB += stPct / 2;
-            } else if (stInA) {
-              pctFromA += stPct;
-            } else {
-              pctFromB += stPct;
-            }
-            
-            traits.push({
-              category: 'Aynı Stüdyo',
-              label: matchedStudios.slice(0, 2).join(', '),
-              addedPct: stPct,
-              sourceLabel: stInA && stInB ? 'Her İki Film' : stInA ? activeA.title : activeB.title,
-              sourceType: stInA && stInB ? 'both' : stInA ? 'A' : 'B',
-            });
-          }
-        }
-
-        // ---------------------------------------------------------
-        // 8. DÖNEM (ON YIL) UYUMU
-        // ---------------------------------------------------------
-        const candYear = parseInt(candidate.year || '0', 10);
-        const candDecade = candYear > 1900 ? Math.floor(candYear / 10) * 10 : 0;
-        if (candDecade > 0 && (candDecade === decadeA || candDecade === decadeB)) {
-          const decPct = 5;
-          if (candDecade === decadeA && candDecade === decadeB) {
-            pctFromA += 2.5;
-            pctFromB += 2.5;
-          } else if (candDecade === decadeA) {
-            pctFromA += decPct;
-          } else {
-            pctFromB += decPct;
-          }
-          
-          traits.push({
-            category: 'Aynı Dönem',
-            label: `${candDecade}'ler Sineması (${candidate.year})`,
-            addedPct: decPct,
-            sourceLabel:
-              candDecade === decadeA && candDecade === decadeB
-                ? 'Her İki Film'
-                : candDecade === decadeA
-                ? activeA.title
-                : activeB.title,
-            sourceType:
-              candDecade === decadeA && candDecade === decadeB
-                ? 'both'
-                : candDecade === decadeA
-                ? 'A'
-                : 'B',
-          });
-        }
-
-        // ---------------------------------------------------------
-        // 9. SÜRE & TEMPO UYUMU
-        // ---------------------------------------------------------
-        if (candidate.runtime && candidate.runtime > 0 && avgParentRuntime > 0) {
-          const diffAvg = Math.abs(candidate.runtime - avgParentRuntime);
-          if (diffAvg <= 15) {
-            const rtPct = 5;
-            pctFromA += 2.5;
-            pctFromB += 2.5;
-            
-            traits.push({
-              category: 'Süre Uyumu',
-              label: `${candidate.runtime} dk (Ebeveyn Ort: ${avgParentRuntime} dk)`,
-              addedPct: rtPct,
-              sourceLabel: 'Ortak Tempo',
-              sourceType: 'both',
-            });
-          }
-        }
-
-        // ---------------------------------------------------------
-        // 10. ÇİFT EBEVEYN MELEZ SENTEZ BONUSU
-        // ---------------------------------------------------------
-        const isTrueHybrid = pctFromA >= 5 && pctFromB >= 5;
-        if (isTrueHybrid) {
-          pctFromA += 2.5;
-          pctFromB += 2.5;
-          
-          traits.push({
-            category: 'Melez Sentez',
-            label: 'Hem 1. Hem 2. Filmden Ortak Gen Taşıyor',
-            addedPct: 5,
-            sourceLabel: 'A × B Sinerjisi',
-            sourceType: 'hybrid',
-          });
-        }
-
-        // Sadece Kaos Modu seçiliyse deneysel mutasyon ekle
-        if (mutationRate === 2) {
-          const chaosBonus = Math.floor(Math.random() * 8) + 3;
-          pctFromA += chaosBonus / 2;
-          pctFromB += chaosBonus / 2;
-          
-          traits.push({
-            category: 'Kaos Mutasyonu',
-            label: 'Deneysel Genetik Sapma',
-            addedPct: chaosBonus,
-            sourceLabel: 'Kaos Modu',
-            sourceType: 'hybrid',
-          });
-        }
-
-        // TOPLAM UYUM HESABI
-        const exactSumPct = traits.reduce((sum, t) => sum + t.addedPct, 0);
-        
-        // EĞER HİÇBİR ORTAK ÖZELLİK YOKSA BU FİLMİ ATLA
-        if (exactSumPct <= 0) return;
-
-        const matchScore = Math.min(100, exactSumPct);
-
-        const totalParentShare = pctFromA + pctFromB || 1;
-        const parentAPct = Math.round((pctFromA / totalParentShare) * 100);
-        const parentBPct = 100 - parentAPct;
-
-        const hybridRankBonus = isTrueHybrid && mutationRate === 1 ? 8 : 0;
-        const sortRank = matchScore + hybridRankBonus;
-
-        const sortedTraits = [...traits].sort((a, b) => b.addedPct - a.addedPct);
-
-        scoredCandidates.push({
-          movie: candidate,
-          matchScore,
-          parentAPct,
-          parentBPct,
-          traits: sortedTraits,
-          sortRank,
-        });
-      });
-
-      // Adayları yüksek skordan düşüğe sırala
-      scoredCandidates.sort((a, b) => b.sortRank - a.sortRank || b.matchScore - a.matchScore);
+      // YENİ: SADECE BEYNİ (FONKSİYONU) ÇAĞIRIYORUZ! Yüzlerce satır matematik gitti.
+      const scoredCandidates = calculateDnaSynthesis(activeA, activeB, updatedCandidates, mutationRate);
 
       setVariants(scoredCandidates.slice(0, 3));
       setActiveVariantIdx(0);
@@ -972,7 +402,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         onClick={(e) => e.stopPropagation()}
         className="relative w-full h-full sm:h-auto sm:max-h-[92vh] max-w-4xl bg-ink-950/95 border-0 sm:border border-emerald-500/30 rounded-none sm:rounded-[2rem] overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.9)] flex flex-col"
       >
-        {/* SENTEZ SONUCU FLU ARKA PLAN ATMOSFERİ */}
         {step === 'result' && currentResult?.movie.posterUrl && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
             <img
@@ -984,7 +413,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           </div>
         )}
 
-        {/* ÜST HEADER */}
         <div className="relative z-10 flex items-center justify-between px-4 sm:px-7 py-3 sm:py-4 border-b border-ink-800/70 bg-gradient-to-r from-emerald-950/50 via-ink-900/90 to-ink-950 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {selectingSlot ? (
@@ -1031,7 +459,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           </div>
         </div>
 
-        {/* SABİT MATEMATİKSEL ORAN TABLOSU */}
         {showFormulaTable && (
           <div className="relative z-10 bg-ink-900/95 border-b border-emerald-500/30 px-4 sm:px-6 py-3 sm:py-4 text-xs space-y-2.5 animate-fade-in shrink-0">
             <div className="font-black text-emerald-400 uppercase tracking-wider flex items-center justify-between text-[10px] sm:text-xs">
@@ -1076,12 +503,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           </div>
         )}
 
-        {/* ANA İÇERİK GÖVDESİ */}
         <div className="relative z-10 flex-1 overflow-y-auto p-3.5 sm:p-7 custom-scrollbar pb-20 sm:pb-7">
-          
-          {/* =========================================================
-              DURUM 1: EBEVEYN FİLM SEÇİM LİSTESİ
-              ========================================================= */}
           {selectingSlot && (
             <div className="space-y-3.5 animate-fade-in">
               <div className="flex flex-col sm:flex-row gap-2.5">
@@ -1199,9 +621,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             </div>
           )}
 
-          {/* =========================================================
-              DURUM 2: MODERN EBEVEYN SEÇİM VE SENTEZ HAZIRLIK EKRANI
-              ========================================================= */}
           {!selectingSlot && step === 'select' && (
             <div className="space-y-4 sm:space-y-6 animate-fade-in">
               {eligibleUnwatchedMovies.length === 0 ? (
@@ -1354,7 +773,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     })}
                   </div>
 
-                  {/* İKİ EBEVEYN ARASINDA TESPİT EDİLEN ORTAK GENLER ÖNİZLEMESİ */}
                   {movieA && movieB && (
                     <div className="bg-emerald-950/25 border border-emerald-500/30 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 animate-fade-in">
                       <span className="text-[11px] sm:text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 flex-shrink-0">
@@ -1379,7 +797,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     </div>
                   )}
 
-                  {/* SENTEZ MODU SEÇİMİ */}
                   <div className="bg-ink-900/60 border border-ink-800 rounded-2xl p-3.5 sm:p-4 space-y-2.5">
                     <div className="flex justify-between text-[11px] sm:text-xs font-bold text-ink-400 uppercase tracking-wider">
                       <span>Sentezleme Stratejisi</span>
@@ -1432,9 +849,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             </div>
           )}
 
-          {/* =========================================================
-              DURUM 3: SENTEZ & KÜNYE TAMAMLAMA ANİMASYONU
-              ========================================================= */}
           {!selectingSlot && step === 'synthesizing' && (
             <div className="flex flex-col items-center justify-center py-16 animate-fade-in space-y-5">
               <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
@@ -1453,9 +867,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
             </div>
           )}
 
-          {/* =========================================================
-              DURUM 4: SENTEZ SONUÇ VİTRİNİ
-              ========================================================= */}
           {!selectingSlot && step === 'result' && (
             <div className="animate-fade-in-up space-y-4 sm:space-y-5">
               {!currentResult ? (
@@ -1474,7 +885,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                 </div>
               ) : (
                 <>
-                  {/* ÜST BAR: VARYANT SEÇİCİ SEKMELER */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div className="inline-flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3.5 py-1.5 rounded-2xl text-[11px] sm:text-xs font-black uppercase tracking-wider w-fit">
                       <CheckCircle2 size={15} className="text-emerald-400" />
@@ -1501,7 +911,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     )}
                   </div>
 
-                  {/* EBEVEYN KALITIM KÖPRÜSÜ */}
                   {movieA && movieB && (
                     <div className="bg-ink-900/80 border border-ink-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex items-center gap-3 shadow-lg">
                       {movieA.posterUrl && (
@@ -1541,9 +950,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     </div>
                   )}
 
-                  {/* ANA SENTEZ VİTRİN KARTI */}
                   <div className="bg-ink-900/75 backdrop-blur-md border border-emerald-500/35 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col lg:flex-row items-center lg:items-start gap-4 sm:gap-6">
-                    {/* SOL: 2:3 POSTER VİTRİNİ */}
                     <div className="flex flex-col items-center gap-2.5 flex-shrink-0">
                       <button
                         type="button"
@@ -1584,7 +991,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                       </div>
                     </div>
 
-                    {/* SAĞ: FİLM DETAYLARI VE SABİT ORANLI GENETİK TABLO */}
                     <div className="flex-1 min-w-0 w-full flex flex-col justify-between text-center lg:text-left">
                       <div>
                         {currentResult.movie.collectionId && (

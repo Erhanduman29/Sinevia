@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useApp } from './AppContext'; 
 import { QUEST_DEFS, RARITY_STYLES } from '../lib/quests';
 import { Sparkles } from 'lucide-react';
+import { evaluateQuestCompletion } from '../lib/questLogic';
+import { playQuestCompleteSound } from '../lib/sound';
 
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
 
@@ -22,7 +24,7 @@ interface QuestContextValue {
   completeActiveQuest: (questId: string) => void;
   equipBadge: (questId: string | null) => void;
   togglePenalty: () => void; 
-  resetQuestData: () => void; // YENİ: Sıfırlama fonksiyonu arayüze eklendi
+  resetQuestData: () => void;
 }
 
 const defaultQuestState: QuestState = {
@@ -44,7 +46,7 @@ export function useQuests() {
 }
 
 export function QuestProvider({ children }: { children: ReactNode }) {
-  const { data, grantXp } = useApp(); 
+  const { data, grantXp, setIsQuestCelebrating } = useApp();
 
   const [questState, setQuestState] = useState<QuestState>(() => {
     try {
@@ -126,209 +128,28 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     setQuestState((prev) => ({ ...prev, activeBadgeId: questId }));
   };
 
-  // YENİ: Tüm görev ve rozet verilerini fabrika ayarlarına döndürür
   const resetQuestData = () => {
     setQuestState(defaultQuestState);
   };
 
-  // =========================================================================
-  // GÖREV DEĞERLENDİRME MOTORU
-  // =========================================================================
   useEffect(() => {
     if (!questState.activeQuestId || !questState.questAcceptedAt) return;
 
-    const qId = questState.activeQuestId;
-    const acceptedAt = questState.questAcceptedAt;
-
-    const historySince = data.history.filter(h => {
-      const watchedTime = new Date(h.watchedAt).getTime();
-      return !isNaN(watchedTime) && watchedTime >= acceptedAt;
-    });
-    
-    const watchedMovies = data.movies.filter(m => 
-      m.watched && historySince.some(h => h.kind === 'movie' && h.itemId === m.id)
+    const isCompleted = evaluateQuestCompletion(
+      questState.activeQuestId,
+      questState.questAcceptedAt,
+      data.history,
+      data.movies,
+      data.dailyStreak
     );
-    
-    const ratedMovies = data.movies.filter(m => 
-      m.rating !== null && historySince.some(h => h.kind === 'movie' && h.itemId === m.id)
-    );
-
-    const watchedEpisodes = historySince.filter(h => h.kind === 'series');
-
-    let isCompleted = false;
-
-    switch (qId) {
-      case 'c_picky_taste': 
-        isCompleted = ratedMovies.some(m => m.rating === 7.5 || m.rating === 8.5);
-        break;
-      case 'c_short_movie': 
-        isCompleted = watchedMovies.some(m => m.runtime && m.runtime < 90);
-        break;
-      case 'c_action_fan': 
-        isCompleted = watchedMovies.some(m => m.genres?.includes('Aksiyon') && m.rating !== null);
-        break;
-      case 'c_comedy_fan': 
-        isCompleted = watchedMovies.some(m => m.genres?.includes('Komedi'));
-        break;
-      case 'c_drama_fan': 
-        isCompleted = watchedMovies.some(m => m.genres?.includes('Dram'));
-        break;
-      case 'c_sci_fi_fan': 
-        isCompleted = watchedMovies.some(m => m.genres?.includes('Bilim Kurgu'));
-        break;
-      case 'c_documentary': 
-        isCompleted = watchedMovies.some(m => m.genres?.includes('Belgesel'));
-        break;
-      case 'c_animation': 
-        isCompleted = watchedMovies.some(m => m.genres?.includes('Animasyon'));
-        break;
-      case 'c_masterpiece': 
-        isCompleted = ratedMovies.some(m => m.rating === 10);
-        break;
-      case 'c_trash': 
-        isCompleted = ratedMovies.some(m => m.rating !== null && m.rating <= 3);
-        break;
-      case 'c_mediocre': 
-        isCompleted = ratedMovies.some(m => m.rating !== null && m.rating >= 5 && m.rating <= 6);
-        break;
-      case 'c_detailer': 
-        isCompleted = watchedMovies.some(m => m.reviewTags && m.reviewTags.length >= 3);
-        break;
-      case 'c_writer': 
-        isCompleted = watchedMovies.some(m => m.note && m.note.length >= 50);
-        break;
-      case 'c_old_movie': 
-        isCompleted = watchedMovies.some(m => m.year && parseInt(m.year) < 2000);
-        break;
-      case 'c_new_movie': 
-        const currentYear = new Date().getFullYear().toString();
-        isCompleted = watchedMovies.some(m => m.year === currentYear);
-        break;
-      case 'c_weekend': 
-        isCompleted = watchedMovies.some(m => {
-          if (!m.watchedAt) return false;
-          const day = new Date(m.watchedAt).getDay();
-          return day === 0 || day === 6; 
-        });
-        break;
-      case 'c_weekday': 
-        isCompleted = watchedMovies.some(m => {
-          if (!m.watchedAt) return false;
-          return new Date(m.watchedAt).getDay() === 1; 
-        });
-        break;
-      case 'c_short_series': 
-        isCompleted = watchedEpisodes.some(e => e.actualRuntime && e.actualRuntime < 30);
-        break;
-      case 'c_series_pilot': 
-        isCompleted = watchedEpisodes.some(e => e.season === 1 && e.episode === 1);
-        break;
-      case 'c_series_double': 
-        isCompleted = watchedEpisodes.length >= 2;
-        break;
-
-      case 'r_night_watch': 
-        isCompleted = watchedMovies.some(m => {
-          if (!m.watchedAt) return false;
-          const hr = new Date(m.watchedAt).getHours();
-          return hr >= 1 && hr < 5;
-        });
-        break;
-      case 'r_two_hours': 
-        isCompleted = watchedMovies.some(m => m.runtime && m.runtime >= 120 && m.runtime <= 130);
-        break;
-      case 'r_tarantino': 
-        isCompleted = watchedMovies.some(m => (m.genres?.includes('Suç') || m.genres?.includes('Gerilim')) && m.rating !== null && m.rating >= 8);
-        break;
-      case 'r_classic':
-        isCompleted = watchedMovies.some(m => m.year && parseInt(m.year) >= 1970 && parseInt(m.year) <= 1980);
-        break;
-      case 'r_mystery_solver':
-        isCompleted = watchedMovies.some(m => m.genres?.includes('Gizem') && m.note && m.note.length >= 100);
-        break;
-      case 'r_consistent': 
-        isCompleted = data.dailyStreak >= 3; 
-        break;
-      case 'r_variety': 
-        if (watchedMovies.length >= 2) isCompleted = true; 
-        break;
-      case 'r_series_wolf': 
-        isCompleted = watchedEpisodes.length >= 3;
-        break;
-      case 'r_friday_joy': 
-        isCompleted = watchedMovies.some(m => {
-          if (!m.watchedAt) return false;
-          const d = new Date(m.watchedAt);
-          return d.getDay() === 5 && d.getHours() >= 20; 
-        });
-        break;
-      case 'r_double_action': 
-        isCompleted = watchedMovies.filter(m => m.genres?.includes('Aksiyon')).length >= 2;
-        break;
-      case 'r_double_horror': 
-        isCompleted = watchedMovies.filter(m => m.genres?.includes('Korku')).length >= 2;
-        break;
-      case 'r_long_movie': 
-        isCompleted = watchedMovies.some(m => m.runtime && m.runtime >= 150);
-        break;
-      case 'r_perfect_pair': 
-        const perfectMovies = ratedMovies.filter(m => m.rating === 9 || m.rating === 10);
-        isCompleted = perfectMovies.length >= 2;
-        break;
-      case 'r_indecisive': 
-        isCompleted = ratedMovies.length > 0;
-        break;
-      case 'r_second_chance':
-        isCompleted = watchedMovies.length > 0;
-        break;
-
-      case 'e_series_killer': 
-        isCompleted = watchedEpisodes.length >= 5;
-        break;
-      case 'e_old_school': 
-        isCompleted = watchedMovies.some(m => m.year && parseInt(m.year) <= 1960);
-        break;
-      case 'e_heavy_novel': 
-        isCompleted = watchedMovies.some(m => m.note && m.note.length >= 1000);
-        break;
-      case 'e_marathon_3': 
-        isCompleted = watchedMovies.length >= 3;
-        break;
-      case 'e_perfect_3': 
-        isCompleted = ratedMovies.filter(m => m.rating !== null && m.rating >= 8).length >= 3;
-        break;
-
-      case 'l_directors_cut': 
-        isCompleted = watchedMovies.some(m => m.runtime && m.runtime >= 180);
-        break;
-      case 'l_weekend_massacre': 
-        isCompleted = watchedMovies.length >= 4;
-        break;
-      case 'l_flawless_selection': 
-        isCompleted = ratedMovies.filter(m => m.rating !== null && m.rating >= 9).length >= 4;
-        break;
-      case 'l_sinevia_god': 
-        isCompleted = data.dailyStreak >= 7;
-        break;
-      case 'l_marathon_5': 
-        isCompleted = watchedMovies.length >= 5;
-        break;
-
-      case 'm_hater': 
-        isCompleted = ratedMovies.filter(m => m.rating !== null && m.rating <= 3).length >= 3;
-        break;
-
-      default:
-        if (watchedMovies.length > 0 || watchedEpisodes.length > 0) isCompleted = true; 
-        break;
-    }
 
     if (isCompleted) {
-      completeActiveQuest(qId);
-      setCelebratingQuestId(qId);
+      completeActiveQuest(questState.activeQuestId);
+      setIsQuestCelebrating(true); 
+      setCelebratingQuestId(questState.activeQuestId);
     }
 
-  }, [data.history, data.movies, questState.activeQuestId, questState.questAcceptedAt]);
+  }, [data.history, data.movies, questState.activeQuestId, questState.questAcceptedAt, data.dailyStreak]);
 
   return (
     <QuestContext.Provider value={{ 
@@ -338,17 +159,17 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       completeActiveQuest,
       equipBadge,
       togglePenalty,
-      resetQuestData // Arayüze eklendi
+      resetQuestData 
     }}>
       {children}
 
-      {/* SİNEMATİK KUTLAMA ANİMASYONU */}
       {celebratingQuestId && (
         <QuestCelebrationOverlay 
           questId={celebratingQuestId} 
           onClaim={(xp) => {
             grantXp(xp); 
             setCelebratingQuestId(null);
+            setIsQuestCelebrating(false); 
           }} 
         />
       )}
@@ -364,6 +185,10 @@ function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClai
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
+    // YENİ: Sinematik müziği ekran açıldığı an başlatıyoruz.
+    // Fonksiyon kendi içinde 3 saniye boyunca yükselecek ve tam Phase 1'de patlayacak!
+    playQuestCompleteSound();
+    
     const t1 = setTimeout(() => setPhase(1), 3000);
     const t2 = setTimeout(() => setPhase(2), 5000);
     return () => { clearTimeout(t1); clearTimeout(t2); };

@@ -1,37 +1,19 @@
 import { useState, useMemo } from 'react';
 import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
-  Hourglass, Activity, User, Users, Building2, SlidersHorizontal, Crown, Sparkles,
+  Hourglass, Activity, User, Users, Building2, Crown, Sparkles,
   Eye, Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon
 } from 'lucide-react';
-import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
-import { ratingBgClass, normalize } from '../lib/utils';
+import { useApp } from '../context/AppContext';
+import { ratingBgClass } from '../lib/utils';
 import MediaDetailModal from '../components/MediaDetailModal';
 import WrappedModal from '../components/WrappedModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
-import type { Movie, Series, WatchHistoryItem } from '../types';
+import type { WatchHistoryItem } from '../types';
 
-const LANGUAGE_LABELS: Record<string, { name: string; flag: string }> = {
-  en: { name: 'İngilizce (ABD / UK)', flag: '🇺🇸' },
-  tr: { name: 'Türkçe (Yerli Sinema)', flag: '🇹🇷' },
-  ko: { name: 'Korece (K-Drama / Sinema)', flag: '🇰🇷' },
-  ja: { name: 'Japonca (Anime / Sinema)', flag: '🇯🇵' },
-  es: { name: 'İspanyolca', flag: '🇪🇸' },
-  fr: { name: 'Fransızca', flag: '🇫🇷' },
-  de: { name: 'Almanca', flag: '🇩🇪' },
-  it: { name: 'İtalyanca', flag: '🇮🇹' },
-  ru: { name: 'Rusça', flag: '🇷🇺' },
-  hi: { name: 'Hintçe (Bollywood)', flag: '🇮🇳' },
-  zh: { name: 'Çince', flag: '🇨🇳' },
-  pt: { name: 'Portekizce', flag: '🇧🇷' },
-  da: { name: 'Danca', flag: '🇩🇰' },
-  sv: { name: 'İsveççe', flag: '🇸🇪' },
-  no: { name: 'Norveççe', flag: '🇳🇴' },
-};
+// YENİ: ZEKİ MOTORUMUZU ÇAĞIRIYORUZ
+import { calculateStats, StatsScopeMode } from '../lib/statsLogic';
 
-type StatsScopeMode = 'current' | 'past' | 'all';
-
-// RADAR CHART BİLEŞENİ
 function RadarChart({ data, maxScore = 10 }: { data: { name: string; score: number }[]; maxScore?: number }) {
   if (data.length < 3) {
     return <div className="text-center text-xs text-ink-500 py-8">Radar analizi için en az 3 farklı kritere detaylı puan vermiş olmalısın.</div>;
@@ -39,51 +21,45 @@ function RadarChart({ data, maxScore = 10 }: { data: { name: string; score: numb
 
   const size = 200;
   const center = size / 2;
-  const radius = size / 2 - 30; // Etiketlere yer bırakmak için
+  const radius = size / 2 - 30; 
   
   const angleSlice = (Math.PI * 2) / data.length;
 
   const getPoint = (value: number, index: number) => {
     const r = (value / maxScore) * radius;
-    const theta = index * angleSlice - Math.PI / 2; // Yukarıdan başla
+    const theta = index * angleSlice - Math.PI / 2;
     return {
       x: center + r * Math.cos(theta),
       y: center + r * Math.sin(theta)
     };
   };
 
-  // Veri Poligonu Çizgileri
   const dataPoints = data.map((d, i) => getPoint(d.score, i));
   const polygonPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ') + ' Z';
 
   return (
     <div className="relative w-full max-w-[280px] mx-auto aspect-square flex items-center justify-center">
       <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full overflow-visible drop-shadow-lg">
-        {/* Arka plan Ağları (Grid) */}
         {[0.2, 0.4, 0.6, 0.8, 1].map((level) => {
           const points = data.map((_, i) => getPoint(maxScore * level, i));
           const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ') + ' Z';
           return <path key={level} d={path} fill="none" stroke="currentColor" className="text-ink-700/50" strokeWidth="1" />;
         })}
 
-        {/* Eksen Çizgileri */}
         {data.map((_, i) => {
           const p = getPoint(maxScore, i);
           return <line key={i} x1={center} y1={center} x2={p.x} y2={p.y} stroke="currentColor" className="text-ink-700/50" strokeWidth="1" />;
         })}
 
-        {/* Veri Poligonu Alanı */}
         <path d={polygonPath} fill="currentColor" className="text-azure-500/30 transition-all duration-1000 ease-out" />
         <path d={polygonPath} fill="none" stroke="currentColor" className="text-azure-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]" strokeWidth="2" strokeLinejoin="round" />
 
-        {/* Veri Noktaları */}
         {dataPoints.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r="4" fill="currentColor" className="text-white" />
         ))}
 
-        {/* Etiketler (İsim ve Puan) */}
         {data.map((d, i) => {
-          const p = getPoint(maxScore + 1.8, i); // Metni biraz dışarı it
+          const p = getPoint(maxScore + 1.8, i);
           let anchor = 'middle';
           if (p.x < center - 10) anchor = 'end';
           if (p.x > center + 10) anchor = 'start';
@@ -98,24 +74,20 @@ function RadarChart({ data, maxScore = 10 }: { data: { name: string; score: numb
   );
 }
 
-// HEATMAP BİLEŞENİ
 function ActivityHeatmap({ history }: { history: WatchHistoryItem[] }) {
-  const daysInYear = 364; // 52 hafta x 7 gün
+  const daysInYear = 364;
   
-  // Bugünü baz alarak son 1 yılı bul
   const today = new Date();
   today.setHours(0,0,0,0);
   const startDate = new Date(today);
   startDate.setDate(today.getDate() - daysInYear);
 
-  // Günleri doldur
   const daysArray = Array.from({ length: daysInYear + 1 }, (_, i) => {
     const d = new Date(startDate);
     d.setDate(startDate.getDate() + i);
     return d;
   });
 
-  // İzleme haritası oluştur (Sadece izlenmiş günlerin sayısı)
   const watchMap = new Map<string, number>();
   history.forEach(h => {
     if(!h.watchedAt) return;
@@ -128,14 +100,12 @@ function ActivityHeatmap({ history }: { history: WatchHistoryItem[] }) {
     if (count === 1) return 'bg-emerald-900/60 border-emerald-800/50';
     if (count <= 3) return 'bg-emerald-600/80 border-emerald-500';
     if (count <= 5) return 'bg-emerald-400 border-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.5)]';
-    return 'bg-gold-400 border-gold-300 shadow-[0_0_15px_rgba(250,204,21,0.8)]'; // Efsanevi Gün
+    return 'bg-gold-400 border-gold-300 shadow-[0_0_15px_rgba(250,204,21,0.8)]';
   };
 
-  // Sütunlar (Haftalar) halinde bölmek için
   const weeks: (Date | null)[][] = [];
   let currentWeek: (Date | null)[] = [];
   
-  // Önceki günlerin haftanın günlerine tam uyması için boşluk bırak (Pazar = 0)
   const firstDayOfWeek = daysArray[0].getDay();
   for (let i = 0; i < firstDayOfWeek; i++) {
     currentWeek.push(null);
@@ -159,7 +129,7 @@ function ActivityHeatmap({ history }: { history: WatchHistoryItem[] }) {
         {weeks.map((week, wIndex) => (
           <div key={wIndex} className="flex flex-col gap-1">
             {week.map((date, dIndex) => {
-              if (!date) return <div key={`empty-${dIndex}`} className="w-3 h-3 sm:w-3.5 sm:h-3.5" />; // Boşluk
+              if (!date) return <div key={`empty-${dIndex}`} className="w-3 h-3 sm:w-3.5 sm:h-3.5" />;
               const dateStr = date.toISOString().split('T')[0];
               const count = watchMap.get(dateStr) || 0;
               const title = `${date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}: ${count} Yapım İzlendi`;
@@ -195,15 +165,6 @@ export default function StatsPage() {
   const [showWrapped, setShowWrapped] = useState(false);
   const [statsMode, setStatsMode] = useState<StatsScopeMode>('current');
 
-  const isHistoryItemPast = (h: WatchHistoryItem): boolean => {
-    if (h.isPastWatch) return true;
-    if (h.kind === 'movie' || h.type === 'movie') {
-      const m = data.movies.find((x) => x.id === (h.itemId || h.id));
-      if (m?.isPastWatch) return true;
-    }
-    return false;
-  };
-
   const currentMoviesCount = useMemo(
     () => data.movies.filter((m) => m.watched && !m.isPastWatch).length,
     [data.movies]
@@ -213,383 +174,8 @@ export default function StatsPage() {
     [data.movies]
   );
 
-  const stats = useMemo(() => {
-    const scopedHistory = data.history.filter((h) => {
-      const isPast = isHistoryItemPast(h);
-      if (statsMode === 'current') return !isPast;
-      if (statsMode === 'past') return isPast;
-      return true;
-    });
-
-    const scopedWatchedMovies = data.movies.filter((m) => {
-      if (!m.watched) return false;
-      if (statsMode === 'current') return !m.isPastWatch;
-      if (statsMode === 'past') return Boolean(m.isPastWatch);
-      return true;
-    });
-
-    const includeSeries = statsMode !== 'past';
-
-    const movieHistory = scopedHistory.filter((h) => h.kind === 'movie' || h.type === 'movie');
-    const seriesHistory = includeSeries
-      ? scopedHistory.filter((h) => h.kind === 'series' || h.type === 'series')
-      : [];
-
-    const genreMovieMap = new Map<string, { count: number; totalRating: number; ratedCount: number }>();
-    const genreSeriesMap = new Map<string, { count: number; totalRating: number; ratedCount: number }>();
-    const genreAllMap = new Map<string, { count: number; totalRating: number; ratedCount: number }>();
-
-    movieHistory.forEach((h) => {
-      (h.genres || []).forEach((g) => {
-        const m = genreMovieMap.get(g) || { count: 0, totalRating: 0, ratedCount: 0 };
-        m.count++;
-        if (h.rating !== null) { m.totalRating += h.rating; m.ratedCount++; }
-        genreMovieMap.set(g, m);
-      });
-    });
-
-    const seenSeries = new Set<string>();
-    seriesHistory.forEach((h) => {
-      const sid = h.seriesId || h.itemId || h.id;
-      if (sid && seenSeries.has(sid)) return;
-      if (sid) seenSeries.add(sid);
-      (h.genres || []).forEach((g) => {
-        const m = genreSeriesMap.get(g) || { count: 0, totalRating: 0, ratedCount: 0 };
-        m.count++;
-        if (h.rating !== null) { m.totalRating += h.rating; m.ratedCount++; }
-        genreSeriesMap.set(g, m);
-      });
-    });
-
-    const allGenres = new Set([...genreMovieMap.keys(), ...genreSeriesMap.keys()]);
-    allGenres.forEach((g) => {
-      const movie = genreMovieMap.get(g) || { count: 0, totalRating: 0, ratedCount: 0 };
-      const series = genreSeriesMap.get(g) || { count: 0, totalRating: 0, ratedCount: 0 };
-      genreAllMap.set(g, { count: movie.count + series.count, totalRating: movie.totalRating + series.totalRating, ratedCount: movie.ratedCount + series.ratedCount });
-    });
-
-    const monthlyMap = new Map<string, { movies: number; series: number; total: number }>();
-    scopedHistory.forEach((h) => {
-      if (!h.watchedAt) return;
-      const d = new Date(h.watchedAt);
-      if (isNaN(d.getTime())) return;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const entry = monthlyMap.get(key) || { movies: 0, series: 0, total: 0 };
-      entry.total++;
-      if (h.kind === 'movie' || h.type === 'movie') entry.movies++;
-      else entry.series++;
-      monthlyMap.set(key, entry);
-    });
-    const monthly = Array.from(monthlyMap.entries()).sort().slice(-6);
-    const maxMonthly = Math.max(...monthly.map(([, v]) => v.total), 1);
-
-    const ratingDist = new Map<number, number>();
-    scopedHistory.forEach((h) => {
-      if (h.rating !== null) ratingDist.set(h.rating, (ratingDist.get(h.rating) || 0) + 1);
-    });
-    const ratings = Array.from(ratingDist.entries()).sort((a, b) => b[0] - a[0]);
-
-    const ratedMovies = movieHistory.filter((h) => h.rating !== null);
-    const ratedSeries = seriesHistory.filter((h) => h.rating !== null);
-    const avgMovie = ratedMovies.length > 0 ? ratedMovies.reduce((s, h) => s + (h.rating || 0), 0) / ratedMovies.length : 0;
-    const avgSeries = ratedSeries.length > 0 ? ratedSeries.reduce((s, h) => s + (h.rating || 0), 0) / ratedSeries.length : 0;
-    const avgAll = scopedHistory.filter((h) => h.rating !== null);
-    const avgTotal = avgAll.length > 0 ? avgAll.reduce((s, h) => s + (h.rating || 0), 0) / avgAll.length : 0;
-
-    let ratingPersona = { label: 'Yeni Başlayan', color: 'text-ink-400' };
-    if (avgAll.length > 0) {
-      if (avgTotal >= 8.5) ratingPersona = { label: 'Çok Cömert 💖', color: 'text-emerald-400' };
-      else if (avgTotal >= 7.0) ratingPersona = { label: 'Pozitif Sinefil 😊', color: 'text-teal-400' };
-      else if (avgTotal >= 5.0) ratingPersona = { label: 'Dengeli Eleştirmen ⚖', color: 'text-amber-400' };
-      else ratingPersona = { label: 'Acımasız Yargıç 💀', color: 'text-red-400' };
-    }
-
-    const uniqueTopItems: WatchHistoryItem[] = [];
-    const seenTopKeys = new Set<string>();
-    const sortedByRating = [...scopedHistory].filter((h) => h.rating !== null).sort((a, b) => (b.rating || 0) - (a.rating || 0));
-
-    for (const item of sortedByRating) {
-      const key = item.kind === 'series' || item.type === 'series' ? `series_${item.seriesId || item.title}` : `movie_${item.itemId || item.id}`;
-      if (!seenTopKeys.has(key)) { seenTopKeys.add(key); uniqueTopItems.push(item); }
-      if (uniqueTopItems.length >= 6) break;
-    }
-
-    const collectionStats = data.collections
-      .filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME))
-      .map((c) => {
-        const movies = data.movies.filter((m) => m.collectionId === c.id);
-        const watched = movies.filter((m) => m.watched).length;
-        return { name: c.name, total: movies.length, watched, progress: movies.length > 0 ? (watched / movies.length) * 100 : 0 };
-      });
-
-    const dayOfWeekMap = new Array(7).fill(0);
-    scopedHistory.forEach((h) => {
-      if (!h.watchedAt) return;
-      const d = new Date(h.watchedAt).getDay();
-      if (!isNaN(d)) dayOfWeekMap[d]++;
-    });
-    const maxDayOfWeek = Math.max(...dayOfWeekMap, 1);
-
-    const uniqueSeries = new Set(seriesHistory.map((h) => h.seriesId || h.itemId || h.id).filter(Boolean)).size;
-
-    const now = new Date();
-    const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const thisMonthCount = scopedHistory.filter((h) => {
-      if (!h.watchedAt) return false;
-      const d = new Date(h.watchedAt);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === thisMonthKey;
-    }).length;
-
-    const unwatchedMoviesList = data.movies.filter((m) => !m.watched);
-    const remainingMovies = unwatchedMoviesList.length;
-    const remainingMoviesHours = Math.round(unwatchedMoviesList.reduce((sum, m) => sum + (m.runtime || 115), 0) / 60);
-    const movieCompletionPct = data.movies.length > 0 ? Math.round(((data.movies.length - remainingMovies) / data.movies.length) * 100) : 0;
-
-    const ongoingSeriesCount = data.series.filter((s) => s.episodes.length === 0 || s.episodes.some((e) => !e.watched)).length;
-    const totalAllEpisodes = data.series.reduce((sum, s) => sum + s.episodes.length, 0);
-    const remainingEpisodes = data.series.reduce((sum, s) => sum + s.episodes.filter((e) => !e.watched).length, 0);
-    const remainingEpisodesHours = Math.round((remainingEpisodes * 42) / 60);
-    const seriesCompletionPct = totalAllEpisodes > 0 ? Math.round(((totalAllEpisodes - remainingEpisodes) / totalAllEpisodes) * 100) : 0;
-
-    const watchedMoviesList = scopedWatchedMovies;
-    const catalogMovieRuntimeMinutes = watchedMoviesList.reduce((sum, m) => sum + (m.runtime || 110), 0);
-    const actualMovieRuntimeMinutes = watchedMoviesList.reduce((sum, m) => {
-      const orig = m.runtime || 110;
-      const real = m.actualRuntime && m.actualRuntime > 0 ? Math.min(m.actualRuntime, orig) : orig;
-      return sum + real;
-    }, 0);
-
-    const watchedEpisodesCount = includeSeries
-      ? data.series.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0)
-      : 0;
-    const seriesRuntimeMinutes = watchedEpisodesCount * 42;
-
-    const totalActualMinutes = actualMovieRuntimeMinutes + seriesRuntimeMinutes;
-    const totalCatalogMinutes = catalogMovieRuntimeMinutes + seriesRuntimeMinutes;
-
-    const runtimeDays = Math.floor(totalActualMinutes / (24 * 60));
-    const runtimeHours = Math.floor((totalActualMinutes % (24 * 60)) / 60);
-    const runtimeMins = totalActualMinutes % 60;
-
-    const catalogDays = Math.floor(totalCatalogMinutes / (24 * 60));
-    const catalogHours = Math.floor((totalCatalogMinutes % (24 * 60)) / 60);
-    const catalogMins = totalCatalogMinutes % 60;
-
-    const earlyMovies = watchedMoviesList.filter((m) => !m.isPastWatch && m.actualRuntime && m.runtime && m.actualRuntime < m.runtime);
-    const earlyFinishedCount = earlyMovies.length;
-    const totalSavedMinutes = earlyMovies.reduce((sum, m) => sum + ((m.runtime || 0) - (m.actualRuntime || 0)), 0);
-    const savedHours = Math.floor(totalSavedMinutes / 60);
-    const savedMins = totalSavedMinutes % 60;
-
-    const trackedSpeedMovies = watchedMoviesList.filter((m) => !m.isPastWatch && m.actualRuntime && m.actualRuntime > 0 && m.runtime && m.runtime > 0);
-    const avgSpeedMultiplier = trackedSpeedMovies.length > 0
-      ? trackedSpeedMovies.reduce((s, m) => s + (m.runtime || 0), 0) / trackedSpeedMovies.reduce((s, m) => s + (m.actualRuntime || 1), 0)
-      : 1.0;
-
-    const fastestMovieRecord = [...earlyMovies].sort((a, b) => ((b.runtime || 0) - (b.actualRuntime || 0)) - ((a.runtime || 0) - (a.actualRuntime || 0)))[0] || null;
-
-    const timeBuckets = { morning: 0, afternoon: 0, evening: 0, night: 0 };
-    scopedHistory.forEach((h) => {
-      if (!h.watchedAt) return;
-      const hr = new Date(h.watchedAt).getHours();
-      if (isNaN(hr)) return;
-      if (hr >= 6 && hr < 12) timeBuckets.morning++;
-      else if (hr >= 12 && hr < 18) timeBuckets.afternoon++;
-      else if (hr >= 18 && hr <= 23) timeBuckets.evening++;
-      else timeBuckets.night++;
-    });
-    const totalTimeTracked = timeBuckets.morning + timeBuckets.afternoon + timeBuckets.evening + timeBuckets.night || 1;
-
-    const dailyCountMap = new Map<string, number>();
-    scopedHistory.forEach((h) => {
-      if (!h.watchedAt) return;
-      const dateStr = h.watchedAt.slice(0, 10);
-      dailyCountMap.set(dateStr, (dailyCountMap.get(dateStr) || 0) + 1);
-    });
-
-    const last14Days: { date: string; label: string; count: number }[] = [];
-    const todayObj = new Date();
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
-      const label = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
-      last14Days.push({ date: iso, label, count: dailyCountMap.get(iso) || 0 });
-    }
-    const max14DayCount = Math.max(...last14Days.map((d) => d.count), 1);
-
-    let busiestDay: { date: string; count: number } = { date: '-', count: 0 };
-    dailyCountMap.forEach((count, dateStr) => {
-      if (count > busiestDay.count) {
-        const formatted = new Date(dateStr).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
-        busiestDay = { date: formatted, count };
-      }
-    });
-
-    const sortedUniqueDates = Array.from(dailyCountMap.keys()).sort();
-    let maxStreakEver = 0, currentRun = 0;
-    for (let i = 0; i < sortedUniqueDates.length; i++) {
-      if (i === 0) { currentRun = 1; maxStreakEver = 1; continue; }
-      const diff = Math.round((new Date(sortedUniqueDates[i]).getTime() - new Date(sortedUniqueDates[i - 1]).getTime()) / 86400000);
-      currentRun = diff === 1 ? currentRun + 1 : 1;
-      if (currentRun > maxStreakEver) maxStreakEver = currentRun;
-    }
-
-    const longestMovie: Movie | null = [...watchedMoviesList].filter((m) => m.runtime && m.runtime > 0).sort((a, b) => (b.runtime || 0) - (a.runtime || 0))[0] || null;
-    const mostWatchedSeries: { title: string; count: number } | null = includeSeries
-      ? data.series.map((s) => ({ title: s.title, count: s.episodes.filter((e) => e.watched).length })).filter((item) => item.count > 0).sort((a, b) => b.count - a.count)[0] || null
-      : null;
-
-    const notesWritten = scopedHistory.filter((h) => h.note && h.note.trim().length > 0);
-    const totalNoteWords = notesWritten.reduce((sum, h) => sum + h.note.trim().split(/\s+/).filter(Boolean).length, 0);
-
-    const reviewTagMap = new Map<string, { count: number; ratingSum: number; ratedCount: number }>();
-    let totalTaggedItems = 0;
-    scopedHistory.forEach((h) => {
-      if (!h.reviewTags || h.reviewTags.length === 0) return;
-      totalTaggedItems++;
-      h.reviewTags.forEach((tag) => {
-        const cur = reviewTagMap.get(tag) || { count: 0, ratingSum: 0, ratedCount: 0 };
-        cur.count++;
-        if (h.rating !== null) { cur.ratingSum += h.rating; cur.ratedCount++; }
-        reviewTagMap.set(tag, cur);
-      });
-    });
-
-    const reviewTagStats = Array.from(reviewTagMap.entries())
-      .map(([tag, val]) => ({ tag, count: val.count, avg: val.ratedCount > 0 ? val.ratingSum / val.ratedCount : 0 }))
-      .sort((a, b) => (b.count !== a.count ? b.count - a.count : b.avg - a.avg));
-    const maxReviewTagCount = Math.max(...reviewTagStats.map((t) => t.count), 1);
-
-    const langMap = new Map<string, { count: number; ratingSum: number; ratedCount: number }>();
-    watchedMoviesList.forEach((m) => {
-      if (!m.originalLanguage) return;
-      const code = m.originalLanguage.toLowerCase();
-      const cur = langMap.get(code) || { count: 0, ratingSum: 0, ratedCount: 0 };
-      cur.count++;
-      if (m.rating !== null) { cur.ratingSum += m.rating; cur.ratedCount++; }
-      langMap.set(code, cur);
-    });
-    if (includeSeries) {
-      data.series.forEach((s) => {
-        if (!s.originalLanguage) return;
-        const watchedEps = s.episodes.filter((e) => e.watched);
-        if (watchedEps.length === 0) return;
-        const code = s.originalLanguage.toLowerCase();
-        const cur = langMap.get(code) || { count: 0, ratingSum: 0, ratedCount: 0 };
-        cur.count++;
-        const ratedEps = watchedEps.filter((e) => e.rating !== null);
-        if (ratedEps.length > 0) {
-          const sAvg = ratedEps.reduce((sum, e) => sum + (e.rating || 0), 0) / ratedEps.length;
-          cur.ratingSum += sAvg; cur.ratedCount++;
-        }
-        langMap.set(code, cur);
-      });
-    }
-
-    const topLanguages = Array.from(langMap.entries())
-      .map(([code, val]) => {
-        const info = LANGUAGE_LABELS[code] || { name: `Diğer (${code.toUpperCase()})`, flag: '🌐' };
-        return { code, name: info.name, flag: info.flag, count: val.count, avg: val.ratedCount > 0 ? val.ratingSum / val.ratedCount : 0 };
-      })
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-
-    const directorMap = new Map<string, { count: number; ratingSum: number; ratedCount: number }>();
-    const castMap = new Map<string, { count: number; ratingSum: number; ratedCount: number }>();
-    const studioMap = new Map<string, { count: number; ratingSum: number; ratedCount: number }>();
-
-    const addPersonStat = (map: Map<string, { count: number; ratingSum: number; ratedCount: number }>, name: string, rating: number | null) => {
-      if (!name) return;
-      const entry = map.get(name) || { count: 0, ratingSum: 0, ratedCount: 0 };
-      entry.count++;
-      if (rating !== null && rating !== undefined) { entry.ratingSum += rating; entry.ratedCount++; }
-      map.set(name, entry);
-    };
-
-    watchedMoviesList.forEach((m) => {
-      (m.directors || []).forEach((d) => addPersonStat(directorMap, d, m.rating));
-      (m.cast || []).forEach((a) => addPersonStat(castMap, a, m.rating));
-      (m.studios || []).forEach((st) => addPersonStat(studioMap, st, m.rating));
-    });
-
-    if (includeSeries) {
-      data.series.forEach((s) => {
-        const watchedEps = s.episodes.filter((e) => e.watched);
-        if (watchedEps.length === 0) return;
-        const ratedEps = watchedEps.filter((e) => e.rating !== null);
-        const sAvg = ratedEps.length > 0 ? ratedEps.reduce((sum, e) => sum + (e.rating || 0), 0) / ratedEps.length : null;
-        (s.creators || []).forEach((cr) => addPersonStat(directorMap, cr, sAvg));
-        (s.cast || []).forEach((a) => addPersonStat(castMap, a, sAvg));
-        (s.studios || []).forEach((st) => addPersonStat(studioMap, st, sAvg));
-      });
-    }
-
-    const formatTopPeople = (map: Map<string, { count: number; ratingSum: number; ratedCount: number }>) =>
-      Array.from(map.entries())
-        .map(([name, val]) => ({ name, count: val.count, avg: val.ratedCount > 0 ? val.ratingSum / val.ratedCount : 0 }))
-        .sort((a, b) => (b.count !== a.count ? b.count - a.count : b.avg - a.avg))
-        .slice(0, 6);
-
-    const topDirectors = formatTopPeople(directorMap);
-    const topCast = formatTopPeople(castMap);
-    const topStudios = formatTopPeople(studioMap);
-
-    const criteriaStatsMap = new Map<string, { sum: number; count: number }>();
-    scopedHistory.forEach((h) => {
-      if (!h.detailedRating) return;
-      Object.entries(h.detailedRating).forEach(([critId, score]) => {
-        const num = Number(score);
-        if (!isNaN(num)) {
-          const cur = criteriaStatsMap.get(critId) || { sum: 0, count: 0 };
-          cur.sum += num; cur.count++;
-          criteriaStatsMap.set(critId, cur);
-        }
-      });
-    });
-
-    const criteriaAverages = (data.criteria || [])
-      .map((c) => {
-        const st = criteriaStatsMap.get(c.id);
-        return { id: c.id, name: c.name, weight: c.weight, count: st ? st.count : 0, avg: st && st.count > 0 ? st.sum / st.count : 0 };
-      })
-      .filter((c) => c.count > 0)
-      .sort((a, b) => b.avg - a.avg);
-
-    // YENİ: RADAR GRAFİĞİ İÇİN VERİ DÜZENLEME
-    const radarData = criteriaAverages.map(c => ({ name: c.name, score: c.avg }));
-
-    const decadeMap = new Map<string, { count: number; ratingSum: number; ratedCount: number }>();
-    watchedMoviesList.forEach((m) => {
-      const y = parseInt(m.year || '', 10);
-      if (!isNaN(y) && y >= 1920 && y <= 2035) {
-        const decade = `${Math.floor(y / 10) * 10}'ler`;
-        const cur = decadeMap.get(decade) || { count: 0, ratingSum: 0, ratedCount: 0 };
-        cur.count++;
-        if (m.rating !== null) { cur.ratingSum += m.rating; cur.ratedCount++; }
-        decadeMap.set(decade, cur);
-      }
-    });
-    const decades = Array.from(decadeMap.entries())
-      .map(([decade, val]) => ({ decade, count: val.count, avg: val.ratedCount > 0 ? val.ratingSum / val.ratedCount : 0 }))
-      .sort((a, b) => a.decade.localeCompare(b.decade));
-    const maxDecadeCount = Math.max(...decades.map((d) => d.count), 1);
-
-    return {
-      genreMovieMap, genreSeriesMap, genreAllMap, monthly, maxMonthly, ratings, avgMovie, avgSeries, avgTotal,
-      ratingPersona, topRated: uniqueTopItems, movieCount: watchedMoviesList.length, seriesCount: seriesHistory.length,
-      uniqueSeriesCount: uniqueSeries, collectionStats, dayOfWeekMap, maxDayOfWeek, thisMonthCount,
-      remainingMovies, remainingMoviesHours, movieCompletionPct, ongoingSeriesCount, remainingEpisodes,
-      remainingEpisodesHours, seriesCompletionPct,
-      totalActualMinutes, totalCatalogMinutes, actualMovieRuntimeMinutes, catalogMovieRuntimeMinutes, seriesRuntimeMinutes,
-      runtimeDays, runtimeHours, runtimeMins, catalogDays, catalogHours, catalogMins,
-      earlyFinishedCount, totalSavedMinutes, savedHours, savedMins, avgSpeedMultiplier, fastestMovieRecord,
-      timeBuckets, totalTimeTracked, last14Days, max14DayCount,
-      busiestDay, maxStreakEver, longestMovie, mostWatchedSeries, notesCount: notesWritten.length, totalNoteWords,
-      reviewTagStats, maxReviewTagCount, totalTaggedItems, topLanguages, topDirectors, topCast, topStudios,
-      criteriaAverages, radarData, decades, maxDecadeCount, // YENİ: radarData eklendi
-      scopedHistory // YENİ: Heatmap için
-    };
-  }, [data, statsMode]);
+  // YENİ: TASARIMI KORUYUP, YÜZLERCE SATIRI TEK FONKSİYONA ÇAĞIRIYORUZ!
+  const stats = useMemo(() => calculateStats(data, statsMode), [data, statsMode]);
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
@@ -602,22 +188,21 @@ export default function StatsPage() {
   const openHistoryItemDetail = (h: WatchHistoryItem) => {
     if (h.kind === 'movie' || h.type === 'movie') {
       const found = data.movies.find((m) => m.id === (h.itemId || h.id));
-      const fallback: Movie = found || {
+      const fallback = found || {
         id: h.itemId || h.id, title: h.title, year: h.year || '', genres: h.genres || [], collectionId: null,
         watched: true, isPastWatch: h.isPastWatch, rating: h.rating, detailedRating: h.detailedRating, reviewTags: h.reviewTags, note: h.note, watchedAt: h.watchedAt, addedAt: h.watchedAt,
-      };
+      } as any;
       setDetailTarget({ type: 'movie', data: fallback, historyItem: h });
     } else {
       const sid = h.seriesId || h.itemId || h.id;
       const found = data.series.find((s) => s.id === sid);
-      const fallback: Series = found || { id: sid, title: h.title, year: h.year, genres: h.genres || [], episodes: [], addedAt: h.watchedAt };
+      const fallback = found || { id: sid, title: h.title, year: h.year, genres: h.genres || [], episodes: [], addedAt: h.watchedAt } as any;
       setDetailTarget({ type: 'series', data: fallback, historyItem: h });
     }
   };
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in pb-10">
-      {/* SAYFA BAŞLIĞI & MOBİL UYUMLU SEKMELİ İSTATİSTİK MODU SEÇİCİ */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
@@ -693,7 +278,6 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {/* YENİ: 365 GÜNLÜK İZLEME ISI HARİTASI (HEATMAP) */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm sm:text-lg font-bold text-ink-100 flex items-center gap-2">
@@ -713,7 +297,6 @@ export default function StatsPage() {
         )}
       </div>
 
-      {/* 1. EKRAN BAŞINDA GEÇEN TOPLAM ÖMÜR */}
       <div className="bg-gradient-to-br from-ink-950 via-ink-900 to-ink-950 border border-ink-700/70 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-2xl relative overflow-hidden">
         <div className="absolute -right-6 -top-10 text-gold-500/10 transform rotate-12 pointer-events-none">
           <Hourglass size={180} />
@@ -776,7 +359,6 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {/* ZAMAN BÜKÜCÜ & HIZ ANALİZİ */}
       {statsMode !== 'past' && (
         <div className="bg-ink-900/65 border border-emerald-500/30 rounded-2xl p-4 sm:p-5 shadow-xl">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3.5">
@@ -849,7 +431,6 @@ export default function StatsPage() {
         </div>
       )}
 
-      {/* 2. ANA METRİKLER */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3.5">
         <div className="bg-ink-900/70 border border-ink-700/50 rounded-2xl p-3.5 sm:p-4 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -890,7 +471,6 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {/* SIRADA BEKLEYENLER */}
       {statsMode !== 'past' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
           <div className="bg-ink-900/70 border border-gold-500/30 rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col justify-between gap-3.5">
@@ -945,7 +525,6 @@ export default function StatsPage() {
         </div>
       )}
 
-      {/* 3. İZLEME BİYORİTMİ & SON 14 GÜN */}
       {statsMode !== 'past' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           <div className="lg:col-span-7 bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between">
@@ -1011,7 +590,6 @@ export default function StatsPage() {
         </div>
       )}
 
-      {/* 4. DEĞERLENDİRME BAŞLIKLARI ANALİZİ */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3.5">
           <div>
@@ -1052,7 +630,6 @@ export default function StatsPage() {
         )}
       </div>
 
-      {/* 5. REKORLAR KİTABI & DÜNYA SİNEMASI PASAPORTU */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
           <div>
@@ -1115,7 +692,6 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {/* 6. YILDIZLAR GEÇİDİ */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
@@ -1157,7 +733,6 @@ export default function StatsPage() {
         })()}
       </div>
 
-      {/* 7. ŞEREF KÜRSÜSÜ */}
       {stats.topRated.length > 0 && (
         <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl">
           <div className="mb-3.5">
@@ -1186,7 +761,6 @@ export default function StatsPage() {
         </div>
       )}
 
-      {/* YENİ: 8. RADAR (SİNEFİL KİMLİĞİ) VE DETAYLI KRİTER KARNESİ BİRLEŞTİRMESİ */}
       {(stats.criteriaAverages.length > 0 || stats.decades.length > 0) && (
         <div className="grid md:grid-cols-2 gap-4">
           <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col">
@@ -1244,7 +818,6 @@ export default function StatsPage() {
         </div>
       )}
 
-      {/* 9. EN SEVDİĞİN TÜRLER */}
       <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl">
         <h2 className="text-base sm:text-lg font-semibold text-ink-100 mb-3.5 flex items-center gap-2"><Layers size={18} className="text-teal-400" /> En Sevdiğin Türler</h2>
         {genreAllSorted.length === 0 ? (
@@ -1270,7 +843,6 @@ export default function StatsPage() {
         )}
       </div>
 
-      {/* 10. AYLIK İZLEME, HAFTALIK YOĞUNLUK & PUAN DAĞILIMI */}
       <div className="grid md:grid-cols-3 gap-4">
         <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between">
           <h2 className="text-sm sm:text-base font-semibold text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-cyan-400" /> Aylık İzleme</h2>
@@ -1344,7 +916,6 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {/* 11. KOLEKSİYON İLERLEMESİ */}
       {stats.collectionStats.length > 0 && (
         <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl p-4 sm:p-5 shadow-xl">
           <h2 className="text-base sm:text-lg font-semibold text-ink-100 mb-3.5 flex items-center gap-2"><Layers size={18} className="text-cyan-400" /> Koleksiyon İlerlemesi</h2>

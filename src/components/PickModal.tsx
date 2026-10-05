@@ -8,9 +8,12 @@ import MediaDetailModal from './MediaDetailModal';
 import type { DetailModalTarget } from './MediaDetailModal';
 import type { Movie, Series, Episode } from '../types';
 
-export type PickedItem =
-  | { kind: 'movie'; movie: Movie }
-  | { kind: 'series'; series: Series; episode: Episode };
+// YENİ: Mantık motorundan fonksiyonu ve tipleri çekiyoruz
+import { filterPickerCandidates } from '../lib/pickerLogic';
+import type { PickedItem, ModeFilter, DurationFilter } from '../lib/pickerLogic';
+
+// Başka sayfaların kırılmaması için PickedItem'i dışarı aktarıyoruz
+export type { PickedItem };
 
 interface PickModalProps {
   movieCount: number;
@@ -21,8 +24,6 @@ interface PickModalProps {
   onClose: () => void;
 }
 
-type ModeFilter = 'all' | 'movie' | 'series';
-type DurationFilter = 'any' | 'short' | 'medium' | 'long';
 type ModalPhase = 'setup' | 'spinning' | 'result';
 
 export default function PickModal({
@@ -76,30 +77,9 @@ export default function PickModal({
     return Array.from(genreSet).sort((a, b) => a.localeCompare(b, 'tr'));
   }, [mode, cleanUnwatchedMovies, nextEpisodes]);
 
+  // YENİ: Arayüzdeki matematik silindi, doğrudan beyin (pickerLogic) çağrılıyor!
   const candidatePool = useMemo<PickedItem[]>(() => {
-    const pool: PickedItem[] = [];
-
-    if (mode === 'all' || mode === 'movie') {
-      cleanUnwatchedMovies.forEach((m) => {
-        if (selectedGenre && !m.genres.includes(selectedGenre)) return;
-        if (durationFilter !== 'any') {
-          const rt = m.runtime || 115;
-          if (durationFilter === 'short' && rt >= 100) return;
-          if (durationFilter === 'medium' && (rt < 100 || rt > 140)) return;
-          if (durationFilter === 'long' && rt <= 140) return;
-        }
-        pool.push({ kind: 'movie', movie: m });
-      });
-    }
-
-    if (mode === 'all' || mode === 'series') {
-      nextEpisodes.forEach((item) => {
-        if (selectedGenre && !item.series.genres.includes(selectedGenre)) return;
-        pool.push({ kind: 'series', series: item.series, episode: item.episode });
-      });
-    }
-
-    return pool;
+    return filterPickerCandidates(cleanUnwatchedMovies, nextEpisodes, mode, selectedGenre, durationFilter);
   }, [mode, cleanUnwatchedMovies, nextEpisodes, selectedGenre, durationFilter]);
 
   const startRoulette = () => {
@@ -685,7 +665,7 @@ export default function PickModal({
                                     href={link.href}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md"
+                                    className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105"
                                   >
                                     <Icon size={13} /> {link.text}
                                   </a>
@@ -697,10 +677,14 @@ export default function PickModal({
                                   href={link.href}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                                  className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105"
                                 >
                                   {link.logo ? (
-                                    <img src={link.logo} alt={link.text} className="w-3.5 h-3.5 rounded-sm object-cover" />
+                                    <img
+                                      src={link.logo}
+                                      alt="Platform"
+                                      className="w-3.5 h-3.5 rounded-sm object-cover"
+                                    />
                                   ) : (
                                     <Icon size={13} />
                                   )}

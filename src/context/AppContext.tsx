@@ -28,7 +28,8 @@ export const QUEUE_STEP_DURATION_MS = 4300;
 export interface AIMessage { id: string; sender: 'user' | 'ai'; text: string; timestamp: number; actionItems?: any[]; }
 export interface MovieExtraData { keywords?: string[]; directors?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; inPastQueue?: boolean; }
 export interface SeriesExtraData { keywords?: string[]; creators?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; }
-interface ExtendedAppData extends AppData { aiChatHistory?: AIMessage[]; theme?: string; reviewTags: string[]; tagSentiments?: Record<string, 'positive' | 'negative'>; notificationsEnabled?: boolean; }
+
+export interface ExtendedAppData extends AppData { aiChatHistory?: AIMessage[]; theme?: string; reviewTags: string[]; tagSentiments?: Record<string, 'positive' | 'negative'>; notificationsEnabled?: boolean; }
 
 export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
   const maxMins = movie.runtime && movie.runtime > 0 ? movie.runtime : 115;
@@ -189,7 +190,7 @@ type Action =
 
 const FIXED_BUGGED_ACHIEVEMENTS = new Set(['selective_critic', 'weekend_cinema', 'loyalty_test', 'break_taker', 'lost_colony', 'final_phobia', 'ghost_viewer', 'secret_critic']);
 
-function applyAchievements(state: ExtendedAppData): ExtendedAppData {
+export function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   const unlocked: { achievementId: string; tier: string; xp: number; name: string; icon: string; description: string }[] = [];
 
   const allValidHistory = [...(state.history || [])].filter((h) => {
@@ -454,7 +455,7 @@ function applyAchievements(state: ExtendedAppData): ExtendedAppData {
   return { ...state, achievements: newAchievements };
 }
 
-function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
+export function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'IMPORT_DATA') {
     const migrated = migrateLegacyPastCollection(action.data.movies, action.data.collections);
     return applyAchievements({
@@ -485,7 +486,7 @@ function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages };
   if (action.type === 'UPDATE_ALT_TEMPLATE') return { ...state, altWatchTemplate: action.template };
   if (action.type === 'SET_THEME') return { ...state, theme: action.theme };
-  if (action.type === 'TOGGLE_NOTIFICATIONS') return { ...state, notificationsEnabled: action.enabled }; // YENİ EKLENDİ
+  if (action.type === 'TOGGLE_NOTIFICATIONS') return { ...state, notificationsEnabled: action.enabled };
 
   let nextState = { ...state };
   switch (action.type) {
@@ -639,6 +640,8 @@ interface SeasonCompleteData { seriesTitle: string; season: number; }
 
 interface AppContextValue {
   data: ExtendedAppData;
+  isQuestCelebrating: boolean; // YENİ: Başarımları dondurma anahtarı
+  setIsQuestCelebrating: (val: boolean) => void; // YENİ
   addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => boolean;
   deleteMovie: (id: string) => void;
   startWatchingMovie: (id: string, silent?: boolean) => void;
@@ -671,7 +674,7 @@ interface AppContextValue {
   deletePlanItem: (id: string) => void;
   updatePlanItem: (id: string, date: string, time: string) => boolean;
   grantXp: (xp: number) => void; 
-  toggleNotifications: (enabled: boolean) => void; // YENİ: Bildirim butonu
+  toggleNotifications: (enabled: boolean) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -705,13 +708,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return defaultData();
   });
 
+  const [isQuestCelebrating, setIsQuestCelebrating] = useState(false); // YENİ EKLENDİ
+
   const toastsRef = useRef<ToastItem[]>([]);
   const achievementToastsRef = useRef<AchievementToastItem[]>([]);
   const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProcessingToastRef = useRef(false);
   const [queueTick, setQueueTick] = useState(0);
 
-  // YENİ: BİLDİRİM İZLEME REFERANSLARI (Aynı bildirimi spamlama diye)
   const notifiedTimerIds = useRef<Set<string>>(new Set());
   const notifiedPlanIds = useRef<Set<string>>(new Set());
 
@@ -733,7 +737,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
   useEffect(() => { dispatch({ type: 'SYNC_ACHIEVEMENTS' }); }, []);
 
-  // YENİ: AKILLI BİLDİRİM (PUSH) MOTORU
   useEffect(() => {
     if (!data.notificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
     
@@ -743,7 +746,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const d = new Date(nowMs);
       const currentTotalMins = d.getHours() * 60 + d.getMinutes();
 
-      // 1. Canlı Sayaç Kontrolü (Süre bittiyse)
       const activeMovie = data.movies.find(m => !m.watched && m.startedAt && !m.startedAt.startsWith('PAUSED:'));
       if (activeMovie && !notifiedTimerIds.current.has(activeMovie.id)) {
         const info = getMovieTimerInfo(activeMovie, nowMs);
@@ -756,7 +758,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 2. Haftalık Plan Kontrolü (Tam 15 dk kala veya daha az kaldıysa 1 kere uyar)
       const todaysPlans = (data.weeklyPlan || []).filter(p => p.date === today);
       todaysPlans.forEach(p => {
         if (notifiedPlanIds.current.has(p.id)) return;
@@ -767,7 +768,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const planTotalMins = ph * 60 + pm;
         const diff = planTotalMins - currentTotalMins;
 
-        // Film saati yaklaşıyorsa (0-15 dk arası kaldıysa ve daha önce uyarılmadıysa)
         if (diff > 0 && diff <= 15) {
           new Notification('Sinevia - Film Saati Yaklaşıyor! 🍿', {
             body: `Mısırları patlat! "${p.title}" maratonuna ${diff} dakika kaldı. (${p.time})`,
@@ -776,7 +776,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           notifiedPlanIds.current.add(p.id);
         }
       });
-    }, 10000); // 10 saniyede bir durumu kontrol eder
+    }, 10000); 
 
     return () => clearInterval(interval);
   }, [data.notificationsEnabled, data.movies, data.weeklyPlan]);
@@ -802,7 +802,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const queue = data.pendingToasts || [];
-    if (queue.length === 0 || levelUpData || isProcessingToastRef.current) return;
+    // YENİ EKLENDİ: isQuestCelebrating aktifse (yani görev tamamlanma ekranı açıksa) KUPALARI BEKLET!
+    if (queue.length === 0 || levelUpData || isProcessingToastRef.current || isQuestCelebrating) return;
+    
     isProcessingToastRef.current = true;
     const nextAchievement = queue[0], remainingCount = queue.length - 1;
     const comboText = remainingCount > 0 ? ` (+${remainingCount} Sırada)` : '';
@@ -812,7 +814,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'CONSUME_NEXT_TOAST' });
 
     setTimeout(() => { isProcessingToastRef.current = false; setQueueTick((t) => t + 1); }, QUEUE_STEP_DURATION_MS);
-  }, [data.pendingToasts, levelUpData, queueTick, showAchievementToast]);
+  }, [data.pendingToasts, levelUpData, queueTick, showAchievementToast, isQuestCelebrating]);
 
   const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => {
     const id = uid(); setToasts({ type: 'add', toast: { id, message, type } });
@@ -820,7 +822,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
-  const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []); // YENİ
+  const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []);
 
   const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
     if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
@@ -1172,7 +1174,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.weeklyPlan, findPlanConflict, showToast]);
 
   return (
-    <AppContext.Provider value={{ data, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications }}>
+    <AppContext.Provider value={{ data, isQuestCelebrating, setIsQuestCelebrating, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications }}>
       {children}
     </AppContext.Provider>
   );
