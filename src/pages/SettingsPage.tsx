@@ -3,7 +3,7 @@ import {
   Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X,
   AlertTriangle, Wrench, SlidersHorizontal, Smartphone, PlayCircle, Palette,
   Sparkles, Moon, Sun, Award, Share2, FolderPlus, ChevronDown, ThumbsUp, ThumbsDown,
-  Bell, BellRing, BellOff // YENİ İKONLAR
+  Bell, BellRing, BellOff, UserCircle, Key, Copy // YENİ İKONLAR EKLENDİ
 } from 'lucide-react';
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
@@ -70,11 +70,20 @@ export default function SettingsPage() {
     data, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData, resetData,
     exportShareList, toggleLockedNames, addCriterion, editCriterion,
-    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, showToast // YENİ
+    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, showToast,
+    setNickname, recoverIdentity // YENİ: İsim değiştirme ve hesap kurtarma eklendi
   } = useApp();
 
   const { resetQuestData } = useQuests(); 
   const { isInstallable, installPWA } = usePWAInstall();
+
+  // KİMLİK YÖNETİMİ STATELERİ (YENİ)
+  const [editingNickname, setEditingNickname] = useState(false);
+  const [tempNickname, setTempNickname] = useState(data.nickname || '');
+  const [isRecoverMode, setIsRecoverMode] = useState(false);
+  const [recAgentId, setRecAgentId] = useState('');
+  const [recKey, setRecKey] = useState('');
+  const [recNickname, setRecNickname] = useState('');
 
   const [newGenre, setNewGenre] = useState('');
   const [newCollection, setNewCollection] = useState('');
@@ -120,6 +129,30 @@ export default function SettingsPage() {
     { id: 'matrix', name: 'Matrix Terminal', desc: 'Zümrüt & Camgöbeği', icon: Sparkles, previewBg: '#020804', textMode: 'dark', colors: ['#10b981', '#84cc16', '#14b8a6'] },
     { id: 'ocean', name: 'Aurora', desc: 'Buz Mavisi & İndigo', icon: Sparkles, previewBg: '#020617', textMode: 'dark', colors: ['#38bdf8', '#6366f1', '#2dd4bf'] },
   ];
+
+  // KİMLİK YÖNETİMİ FONKSİYONLARI (YENİ)
+  const handleSaveNickname = () => {
+    if (!tempNickname.trim()) return;
+    setNickname(tempNickname.trim());
+    setEditingNickname(false);
+  };
+
+  const handleRecoverIdentity = () => {
+    if (!recAgentId.trim() || !recKey.trim() || !recNickname.trim()) {
+      showToast('Lütfen tüm alanları doldurun!', 'error');
+      return;
+    }
+    recoverIdentity(recAgentId.trim().toUpperCase(), recKey.trim(), recNickname.trim());
+    setIsRecoverMode(false);
+    setRecAgentId('');
+    setRecKey('');
+    setRecNickname('');
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    showToast(`${label} kopyalandı!`, 'success');
+  };
 
   const handleAddGenre = () => { if (!newGenre.trim()) return; addGenre(newGenre); setNewGenre(''); };
   const handleAddReviewTag = () => {
@@ -228,7 +261,100 @@ export default function SettingsPage() {
         Ayarlar
       </h1>
 
-      {/* YENİ: CİHAZ BİLDİRİMLERİ (PUSH NOTIFICATIONS) */}
+      {/* YENİ: KİŞİSEL KİMLİK & AĞ YÖNETİMİ */}
+      <CollapsibleSection
+        title="Kişisel Kimlik ve Ağ Yönetimi"
+        icon={<UserCircle size={18} className="text-emerald-400 flex-shrink-0" />}
+        badge={
+          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+            <Key size={10} /> Sinevia Ağı
+          </span>
+        }
+        defaultOpen={true}
+        desc="Ağ üzerinde görünen ismini değiştir veya başka bir cihaza geçtiğinde kimliğini kurtar."
+      >
+        <div className="space-y-4">
+          
+          {/* İSİM DEĞİŞTİRME */}
+          <div className="bg-ink-950/50 border border-ink-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="block text-xs font-bold text-ink-400 mb-1 uppercase tracking-wider">Ağ İsminiz</label>
+              {editingNickname ? (
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="text" 
+                    value={tempNickname} 
+                    onChange={(e) => setTempNickname(e.target.value)}
+                    className="bg-ink-900 border border-emerald-500/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none w-48"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveNickname()}
+                  />
+                  <button onClick={handleSaveNickname} className="text-emerald-400 hover:text-emerald-300 p-1"><Check size={18} /></button>
+                  <button onClick={() => { setEditingNickname(false); setTempNickname(data.nickname || ''); }} className="text-ink-400 hover:text-ink-200 p-1"><X size={18} /></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-black text-white">{data.nickname}</span>
+                  <button onClick={() => setEditingNickname(true)} className="text-ink-500 hover:text-emerald-400 transition-colors p-1" title="İsmini Değiştir"><Edit2 size={16} /></button>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <button onClick={() => copyToClipboard(data.agentId || '', 'Ağ Kodun')} className="flex items-center justify-between gap-3 bg-ink-900 border border-ink-700 hover:border-emerald-500/30 px-3 py-1.5 rounded-lg transition-colors group">
+                <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Ağ Kodun:</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-emerald-400 text-xs sm:text-sm font-bold">{data.agentId}</span>
+                  <Copy size={12} className="text-ink-500 group-hover:text-emerald-400" />
+                </div>
+              </button>
+              <button onClick={() => copyToClipboard(data.recoveryKey || '', 'Kurtarma Anahtarın')} className="flex items-center justify-between gap-3 bg-ink-900 border border-ink-700 hover:border-red-500/30 px-3 py-1.5 rounded-lg transition-colors group">
+                <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Kurtarma Anahtarın:</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-red-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{data.recoveryKey}</span>
+                  <Copy size={12} className="text-ink-500 group-hover:text-red-400" />
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-ink-500 italic bg-ink-900/30 p-2 rounded-lg border border-ink-800/50">
+            <strong>ÖNEMLİ:</strong> Cihaz değiştirirsen veya verilerini silersen, sosyal ağdaki seviyeni ve arkadaşlarını geri getirmek için <strong>Ağ Kodun</strong> ve <strong>Kurtarma Anahtarın</strong> gerekir. Lütfen bu ikisini güvenli bir yere kopyala!
+          </p>
+
+          {/* KİMLİK KURTARMA BÖLÜMÜ */}
+          <div className="mt-2 pt-4 border-t border-ink-800">
+            {!isRecoverMode ? (
+              <button onClick={() => setIsRecoverMode(true)} className="flex items-center gap-2 text-xs font-bold text-azure-400 hover:text-azure-300 transition-colors">
+                <Key size={14} /> Başka bir hesabı (Kimliği) bu cihaza kurtar
+              </button>
+            ) : (
+              <div className="bg-azure-950/20 border border-azure-500/30 rounded-xl p-4 space-y-3 animate-fade-in">
+                <h3 className="text-sm font-bold text-azure-400 flex items-center gap-2 mb-2"><Key size={16} /> Kimlik Kurtarma Aracı</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ Kodu (SNV-..)</label>
+                    <input type="text" value={recAgentId} onChange={(e) => setRecAgentId(e.target.value)} placeholder="SNV-XXXX-XXXX" className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono uppercase text-white focus:border-azure-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ İsmin</label>
+                    <input type="text" value={recNickname} onChange={(e) => setRecNickname(e.target.value)} placeholder="Eski ismin..." className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs text-white focus:border-azure-500 outline-none" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Gizli Kurtarma Anahtarı</label>
+                    <input type="password" value={recKey} onChange={(e) => setRecKey(e.target.value)} placeholder="Karmaşık anahtarı buraya yapıştır..." className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-azure-500 outline-none" />
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={handleRecoverIdentity} className="flex-1 bg-azure-600 hover:bg-azure-500 text-white py-2 rounded-lg font-bold text-xs transition-colors">Kimliği Kurtar</button>
+                  <button onClick={() => setIsRecoverMode(false)} className="flex-1 bg-ink-800 hover:bg-ink-700 text-white py-2 rounded-lg font-bold text-xs transition-colors">İptal</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* CİHAZ BİLDİRİMLERİ (PUSH NOTIFICATIONS) */}
       <CollapsibleSection
         title="Akıllı Cihaz Bildirimleri"
         icon={data.notificationsEnabled ? <BellRing size={18} className="text-emerald-400 flex-shrink-0 animate-pulse" /> : <BellOff size={18} className="text-ink-500 flex-shrink-0" />}

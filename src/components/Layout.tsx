@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Film, Tv, History, Trophy, Settings, BarChart3, Bot,
-  Menu, X, LayoutDashboard, Sparkles, CalendarClock,
+  Menu, X, LayoutDashboard, Sparkles, CalendarClock, Users
 } from 'lucide-react';
 import WrappedModal from './WrappedModal';
 
-export type TabId = 'home' | 'movies' | 'series' | 'plan' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
+export type TabId = 'home' | 'movies' | 'series' | 'network' | 'plan' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,6 +26,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     { id: 'home', icon: LayoutDashboard, label: 'Ana Sayfa', shortLabel: 'Ana Sayfa' },
     { id: 'movies', icon: Film, label: 'Filmler', shortLabel: 'Filmler' },
     { id: 'series', icon: Tv, label: 'Diziler', shortLabel: 'Diziler' },
+    { id: 'network', icon: Users, label: 'Sinevia Ağı', shortLabel: 'Ağ' },
     { id: 'plan', icon: CalendarClock, label: 'Haftalık Plan', shortLabel: 'Plan' },
     { id: 'history', icon: History, label: 'Geçmiş', shortLabel: 'Geçmiş' },
     { id: 'achievements', icon: Trophy, label: 'Başarımlar', shortLabel: 'Kupalar' },
@@ -36,20 +37,17 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   const mobileBottomTabs = [
     { id: 'movies', icon: Film, label: 'Filmler' },
     { id: 'series', icon: Tv, label: 'Diziler' },
+    { id: 'network', icon: Users, label: 'Sinevia Ağı' },
     { id: 'history', icon: History, label: 'Geçmiş' },
-    { id: 'stats', icon: BarChart3, label: 'İstatistik' },
     { id: 'achievements', icon: Trophy, label: 'Başarımlar' },
   ] as const;
 
   // 1. KUSURSUZ MODAL ALGILAYICI
-  // Ekranda açılan herhangi bir tam ekran pencereyi (Rating, Detay vb.) yakalar
   useEffect(() => {
     const checkModals = () => {
       const hasModals = Array.from(document.querySelectorAll('.fixed.inset-0')).some(el => {
         const zIndexMatch = el.className.match(/z-\[?(\d+)\]?/);
         if (zIndexMatch) {
-          // Sistemdeki ana bileşenler z-60 ve altındadır.
-          // Açılır pencereler ise genelde z-100, z-120 kullanır.
           return parseInt(zIndexMatch[1], 10) > 60; 
         }
         return false;
@@ -60,7 +58,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     const observer = new MutationObserver(checkModals);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
     
-    // İlk render kontrolü
     checkModals();
 
     return () => observer.disconnect();
@@ -68,11 +65,10 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
   // 2. YAVAŞ KAYDIRMAYA DUYARLI AKILLI SCROLL MOTORU
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (isModalOpen) return; // Açılır pencere varken bar görünmez kalmaya devam eder!
+    if (isModalOpen) return; 
 
     const currentY = e.currentTarget.scrollTop;
     
-    // Ekranın en tepesine gelindiyse barı zorla göster
     if (currentY <= 20) {
       setIsNavVisible(true);
       lastScrollY.current = currentY;
@@ -81,13 +77,10 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
     const diff = currentY - lastScrollY.current;
 
-    // Sadece net bir yön değişimi (15px) olduğunda referansı güncelle
     if (diff > 15) {
-      // Aşağı kaydırılıyor
       setIsNavVisible(false);
       lastScrollY.current = currentY;
     } else if (diff < -15) {
-      // Yukarı kaydırılıyor
       setIsNavVisible(true);
       lastScrollY.current = currentY;
     }
@@ -97,7 +90,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     const scrollEl = document.getElementById('main-scroll');
     if (scrollEl) {
       scrollEl.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-      setIsNavVisible(true); // Sekme değiştiğinde menü her zaman görünür olsun
+      setIsNavVisible(true); 
     }
   }, [activeTab]);
 

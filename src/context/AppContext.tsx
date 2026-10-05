@@ -4,6 +4,7 @@ import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, Ach
 import { normalize, uid, todayStr, daysBetween } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
+import { supabase } from '../lib/supabase'; 
 
 const STORAGE_KEY = 'sinevia-v1';
 export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
@@ -11,7 +12,7 @@ const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim K
 export const DEFAULT_REVIEW_TAGS = ['🔥 Başyapıt', '🎭 Oyunculuk Muazzam', '🤯 Ters Köşe Final', '🎵 Müzikler Efsane', '🎬 Görsellik Şahane', '🍿 Akıcı & Keyifli', '🧠 Beyin Yakan Kurgu', '💪 Tempo Yavaştı', '📉 Beklentimin Altında', '💩 Bok Gibi'];
 
 export const POSITIVE_TAG_EMOJIS = ['🔥', '🎭', '🤯', '🎵', '🎬', '🍿', '🧠', '⭐', '💎', '🏆', '✨', '💪', '🌟', '🥇', '👏', '😍', '❤️', '🤩', '👍'];
-export const NEGATIVE_TAG_EMOJIS = ['💤', '📉', '💩', '😴', '🤮', '👎', '😩', '😤', '🤦', '💔', '⚠️', '🗑️', '🤢', '😈', '💀', '😱'];
+export const NEGATIVE_TAG_EMOJIS = ['💤', '📉', '💩', '😴', '🤮', '👎', '😩', '😤', '🤦', '💔', '⚠', '🗑️', '🤢', '😈', '💀', '😱'];
 
 export function isPositiveTag(tag: string, sentiments?: Record<string, 'positive' | 'negative'>): boolean {
   if (sentiments && sentiments[tag] !== undefined) return sentiments[tag] === 'positive';
@@ -22,6 +23,7 @@ export function isPositiveTag(tag: string, sentiments?: Record<string, 'positive
   if (POSITIVE_TAG_EMOJIS.includes(firstChar)) return true;
   return true;
 }
+
 export const DISPLAY_DURATION_MS = 4000;
 export const QUEUE_STEP_DURATION_MS = 4300;
 
@@ -29,7 +31,30 @@ export interface AIMessage { id: string; sender: 'user' | 'ai'; text: string; ti
 export interface MovieExtraData { keywords?: string[]; directors?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; inPastQueue?: boolean; }
 export interface SeriesExtraData { keywords?: string[]; creators?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; }
 
-export interface ExtendedAppData extends AppData { aiChatHistory?: AIMessage[]; theme?: string; reviewTags: string[]; tagSentiments?: Record<string, 'positive' | 'negative'>; notificationsEnabled?: boolean; }
+export interface ExtendedAppData extends AppData { 
+  aiChatHistory?: AIMessage[]; 
+  theme?: string; 
+  reviewTags: string[]; 
+  tagSentiments?: Record<string, 'positive' | 'negative'>; 
+  notificationsEnabled?: boolean; 
+  notifyMessages?: boolean;
+  notifyFriendRequests?: boolean;
+  notifyLists?: boolean;
+  agentId?: string;      
+  nickname?: string;     
+  recoveryKey?: string;  
+}
+
+export function generateAgentId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const p1 = Array.from({length: 4}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const p2 = Array.from({length: 4}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `SNV-${p1}-${p2}`;
+}
+
+export function generateRecoveryKey() {
+  return `${uid()}-${uid()}`; 
+}
 
 export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
   const maxMins = movie.runtime && movie.runtime > 0 ? movie.runtime : 115;
@@ -126,6 +151,9 @@ function migrateLegacyPastCollection(movies: Movie[] = [], collections: Collecti
 
 function defaultData(): ExtendedAppData {
   return {
+    agentId: generateAgentId(),
+    nickname: 'Yeni Üye',
+    recoveryKey: generateRecoveryKey(),
     movies: [], series: [], removedSeriesTitles: [], collections: [],
     genres: DEFAULT_GENRES, reviewTags: DEFAULT_REVIEW_TAGS, history: [],
     achievements: createInitialAchievements(),
@@ -137,7 +165,8 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
     showLockedNames: false, aiChatHistory: [], theme: 'default',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
-    weeklyPlan: [], notificationsEnabled: false
+    weeklyPlan: [], notificationsEnabled: false,
+    notifyMessages: true, notifyFriendRequests: true, notifyLists: true
   };
 }
 
@@ -186,7 +215,10 @@ type Action =
   | { type: 'ADD_PLAN_ITEM'; item: WeeklyPlanItem }
   | { type: 'DELETE_PLAN_ITEM'; id: string }
   | { type: 'UPDATE_PLAN_ITEM'; id: string; date: string; time: string }
-  | { type: 'TOGGLE_NOTIFICATIONS'; enabled: boolean };
+  | { type: 'TOGGLE_NOTIFICATIONS'; enabled: boolean }
+  | { type: 'SET_NICKNAME'; nickname: string }
+  | { type: 'RECOVER_IDENTITY'; agentId: string; recoveryKey: string; nickname: string }
+  | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean };
 
 const FIXED_BUGGED_ACHIEVEMENTS = new Set(['selective_critic', 'weekend_cinema', 'loyalty_test', 'break_taker', 'lost_colony', 'final_phobia', 'ghost_viewer', 'secret_critic']);
 
@@ -487,6 +519,9 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'UPDATE_ALT_TEMPLATE') return { ...state, altWatchTemplate: action.template };
   if (action.type === 'SET_THEME') return { ...state, theme: action.theme };
   if (action.type === 'TOGGLE_NOTIFICATIONS') return { ...state, notificationsEnabled: action.enabled };
+  if (action.type === 'TOGGLE_SPECIFIC_NOTIFICATION') return { ...state, [action.key]: action.enabled };
+  if (action.type === 'SET_NICKNAME') return { ...state, nickname: action.nickname };
+  if (action.type === 'RECOVER_IDENTITY') return { ...state, agentId: action.agentId, recoveryKey: action.recoveryKey, nickname: action.nickname };
 
   let nextState = { ...state };
   switch (action.type) {
@@ -512,18 +547,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'WATCH_MOVIE':
       nextState.movies = state.movies.map((m) =>
         m.id === action.id
-          ? {
-              ...m,
-              watched: true,
-              inPastQueue: false,
-              isPastWatch: Boolean(action.isPastWatch),
-              rating: action.rating,
-              detailedRating: action.detailedRating,
-              reviewTags: action.reviewTags,
-              note: action.note,
-              watchedAt: action.watchedAt,
-              actualRuntime: action.actualRuntime
-            }
+          ? { ...m, watched: true, inPastQueue: false, isPastWatch: Boolean(action.isPastWatch), rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt, actualRuntime: action.actualRuntime }
           : m
       );
       nextState.history = [action.historyItem, ...state.history];
@@ -618,17 +642,9 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'ADD_CRITERION': nextState.criteria = [...(state.criteria || []), action.criterion]; break;
     case 'EDIT_CRITERION': nextState.criteria = (state.criteria || []).map((c) => (c.id === action.id ? action.criterion : c)); break;
     case 'DELETE_CRITERION': nextState.criteria = (state.criteria || []).filter((c) => c.id !== action.id); break;
-    case 'ADD_PLAN_ITEM':
-      nextState.weeklyPlan = [...(state.weeklyPlan || []), action.item];
-      break;
-    case 'DELETE_PLAN_ITEM':
-      nextState.weeklyPlan = (state.weeklyPlan || []).filter((p) => p.id !== action.id);
-      break;
-    case 'UPDATE_PLAN_ITEM':
-      nextState.weeklyPlan = (state.weeklyPlan || []).map((p) =>
-        p.id === action.id ? { ...p, date: action.date, time: action.time } : p
-      );
-      break;
+    case 'ADD_PLAN_ITEM': nextState.weeklyPlan = [...(state.weeklyPlan || []), action.item]; break;
+    case 'DELETE_PLAN_ITEM': nextState.weeklyPlan = (state.weeklyPlan || []).filter((p) => p.id !== action.id); break;
+    case 'UPDATE_PLAN_ITEM': nextState.weeklyPlan = (state.weeklyPlan || []).map((p) => p.id === action.id ? { ...p, date: action.date, time: action.time } : p); break;
   }
   return applyAchievements(nextState);
 }
@@ -640,17 +656,11 @@ interface SeasonCompleteData { seriesTitle: string; season: number; }
 
 interface AppContextValue {
   data: ExtendedAppData;
-  isQuestCelebrating: boolean; // YENİ: Başarımları dondurma anahtarı
-  setIsQuestCelebrating: (val: boolean) => void; // YENİ
+  isQuestCelebrating: boolean; setIsQuestCelebrating: (val: boolean) => void; 
   addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => boolean;
-  deleteMovie: (id: string) => void;
-  startWatchingMovie: (id: string, silent?: boolean) => void;
-  togglePauseWatchingMovie: (id: string) => void;
-  cancelWatchingMovie: (id: string) => void;
-  canRateMovieWithTimer: (id: string) => boolean;
+  deleteMovie: (id: string) => void; startWatchingMovie: (id: string, silent?: boolean) => void; togglePauseWatchingMovie: (id: string) => void; cancelWatchingMovie: (id: string) => void; canRateMovieWithTimer: (id: string) => boolean;
   watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
-  unwatchMovie: (id: string) => void;
-  updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
+  unwatchMovie: (id: string) => void; updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => boolean;
   deleteSeries: (id: string) => void; addEpisodes: (sId: string, s: number, ec: number) => void;
   watchEpisode: (sId: string, eId: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[]) => void;
@@ -659,22 +669,16 @@ interface AppContextValue {
   addReviewTag: (tag: string, sentiment?: 'positive' | 'negative') => void; deleteReviewTag: (tag: string) => void; renameReviewTag: (oldTag: string, newTag: string, sentiment?: 'positive' | 'negative') => void; setTagSentiment: (tag: string, sentiment: 'positive' | 'negative') => void;
   editMovie: (i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => void;
   editSeries: (i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => void;
-  addCollection: (n: string) => string; deleteCollection: (i: string) => void; renameCollection: (i: string, n: string) => void;
-  setMovieCollection: (i: string, c: string | null) => void;
-  setMoviePastQueue: (i: string, inPastQueue: boolean) => void;
-  exportData: () => void; importData: (j: string) => boolean; resetData: () => void;
-  exportShareList: () => void; importShareList: (j: string) => boolean;
+  addCollection: (n: string) => string; deleteCollection: (i: string) => void; renameCollection: (i: string, n: string) => void; setMovieCollection: (i: string, c: string | null) => void; setMoviePastQueue: (i: string, inPastQueue: boolean) => void;
+  exportData: () => void; importData: (j: string) => boolean; resetData: () => void; exportShareList: () => void; importShareList: (j: string) => boolean;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void; achievementToasts: AchievementToastItem[];
   levelUpData: LevelUpData | null; seasonCompleteData: SeasonCompleteData | null; dismissLevelUp: () => void; dismissSeasonComplete: () => void;
   toggleLockedNames: () => void; xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
   updateAIHistory: (messages: AIMessage[]) => void; addCriterion: (criterion: RatingCriterion) => void; editCriterion: (id: string, criterion: RatingCriterion) => void; deleteCriterion: (id: string) => void;
   updateAltWatchTemplate: (template: string) => void; updateTheme: (theme: string) => void;
-  weeklyPlan: WeeklyPlanItem[];
-  addPlanItem: (movie: Movie, date: string, time: string) => boolean;
-  deletePlanItem: (id: string) => void;
-  updatePlanItem: (id: string, date: string, time: string) => boolean;
-  grantXp: (xp: number) => void; 
-  toggleNotifications: (enabled: boolean) => void;
+  weeklyPlan: WeeklyPlanItem[]; addPlanItem: (movie: Movie, date: string, time: string) => boolean; deletePlanItem: (id: string) => void; updatePlanItem: (id: string, date: string, time: string) => boolean;
+  grantXp: (xp: number) => void; toggleNotifications: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
+  setNickname: (nickname: string) => void; recoverIdentity: (agentId: string, recoveryKey: string, nickname: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -685,496 +689,250 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        const migrated = migrateLegacyPastCollection(parsed.movies, parsed.collections);
-        const parsedData: ExtendedAppData = {
-          ...defaultData(),
-          ...parsed,
-          collections: migrated.collections,
-          movies: migrated.movies,
-          achievements: createInitialAchievements(parsed.achievements)
-        };
+        const parsed = JSON.parse(stored); const migrated = migrateLegacyPastCollection(parsed.movies, parsed.collections);
+        const parsedData: ExtendedAppData = { ...defaultData(), ...parsed, collections: migrated.collections, movies: migrated.movies, achievements: createInitialAchievements(parsed.achievements) };
+        if (!parsedData.agentId) parsedData.agentId = generateAgentId(); if (!parsedData.nickname) parsedData.nickname = 'Yeni Üye'; if (!parsedData.recoveryKey) parsedData.recoveryKey = generateRecoveryKey();
         if (parsedData.aiChatHistory) parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= Date.now() - 3 * 86400000);
-        if (!parsedData.criteria) parsedData.criteria = defaultData().criteria;
-        if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS;
-        if (!parsedData.theme) parsedData.theme = 'default';
-        if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) {
-          parsedData.weeklyPlan = [];
-        }
+        if (!parsedData.criteria) parsedData.criteria = defaultData().criteria; if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS; if (!parsedData.theme) parsedData.theme = 'default';
+        if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) parsedData.weeklyPlan = [];
         if (parsedData.notificationsEnabled === undefined) parsedData.notificationsEnabled = false;
+        if (parsedData.notifyMessages === undefined) parsedData.notifyMessages = true;
+        if (parsedData.notifyFriendRequests === undefined) parsedData.notifyFriendRequests = true;
+        if (parsedData.notifyLists === undefined) parsedData.notifyLists = true;
         return parsedData;
       }
-    } catch {}
-    return defaultData();
+    } catch {} return defaultData();
   });
 
-  const [isQuestCelebrating, setIsQuestCelebrating] = useState(false); // YENİ EKLENDİ
+  const [isQuestCelebrating, setIsQuestCelebrating] = useState(false);
+  const toastsRef = useRef<ToastItem[]>([]); const achievementToastsRef = useRef<AchievementToastItem[]>([]); const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const isProcessingToastRef = useRef(false); const [queueTick, setQueueTick] = useState(0);
+  const notifiedTimerIds = useRef<Set<string>>(new Set()); const notifiedPlanIds = useRef<Set<string>>(new Set());
 
-  const toastsRef = useRef<ToastItem[]>([]);
-  const achievementToastsRef = useRef<AchievementToastItem[]>([]);
-  const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isProcessingToastRef = useRef(false);
-  const [queueTick, setQueueTick] = useState(0);
-
-  const notifiedTimerIds = useRef<Set<string>>(new Set());
-  const notifiedPlanIds = useRef<Set<string>>(new Set());
-
-  const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => {
-    toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id);
-    return toastsRef.current;
-  }, []);
-
-  const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => {
-    achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id);
-    return achievementToastsRef.current;
-  }, []);
-
-  const [levelUpData, setLevelUpData] = useReducer((_s: any, a: any) => a, null);
-  const [seasonCompleteData, setSeasonCompleteData] = useReducer((_s: any, a: any) => a, null);
+  const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => { toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return toastsRef.current; }, []);
+  const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
+  const [levelUpData, setLevelUpData] = useReducer((_s: any, a: any) => a, null); const [seasonCompleteData, setSeasonCompleteData] = useReducer((_s: any, a: any) => a, null);
   const [xpGainData, setXpGainData] = useState<{ gained: number; oldTotal: number; newTotal: number } | null>(null);
 
   useEffect(() => { document.body.setAttribute('data-theme', data.theme || 'default'); }, [data.theme]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
-  useEffect(() => { dispatch({ type: 'SYNC_ACHIEVEMENTS' }); }, []);
 
   useEffect(() => {
-    if (!data.notificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
-    
-    const interval = setInterval(() => {
-      const nowMs = Date.now();
-      const today = todayStr();
-      const d = new Date(nowMs);
-      const currentTotalMins = d.getHours() * 60 + d.getMinutes();
+    if (!data.agentId) return;
+    const syncProfileToCloud = async () => {
+      try {
+        const watchedMoviesCount = data.movies.filter(m => m.watched).length;
+        const watchedSeriesCount = data.series.filter(s => s.episodes?.every(e => e.watched)).length;
+        const watchedEpisodesCount = data.series.reduce((sum, s) => sum + (s.episodes?.filter(e => e.watched).length || 0), 0);
+        const unlockedAchievementsCount = data.achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0);
+        
+        let questsCompleted = 0;
+        try { const qs = JSON.parse(localStorage.getItem('sinevia-quests') || '{}'); questsCompleted = qs.completedCount || 0; } catch {}
 
-      const activeMovie = data.movies.find(m => !m.watched && m.startedAt && !m.startedAt.startsWith('PAUSED:'));
-      if (activeMovie && !notifiedTimerIds.current.has(activeMovie.id)) {
-        const info = getMovieTimerInfo(activeMovie, nowMs);
-        if (info.remainingSec <= 0) {
-          new Notification('Sinevia - Süren Doldu! 🎬', {
-            body: `"${activeMovie.title}" filmi için izleme sayacı tamamlandı. Hemen puanlayıp XP ödülünü al!`,
-            icon: activeMovie.posterUrl || undefined
-          });
-          notifiedTimerIds.current.add(activeMovie.id);
+        await supabase.from('profiles').upsert({
+          agent_id: data.agentId, nickname: data.nickname || 'Yeni Üye', level: data.level || 1, total_xp: data.totalXp || 0,
+          movies_watched: watchedMoviesCount, series_watched: watchedSeriesCount, episodes_watched: watchedEpisodesCount,
+          achievements_unlocked: unlockedAchievementsCount, quests_completed: questsCompleted, last_seen: new Date().toISOString()
+        }, { onConflict: 'agent_id' });
+      } catch (err) { console.error(err); }
+    };
+    const timer = setTimeout(() => syncProfileToCloud(), 2000); 
+    return () => clearTimeout(timer);
+  }, [data]);
+
+  const lastCheckRef = useRef({
+    message: new Date().toISOString(),
+    friend: new Date().toISOString(),
+    list: new Date().toISOString(),
+  });
+
+  useEffect(() => {
+    if (!data.notificationsEnabled || !data.agentId) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const interval = setInterval(async () => {
+      try {
+        if (data.notifyMessages !== false) {
+          const { data: msgs } = await supabase.from('messages').select('id, created_at').eq('receiver_id', data.agentId).gt('created_at', lastCheckRef.current.message);
+          if (msgs && msgs.length > 0) {
+            new Notification('Sinevia - Yeni Mesaj 💬', { body: 'Ağından yeni bir mesajın var!', icon: '/icon.png' });
+            lastCheckRef.current.message = msgs.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at;
+          }
         }
+
+        if (data.notifyFriendRequests !== false) {
+          const { data: reqs } = await supabase.from('friendships').select('id, created_at').eq('receiver_id', data.agentId).eq('status', 'pending').gt('created_at', lastCheckRef.current.friend);
+          if (reqs && reqs.length > 0) {
+            new Notification('Sinevia - Yeni Bağlantı 👤', { body: 'Biri sana arkadaşlık isteği gönderdi!', icon: '/icon.png' });
+            lastCheckRef.current.friend = reqs.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at;
+          }
+        }
+
+        if (data.notifyLists !== false) {
+          const { data: recs } = await supabase.from('recommendations').select('id, list_title, created_at').eq('receiver_id', data.agentId).gt('created_at', lastCheckRef.current.list);
+          if (recs && recs.length > 0) {
+            new Notification('Sinevia - Yeni Liste 🎁', { body: `Sana özel bir tavsiye listesi gönderildi: "${recs[0].list_title}"`, icon: '/icon.png' });
+            lastCheckRef.current.list = recs.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at;
+          }
+        }
+      } catch (e) {
+        console.error('Bildirim radar hatası:', e);
       }
-
-      const todaysPlans = (data.weeklyPlan || []).filter(p => p.date === today);
-      todaysPlans.forEach(p => {
-        if (notifiedPlanIds.current.has(p.id)) return;
-        const movie = data.movies.find(m => m.id === p.movieId);
-        if (movie?.watched) return;
-
-        const [ph, pm] = p.time.split(':').map(Number);
-        const planTotalMins = ph * 60 + pm;
-        const diff = planTotalMins - currentTotalMins;
-
-        if (diff > 0 && diff <= 15) {
-          new Notification('Sinevia - Film Saati Yaklaşıyor! 🍿', {
-            body: `Mısırları patlat! "${p.title}" maratonuna ${diff} dakika kaldı. (${p.time})`,
-            icon: p.posterUrl || undefined
-          });
-          notifiedPlanIds.current.add(p.id);
-        }
-      });
-    }, 10000); 
+    }, 10000);
 
     return () => clearInterval(interval);
-  }, [data.notificationsEnabled, data.movies, data.weeklyPlan]);
+  }, [data.notificationsEnabled, data.agentId, data.notifyMessages, data.notifyFriendRequests, data.notifyLists]);
 
-  const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => {
-    const id = uid(); setAchievementToasts({ type: 'add', toast: { ...item, id } });
-    setTimeout(() => setAchievementToasts({ type: 'remove', id }), DISPLAY_DURATION_MS);
-  }, []);
+  const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => { const id = uid(); setAchievementToasts({ type: 'add', toast: { ...item, id } }); setTimeout(() => setAchievementToasts({ type: 'remove', id }), DISPLAY_DURATION_MS); }, []);
 
   useEffect(() => {
     if (data.pendingXpGain) {
-      if (xpTimerRef.current) clearTimeout(xpTimerRef.current);
-      setXpGainData(data.pendingXpGain);
-      xpTimerRef.current = setTimeout(() => { setXpGainData(null); xpTimerRef.current = null; }, DISPLAY_DURATION_MS);
-      dispatch({ type: 'CLEAR_XP_GAIN' });
+      if (xpTimerRef.current) clearTimeout(xpTimerRef.current); setXpGainData(data.pendingXpGain);
+      xpTimerRef.current = setTimeout(() => { setXpGainData(null); xpTimerRef.current = null; }, DISPLAY_DURATION_MS); dispatch({ type: 'CLEAR_XP_GAIN' });
     }
-    if (data.pendingLevelUp) {
-      setLevelUpData(data.pendingLevelUp);
-      import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound());
-      dispatch({ type: 'CLEAR_LEVELUP' });
-    }
+    if (data.pendingLevelUp) { setLevelUpData(data.pendingLevelUp); import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound()); dispatch({ type: 'CLEAR_LEVELUP' }); }
   }, [data.pendingXpGain, data.pendingLevelUp]);
 
   useEffect(() => {
-    const queue = data.pendingToasts || [];
-    // YENİ EKLENDİ: isQuestCelebrating aktifse (yani görev tamamlanma ekranı açıksa) KUPALARI BEKLET!
-    if (queue.length === 0 || levelUpData || isProcessingToastRef.current || isQuestCelebrating) return;
-    
-    isProcessingToastRef.current = true;
-    const nextAchievement = queue[0], remainingCount = queue.length - 1;
-    const comboText = remainingCount > 0 ? ` (+${remainingCount} Sırada)` : '';
-
+    const queue = data.pendingToasts || []; if (queue.length === 0 || levelUpData || isProcessingToastRef.current || isQuestCelebrating) return;
+    isProcessingToastRef.current = true; const nextAchievement = queue[0], remainingCount = queue.length - 1; const comboText = remainingCount > 0 ? ` (+${remainingCount} Sırada)` : '';
     showAchievementToast({ achievementName: `${nextAchievement.name}${comboText}`, tier: nextAchievement.tier, icon: nextAchievement.icon, description: nextAchievement.description });
-    import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound());
-    dispatch({ type: 'CONSUME_NEXT_TOAST' });
-
+    import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound()); dispatch({ type: 'CONSUME_NEXT_TOAST' });
     setTimeout(() => { isProcessingToastRef.current = false; setQueueTick((t) => t + 1); }, QUEUE_STEP_DURATION_MS);
   }, [data.pendingToasts, levelUpData, queueTick, showAchievementToast, isQuestCelebrating]);
 
-  const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => {
-    const id = uid(); setToasts({ type: 'add', toast: { id, message, type } });
-    setTimeout(() => setToasts({ type: 'remove', id }), 2800);
-  }, []);
-
+  const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => { const id = uid(); setToasts({ type: 'add', toast: { id, message, type } }); setTimeout(() => setToasts({ type: 'remove', id }), 2800); }, []);
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
   const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []);
+  const toggleSpecificNotification = useCallback((key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => dispatch({ type: 'TOGGLE_SPECIFIC_NOTIFICATION', key, enabled }), []);
+  const setNickname = useCallback((nickname: string) => { dispatch({ type: 'SET_NICKNAME', nickname }); showToast('Kullanıcı adı güncellendi!', 'success'); }, [showToast]);
+  const recoverIdentity = useCallback((agentId: string, recoveryKey: string, nickname: string) => { dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey, nickname }); showToast('Kimlik başarıyla kurtarıldı!', 'success'); }, [showToast]);
 
   const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
     if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
-    dispatch({
-      type: 'ADD_MOVIE',
-      movie: {
-        id: uid(), title: title.trim(), year: year.trim(), genres, collectionId,
-        inPastQueue: Boolean(extra?.inPastQueue),
-        runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders,
-        directors: extra?.directors, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage,
-        watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString()
-      }
-    });
-    showToast('Film eklendi'); return true;
+    dispatch({ type: 'ADD_MOVIE', movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, inPastQueue: Boolean(extra?.inPastQueue), runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders, directors: extra?.directors, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage, watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString() } }); showToast('Film eklendi'); return true;
   }, [data.movies, showToast]);
 
   const startWatchingMovie = useCallback((id: string, silent = false) => {
-    const movie = data.movies.find((m) => m.id === id);
-    if (!movie || movie.watched) return;
-    if (movie.startedAt) return;
-
+    const movie = data.movies.find((m) => m.id === id); if (!movie || movie.watched || movie.startedAt) return;
     const anotherActive = data.movies.find((m) => !m.watched && m.id !== id && m.startedAt);
-    if (anotherActive) {
-      if (!silent) showToast(`⛔ Sayaç Engelleyici: Şu anda "${anotherActive.title}" için sayaç zaten açık! Önce onu tamamla veya iptal et.`, 'warning');
-      return;
-    }
-
-    dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: new Date().toISOString() });
-    showToast(`⏳ "${movie.title}" için geri sayım başladı!`, 'info');
+    if (anotherActive) { if (!silent) showToast(`⛔ Sayaç Engelleyici: Şu anda "${anotherActive.title}" için sayaç zaten açık!`, 'warning'); return; }
+    dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: new Date().toISOString() }); showToast(`⏳ "${movie.title}" için geri sayım başladı!`, 'info');
   }, [data.movies, showToast]);
 
   const togglePauseWatchingMovie = useCallback((id: string) => {
-    const movie = data.movies.find((m) => m.id === id);
-    if (!movie || !movie.startedAt) return;
-    const info = getMovieTimerInfo(movie);
-
-    if (info.isPaused) {
-      const resumedStart = new Date(Date.now() - info.elapsedSec * 1000).toISOString();
-      dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: resumedStart });
-      showToast('▶️ Geri sayım kaldığı yerden devam ediyor', 'info');
-    } else {
-      dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: `PAUSED:${info.elapsedSec}` });
-      showToast('⏸️ Geri sayım duraklatıldı', 'warning');
-    }
+    const movie = data.movies.find((m) => m.id === id); if (!movie || !movie.startedAt) return; const info = getMovieTimerInfo(movie);
+    if (info.isPaused) { const resumedStart = new Date(Date.now() - info.elapsedSec * 1000).toISOString(); dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: resumedStart }); showToast('▶️ Geri sayım devam ediyor', 'info'); } 
+    else { dispatch({ type: 'START_WATCHING_MOVIE', id, startedAt: `PAUSED:${info.elapsedSec}` }); showToast('⏸️ Geri sayım duraklatıldı', 'warning'); }
   }, [data.movies, showToast]);
 
-  const cancelWatchingMovie = useCallback((id: string) => {
-    dispatch({ type: 'CANCEL_WATCHING_MOVIE', id });
-    showToast('İzleme sayacı iptal edildi', 'info');
-  }, [showToast]);
-
-  const canRateMovieWithTimer = useCallback((id: string): boolean => {
-    const movie = data.movies.find((m) => m.id === id);
-    if (!movie || !movie.startedAt) return true;
-    const info = getMovieTimerInfo(movie);
-    if (!info.canRateWithTimer) {
-      showToast(`⛔ Sayaç Engelleyici: Henüz ${info.elapsedMins} dk geçti! Puanlamak için en az ${info.minRequiredMins} dk geçmeli (veya X ile sayacı iptal et).`, 'error');
-      return false;
-    }
-    return true;
-  }, [data.movies, showToast]);
+  const cancelWatchingMovie = useCallback((id: string) => { dispatch({ type: 'CANCEL_WATCHING_MOVIE', id }); showToast('İzleme sayacı iptal edildi', 'info'); }, [showToast]);
+  const canRateMovieWithTimer = useCallback((id: string): boolean => { const movie = data.movies.find((m) => m.id === id); if (!movie || !movie.startedAt) return true; const info = getMovieTimerInfo(movie); if (!info.canRateWithTimer) { showToast(`⛔ Henüz ${info.elapsedMins} dk geçti! En az ${info.minRequiredMins} dk geçmeli.`, 'error'); return false; } return true; }, [data.movies, showToast]);
 
   const watchMovie = useCallback((id: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => {
     const movie = data.movies.find((m) => m.id === id); if (!movie) return;
     const finalIsPastWatch = isPastWatch !== undefined ? isPastWatch : Boolean(movie.isPastWatch || movie.inPastQueue);
-
-    const now = new Date().toISOString();
-    const info = getMovieTimerInfo(movie);
-    let actualRuntime = info.maxMins;
-
-    if (!finalIsPastWatch && movie.startedAt && info.canRateWithTimer) {
-      actualRuntime = Math.min(Math.max(1, info.elapsedMins), info.maxMins);
+    const now = new Date().toISOString(); const info = getMovieTimerInfo(movie); let actualRuntime = info.maxMins;
+    if (!finalIsPastWatch && movie.startedAt && info.canRateWithTimer) { actualRuntime = Math.min(Math.max(1, info.elapsedMins), info.maxMins); }
+    
+    const isSpoiler = note.toLowerCase().includes('[spoiler]') || note.toLowerCase().includes('#spoiler');
+    
+    dispatch({ type: 'WATCH_MOVIE', id, rating, detailedRating, reviewTags, note, watchedAt: now, actualRuntime, isPastWatch: finalIsPastWatch, historyItem: { id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title, rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: finalIsPastWatch, startedAt: finalIsPastWatch ? null : (movie.startedAt || null), actualRuntime, originalRuntime: info.maxMins, genres: movie.genres, year: movie.year } });
+    
+    if (!finalIsPastWatch) {
+      supabase.from('network_logs').insert([{
+        id: uid(), agent_id: data.agentId, action_type: 'watched', item_id: movie.id, item_type: 'movie',
+        item_title: movie.title, item_poster: movie.posterUrl || null, rating: rating, note: note || '',
+        genres: movie.genres, review_tags: reviewTags || [], is_spoiler: isSpoiler, created_at: now
+      }]).then(({ error }: { error: any }) => { if (error) console.error(error); });
     }
+    if (finalIsPastWatch) showToast(`"${movie.title}" puanlandı ve Geçmiş'e eklendi`, 'info'); else if (movie.startedAt && actualRuntime < info.maxMins) showToast(`Film ${actualRuntime} dk'da bitti! (${info.maxMins - actualRuntime} dk kazandın ⚡)`, 'success');
+  }, [data.movies, data.agentId, showToast]);
 
-    dispatch({
-      type: 'WATCH_MOVIE',
-      id,
-      rating,
-      detailedRating,
-      reviewTags,
-      note,
-      watchedAt: now,
-      actualRuntime,
-      isPastWatch: finalIsPastWatch,
-      historyItem: {
-        id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title,
-        rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: finalIsPastWatch,
-        startedAt: finalIsPastWatch ? null : (movie.startedAt || null), actualRuntime, originalRuntime: info.maxMins,
-        genres: movie.genres, year: movie.year
-      }
-    });
-
-    if (finalIsPastWatch) {
-      showToast(`"${movie.title}" puanlandı ve Daha Önce İzlenenler kısmına eklendi`, 'info');
-    } else if (movie.startedAt && actualRuntime < info.maxMins) {
-      showToast(`Film ${actualRuntime} dk'da bitti! (${info.maxMins - actualRuntime} dk kazandın ⚡)`, 'success');
-    }
-  }, [data.movies, showToast]);
-
-  const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => {
-    dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags, isPastWatch }); showToast('Puan güncellendi');
-  }, [showToast]);
+  const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => { dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags, isPastWatch }); showToast('Puan güncellendi'); }, [showToast]);
 
   const addSeries = useCallback((title: string, genres: string[], seasons: number[], posterUrl?: string | null, overview?: string, tmdbId?: number, year?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData): boolean => {
     if (data.removedSeriesTitles.some((t) => normalize(t) === normalize(title))) { showToast('Daha önce tamamlandı!', 'warning'); return false; }
     if (data.series.some((s) => normalize(s.title) === normalize(title))) { showToast('Bu dizi zaten listede var!', 'warning'); return false; }
-    const episodes: Episode[] = [];
-    seasons.forEach((epCount, s) => { for (let e = 1; e <= epCount; e++) episodes.push({ id: uid(), season: s + 1, episode: e, watched: false, rating: null, note: '', watchedAt: null }); });
-    dispatch({ type: 'ADD_SERIES', series: { id: uid(), title: title.trim(), genres, episodes, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, year, imdbId, watchProviders, creators: extra?.creators, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage, addedAt: new Date().toISOString() } });
-    showToast('Dizi eklendi'); return true;
+    const episodes: Episode[] = []; seasons.forEach((epCount, s) => { for (let e = 1; e <= epCount; e++) episodes.push({ id: uid(), season: s + 1, episode: e, watched: false, rating: null, note: '', watchedAt: null }); });
+    dispatch({ type: 'ADD_SERIES', series: { id: uid(), title: title.trim(), genres, episodes, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, year, imdbId, watchProviders, creators: extra?.creators, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage, addedAt: new Date().toISOString() } }); showToast('Dizi eklendi'); return true;
   }, [data.series, data.removedSeriesTitles, showToast]);
 
   const watchEpisode = useCallback((seriesId: string, episodeId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => {
-    const series = data.series.find((s) => s.id === seriesId); if (!series) return;
-    const ep = series.episodes.find((e) => e.id === episodeId); if (!ep) return;
+    const series = data.series.find((s) => s.id === seriesId); if (!series) return; const ep = series.episodes.find((e) => e.id === episodeId); if (!ep) return;
     const now = new Date().toISOString();
+    
+    const isSpoiler = note.toLowerCase().includes('[spoiler]') || note.toLowerCase().includes('#spoiler');
+
     dispatch({ type: 'WATCH_EPISODE', seriesId, episodeId, rating, detailedRating, reviewTags, note, watchedAt: now, historyItem: { id: uid(), itemId: ep.id, seriesId: series.id, kind: 'series', type: 'series', title: series.title, rating, detailedRating, reviewTags, note, watchedAt: now, genres: series.genres, season: ep.season, episode: ep.episode } });
+    
+    supabase.from('network_logs').insert([{
+      id: uid(), agent_id: data.agentId, action_type: 'watched', item_id: ep.id, item_type: 'series',
+      item_title: `${series.title} (S${ep.season} B${ep.episode})`, item_poster: series.posterUrl || null,
+      rating: rating, note: note || '', genres: series.genres, review_tags: reviewTags || [], is_spoiler: isSpoiler, created_at: now
+    }]).then(({ error }: { error: any }) => { if (error) console.error(error); });
+
     setTimeout(() => {
-      const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      const updatedSeries = state.series?.find((s: any) => s.id === seriesId);
-      if (updatedSeries) {
-        if (updatedSeries.episodes.filter((e: any) => e.season === ep.season).every((e: any) => e.watched)) setSeasonCompleteData({ seriesTitle: updatedSeries.title, season: ep.season });
-        if (updatedSeries.episodes.every((e: any) => e.watched)) { dispatch({ type: 'COMPLETE_SERIES', id: seriesId, title: updatedSeries.title }); showToast(`${updatedSeries.title} tamamlandı!`, 'success'); }
-      }
+      const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); const updatedSeries = state.series?.find((s: any) => s.id === seriesId);
+      if (updatedSeries) { if (updatedSeries.episodes.filter((e: any) => e.season === ep.season).every((e: any) => e.watched)) setSeasonCompleteData({ seriesTitle: updatedSeries.title, season: ep.season });
+      if (updatedSeries.episodes.every((e: any) => e.watched)) { dispatch({ type: 'COMPLETE_SERIES', id: seriesId, title: updatedSeries.title }); showToast(`${updatedSeries.title} tamamlandı!`, 'success'); } }
     }, 200);
-  }, [data.series, showToast]);
+  }, [data.series, data.agentId, showToast]);
 
   const deleteMovie = useCallback((id: string) => dispatch({ type: 'DELETE_MOVIE', id }), []);
   const unwatchMovie = useCallback((id: string) => dispatch({ type: 'UNWATCH_MOVIE', id }), []);
   const deleteSeries = useCallback((id: string) => dispatch({ type: 'DELETE_SERIES', id }), []);
-  const addEpisodes = useCallback((sId: string, s: number, ec: number) => {
-    const series = data.series.find((x) => x.id === sId); if (!series) return;
-    const startEp = series.episodes.filter((e) => e.season === s).length > 0 ? Math.max(...series.episodes.filter((e) => e.season === s).map((e) => e.episode)) + 1 : 1;
-    dispatch({ type: 'ADD_EPISODES', seriesId: sId, episodes: Array.from({ length: ec }, (_, i) => ({ id: uid(), season: s, episode: startEp + i, watched: false, rating: null, note: '', watchedAt: null })) });
-    showToast(`${ec} bölüm eklendi`);
-  }, [data.series, showToast]);
-
-  const canWatchEpisode = useCallback((sId: string, eId: string): boolean => {
-    const series = data.series.find((s) => s.id === sId); if (!series) return false;
-    const ep = series.episodes.find((e) => e.id === eId); if (!ep || ep.watched) return false;
-    return [...series.episodes].sort((a, b) => a.season - b.season || a.episode - b.episode).find((e) => !e.watched)?.id === eId;
-  }, [data.series]);
-
+  const addEpisodes = useCallback((sId: string, s: number, ec: number) => { const series = data.series.find((x) => x.id === sId); if (!series) return; const startEp = series.episodes.filter((e) => e.season === s).length > 0 ? Math.max(...series.episodes.filter((e) => e.season === s).map((e) => e.episode)) + 1 : 1; dispatch({ type: 'ADD_EPISODES', seriesId: sId, episodes: Array.from({ length: ec }, (_, i) => ({ id: uid(), season: s, episode: startEp + i, watched: false, rating: null, note: '', watchedAt: null })) }); showToast(`${ec} bölüm eklendi`); }, [data.series, showToast]);
+  const canWatchEpisode = useCallback((sId: string, eId: string): boolean => { const series = data.series.find((s) => s.id === sId); if (!series) return false; const ep = series.episodes.find((e) => e.id === eId); if (!ep || ep.watched) return false; return [...series.episodes].sort((a, b) => a.season - b.season || a.episode - b.episode).find((e) => !e.watched)?.id === eId; }, [data.series]);
   const unwatchEpisode = useCallback((sId: string, eId: string) => dispatch({ type: 'UNWATCH_EPISODE', seriesId: sId, episodeId: eId }), []);
   const deleteEpisode = useCallback((sId: string, eId: string) => dispatch({ type: 'DELETE_EPISODE', seriesId: sId, episodeId: eId }), []);
   const addGenre = useCallback((g: string) => { if (!data.genres.some((x) => normalize(x) === normalize(g))) { dispatch({ type: 'ADD_GENRE', genre: g.trim() }); showToast('Tür eklendi'); } }, [data.genres, showToast]);
   const deleteGenre = useCallback((g: string) => dispatch({ type: 'DELETE_GENRE', genre: g }), []);
   const renameGenre = useCallback((o: string, n: string) => { if (n.trim()) { dispatch({ type: 'RENAME_GENRE', oldName: o, newName: n.trim() }); showToast('Tür güncellendi'); } }, [showToast]);
-
-  const addReviewTag = useCallback((tag: string, sentiment?: 'positive' | 'negative') => {
-    const clean = tag.trim(); if (!clean) return;
-    if ((data.reviewTags || []).some((x) => normalize(x) === normalize(clean))) { showToast('Bu başlık zaten mevcut!', 'warning'); return; }
-    dispatch({ type: 'ADD_REVIEW_TAG', tag: clean, sentiment }); showToast('Değerlendirme başlığı eklendi');
-  }, [data.reviewTags, showToast]);
+  const addReviewTag = useCallback((tag: string, sentiment?: 'positive' | 'negative') => { const clean = tag.trim(); if (!clean) return; if ((data.reviewTags || []).some((x) => normalize(x) === normalize(clean))) { showToast('Bu başlık zaten mevcut!', 'warning'); return; } dispatch({ type: 'ADD_REVIEW_TAG', tag: clean, sentiment }); showToast('Değerlendirme başlığı eklendi'); }, [data.reviewTags, showToast]);
   const deleteReviewTag = useCallback((tag: string) => { dispatch({ type: 'DELETE_REVIEW_TAG', tag }); showToast('Başlık silindi'); }, [showToast]);
   const renameReviewTag = useCallback((oldTag: string, newTag: string, sentiment?: 'positive' | 'negative') => { if (newTag.trim()) { dispatch({ type: 'RENAME_REVIEW_TAG', oldTag, newTag: newTag.trim(), sentiment }); showToast('Başlık güncellendi'); } }, [showToast]);
   const setTagSentiment = useCallback((tag: string, sentiment: 'positive' | 'negative') => { dispatch({ type: 'SET_TAG_SENTIMENT', tag, sentiment }); }, []);
-
-  const editMovie = useCallback((i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => {
-    dispatch({ type: 'EDIT_MOVIE', id: i, title: t, year: y, genres: g, runtime: r, posterUrl: p || undefined, overview: o || undefined, tmdbId, customUrl, imdbId, watchProviders, extra });
-    if (!silent) showToast('Film güncellendi');
-  }, [showToast]);
-
-  const editSeries = useCallback((i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => {
-    dispatch({ type: 'EDIT_SERIES', id: i, title: t, genres: g, posterUrl: p || undefined, overview: o || undefined, tmdbId, year: y, customUrl, imdbId, watchProviders, extra });
-    if (!silent) showToast('Dizi güncellendi');
-  }, [showToast]);
-
-  const addCollection = useCallback((n: string) => {
-    const clean = n.trim();
-    const existing = data.collections.find((c) => normalize(c.name) === normalize(clean));
-    if (existing) return existing.id;
-    const id = uid();
-    dispatch({ type: 'ADD_COLLECTION', collection: { id, name: clean } });
-    showToast('Koleksiyon eklendi');
-    return id;
-  }, [data.collections, showToast]);
+  const editMovie = useCallback((i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => { dispatch({ type: 'EDIT_MOVIE', id: i, title: t, year: y, genres: g, runtime: r, posterUrl: p || undefined, overview: o || undefined, tmdbId, customUrl, imdbId, watchProviders, extra }); if (!silent) showToast('Film güncellendi'); }, [showToast]);
+  const editSeries = useCallback((i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent = false, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => { dispatch({ type: 'EDIT_SERIES', id: i, title: t, genres: g, posterUrl: p || undefined, overview: o || undefined, tmdbId, year: y, customUrl, imdbId, watchProviders, extra }); if (!silent) showToast('Dizi güncellendi'); }, [showToast]);
+  const addCollection = useCallback((n: string) => { const clean = n.trim(); const existing = data.collections.find((c) => normalize(c.name) === normalize(clean)); if (existing) return existing.id; const id = uid(); dispatch({ type: 'ADD_COLLECTION', collection: { id, name: clean } }); showToast('Koleksiyon eklendi'); return id; }, [data.collections, showToast]);
   const deleteCollection = useCallback((id: string) => dispatch({ type: 'DELETE_COLLECTION', id }), []);
   const renameCollection = useCallback((i: string, n: string) => { dispatch({ type: 'RENAME_COLLECTION', id: i, name: n.trim() }); showToast('Koleksiyon güncellendi'); }, [showToast]);
   const setMovieCollection = useCallback((i: string, c: string | null) => dispatch({ type: 'SET_MOVIE_COLLECTION', id: i, collectionId: c }), []);
   const setMoviePastQueue = useCallback((i: string, inPastQueue: boolean) => dispatch({ type: 'SET_MOVIE_PAST_QUEUE', id: i, inPastQueue }), []);
-
   const updateAIHistory = useCallback((messages: AIMessage[]) => dispatch({ type: 'UPDATE_AI_HISTORY', messages }), []);
   const addCriterion = useCallback((c: RatingCriterion) => { dispatch({ type: 'ADD_CRITERION', criterion: c }); showToast('Kriter Eklendi'); }, [showToast]);
   const editCriterion = useCallback((id: string, c: RatingCriterion) => { dispatch({ type: 'EDIT_CRITERION', id, criterion: c }); showToast('Kriter Güncellendi'); }, [showToast]);
   const deleteCriterion = useCallback((id: string) => { dispatch({ type: 'DELETE_CRITERION', id }); showToast('Kriter Silindi'); }, [showToast]);
   const updateAltWatchTemplate = useCallback((template: string) => { dispatch({ type: 'UPDATE_ALT_TEMPLATE', template }); showToast('Alternatif izleme şablonu güncellendi', 'success'); }, [showToast]);
   const updateTheme = useCallback((theme: string) => { dispatch({ type: 'SET_THEME', theme }); showToast('Tema değiştirildi', 'success'); }, [showToast]);
-
-  const exportData = useCallback(() => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-    const a = document.createElement('a'); a.href = url; a.download = `sinevia-yedek-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('Yedek alındı');
-  }, [data, showToast]);
-
+  const exportData = useCallback(() => { const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = `sinevia-yedek-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('Yedek alındı'); }, [data, showToast]);
   const importData = useCallback((json: string) => { try { dispatch({ type: 'IMPORT_DATA', data: { ...defaultData(), ...JSON.parse(json) } }); showToast('Veriler geri yüklendi'); return true; } catch { showToast('Hata', 'error'); return false; } }, [showToast]);
   const resetData = useCallback(() => { dispatch({ type: 'IMPORT_DATA', data: defaultData() }); showToast('Sıfırlandı'); }, [showToast]);
-
   const exportShareList = useCallback(() => {
-    const sharePayload = {
-      isShareList: true, exportedAt: new Date().toISOString(),
-      collections: data.collections.map((c) => ({ id: c.id, name: c.name })),
-      movies: data.movies.map((m) => ({
-        title: m.title, year: m.year, genres: m.genres, collectionId: m.collectionId, runtime: m.runtime,
-        posterUrl: m.posterUrl, overview: m.overview, tmdbId: m.tmdbId, imdbId: m.imdbId, watchProviders: m.watchProviders,
-        directors: m.directors, cast: m.cast, studios: m.studios, keywords: m.keywords, originalLanguage: m.originalLanguage, customUrl: m.customUrl
-      })),
-      series: data.series.map((s) => ({
-        title: s.title, year: s.year, genres: s.genres, posterUrl: s.posterUrl, overview: s.overview,
-        tmdbId: s.tmdbId, imdbId: s.imdbId, watchProviders: s.watchProviders, creators: s.creators,
-        cast: s.cast, studios: s.studios, keywords: s.keywords, originalLanguage: s.originalLanguage, customUrl: s.customUrl,
-        episodes: (s.episodes || []).map((e) => ({ season: e.season, episode: e.episode }))
-      }))
-    };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(sharePayload, null, 2)], { type: 'application/json' }));
-    const a = document.createElement('a'); a.href = url; a.download = `sinevia-liste-paylasimi-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url);
-    showToast('Paylaşım listesi indirildi!', 'success');
+    const sharePayload = { isShareList: true, exportedAt: new Date().toISOString(), collections: data.collections.map((c) => ({ id: c.id, name: c.name })), movies: data.movies.map((m) => ({ title: m.title, year: m.year, genres: m.genres, collectionId: m.collectionId, runtime: m.runtime, posterUrl: m.posterUrl, overview: m.overview, tmdbId: m.tmdbId, imdbId: m.imdbId, watchProviders: m.watchProviders, directors: m.directors, cast: m.cast, studios: m.studios, keywords: m.keywords, originalLanguage: m.originalLanguage, customUrl: m.customUrl })), series: data.series.map((s) => ({ title: s.title, year: s.year, genres: s.genres, posterUrl: s.posterUrl, overview: s.overview, tmdbId: s.tmdbId, imdbId: s.imdbId, watchProviders: s.watchProviders, creators: s.creators, cast: s.cast, studios: s.studios, keywords: s.keywords, originalLanguage: s.originalLanguage, customUrl: s.customUrl, episodes: (s.episodes || []).map((e) => ({ season: e.season, episode: e.episode })) })) };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(sharePayload, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = `sinevia-liste-paylasimi-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('Paylaşım listesi indirildi!', 'success');
   }, [data.collections, data.movies, data.series, showToast]);
-
   const importShareList = useCallback((json: string): boolean => {
     try {
-      const parsed = JSON.parse(json);
-      const incMovies: any[] = Array.isArray(parsed.movies) ? parsed.movies : [];
-      const incSeries: any[] = Array.isArray(parsed.series) ? parsed.series : [];
-      const incCols: any[] = Array.isArray(parsed.collections) ? parsed.collections : [];
-
-      const colIdMap = new Map<string, string>();
-      const newCollections: Collection[] = [];
-      const tempCols = [...data.collections];
-
-      incCols.forEach((ic) => {
-        if (!ic || !ic.name) return;
-        const ex = tempCols.find((c) => normalize(c.name) === normalize(ic.name));
-        if (ex) colIdMap.set(ic.id, ex.id);
-        else { const nid = uid(), nc = { id: nid, name: ic.name.trim() }; newCollections.push(nc); tempCols.push(nc); colIdMap.set(ic.id, nid); }
-      });
-
-      let tempGenres = [...data.genres];
-      const newMovies: Movie[] = [];
-      const existingMovieTitles = new Set(data.movies.map((m) => normalize(m.title)));
-
-      incMovies.forEach((im) => {
-        if (!im || !im.title) return;
-        const normTitle = normalize(im.title);
-        if (existingMovieTitles.has(normTitle)) return;
-        existingMovieTitles.add(normTitle);
-        const resolvedGenres = resolveTMDBGenres(Array.isArray(im.genres) ? im.genres : [], tempGenres);
-        tempGenres = addNewGenres(tempGenres, resolvedGenres);
-        newMovies.push({
-          id: uid(), title: im.title.trim(), year: im.year ? String(im.year).trim() : '',
-          genres: resolvedGenres, collectionId: im.collectionId && colIdMap.has(im.collectionId) ? colIdMap.get(im.collectionId)! : null,
-          runtime: im.runtime, posterUrl: im.posterUrl || undefined, overview: im.overview || undefined,
-          tmdbId: im.tmdbId, imdbId: im.imdbId, watchProviders: im.watchProviders,
-          directors: im.directors, cast: im.cast, studios: im.studios, keywords: im.keywords,
-          originalLanguage: im.originalLanguage, customUrl: im.customUrl,
-          watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString()
-        });
-      });
-
-      const newSeries: Series[] = [];
-      const existingSeriesTitles = new Set([...data.series.map((s) => normalize(s.title)), ...data.removedSeriesTitles.map((t) => normalize(t))]);
-
-      incSeries.forEach((is) => {
-        if (!is || !is.title) return;
-        const normTitle = normalize(is.title);
-        if (existingSeriesTitles.has(normTitle)) return;
-        existingSeriesTitles.add(normTitle);
-        const resolvedGenres = resolveTMDBGenres(Array.isArray(is.genres) ? is.genres : [], tempGenres);
-        tempGenres = addNewGenres(tempGenres, resolvedGenres);
-        const episodes: Episode[] = Array.isArray(is.episodes)
-          ? is.episodes.map((ep: any) => ({ id: uid(), season: Number(ep.season) || 1, episode: Number(ep.episode) || 1, watched: false, rating: null, note: '', watchedAt: null }))
-          : [];
-        newSeries.push({
-          id: uid(), title: is.title.trim(), year: is.year ? String(is.year).trim() : undefined,
-          genres: resolvedGenres, episodes, posterUrl: is.posterUrl || undefined, overview: is.overview || undefined,
-          tmdbId: is.tmdbId, imdbId: is.imdbId, watchProviders: is.watchProviders,
-          creators: is.creators, cast: is.cast, studios: is.studios, keywords: is.keywords,
-          originalLanguage: is.originalLanguage, customUrl: is.customUrl, addedAt: new Date().toISOString()
-        });
-      });
-
-      if (newMovies.length === 0 && newSeries.length === 0 && newCollections.length === 0) {
-        showToast('Listendeki tüm film ve diziler zaten mevcut!', 'info');
-        return true;
-      }
-
-      dispatch({ type: 'MERGE_SHARED_LIST', movies: newMovies, series: newSeries, collections: newCollections, genres: tempGenres });
-      showToast(`${newMovies.length} yeni film ve ${newSeries.length} yeni dizi eklendi!`, 'success');
-      return true;
-    } catch {
-      showToast('Geçersiz paylaşım dosyası!', 'error');
-      return false;
-    }
+      const parsed = JSON.parse(json); const incMovies: any[] = Array.isArray(parsed.movies) ? parsed.movies : []; const incSeries: any[] = Array.isArray(parsed.series) ? parsed.series : []; const incCols: any[] = Array.isArray(parsed.collections) ? parsed.collections : [];
+      const colIdMap = new Map<string, string>(); const newCollections: Collection[] = []; const tempCols = [...data.collections];
+      incCols.forEach((ic) => { if (!ic || !ic.name) return; const ex = tempCols.find((c) => normalize(c.name) === normalize(ic.name)); if (ex) colIdMap.set(ic.id, ex.id); else { const nid = uid(), nc = { id: nid, name: ic.name.trim() }; newCollections.push(nc); tempCols.push(nc); colIdMap.set(ic.id, nid); } });
+      let tempGenres = [...data.genres]; const newMovies: Movie[] = []; const existingMovieTitles = new Set(data.movies.map((m) => normalize(m.title)));
+      incMovies.forEach((im) => { if (!im || !im.title) return; const normTitle = normalize(im.title); if (existingMovieTitles.has(normTitle)) return; existingMovieTitles.add(normTitle); const resolvedGenres = resolveTMDBGenres(Array.isArray(im.genres) ? im.genres : [], tempGenres); tempGenres = addNewGenres(tempGenres, resolvedGenres); newMovies.push({ id: uid(), title: im.title.trim(), year: im.year ? String(im.year).trim() : '', genres: resolvedGenres, collectionId: im.collectionId && colIdMap.has(im.collectionId) ? colIdMap.get(im.collectionId)! : null, runtime: im.runtime, posterUrl: im.posterUrl || undefined, overview: im.overview || undefined, tmdbId: im.tmdbId, imdbId: im.imdbId, watchProviders: im.watchProviders, directors: im.directors, cast: im.cast, studios: im.studios, keywords: im.keywords, originalLanguage: im.originalLanguage, customUrl: im.customUrl, watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString() }); });
+      const newSeries: Series[] = []; const existingSeriesTitles = new Set([...data.series.map((s) => normalize(s.title)), ...data.removedSeriesTitles.map((t) => normalize(t))]);
+      incSeries.forEach((is) => { if (!is || !is.title) return; const normTitle = normalize(is.title); if (existingSeriesTitles.has(normTitle)) return; existingSeriesTitles.add(normTitle); const resolvedGenres = resolveTMDBGenres(Array.isArray(is.genres) ? is.genres : [], tempGenres); tempGenres = addNewGenres(tempGenres, resolvedGenres); const episodes: Episode[] = Array.isArray(is.episodes) ? is.episodes.map((ep: any) => ({ id: uid(), season: Number(ep.season) || 1, episode: Number(ep.episode) || 1, watched: false, rating: null, note: '', watchedAt: null })) : []; newSeries.push({ id: uid(), title: is.title.trim(), year: is.year ? String(is.year).trim() : undefined, genres: resolvedGenres, episodes, posterUrl: is.posterUrl || undefined, overview: is.overview || undefined, tmdbId: is.tmdbId, imdbId: is.imdbId, watchProviders: is.watchProviders, creators: is.creators, cast: is.cast, studios: is.studios, keywords: is.keywords, originalLanguage: is.originalLanguage, customUrl: is.customUrl, addedAt: new Date().toISOString() }); });
+      if (newMovies.length === 0 && newSeries.length === 0 && newCollections.length === 0) { showToast('Listendeki tüm film ve diziler zaten mevcut!', 'info'); return true; }
+      dispatch({ type: 'MERGE_SHARED_LIST', movies: newMovies, series: newSeries, collections: newCollections, genres: tempGenres }); showToast(`${newMovies.length} yeni film ve ${newSeries.length} yeni dizi eklendi!`, 'success'); return true;
+    } catch { showToast('Geçersiz paylaşım dosyası!', 'error'); return false; }
   }, [data.collections, data.genres, data.movies, data.removedSeriesTitles, data.series, showToast]);
-
-  const dismissLevelUp = useCallback(() => setLevelUpData(null), []);
-  const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
-  
-  const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
-
-  const findPlanConflict = useCallback((date: string, time: string, runtime: number | undefined, excludeId?: string) => {
-    return (data.weeklyPlan || []).find((p) => {
-      if (p.id === excludeId) return false;
-      const refMovie = data.movies.find((m) => m.id === p.movieId);
-      if (refMovie?.watched) return false;
-      return planItemsOverlap(date, time, runtime, p.date, p.time, p.runtime);
-    });
-  }, [data.weeklyPlan, data.movies]);
-
-  const addPlanItem = useCallback((movie: Movie, date: string, time: string): boolean => {
-    const conflict = findPlanConflict(date, time, movie.runtime);
-    if (conflict) {
-      showToast(`⛔ Bu saat aralığında zaten "${conflict.title}" planlanmış! Önce onu değiştir ya da sil.`, 'warning');
-      return false;
-    }
-    dispatch({
-      type: 'ADD_PLAN_ITEM',
-      item: {
-        id: uid(),
-        movieId: movie.id,
-        title: movie.title,
-        year: movie.year,
-        posterUrl: movie.posterUrl,
-        genres: movie.genres,
-        runtime: movie.runtime,
-        date,
-        time,
-        createdAt: new Date().toISOString(),
-      },
-    });
-    showToast(`"${movie.title}" ${time} için plana eklendi`, 'success');
-    return true;
-  }, [findPlanConflict, showToast]);
-
-  const deletePlanItem = useCallback((id: string) => {
-    dispatch({ type: 'DELETE_PLAN_ITEM', id });
-    showToast('Plan öğesi kaldırıldı', 'info');
-  }, [showToast]);
-
-  const updatePlanItem = useCallback((id: string, date: string, time: string): boolean => {
-    const item = (data.weeklyPlan || []).find((p) => p.id === id);
-    const conflict = findPlanConflict(date, time, item?.runtime, id);
-    if (conflict) {
-      showToast(`⛔ Bu saat aralığında zaten "${conflict.title}" planlanmış!`, 'warning');
-      return false;
-    }
-    dispatch({ type: 'UPDATE_PLAN_ITEM', id, date, time });
-    showToast('Plan güncellendi', 'success');
-    return true;
-  }, [data.weeklyPlan, findPlanConflict, showToast]);
+  const dismissLevelUp = useCallback(() => setLevelUpData(null), []); const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []); const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
+  const findPlanConflict = useCallback((date: string, time: string, runtime: number | undefined, excludeId?: string) => { return (data.weeklyPlan || []).find((p) => { if (p.id === excludeId) return false; const refMovie = data.movies.find((m) => m.id === p.movieId); if (refMovie?.watched) return false; return planItemsOverlap(date, time, runtime, p.date, p.time, p.runtime); }); }, [data.weeklyPlan, data.movies]);
+  const addPlanItem = useCallback((movie: Movie, date: string, time: string): boolean => { const conflict = findPlanConflict(date, time, movie.runtime); if (conflict) { showToast(`⛔ Bu saat aralığında zaten "${conflict.title}" planlanmış!`, 'warning'); return false; } dispatch({ type: 'ADD_PLAN_ITEM', item: { id: uid(), movieId: movie.id, title: movie.title, year: movie.year, posterUrl: movie.posterUrl, genres: movie.genres, runtime: movie.runtime, date, time, createdAt: new Date().toISOString() } }); showToast(`"${movie.title}" plana eklendi`, 'success'); return true; }, [findPlanConflict, showToast]);
+  const deletePlanItem = useCallback((id: string) => { dispatch({ type: 'DELETE_PLAN_ITEM', id }); showToast('Plan silindi', 'info'); }, [showToast]);
+  const updatePlanItem = useCallback((id: string, date: string, time: string): boolean => { const item = (data.weeklyPlan || []).find((p) => p.id === id); const conflict = findPlanConflict(date, time, item?.runtime, id); if (conflict) { showToast(`⛔ Çakışma var: "${conflict.title}"`, 'warning'); return false; } dispatch({ type: 'UPDATE_PLAN_ITEM', id, date, time }); showToast('Plan güncellendi', 'success'); return true; }, [data.weeklyPlan, findPlanConflict, showToast]);
 
   return (
-    <AppContext.Provider value={{ data, isQuestCelebrating, setIsQuestCelebrating, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications }}>
+    <AppContext.Provider value={{ data, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleSpecificNotification }}>
       {children}
     </AppContext.Provider>
   );

@@ -12,6 +12,7 @@ import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage';
 import AIPage from './pages/AIPage';
 import WeeklyPlanPage from './pages/WeeklyPlanPage';
+import NetworkPage from './pages/NetworkPage'; // YENİ: Sinevia Ağı import edildi
 import Toasts from './components/Toasts';
 import AchievementToasts from './components/AchievementToasts';
 import LevelUpModal from './components/LevelUpModal';
@@ -23,6 +24,7 @@ const VALID_TABS: TabId[] = [
   'home',
   'movies',
   'series',
+  'network', // YENİ: Ağ sekmesi geçerli yollara eklendi
   'plan',
   'history',
   'achievements',
@@ -94,6 +96,7 @@ function AppContent() {
       {activeTab === 'home' && <HomePage />}
       {activeTab === 'movies' && <MoviesPage />}
       {activeTab === 'series' && <SeriesPage />}
+      {activeTab === 'network' && <NetworkPage />} {/* YENİ: Tıklandığında NetworkPage açılacak */}
       {activeTab === 'plan' && <WeeklyPlanPage />}
       {activeTab === 'history' && <HistoryPage />}
       {activeTab === 'achievements' && <AchievementsPage />}

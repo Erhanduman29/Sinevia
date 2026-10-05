@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus, Tag, History } from 'lucide-react';
+import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus, Tag, History, ShieldAlert } from 'lucide-react'; // YENİ: ShieldAlert ikonu eklendi
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
 
@@ -61,8 +61,19 @@ export default function RatingModal({
   const [hoverRating, setHoverRating] = useState<number | null>(null);
 
   const [note, setNote] = useState<string>(() => {
-    if (savedDraft && typeof savedDraft.note === 'string') return savedDraft.note;
-    return initialNote;
+    if (savedDraft && typeof savedDraft.note === 'string') {
+      // YENİ: Kayıtlı taslaktan spoiler etiketini temizleyerek göster
+      return savedDraft.note.replace(/\[spoiler\]/g, '').trim();
+    }
+    return initialNote.replace(/\[spoiler\]/g, '').trim();
+  });
+
+  // YENİ: Spoiler Checkbox State
+  const [isSpoiler, setIsSpoiler] = useState<boolean>(() => {
+    if (savedDraft && typeof savedDraft.note === 'string') {
+      return savedDraft.note.includes('[spoiler]');
+    }
+    return initialNote.includes('[spoiler]');
   });
 
   const [isPastWatch, setIsPastWatch] = useState<boolean>(() => {
@@ -113,7 +124,7 @@ export default function RatingModal({
         draftKey,
         JSON.stringify({
           rating,
-          note,
+          note: isSpoiler ? `[spoiler] ${note}` : note, // Taslağa kaydederken spoiler etiketini ekle
           selectedTags,
           showCriteria,
           critScores,
@@ -121,7 +132,7 @@ export default function RatingModal({
         })
       );
     } catch {}
-  }, [draftKey, rating, note, selectedTags, showCriteria, critScores, isPastWatch]);
+  }, [draftKey, rating, note, isSpoiler, selectedTags, showCriteria, critScores, isPastWatch]);
 
   const handleResetDraft = () => {
     try {
@@ -129,7 +140,8 @@ export default function RatingModal({
     } catch {}
     const defRating = initialRating ?? 8;
     setRating(defRating);
-    setNote(initialNote);
+    setNote(initialNote.replace(/\[spoiler\]/g, '').trim());
+    setIsSpoiler(initialNote.includes('[spoiler]'));
     setSelectedTags(initialReviewTags || []);
     setIsPastWatch(Boolean(initialIsPastWatch));
     const defShow = Boolean(initialDetailedRating && Object.keys(initialDetailedRating).length > 0);
@@ -263,10 +275,15 @@ export default function RatingModal({
   const handleSubmit = () => {
     const finalDetailed = showCriteria && criteriaList.length > 0 ? critScores : undefined;
     const finalTags = selectedTags.length > 0 ? selectedTags : undefined;
+    
+    // YENİ: Eğer spoiler işaretliyse nota etiketi ekle, yoksa temiz notu yolla
+    const finalNote = isSpoiler ? `[spoiler] ${note.trim()}` : note.trim();
+    
     try {
       localStorage.removeItem(draftKey);
     } catch {}
-    onRate(rating, note.trim(), finalDetailed, finalTags, canTogglePastWatch ? isPastWatch : false);
+    
+    onRate(rating, finalNote, finalDetailed, finalTags, canTogglePastWatch ? isPastWatch : false);
     onClose();
   };
 
@@ -609,20 +626,36 @@ export default function RatingModal({
             )}
           </div>
 
-          {/* KİŞİSEL İNCELEME DEFTERİ */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
+          {/* KİŞİSEL İNCELEME DEFTERİ VE SPOILER KUTUSU */}
+          <div className="space-y-1.5 pt-2 border-t border-ink-800/60">
+            <div className="flex items-center justify-between mb-1">
               <label className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-ink-300 flex items-center gap-1.5">
                 <StickyNote size={13} className="text-gold-400" /> Eleştirmen Notun
               </label>
-              <span className="text-[10px] text-ink-500 font-mono">{note.length} krk</span>
+              
+              {/* YENİ: SPOILER ONAY KUTUSU */}
+              <button 
+                type="button"
+                onClick={() => setIsSpoiler(!isSpoiler)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all ${
+                  isSpoiler 
+                    ? 'bg-red-500/20 border-red-500/40 text-red-400' 
+                    : 'bg-ink-900 border-ink-800 text-ink-500 hover:bg-ink-800 hover:text-ink-400'
+                }`}
+              >
+                <ShieldAlert size={12} className={isSpoiler ? "animate-pulse" : ""} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">{isSpoiler ? 'Spoiler İçeriyor' : 'Spoiler Yok'}</span>
+                <div className={`w-3 h-3 rounded flex items-center justify-center ml-1 border ${isSpoiler ? 'bg-red-500 border-red-400 text-white' : 'bg-ink-950 border-ink-700 text-transparent'}`}>
+                  <Check size={10} strokeWidth={4} />
+                </div>
+              </button>
             </div>
 
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
-              placeholder="Bu yapım hakkında ne düşündün? (Otomatik taslak olarak kaydedilir...)"
+              placeholder="Bu yapım hakkında ne düşündün? (Ağda arkadaşların da görecek...)"
               className="w-full bg-ink-900/80 border border-ink-700/80 rounded-2xl p-3 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all resize-none shadow-inner"
             />
           </div>
@@ -635,7 +668,7 @@ export default function RatingModal({
             onClick={onClose}
             className="px-4 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm bg-ink-900 hover:bg-ink-800 text-ink-300 border border-ink-800 transition-colors"
           >
-            Sonra
+            İptal
           </button>
           <button
             type="button"
@@ -650,7 +683,7 @@ export default function RatingModal({
             <span>
               {isPastWatch && canTogglePastWatch
                 ? `${rating} Puanla (Önceden İzlendi)`
-                : `${rating} Puanla Kaydet`}
+                : `${rating} Puanla ve Kaydet`}
             </span>
           </button>
         </div>
