@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, UserPlus, Trophy, Activity, Check, X, Clock, Star, Plus, Copy, RefreshCw, Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift, ListVideo, Search, Filter, Eye, Info, MessageSquare, BarChart2, CheckSquare, MessageCircle, UserCheck, CheckCircle2 } from 'lucide-react';
+import { Users, UserPlus, Trophy, Activity, Check, X, Clock, Star, Plus, Copy, RefreshCw, Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift, ListVideo, Search, Filter, Eye, Info, MessageSquare, BarChart2, CheckSquare, MessageCircle, UserCheck, CheckCircle2, LogOut, Settings, UserMinus, Crown } from 'lucide-react';
 import { useApp, isPositiveTag } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { uid } from '../lib/utils';
@@ -40,7 +40,6 @@ export default function NetworkPage() {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [unreadMessages, setUnreadMessages] = useState<Record<string, number>>({});
   
-  // PROFİL İNCELEME (STALK) MODALI STATELERİ
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [profileTab, setProfileTab] = useState<ProfileTabType>('stats');
   const [friendLogs, setFriendLogs] = useState<any[]>([]);
@@ -59,19 +58,22 @@ export default function NetworkPage() {
   const [listToDelete, setListToDelete] = useState<string | null>(null);
   const [friendToRemove, setFriendToRemove] = useState<string | null>(null);
 
-  // MESAJLAŞMA MERKEZİ (CHAT HUB) STATELERİ
   const [isChatHubOpen, setIsChatHubOpen] = useState(false);
   const [hubTab, setHubTab] = useState<'direct' | 'group'>('direct');
-  const [hubActiveChat, setHubActiveChat] = useState<{ id: string, type: 'direct' | 'group', name?: string, members?: any[] } | null>(null);
+  const [hubActiveChat, setHubActiveChat] = useState<{ id: string, type: 'direct' | 'group', name?: string, members?: any[], created_by?: string } | null>(null);
   const [hubInboxDirect, setHubInboxDirect] = useState<any[]>([]);
   const [hubInboxGroup, setHubInboxGroup] = useState<any[]>([]);
   const [hubMessages, setHubMessages] = useState<any[]>([]);
   const [hubInput, setHubInput] = useState('');
   
+  const [groupActionConf, setGroupActionConf] = useState<{ id: string, name: string, action: 'leave' | 'delete' } | null>(null);
+  const [showGroupManager, setShowGroupManager] = useState(false);
+  const [memberToKick, setMemberToKick] = useState<{ id: string, name: string } | null>(null);
+  
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const hubScrollRef = useRef<HTMLDivElement>(null);
   const viewingProfileIdRef = useRef<string | null>(null);
-  const hubActiveChatRef = useRef<{ id: string, type: 'direct' | 'group', name?: string, members?: any[] } | null>(null);
+  const hubActiveChatRef = useRef<{ id: string, type: 'direct' | 'group', name?: string, members?: any[], created_by?: string } | null>(null);
   
   const [hubCreateMode, setHubCreateMode] = useState<'direct' | 'group' | null>(null);
   const [newDirectCode, setNewDirectCode] = useState('');
@@ -88,16 +90,14 @@ export default function NetworkPage() {
     if (targetId === data.agentId) return; 
     setViewingProfileId(targetId);
     setProfileTab(initialTab);
-    setChatMessages([]); // Çakışma önleyici
+    setChatMessages([]);
     const { data: logsData } = await supabase.from('network_logs').select('*').eq('agent_id', targetId).order('created_at', { ascending: false }).limit(30);
     setFriendLogs(logsData || []);
   };
 
-  // Profil sohbeti için tetikleyici
   useEffect(() => {
     const loadProfileChat = async () => {
       if (viewingProfileId && profileTab === 'chat' && data.agentId) {
-        // .is('group_id', null) kaldırıldı, lokal filtreleme yapılıyor
         const { data: rawMsgs } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${viewingProfileId}),and(sender_id.eq.${viewingProfileId},receiver_id.eq.${data.agentId})`).order('created_at', { ascending: true });
         
         setChatMessages((prev: any[]) => {
@@ -117,7 +117,7 @@ export default function NetworkPage() {
     if (!data.agentId) return;
     try {
       const { data: rawDirectMsgs } = await supabase.from('messages').select('*').or(`sender_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).order('created_at', { ascending: false });
-      const directMsgs = (rawDirectMsgs || []).filter((m: any) => !m.group_id); // Lokal filtreleme
+      const directMsgs = (rawDirectMsgs || []).filter((m: any) => !m.group_id);
 
       const dMap = new Map();
       directMsgs.forEach((msg: any) => {
@@ -145,7 +145,7 @@ export default function NetworkPage() {
           groupsData.forEach((g: any) => {
             const lastMsg = gMsgs?.find((m: any) => m.group_id === g.id);
             gMap.set(g.id, {
-              id: g.id, type: 'group', name: g.name,
+              id: g.id, type: 'group', name: g.name, created_by: g.created_by,
               lastMessage: lastMsg ? `${lastMsg.sender_id === data.agentId ? 'Sen' : 'Biri'}: ${lastMsg.content}` : 'Grup oluşturuldu',
               created_at: lastMsg ? lastMsg.created_at : g.created_at,
               unread: 0 
@@ -178,7 +178,7 @@ export default function NetworkPage() {
         const { data: rawMsgs } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${hubActiveChat.id}),and(sender_id.eq.${hubActiveChat.id},receiver_id.eq.${data.agentId})`).order('created_at', { ascending: true });
         
         setHubMessages((prev: any[]) => {
-          const newMsgs = (rawMsgs || []).filter((m: any) => !m.group_id); // Lokal filtreleme
+          const newMsgs = (rawMsgs || []).filter((m: any) => !m.group_id);
           const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
           const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.receiver_id === hubActiveChat.id && !m.group_id);
           return [...newMsgs, ...localOnly].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -199,7 +199,15 @@ export default function NetworkPage() {
         try {
           const { data: members } = await supabase.from('chat_group_members').select('agent_id').eq('group_id', hubActiveChat.id);
           if (members) {
-            const mIds = members.map((m: any) => m.agent_id).filter((id: string) => id !== data.agentId);
+            const allIds = members.map((m: any) => m.agent_id);
+            if (!allIds.includes(data.agentId)) {
+               setHubActiveChat(null);
+               setShowGroupManager(false);
+               showToast('Bu gruptan çıkarıldınız.', 'warning');
+               return;
+            }
+
+            const mIds = allIds.filter((id: string) => id !== data.agentId);
             if (JSON.stringify(hubActiveChat.members) !== JSON.stringify(mIds)) {
               setHubActiveChat(prev => prev ? { ...prev, members: mIds } : null);
             }
@@ -247,7 +255,7 @@ export default function NetworkPage() {
       setRecommendations(recList);
 
       const { data: unreadDataRaw } = await supabase.from('messages').select('sender_id, group_id').eq('receiver_id', data.agentId).eq('is_read', false);
-      const unreadData = (unreadDataRaw || []).filter((m: any) => !m.group_id); // Lokal filtreleme
+      const unreadData = (unreadDataRaw || []).filter((m: any) => !m.group_id);
       
       const unreads: Record<string, number> = {};
       unreadData.forEach((msg: any) => { unreads[msg.sender_id] = (unreads[msg.sender_id] || 0) + 1; });
@@ -379,6 +387,53 @@ export default function NetworkPage() {
     } catch (err) { showToast('Mesaj gönderilemedi', 'error'); }
   };
 
+  const executeGroupAction = async () => {
+    if (!groupActionConf) return;
+    try {
+      if (groupActionConf.action === 'delete') {
+        await supabase.from('chat_groups').delete().eq('id', groupActionConf.id);
+        await supabase.from('chat_group_members').delete().eq('group_id', groupActionConf.id);
+        await supabase.from('messages').delete().eq('group_id', groupActionConf.id);
+        showToast('Grup başarıyla silindi.', 'success');
+      } else {
+        await supabase.from('chat_group_members').delete().eq('group_id', groupActionConf.id).eq('agent_id', data.agentId);
+        showToast('Gruptan ayrıldınız.', 'info');
+      }
+      setHubActiveChat(null);
+      setGroupActionConf(null);
+      setSyncTick(t => t + 1);
+    } catch (err) {
+      showToast('İşlem sırasında hata oluştu.', 'error');
+    }
+  };
+
+  const handleAddMemberToGroup = async (agentId: string) => {
+    if (!hubActiveChat || hubActiveChat.type !== 'group') return;
+    try {
+      await supabase.from('chat_group_members').insert([{ group_id: hubActiveChat.id, agent_id: agentId }]);
+      const updatedMembers = [...(hubActiveChat.members || []), agentId];
+      setHubActiveChat(prev => prev ? { ...prev, members: updatedMembers } : null);
+      showToast('Ajan gruba eklendi!', 'success');
+      setSyncTick(t => t + 1);
+    } catch (err) {
+      showToast('Ekleme başarısız!', 'error');
+    }
+  };
+
+  const handleKickMemberFromGroup = async (agentId: string) => {
+    if (!hubActiveChat || hubActiveChat.type !== 'group') return;
+    try {
+      await supabase.from('chat_group_members').delete().eq('group_id', hubActiveChat.id).eq('agent_id', agentId);
+      const updatedMembers = (hubActiveChat.members || []).filter(id => id !== agentId);
+      setHubActiveChat(prev => prev ? { ...prev, members: updatedMembers } : null);
+      showToast('Ajan gruptan atıldı.', 'info');
+      setMemberToKick(null);
+      setSyncTick(t => t + 1);
+    } catch (err) {
+      showToast('Atma işlemi başarısız!', 'error');
+    }
+  };
+
   const handleStartNewDirectChat = async () => {
     const code = newDirectCode.trim().toUpperCase();
     if (!code) return;
@@ -392,7 +447,7 @@ export default function NetworkPage() {
       setHubCreateMode(null);
       setNewDirectCode('');
       setHubTab('direct');
-      setHubMessages([]); // KANAMA ÖNLEYİCİ
+      setHubMessages([]); 
       setHubActiveChat({ id: code, type: 'direct' });
     } catch (err) { showToast('Hata oluştu', 'error'); }
   };
@@ -408,7 +463,7 @@ export default function NetworkPage() {
       const members = [...newGroupMembers, data.agentId].map(id => ({ group_id: groupId, agent_id: id }));
       await supabase.from('chat_group_members').insert(members);
 
-      const newG = { id: groupId, type: 'group', name: newGroupName.trim(), lastMessage: 'Grup oluşturuldu', created_at: new Date().toISOString(), unread: 0 };
+      const newG = { id: groupId, type: 'group', name: newGroupName.trim(), created_by: data.agentId, lastMessage: 'Grup oluşturuldu', created_at: new Date().toISOString(), unread: 0 };
       setHubInboxGroup((prev: any[]) => [newG, ...prev]);
 
       showToast('Grup kuruldu!', 'success');
@@ -416,8 +471,8 @@ export default function NetworkPage() {
       setNewGroupName('');
       setNewGroupMembers([]);
       setHubTab('group');
-      setHubMessages([]); // KANAMA ÖNLEYİCİ
-      setHubActiveChat({ id: groupId, type: 'group', name: newGroupName.trim(), members: newGroupMembers });
+      setHubMessages([]); 
+      setHubActiveChat({ id: groupId, type: 'group', name: newGroupName.trim(), members: newGroupMembers, created_by: data.agentId });
       setSyncTick(t => t + 1);
     } catch (err) {
       showToast('Sistem hatası!', 'error');
@@ -590,7 +645,7 @@ export default function NetworkPage() {
                   return (
                     <div key={log.id} className="bg-ink-950 hover:bg-ink-900 border border-ink-800 rounded-2xl overflow-hidden transition-all group flex flex-col relative shadow-md hover:shadow-lg">
                       <button onClick={() => openProfileModal(log.agent_id)} className="p-3 border-b border-ink-800/60 bg-ink-900/40 flex items-start gap-3 hover:bg-ink-800/60 transition-colors text-left w-full">
-                        <div className="w-8 h-8 rounded-lg bg-ink-800 flex items-center justify-center text-xs font-black text-emerald-400 flex-shrink-0 border border-ink-700">{profile.nickname[0].toUpperCase()}</div>
+                        <div className="w-8 h-8 rounded-lg bg-ink-800 flex items-center justify-center text-xs font-black text-emerald-400 flex-shrink-0 border border-ink-700">{profile.nickname?.[0]?.toUpperCase() || '?'}</div>
                         <div className="flex flex-col flex-1 min-w-0">
                           <span className="text-sm font-bold text-white leading-snug group-hover:text-emerald-300 break-words pr-1 line-clamp-2">{profile.nickname}</span>
                           <span className="text-[9px] sm:text-[10px] text-ink-500 font-mono mt-1">{timeAgo(log.created_at)}</span>
@@ -762,7 +817,7 @@ export default function NetworkPage() {
                       <div className={`col-span-1 text-center font-mono text-sm sm:text-base font-black ${rankColor}`}>{rank}</div>
                       <div className="col-span-8 sm:col-span-8 flex items-center gap-3 min-w-0 pl-2">
                         <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-xs sm:text-sm ${isMe ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-ink-800 text-ink-300 border border-ink-700'}`}>
-                          {user.nickname[0].toUpperCase()}
+                          {user.nickname?.[0]?.toUpperCase() || '?'}
                         </div>
                         <div className="truncate flex items-center gap-2">
                           <span className={`text-sm sm:text-base font-bold truncate ${isMe ? 'text-emerald-400' : 'text-ink-100'}`}>{user.nickname}</span>
@@ -805,7 +860,7 @@ export default function NetworkPage() {
                         return (
                           <div key={req.id} className="flex items-center justify-between bg-ink-950 border border-ink-800 p-3 sm:p-4 rounded-2xl shadow-sm">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-ink-800 flex items-center justify-center font-black text-white text-sm">{p.nickname[0]}</div>
+                              <div className="w-10 h-10 rounded-xl bg-ink-800 flex items-center justify-center font-black text-white text-sm">{p.nickname?.[0]?.toUpperCase() || '?'}</div>
                               <div className="leading-tight">
                                 <div className="text-sm font-bold text-white mb-0.5">{p.nickname}</div>
                                 <div className="text-[10px] text-ink-500 font-mono">{p.agent_id}</div>
@@ -830,7 +885,7 @@ export default function NetworkPage() {
                         return (
                           <div key={req.id} className="flex items-center justify-between bg-ink-950 border border-ink-800/50 p-3 sm:p-4 rounded-2xl opacity-70">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-ink-900 flex items-center justify-center font-bold text-ink-500 text-sm">{p.nickname[0]}</div>
+                              <div className="w-10 h-10 rounded-xl bg-ink-900 flex items-center justify-center font-bold text-ink-500 text-sm">{p.nickname?.[0]?.toUpperCase() || '?'}</div>
                               <div className="leading-tight">
                                 <div className="text-sm font-bold text-ink-300 mb-0.5">{p.nickname}</div>
                                 <div className="text-[10px] text-ink-600 font-mono">{p.agent_id}</div>
@@ -861,7 +916,7 @@ export default function NetworkPage() {
                       <div key={f.agent_id} className="flex items-center justify-between bg-ink-950 border border-ink-800 p-4 rounded-2xl hover:border-azure-500/50 transition-colors group shadow-sm">
                         <button onClick={() => openProfileModal(f.agent_id)} className="flex items-center gap-4 text-left flex-1 min-w-0">
                           <div className="relative">
-                            <div className="w-12 h-12 rounded-xl bg-azure-500/10 border border-azure-500/20 flex items-center justify-center font-black text-azure-400 text-lg">{f.nickname[0].toUpperCase()}</div>
+                            <div className="w-12 h-12 rounded-xl bg-azure-500/10 border border-azure-500/20 flex items-center justify-center font-black text-azure-400 text-lg">{f.nickname?.[0]?.toUpperCase() || '?'}</div>
                             {unread > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full border-2 border-ink-950" />}
                           </div>
                           <div className="leading-tight truncate">
@@ -938,7 +993,7 @@ export default function NetworkPage() {
                           className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 transition-all ${isActive ? 'bg-azure-500/10 border border-azure-500/30' : 'bg-transparent hover:bg-ink-900/50 border border-transparent'}`}
                         >
                           <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-black text-lg bg-ink-800 text-ink-300">
-                            {prof?.nickname[0]?.toUpperCase() || '?'}
+                            {prof?.nickname?.[0]?.toUpperCase() || '?'}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
@@ -964,7 +1019,7 @@ export default function NetworkPage() {
                           onClick={() => { 
                             if(hubActiveChat?.id !== chat.id) {
                               setHubMessages([]);
-                              setHubActiveChat({ id: chat.id, type: 'group', name: chat.name }); 
+                              setHubActiveChat({ id: chat.id, type: 'group', name: chat.name, created_by: chat.created_by }); 
                               setHubCreateMode(null); 
                             }
                           }}
@@ -1023,7 +1078,7 @@ export default function NetworkPage() {
                             const isSelected = newGroupMembers.includes(f.agent_id);
                             return (
                               <div key={f.agent_id} onClick={() => setNewGroupMembers(prev => isSelected ? prev.filter(id => id !== f.agent_id) : [...prev, f.agent_id])} className={`p-3 rounded-xl border cursor-pointer flex items-center gap-3 transition-colors ${isSelected ? 'bg-indigo-500/10 border-indigo-500/40' : 'bg-ink-900/40 border-ink-800 hover:border-ink-700'}`}>
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${isSelected ? 'bg-indigo-500 text-white' : 'bg-ink-800 text-ink-300'}`}>{f.nickname[0]}</div>
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${isSelected ? 'bg-indigo-500 text-white' : 'bg-ink-800 text-ink-300'}`}>{f.nickname?.[0]?.toUpperCase() || '?'}</div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-bold text-white truncate">{f.nickname}</div>
                                   <div className="text-[9px] text-ink-500 font-mono">{f.agent_id}</div>
@@ -1055,20 +1110,42 @@ export default function NetworkPage() {
                 </div>
               ) : (
                 <>
-                  <div className="h-16 border-b border-ink-800 bg-ink-900/40 flex items-center px-5 shrink-0">
+                  <div className="h-16 border-b border-ink-800 bg-ink-900/40 flex items-center justify-between pl-5 pr-14 sm:pr-16 shrink-0 relative">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${hubActiveChat.type === 'group' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-ink-800 text-emerald-400'}`}>
-                        {hubActiveChat.type === 'group' ? <Users size={16} /> : (profilesMap[hubActiveChat.id]?.nickname[0] || '?')}
+                        {hubActiveChat.type === 'group' ? <Users size={16} /> : (profilesMap[hubActiveChat.id]?.nickname?.[0]?.toUpperCase() || '?')}
                       </div>
                       <div>
                         <h3 className="text-sm font-black text-white">{hubActiveChat.type === 'group' ? hubActiveChat.name : (profilesMap[hubActiveChat.id]?.nickname || 'Ajan')}</h3>
                         {hubActiveChat.type === 'group' ? (
-                          <div className="text-[10px] text-ink-400 font-medium truncate max-w-[250px]">Siz, {hubActiveChat.members?.map(id => profilesMap[id]?.nickname.split(' ')[0] || 'Ajan').join(', ')}</div>
+                          <div className="text-[10px] text-ink-400 font-medium truncate max-w-[200px] sm:max-w-[300px]">Siz, {hubActiveChat.members?.map(id => profilesMap[id]?.nickname?.split(' ')[0] || 'Ajan').join(', ')}</div>
                         ) : (
                           <div className="text-[10px] text-ink-500 font-mono flex items-center gap-1"><CheckCircle2 size={10}/> Aktif Bağlantı</div>
                         )}
                       </div>
                     </div>
+                    {hubActiveChat.type === 'group' && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setShowGroupManager(true)}
+                          className="p-2 text-ink-400 hover:text-indigo-400 bg-ink-900 hover:bg-indigo-500/10 rounded-xl transition-colors"
+                          title="Grubu Yönet"
+                        >
+                          <Settings size={18} />
+                        </button>
+                        <button
+                          onClick={() => setGroupActionConf({
+                            id: hubActiveChat.id,
+                            name: hubActiveChat.name || 'Grup',
+                            action: hubActiveChat.created_by === data.agentId ? 'delete' : 'leave'
+                          })}
+                          className="p-2 text-ink-500 hover:text-red-400 bg-ink-900 hover:bg-red-500/10 rounded-xl transition-colors"
+                          title={hubActiveChat.created_by === data.agentId ? "Grubu Sil" : "Gruptan Ayrıl"}
+                        >
+                          {hubActiveChat.created_by === data.agentId ? <Trash2 size={18} /> : <LogOut size={18} />}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar" ref={hubScrollRef}>
@@ -1115,12 +1192,141 @@ export default function NetworkPage() {
                 </>
               )}
             </div>
+            
+            {/* GRUP YÖNETİMİ MODALI */}
+            {showGroupManager && hubActiveChat?.type === 'group' && (
+              <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowGroupManager(false)}>
+                <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-ink-950 border border-indigo-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+                  <div className="p-5 border-b border-ink-800 flex items-center justify-between bg-ink-900/50 shrink-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30"><Settings size={18} /></div>
+                      <h2 className="text-lg font-black text-white">Grup Yönetimi</h2>
+                    </div>
+                    <button onClick={() => setShowGroupManager(false)} className="text-ink-500 hover:text-white p-2 rounded-xl bg-ink-900 transition-colors"><X size={18}/></button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+                    {/* Mevcut Üyeler */}
+                    <div>
+                      <h3 className="text-[11px] font-black uppercase text-ink-500 tracking-widest mb-3">Mevcut Üyeler ({hubActiveChat.members?.length ? hubActiveChat.members.length + 1 : 1})</h3>
+                      <div className="space-y-2">
+                        {/* Kurucu (Kendisi veya başkası) */}
+                        <div className="flex justify-between items-center bg-ink-900/30 p-3 rounded-xl border border-ink-800">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-ink-800 text-ink-300 flex items-center justify-center font-bold text-sm">
+                              {hubActiveChat.created_by === data.agentId ? data.nickname?.[0]?.toUpperCase() : profilesMap[hubActiveChat.created_by!]?.nickname?.[0]?.toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-white flex items-center gap-1.5">
+                                {hubActiveChat.created_by === data.agentId ? 'Sen (Kurucu)' : profilesMap[hubActiveChat.created_by!]?.nickname}
+                                <Crown size={12} className="text-gold-400" />
+                              </div>
+                              <div className="text-[10px] text-ink-500 font-mono">{hubActiveChat.created_by}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Diğer Üyeler */}
+                        {hubActiveChat.members?.map(id => {
+                          if (id === hubActiveChat.created_by) return null;
+                          return (
+                            <div key={id} className="flex justify-between items-center bg-ink-900/30 p-3 rounded-xl border border-ink-800">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-ink-800 text-ink-300 flex items-center justify-center font-bold text-sm">{profilesMap[id]?.nickname?.[0]?.toUpperCase() || '?'}</div>
+                                <div>
+                                  <div className="text-sm font-bold text-white">{profilesMap[id]?.nickname || 'Bilinmeyen'}</div>
+                                  <div className="text-[10px] text-ink-500 font-mono">{id}</div>
+                                </div>
+                              </div>
+                              {hubActiveChat.created_by === data.agentId && (
+                                <button onClick={() => setMemberToKick({ id, name: profilesMap[id]?.nickname || 'Ajan' })} className="p-2 text-ink-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Gruptan At">
+                                  <UserMinus size={16} />
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Yeni Üye Ekle */}
+                    <div>
+                      <h3 className="text-[11px] font-black uppercase text-ink-500 tracking-widest mb-3">Ajan Ekle</h3>
+                      <div className="space-y-2">
+                        {(() => {
+                          const availableFriends = friends.filter(f => !hubActiveChat.members?.includes(f.agent_id) && f.agent_id !== hubActiveChat.created_by);
+                          if (availableFriends.length === 0) {
+                            return <div className="text-xs text-ink-600 italic p-3 border border-ink-800 border-dashed rounded-xl text-center">Eklenebilecek başka arkadaşın yok.</div>;
+                          }
+                          return availableFriends.map(f => (
+                            <div key={f.agent_id} className="flex justify-between items-center bg-ink-900/30 p-3 rounded-xl border border-ink-800">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-ink-800 text-ink-300 flex items-center justify-center font-bold text-sm">{f.nickname?.[0]?.toUpperCase()}</div>
+                                <div>
+                                  <div className="text-sm font-bold text-white">{f.nickname}</div>
+                                  <div className="text-[10px] text-ink-500 font-mono">{f.agent_id}</div>
+                                </div>
+                              </div>
+                              <button onClick={() => handleAddMemberToGroup(f.agent_id)} className="p-2 text-ink-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Gruba Ekle">
+                                <UserPlus size={16} />
+                              </button>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* ÜYE ATMA ONAY MODALI */}
+            {memberToKick && (
+              <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setMemberToKick(null)}>
+                <div onClick={e => e.stopPropagation()} className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
+                  <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                    <UserMinus size={24} />
+                  </div>
+                  <h3 className="text-lg font-black text-white mb-2">Ajanı At</h3>
+                  <p className="text-sm text-ink-300 mb-6">"{memberToKick.name}" adlı ajanı gruptan atmak istediğinize emin misiniz?</p>
+                  <div className="flex gap-3">
+                    <button onClick={() => setMemberToKick(null)} className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors">İptal</button>
+                    <button onClick={() => handleKickMemberFromGroup(memberToKick.id)} className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20">Evet, At</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* UYGULAMA İÇİ ONAY MODALLARI */}
       
+      {/* YENİ: Grup Çıkma/Silme Onayı */}
+      {groupActionConf && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setGroupActionConf(null)}>
+          <div onClick={e => e.stopPropagation()} className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
+            <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+              {groupActionConf.action === 'delete' ? <Trash2 size={24} /> : <LogOut size={24} className="ml-1" />}
+            </div>
+            <h3 className="text-lg font-black text-white mb-2">
+              {groupActionConf.action === 'delete' ? 'Grubu Sil' : 'Gruptan Ayrıl'}
+            </h3>
+            <p className="text-sm text-ink-300 mb-6">
+              {groupActionConf.action === 'delete'
+                ? `"${groupActionConf.name}" grubunu tamamen silmek istediğinize emin misiniz? Tüm mesajlar ve grup silinecektir.`
+                : `"${groupActionConf.name}" grubundan ayrılmak istediğinize emin misiniz?`}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setGroupActionConf(null)} className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors">İptal</button>
+              <button onClick={executeGroupAction} className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20">
+                {groupActionConf.action === 'delete' ? 'Evet, Sil' : 'Evet, Ayrıl'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Liste Silme Onayı */}
       {listToDelete && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setListToDelete(null)}>
