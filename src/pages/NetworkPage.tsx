@@ -88,35 +88,51 @@ export default function NetworkPage() {
     if (targetId === data.agentId) return; 
     setViewingProfileId(targetId);
     setProfileTab(initialTab);
+    setChatMessages([]); // Çakışma önleyici
     const { data: logsData } = await supabase.from('network_logs').select('*').eq('agent_id', targetId).order('created_at', { ascending: false }).limit(30);
     setFriendLogs(logsData || []);
-    
-    if (initialTab === 'chat') {
-      const { data: msgs } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${targetId}),and(sender_id.eq.${targetId},receiver_id.eq.${data.agentId})`).is('group_id', null).order('created_at', { ascending: true });
-      setChatMessages(msgs || []);
-    }
   };
+
+  // Profil sohbeti için tetikleyici
+  useEffect(() => {
+    const loadProfileChat = async () => {
+      if (viewingProfileId && profileTab === 'chat' && data.agentId) {
+        // .is('group_id', null) kaldırıldı, lokal filtreleme yapılıyor
+        const { data: rawMsgs } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${viewingProfileId}),and(sender_id.eq.${viewingProfileId},receiver_id.eq.${data.agentId})`).order('created_at', { ascending: true });
+        
+        setChatMessages((prev: any[]) => {
+          const newMsgs = (rawMsgs || []).filter((m: any) => !m.group_id);
+          const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
+          const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.receiver_id === viewingProfileId && !m.group_id);
+          return [...newMsgs, ...localOnly].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        });
+        
+        await supabase.from('messages').update({ is_read: true }).eq('receiver_id', data.agentId).eq('sender_id', viewingProfileId).eq('is_read', false);
+      }
+    };
+    loadProfileChat();
+  }, [viewingProfileId, profileTab, data.agentId, syncTick]);
 
   const loadHubInbox = useCallback(async () => {
     if (!data.agentId) return;
     try {
-      const { data: directMsgs } = await supabase.from('messages').select('*').or(`sender_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).is('group_id', null).order('created_at', { ascending: false });
+      const { data: rawDirectMsgs } = await supabase.from('messages').select('*').or(`sender_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).order('created_at', { ascending: false });
+      const directMsgs = (rawDirectMsgs || []).filter((m: any) => !m.group_id); // Lokal filtreleme
+
       const dMap = new Map();
-      if (directMsgs) {
-        directMsgs.forEach((msg: any) => {
-          const otherId = msg.sender_id === data.agentId ? msg.receiver_id : msg.sender_id;
-          if (!otherId) return;
-          if (!dMap.has(otherId)) {
-            dMap.set(otherId, {
-              id: otherId, type: 'direct',
-              lastMessage: msg.content, created_at: msg.created_at,
-              unread: msg.receiver_id === data.agentId && !msg.is_read ? 1 : 0
-            });
-          } else if (msg.receiver_id === data.agentId && !msg.is_read) {
-            dMap.get(otherId).unread += 1;
-          }
-        });
-      }
+      directMsgs.forEach((msg: any) => {
+        const otherId = msg.sender_id === data.agentId ? msg.receiver_id : msg.sender_id;
+        if (!otherId) return;
+        if (!dMap.has(otherId)) {
+          dMap.set(otherId, {
+            id: otherId, type: 'direct',
+            lastMessage: msg.content, created_at: msg.created_at,
+            unread: msg.receiver_id === data.agentId && !msg.is_read ? 1 : 0
+          });
+        } else if (msg.receiver_id === data.agentId && !msg.is_read) {
+          dMap.get(otherId).unread += 1;
+        }
+      });
 
       const { data: memberOf } = await supabase.from('chat_group_members').select('group_id').eq('agent_id', data.agentId);
       const gMap = new Map();
@@ -159,44 +175,47 @@ export default function NetworkPage() {
     if (!hubActiveChat || !data.agentId) return;
     try {
       if (hubActiveChat.type === 'direct') {
-        const { data: msgs } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${hubActiveChat.id}),and(sender_id.eq.${hubActiveChat.id},receiver_id.eq.${data.agentId})`).is('group_id', null).order('created_at', { ascending: true });
+        const { data: rawMsgs } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${hubActiveChat.id}),and(sender_id.eq.${hubActiveChat.id},receiver_id.eq.${data.agentId})`).order('created_at', { ascending: true });
         
         setHubMessages((prev: any[]) => {
-          const newMsgs = msgs || [];
+          const newMsgs = (rawMsgs || []).filter((m: any) => !m.group_id); // Lokal filtreleme
           const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
-          const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId);
+          const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.receiver_id === hubActiveChat.id && !m.group_id);
           return [...newMsgs, ...localOnly].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         });
         
         await supabase.from('messages').update({ is_read: true }).eq('receiver_id', data.agentId).eq('sender_id', hubActiveChat.id).eq('is_read', false);
       } else {
-        const { data: msgs } = await supabase.from('messages').select('*').eq('group_id', hubActiveChat.id).order('created_at', { ascending: true });
+        const { data: msgs, error } = await supabase.from('messages').select('*').eq('group_id', hubActiveChat.id).order('created_at', { ascending: true });
+        if(error) console.error("Grup mesajı çekme hatası:", error);
         
         setHubMessages((prev: any[]) => {
           const newMsgs = msgs || [];
           const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
-          const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId);
+          const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.group_id === hubActiveChat.id);
           return [...newMsgs, ...localOnly].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         });
         
-        const { data: members } = await supabase.from('chat_group_members').select('agent_id').eq('group_id', hubActiveChat.id);
-        if (members) {
-          const mIds = members.map((m: any) => m.agent_id).filter((id: string) => id !== data.agentId);
-          if (JSON.stringify(hubActiveChat.members) !== JSON.stringify(mIds)) {
-            setHubActiveChat(prev => prev ? { ...prev, members: mIds } : null);
-          }
-          const unknownIds = mIds.filter((id: string) => !profilesMapRef.current[id]);
-          if (unknownIds.length > 0) {
-            const { data: newProfs } = await supabase.from('profiles').select('*').in('agent_id', unknownIds);
-            if (newProfs) {
-              setProfilesMap(prev => {
-                const updated = { ...prev };
-                newProfs.forEach((p: any) => updated[p.agent_id] = p);
-                return updated;
-              });
+        try {
+          const { data: members } = await supabase.from('chat_group_members').select('agent_id').eq('group_id', hubActiveChat.id);
+          if (members) {
+            const mIds = members.map((m: any) => m.agent_id).filter((id: string) => id !== data.agentId);
+            if (JSON.stringify(hubActiveChat.members) !== JSON.stringify(mIds)) {
+              setHubActiveChat(prev => prev ? { ...prev, members: mIds } : null);
+            }
+            const unknownIds = mIds.filter((id: string) => !profilesMapRef.current[id]);
+            if (unknownIds.length > 0) {
+              const { data: newProfs } = await supabase.from('profiles').select('*').in('agent_id', unknownIds);
+              if (newProfs) {
+                setProfilesMap(prev => {
+                  const updated = { ...prev };
+                  newProfs.forEach((p: any) => updated[p.agent_id] = p);
+                  return updated;
+                });
+              }
             }
           }
-        }
+        } catch(e) {}
       }
     } catch (err) { console.error(err); }
   }, [hubActiveChat?.id, hubActiveChat?.type, data.agentId]);
@@ -227,9 +246,11 @@ export default function NetworkPage() {
       });
       setRecommendations(recList);
 
-      const { data: unreadData } = await supabase.from('messages').select('sender_id').eq('receiver_id', data.agentId).eq('is_read', false).is('group_id', null);
+      const { data: unreadDataRaw } = await supabase.from('messages').select('sender_id, group_id').eq('receiver_id', data.agentId).eq('is_read', false);
+      const unreadData = (unreadDataRaw || []).filter((m: any) => !m.group_id); // Lokal filtreleme
+      
       const unreads: Record<string, number> = {};
-      (unreadData || []).forEach((msg: any) => { unreads[msg.sender_id] = (unreads[msg.sender_id] || 0) + 1; });
+      unreadData.forEach((msg: any) => { unreads[msg.sender_id] = (unreads[msg.sender_id] || 0) + 1; });
       setUnreadMessages(unreads);
 
       let pMap = { ...profilesMapRef.current };
@@ -308,6 +329,12 @@ export default function NetworkPage() {
   }, [syncTick, fetchData, loadHubInbox, isChatHubOpen]);
 
   useEffect(() => {
+    if (isChatHubOpen) {
+      loadHubInbox();
+    }
+  }, [isChatHubOpen, loadHubInbox]);
+
+  useEffect(() => {
     if (isChatHubOpen && hubActiveChat?.id) {
       loadHubMessages();
     }
@@ -329,6 +356,7 @@ export default function NetworkPage() {
       const newMsg = { id: uid(), sender_id: data.agentId, receiver_id: viewingProfileId, group_id: null, content, created_at: new Date().toISOString(), is_read: false };
       setChatMessages((prev: any[]) => [...prev, newMsg]);
       await supabase.from('messages').insert([newMsg]);
+      setSyncTick(t => t + 1);
     } catch (err) { showToast('Mesaj gönderilemedi', 'error'); }
   };
 
@@ -347,6 +375,7 @@ export default function NetworkPage() {
         setHubMessages((prev: any[]) => [...prev, newMsg]);
         await supabase.from('messages').insert([newMsg]);
       }
+      setSyncTick(t => t + 1);
     } catch (err) { showToast('Mesaj gönderilemedi', 'error'); }
   };
 
@@ -363,6 +392,7 @@ export default function NetworkPage() {
       setHubCreateMode(null);
       setNewDirectCode('');
       setHubTab('direct');
+      setHubMessages([]); // KANAMA ÖNLEYİCİ
       setHubActiveChat({ id: code, type: 'direct' });
     } catch (err) { showToast('Hata oluştu', 'error'); }
   };
@@ -386,6 +416,7 @@ export default function NetworkPage() {
       setNewGroupName('');
       setNewGroupMembers([]);
       setHubTab('group');
+      setHubMessages([]); // KANAMA ÖNLEYİCİ
       setHubActiveChat({ id: groupId, type: 'group', name: newGroupName.trim(), members: newGroupMembers });
       setSyncTick(t => t + 1);
     } catch (err) {
@@ -843,7 +874,7 @@ export default function NetworkPage() {
                         </button>
                         
                         <div className="flex items-center gap-2 pl-3">
-                          <button onClick={() => { setIsChatHubOpen(true); setHubTab('direct'); setHubActiveChat({ id: f.agent_id, type: 'direct' }); }} className="p-3 text-ink-400 hover:text-azure-400 bg-ink-900 hover:bg-azure-500/10 rounded-xl transition-colors border border-transparent hover:border-azure-500/30 relative">
+                          <button onClick={() => { setIsChatHubOpen(true); setHubMessages([]); setHubTab('direct'); setHubActiveChat({ id: f.agent_id, type: 'direct' }); }} className="p-3 text-ink-400 hover:text-azure-400 bg-ink-900 hover:bg-azure-500/10 rounded-xl transition-colors border border-transparent hover:border-azure-500/30 relative">
                             <MessageSquare size={18} />
                             {unread > 0 && <span className="absolute -top-2 -right-2 text-[10px] font-black bg-red-500 text-white px-2 py-0.5 rounded-full shadow-md">{unread}</span>}
                           </button>
@@ -897,7 +928,13 @@ export default function NetworkPage() {
                       return (
                         <button 
                           key={chat.id} 
-                          onClick={() => { setHubActiveChat({ id: chat.id, type: 'direct' }); setHubCreateMode(null); }}
+                          onClick={() => { 
+                            if(hubActiveChat?.id !== chat.id) {
+                              setHubMessages([]); 
+                              setHubActiveChat({ id: chat.id, type: 'direct' }); 
+                              setHubCreateMode(null); 
+                            }
+                          }}
                           className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 transition-all ${isActive ? 'bg-azure-500/10 border border-azure-500/30' : 'bg-transparent hover:bg-ink-900/50 border border-transparent'}`}
                         >
                           <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-black text-lg bg-ink-800 text-ink-300">
@@ -924,7 +961,13 @@ export default function NetworkPage() {
                       return (
                         <button 
                           key={chat.id} 
-                          onClick={() => { setHubActiveChat({ id: chat.id, type: 'group', name: chat.name }); setHubCreateMode(null); }}
+                          onClick={() => { 
+                            if(hubActiveChat?.id !== chat.id) {
+                              setHubMessages([]);
+                              setHubActiveChat({ id: chat.id, type: 'group', name: chat.name }); 
+                              setHubCreateMode(null); 
+                            }
+                          }}
                           className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 transition-all ${isActive ? 'bg-indigo-500/10 border border-indigo-500/30' : 'bg-transparent hover:bg-ink-900/50 border border-transparent'}`}
                         >
                           <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-black text-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
@@ -1007,7 +1050,7 @@ export default function NetworkPage() {
                   
                   <div className="bg-ink-900/50 border border-ink-800 p-4 rounded-2xl mt-6 text-left max-w-sm">
                     <div className="flex items-center gap-2 text-amber-400 text-[10px] font-black uppercase tracking-widest mb-2"><Info size={14}/> Geçmiş Mesajlar Görünmüyor Mu?</div>
-                    <p className="text-xs text-ink-400 leading-relaxed">Farklı bir tarayıcıdan (örneğin Opera) girdiğinizde mesajlarınızı görmek için "Hesabım" kısmından Ağ Kodunuzu içeri aktarmalısınız.</p>
+                    <p className="text-xs text-ink-400 leading-relaxed">Farklı bir tarayıcıdan (örneğin Opera) girdiğinizde eski mesajlarınızı görmek için "Hesabım" sayfasından asıl kullandığınız Ağ Kodunu içeri aktarmalısınız.</p>
                   </div>
                 </div>
               ) : (
@@ -1107,266 +1150,6 @@ export default function NetworkPage() {
             <div className="flex gap-3">
               <button onClick={() => setFriendToRemove(null)} className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors">İptal</button>
               <button onClick={() => { handleRemove(friendToRemove); setFriendToRemove(null); }} className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20">Evet, Çıkar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 1. AKIŞ DETAY MODALI */}
-      {selectedLog && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedLog(null)}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-xl bg-ink-950 border border-ink-800 rounded-3xl overflow-hidden shadow-2xl relative flex flex-col md:flex-row max-h-[90vh]">
-            <button onClick={() => setSelectedLog(null)} className="absolute top-4 right-4 z-20 w-8 h-8 bg-ink-900/80 hover:bg-ink-800 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-colors"><X size={16} /></button>
-            
-            <div className="w-full md:w-2/5 h-64 md:h-auto bg-ink-900 relative shrink-0">
-              {selectedLog.item_poster ? (
-                <img src={selectedLog.item_poster} alt="poster" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-ink-700">
-                  {selectedLog.item_type === 'series' ? <Tv size={48} /> : <Film size={48} />}
-                </div>
-              )}
-              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink-950 to-transparent md:hidden" />
-            </div>
-
-            <div className="p-5 md:p-6 md:w-3/5 flex flex-col -mt-8 md:mt-0 relative z-10">
-              <div className="mb-4">
-                <button onClick={() => { setSelectedLog(null); openProfileModal(selectedLog.agent_id); }} className="flex items-center gap-2 mb-3 hover:opacity-80 transition-opacity text-left bg-ink-900/60 p-2 rounded-xl border border-ink-800/50">
-                  <div className="w-6 h-6 rounded-md bg-ink-800 text-emerald-400 flex items-center justify-center text-[11px] font-black">{profilesMap[selectedLog.agent_id]?.nickname[0]}</div>
-                  <span className="text-sm text-ink-300 font-bold">{profilesMap[selectedLog.agent_id]?.nickname} <span className="font-normal text-ink-500">inceliyor</span></span>
-                </button>
-                <h2 className="text-2xl font-black text-white leading-tight mb-1.5">{selectedLog.item_title}</h2>
-                <div className="text-[11px] text-ink-500 uppercase tracking-widest font-bold">{selectedLog.item_type === 'series' ? 'Dizi' : 'Film'} • {timeAgo(selectedLog.created_at)}</div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar mb-5">
-                {(selectedLog.rating || (selectedLog.review_tags && selectedLog.review_tags.length > 0)) && (
-                  <div className="flex flex-wrap items-center gap-2 mb-5">
-                    {selectedLog.rating && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gold-500/10 text-gold-400 rounded-lg border border-gold-500/20 font-black text-sm">
-                        <Star size={16} className="fill-gold-400" /> {selectedLog.rating}/10
-                      </div>
-                    )}
-                    {selectedLog.review_tags?.map((tag: string) => (
-                      <span key={tag} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg border ${isPositiveTag(tag, data.tagSentiments) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {selectedLog.note ? (
-                  <div className="bg-ink-900/50 p-4 rounded-2xl border border-ink-800/50 relative">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-ink-500 mb-2 flex items-center gap-1.5"><Info size={12} /> Eleştirmen Notu</div>
-                    {(() => {
-                      const rawNote = selectedLog.note;
-                      const hasSpoiler = selectedLog.is_spoiler || rawNote.toLowerCase().includes('[spoiler]') || rawNote.toLowerCase().includes('#spoiler');
-                      const cleanNote = rawNote.replace(/\[spoiler\]/gi, '').replace(/#spoiler/gi, '').trim();
-                      const isRevealed = revealedSpoilers[selectedLog.id];
-
-                      if (hasSpoiler && !isRevealed) {
-                        return (
-                          <div onClick={() => setRevealedSpoilers(prev => ({ ...prev, [selectedLog.id]: true }))} className="cursor-pointer bg-red-500/10 border border-red-500/20 rounded-xl p-5 flex flex-col items-center justify-center gap-2 text-red-400 hover:bg-red-500/20 transition-all text-center">
-                            <ShieldAlert size={24} className="animate-pulse" />
-                            <span className="text-xs font-black uppercase tracking-widest">Spoiler İçeriyor</span>
-                            <span className="text-[10px] opacity-70">Okumak için tıklayın</span>
-                          </div>
-                        );
-                      }
-                      return <p className="text-sm sm:text-base text-ink-200 italic leading-relaxed">"{cleanNote}"</p>;
-                    })()}
-                  </div>
-                ) : (
-                  <p className="text-sm text-ink-600 italic">Kullanıcı yazılı bir değerlendirme bırakmamış.</p>
-                )}
-              </div>
-
-              <button 
-                onClick={() => { handleAddToLibrary(selectedLog); setSelectedLog(null); }}
-                className="w-full mt-auto py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 uppercase tracking-wider shrink-0"
-              >
-                <Plus size={18} strokeWidth={3} /> Kütüphaneme Ekle
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* 2. LİSTE GÖNDERME MODALI */}
-      {showSendModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setShowSendModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-5xl h-[85vh] bg-ink-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-4 sm:p-5 border-b border-ink-800 bg-ink-900/50 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30"><Send size={18} /></div>
-                <h2 className="text-base sm:text-lg font-black text-white">Arkadaşına Tavsiye Gönder</h2>
-              </div>
-              <button onClick={() => setShowSendModal(false)} className="text-ink-500 hover:text-white p-1.5 rounded-lg bg-ink-900"><X size={18} /></button>
-            </div>
-            
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-              <div className="w-full md:w-72 p-5 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/20 flex flex-col gap-5 overflow-y-auto custom-scrollbar flex-shrink-0">
-                <div>
-                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-2">1. Kime Gidecek?</label>
-                  <select 
-                    value={sendTargetId} 
-                    onChange={(e) => setSendTargetId(e.target.value)}
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
-                  >
-                    <option value="">-- Arkadaş Seç --</option>
-                    {friends.map(f => (
-                      <option key={f.agent_id} value={f.agent_id}>{f.nickname}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-2">2. Listenin Adı</label>
-                  <input 
-                    type="text" 
-                    value={sendListTitle}
-                    onChange={(e) => setSendListTitle(e.target.value)}
-                    placeholder="Örn: Bilim Kurgu Şaheserleri"
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
-                  />
-                </div>
-                <div className="pt-3 border-t border-ink-800">
-                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-3">3. Kütüphaneni Filtrele</label>
-                  <div className="relative mb-3">
-                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
-                    <input 
-                      type="text" 
-                      placeholder="İsimle Ara..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
-                    />
-                  </div>
-                  <div className="relative">
-                    <Filter size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
-                    <select 
-                      value={filterGenre} 
-                      onChange={(e) => setFilterGenre(e.target.value)}
-                      className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none appearance-none"
-                    >
-                      <option value="">Tüm Türler</option>
-                      {data.genres.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 flex flex-col overflow-hidden bg-ink-950 relative">
-                <div className="p-4 border-b border-ink-800 flex items-center justify-between bg-ink-900/40">
-                  <span className="text-[11px] font-bold text-ink-400 uppercase tracking-widest">Kütüphanen</span>
-                  <span className="text-xs text-violet-400 font-bold bg-violet-500/10 px-3 py-1 rounded-lg border border-violet-500/20">{selectedItemIds.length} Yapım Seçildi</span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
-                  {filteredLibraryItems.length === 0 ? (
-                    <div className="text-center py-12 text-ink-600 text-sm italic border border-ink-800 border-dashed rounded-2xl">Sonuç bulunamadı.</div>
-                  ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
-                      {filteredLibraryItems.map(item => {
-                        const isSelected = selectedItemIds.includes(item.id);
-                        return (
-                          <div 
-                            key={item.id} 
-                            onClick={() => setSelectedItemIds(prev => isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id])}
-                            className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer group border-2 transition-all ${isSelected ? 'border-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.4)] scale-95' : 'border-transparent hover:border-ink-600 bg-ink-900'}`}
-                          >
-                            {item.posterUrl ? (
-                              <img src={item.posterUrl} alt="poster" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-ink-700">
-                                {item.type === 'series' ? <Tv size={32} /> : <Film size={32} />}
-                              </div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2.5 pt-8">
-                              <h3 className="text-[10px] sm:text-[11px] font-bold text-white line-clamp-2 leading-tight drop-shadow-md">{item.title}</h3>
-                            </div>
-                            <div className={`absolute inset-0 bg-violet-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
-                              <div className="w-10 h-10 rounded-full bg-violet-500 text-white flex items-center justify-center shadow-xl">
-                                <Check size={20} strokeWidth={4} />
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-5 border-t border-ink-800 bg-ink-950 flex gap-3 flex-shrink-0">
-              <button onClick={() => setShowSendModal(false)} className="px-6 py-3.5 bg-ink-900 text-ink-300 rounded-xl text-sm font-bold hover:bg-ink-800 transition-colors">İptal</button>
-              <button onClick={handleSendList} className="flex-1 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-black transition-colors flex items-center justify-center gap-2 uppercase tracking-wider shadow-lg shadow-violet-500/20">
-                <Send size={18} /> Listeyi Gönder ({selectedItemIds.length})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. LİSTE İNCELEME MODALI */}
-      {viewingList && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setViewingList(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-5xl bg-ink-950 border border-ink-700 rounded-3xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl">
-            <div className="p-5 sm:p-6 border-b border-ink-800 bg-ink-900/40 relative shrink-0">
-              <button onClick={() => setViewingList(null)} className="absolute top-5 right-5 text-ink-500 hover:text-white bg-ink-900 p-2 rounded-full transition-colors"><X size={18} /></button>
-              <div className="pr-12">
-                <div className="text-[11px] font-bold text-violet-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Gift size={14}/> Tavsiye Listesi</div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white mb-2 leading-tight">{viewingList.list_title}</h2>
-                <div className="text-sm text-ink-400">Gönderen: <span className="text-white font-bold">{profilesMap[viewingList.sender_id]?.nickname || 'Bilinmeyen'}</span></div>
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 custom-scrollbar bg-ink-950">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {viewingList.items?.map((item: any, idx: number) => {
-                  const alreadyHas = data.movies.some(m => m.title.toLowerCase() === item.title.toLowerCase()) || data.series.some(s => s.title.toLowerCase() === item.title.toLowerCase());
-                  return (
-                    <div key={idx} className="relative aspect-[2/3] rounded-xl overflow-hidden group border border-ink-800 bg-ink-900 shadow-md">
-                      {item.poster ? (
-                        <img src={item.poster} alt="poster" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-ink-700">
-                          {item.type === 'series' ? <Tv size={32} /> : <Film size={32} />}
-                        </div>
-                      )}
-                      
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-3 pt-10">
-                        <h4 className="text-[11px] sm:text-xs font-bold text-white line-clamp-2 leading-tight mb-1 drop-shadow-md">{item.title}</h4>
-                        <div className="text-[9px] text-ink-400 uppercase tracking-widest">{item.type === 'series' ? 'Dizi' : 'Film'} {item.year ? `• ${item.year}` : ''}</div>
-                      </div>
-
-                      <div className="absolute top-2.5 right-2.5">
-                        {alreadyHas ? (
-                          <div className="bg-emerald-500/90 text-white p-2 rounded-lg shadow-md backdrop-blur-sm" title="Zaten Kütüphanende">
-                            <Check size={16} strokeWidth={3} />
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => handleAddToLibrary(item, true)}
-                            className="bg-violet-600 hover:bg-violet-500 text-white p-2 rounded-lg shadow-xl backdrop-blur-sm transition-all hover:scale-110"
-                            title="Kütüphaneme Ekle"
-                          >
-                            <Plus size={16} strokeWidth={3} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-5 border-t border-ink-800 bg-ink-950 flex gap-3 shrink-0">
-              <button onClick={() => setListToDelete(viewingList.id)} className="px-5 sm:px-6 py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-sm font-bold transition-colors tracking-widest uppercase flex items-center justify-center gap-2">
-                <Trash2 size={18} /> <span className="hidden sm:inline">Sil</span>
-              </button>
-              <button onClick={() => setViewingList(null)} className="flex-1 py-3.5 bg-ink-900 hover:bg-ink-800 text-white rounded-xl text-sm font-bold transition-colors tracking-widest uppercase">
-                Pencereyi Kapat
-              </button>
             </div>
           </div>
         </div>
