@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Sparkles, Clock, Film, Tv, Star, Award, Flame, Crown, Download, Play, Pause, Tag, SlidersHorizontal, User, Users } from 'lucide-react';
+import * as Icons from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Sparkles, Clock, Film, Tv, Star, Award, Flame, Crown, Download, Play, Pause, Tag, SlidersHorizontal, User, Users, CalendarDays, Activity, ShieldAlert } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
+import { formatDateShort } from '../lib/utils';
 import type { WatchHistoryItem } from '../types';
 
 interface WrappedModalProps {
@@ -17,7 +19,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
   const [slide, setSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
-  const TOTAL_SLIDES = 7;
+  const TOTAL_SLIDES = 8; 
 
   const currentYear = new Date().getFullYear();
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -36,7 +38,6 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     const filteredHistory = data.history.filter((h) => {
       const isPast = isHistoryItemPast(h);
       if (period === 'past') return isPast;
-      // Güncel dönemlerde (Tümü / Bu Yıl / Son 30 Gün) önceden izlenenler istatistiği bozmaz
       if (isPast) return false;
 
       if (!h.watchedAt) return false;
@@ -98,6 +99,21 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     const rated = filteredHistory.filter((h) => h.rating !== null);
     const avgRating = rated.length > 0 ? rated.reduce((s, h) => s + (h.rating || 0), 0) / rated.length : 0;
 
+    // Puan Dağılımı (Bar Chart)
+    const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0 };
+    let maxRatingCount = 0;
+    rated.forEach(h => {
+      if (h.rating) {
+        const rounded = Math.round(h.rating);
+        if (rounded >= 1 && rounded <= 10) {
+          (ratingDistribution as any)[rounded]++;
+          if ((ratingDistribution as any)[rounded] > maxRatingCount) {
+            maxRatingCount = (ratingDistribution as any)[rounded];
+          }
+        }
+      }
+    });
+
     const uniqueRated: { title: string; rating: number; kind: string; posterUrl?: string }[] = [];
     const seenKeys = new Set<string>();
     [...rated].sort((a, b) => (b.rating || 0) - (a.rating || 0)).forEach((h) => {
@@ -139,16 +155,31 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
 
     let nightCount = 0, weekendCount = 0;
     const dayCounts: Record<string, number> = {};
+    const dayItems: Record<string, string[]> = {}; 
+
     filteredHistory.forEach((h) => {
       if (!h.watchedAt) return;
       const d = new Date(h.watchedAt);
       const hr = d.getHours(), day = d.getDay();
       if (hr >= 0 && hr < 5) nightCount++;
       if (day === 0 || day === 6) weekendCount++;
+      
       const ds = h.watchedAt.slice(0, 10);
       dayCounts[ds] = (dayCounts[ds] || 0) + 1;
+      
+      if (!dayItems[ds]) dayItems[ds] = [];
+      dayItems[ds].push(h.title);
     });
+    
     const maxDaily = Math.max(0, ...Object.values(dayCounts));
+    let marathonDate = "";
+    let marathonItems: string[] = [];
+    Object.entries(dayCounts).forEach(([date, count]) => {
+      if (count === maxDaily) {
+        marathonDate = date;
+        marathonItems = dayItems[date] || [];
+      }
+    });
 
     const sortedDates = Object.keys(dayCounts).sort();
     let maxStreak = 0, curStreak = 0;
@@ -178,13 +209,15 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
       .map((a) => {
         const def = ACHIEVEMENT_DEFS.find((d) => d.id === a.achievementId);
         const highestTier = a.unlockedTiers[a.unlockedTiers.length - 1];
-        return { name: def?.name || a.achievementId, icon: def?.icon || '🏆', tier: highestTier };
+        // İkonu string olarak kaydediyoruz, render ederken Lucide'den çekeceğiz.
+        return { name: def?.name || a.achievementId, iconStr: def?.icon || 'Trophy', tier: highestTier };
       })
       .slice(-4);
 
     return {
       totalCount: filteredHistory.length, movieCount: movieHist.length, episodeCount: seriesHist.length,
       uniqueSeriesCount, totalMins, totalHours, totalDays, maxStreak, maxDaily,
+      marathonDate, marathonItems, ratingDistribution, maxRatingCount,
       topGenres, maxGenre, favDirector, favActor, topKeywords,
       avgRating, criticTitle, topPicks, worstPick, topTag, critList,
       persona, totalUnlockedTiers, rareBadges,
@@ -286,6 +319,13 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     ctx.fillStyle = '#f59e0b';
     ctx.font = '900 54px sans-serif';
     ctx.fillText('🎬 SINEVIA WRAPPED', 80, 130);
+
+    drawBox(620, 75, 380, 70, 20, 'rgba(14, 165, 233, 0.1)', 'rgba(14, 165, 233, 0.4)');
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${data.nickname || 'Ajan'} • ${data.agentId || 'SNV-0000-0000'}`, 970, 120);
+    ctx.textAlign = 'left';
 
     const periodLabel =
       period === 'all'
@@ -389,9 +429,10 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
     'from-cyan-950/90 via-ink-950 to-ink-950',
     'from-purple-950/90 via-ink-950 to-ink-950',
     'from-emerald-950/90 via-ink-950 to-ink-950',
+    'from-orange-950/90 via-ink-950 to-ink-950',
     'from-indigo-950/90 via-ink-950 to-ink-950',
     'from-rose-950/90 via-ink-950 to-ink-950',
-    'from-amber-900/80 via-indigo-950 to-ink-950',
+    'from-amber-900/80 via-indigo-950 to-ink-950', 
   ];
 
   return (
@@ -400,7 +441,6 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
         onClick={(e) => e.stopPropagation()}
         className={`relative w-full max-w-md h-[90svh] sm:h-[92dvh] max-h-[820px] bg-gradient-to-br ${bgThemes[slide]} border border-white/15 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between transition-colors duration-700 select-none`}
       >
-        {/* ÜST STORY İLERLEME ÇUBUKLARI */}
         <div className="relative z-30 pt-3 px-3 sm:pt-3.5 sm:px-3.5 space-y-2 bg-gradient-to-b from-black/70 to-transparent pb-2.5 shrink-0">
           <div className="flex gap-1.5">
             {Array.from({ length: TOTAL_SLIDES }).map((_, idx) => (
@@ -468,9 +508,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
           </div>
         </div>
 
-        {/* SLAYT İÇERİKLERİ */}
         <div className="relative z-20 flex-1 overflow-y-auto px-4 sm:px-6 py-2 flex flex-col justify-center custom-scrollbar">
-          {/* SLAYT 0: EKRAN BAŞINDAKİ MESAİN */}
           {slide === 0 && (
             <div className="space-y-4 sm:space-y-6 text-center animate-fade-in">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-500/20 border border-gold-500/40 text-gold-300 text-[11px] font-black uppercase tracking-widest">
@@ -515,7 +553,6 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
             </div>
           )}
 
-          {/* SLAYT 1: SİNEMA DNA'N */}
           {slide === 1 && (
             <div className="space-y-4 sm:space-y-5 animate-fade-in">
               <div className="text-center space-y-1">
@@ -574,7 +611,6 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
             </div>
           )}
 
-          {/* SLAYT 2: ZİRVEDEKİLER */}
           {slide === 2 && (
             <div className="space-y-4 sm:space-y-5 animate-fade-in">
               <div className="text-center space-y-1">
@@ -612,7 +648,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
               )}
 
               {stats.worstPick && (
-                <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-3 flex items-center justify-between">
+                <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-3 flex items-center justify-between mt-4">
                   <div className="min-w-0 pr-2">
                     <div className="text-[10px] font-black uppercase text-red-400">En Büyük Hayal Kırıklığın 💀</div>
                     <div className="text-xs font-bold text-white truncate mt-0.5">{stats.worstPick.title}</div>
@@ -625,8 +661,46 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
             </div>
           )}
 
-          {/* SLAYT 3: NASIL BİR ELEŞTİRMENSİN? */}
           {slide === 3 && (
+            <div className="space-y-4 sm:space-y-5 text-center animate-fade-in">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/40 text-orange-300 text-xs font-black uppercase tracking-widest">
+                <CalendarDays size={13} /> Zaman Bükücü
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
+                Ekrandan Hiç Kopamadığın<br/><span className="text-orange-400">O Maraton Günü</span>
+              </h2>
+
+              {stats.maxDaily < 2 ? (
+                 <div className="bg-black/40 border border-white/10 rounded-3xl p-6 text-ink-400 text-sm italic">
+                   Sen oldukça dengeli bir izleyicisin. Henüz arka arkaya saatlerce ekran başında kaldığın çılgın bir maraton günün olmamış.
+                 </div>
+              ) : (
+                <>
+                  <div className="bg-black/40 border border-orange-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/20 blur-[50px]" />
+                    <div className="text-sm font-bold text-ink-300 uppercase tracking-widest mb-2">{formatDateShort(stats.marathonDate)}</div>
+                    <div className="text-6xl font-black text-orange-400 mb-2">{stats.maxDaily}</div>
+                    <div className="text-xs font-bold text-orange-200/70 uppercase tracking-widest">Yapım / Bölüm İzledin</div>
+                  </div>
+
+                  <div className="bg-black/30 border border-white/10 rounded-2xl p-4 text-left">
+                    <div className="text-[10px] font-black text-ink-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                      <Activity size={12} /> O Gün Neler İzledin?
+                    </div>
+                    <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar pr-2">
+                      {stats.marathonItems.map((title, idx) => (
+                        <div key={idx} className="text-xs font-bold text-white bg-white/5 px-3 py-2 rounded-lg truncate border border-white/5">
+                          {idx + 1}. {title}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {slide === 4 && (
             <div className="space-y-4 sm:space-y-5 animate-fade-in">
               <div className="text-center space-y-1">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-widest">
@@ -641,6 +715,32 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                 <div className="inline-block px-3 py-1 rounded-full bg-white/10 text-white text-xs font-black">{stats.criticTitle}</div>
               </div>
 
+              {stats.maxRatingCount > 0 && (
+                <div className="bg-black/40 border border-white/10 rounded-2xl p-4">
+                  <div className="text-[10px] font-black uppercase text-azure-400 mb-2 text-center">Puanlama Dağılımın</div>
+                  <div className="flex items-end justify-between h-24 gap-1 sm:gap-1.5 px-1 mt-4">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => {
+                      const count = (stats.ratingDistribution as any)[score] || 0;
+                      const heightPct = count > 0 ? Math.max(12, (count / stats.maxRatingCount) * 100) : 0;
+                      return (
+                        <div key={score} className="flex flex-col items-center flex-1 h-full justify-end relative">
+                          {count > 0 && (
+                            <span className="text-[9px] font-black text-emerald-300 mb-1 leading-none drop-shadow-md">
+                              {count}
+                            </span>
+                          )}
+                          <div 
+                            className={`w-full rounded-t-sm transition-all duration-1000 ease-out ${count > 0 ? 'bg-gradient-to-t from-emerald-600/50 to-emerald-400' : 'bg-white/5 h-1'}`} 
+                            style={count > 0 ? { height: `${heightPct}%` } : {}}
+                          />
+                          <span className={`text-[9px] mt-1 font-bold leading-none ${count > 0 ? 'text-white' : 'text-ink-600'}`}>{score}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {stats.topTag && (
                 <div className="bg-black/40 border border-gold-500/30 rounded-2xl p-3.5 flex items-center justify-between">
                   <div>
@@ -654,23 +754,10 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                   </div>
                 </div>
               )}
-
-              {stats.critList.length > 0 && (
-                <div className="bg-black/40 border border-white/10 rounded-2xl p-3.5 space-y-2">
-                  <div className="text-[10px] font-black uppercase text-azure-400">Detaylı Kriter Karnen</div>
-                  {stats.critList.map((c) => (
-                    <div key={c.name} className="flex items-center justify-between text-xs">
-                      <span className="text-ink-200 font-bold">{c.name}</span>
-                      <span className="text-gold-400 font-black">{c.avg.toFixed(1)} / 10</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
-          {/* SLAYT 4: İZLEME KARAKTERİN */}
-          {slide === 4 && (
+          {slide === 5 && (
             <div className="space-y-5 text-center animate-fade-in">
               <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-black uppercase tracking-widest">
                 ✨ Sinefil Ruhu
@@ -691,8 +778,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
             </div>
           )}
 
-          {/* SLAYT 5: ŞÖHRETLER MÜZESİ */}
-          {slide === 5 && (
+          {slide === 6 && (
             <div className="space-y-4 sm:space-y-5 text-center animate-fade-in">
               <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-black uppercase tracking-widest">
                 <Award size={14} /> Şöhretler Müzesi
@@ -712,25 +798,40 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                 </div>
                 {stats.rareBadges.length > 0 && (
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
-                    {stats.rareBadges.map((b, i) => (
-                      <div key={i} className="bg-white/5 rounded-xl p-2 flex items-center gap-2">
-                        <span className="text-lg">{b.icon}</span>
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-bold text-white truncate">{b.name}</div>
-                          <div className="text-[9px] font-black uppercase text-gold-400">{b.tier}</div>
+                    {stats.rareBadges.map((b, i) => {
+                      const BadgeIcon = (Icons as any)[b.iconStr] || Icons.Trophy;
+                      return (
+                        <div key={i} className="bg-white/5 rounded-xl p-2 flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-ink-900 flex items-center justify-center flex-shrink-0">
+                            <BadgeIcon size={16} className="text-gold-400" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11px] font-bold text-white truncate">{b.name}</div>
+                            <div className="text-[9px] font-black uppercase text-gold-400">{b.tier}</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* SLAYT 6: FİNAL PAYLAŞIM KARTI */}
-          {slide === 6 && (
+          {slide === 7 && (
             <div className="space-y-3.5 animate-fade-in">
               <div className="bg-black/55 border-2 border-gold-500/50 rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-2xl">
+                
+                <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-1">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase text-azure-400 tracking-widest flex items-center gap-1"><ShieldAlert size={10} /> Sinevia Ajanı</span>
+                    <span className="text-sm font-black text-white">{data.nickname}</span>
+                  </div>
+                  <div className="text-[9px] font-mono text-ink-400 bg-white/5 px-2 py-1 rounded border border-white/10">
+                    {data.agentId}
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-gold-400">🎬 SINEVIA WRAPPED</div>
