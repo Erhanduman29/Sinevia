@@ -490,9 +490,18 @@ export function applyAchievements(state: ExtendedAppData): ExtendedAppData {
 export function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'IMPORT_DATA') {
     const migrated = migrateLegacyPastCollection(action.data.movies, action.data.collections);
+    
+    // KORUMA KALKANI: Yedekleme dosyası yüklense bile kimliğini ezmez.
+    const preservedIdentity = {
+      agentId: state.agentId,
+      nickname: state.nickname,
+      recoveryKey: state.recoveryKey
+    };
+
     return applyAchievements({
       ...defaultData(),
       ...action.data,
+      ...preservedIdentity,
       collections: migrated.collections,
       movies: migrated.movies,
       achievements: createInitialAchievements(action.data.achievements)
@@ -707,6 +716,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isQuestCelebrating, setIsQuestCelebrating] = useState(false);
   const toastsRef = useRef<ToastItem[]>([]); const achievementToastsRef = useRef<AchievementToastItem[]>([]); const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const isProcessingToastRef = useRef(false); const [queueTick, setQueueTick] = useState(0);
   const notifiedTimerIds = useRef<Set<string>>(new Set()); const notifiedPlanIds = useRef<Set<string>>(new Set());
+  const lastSyncedProfileRef = useRef<string>("");
 
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => { toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return toastsRef.current; }, []);
   const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
@@ -716,6 +726,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { document.body.setAttribute('data-theme', data.theme || 'default'); }, [data.theme]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
 
+  // YENİ: SUPABASE PROFİL SENKRONİZASYONU (AKILLI KONTROL VE SÜREKLİ TARAMA)
   useEffect(() => {
     if (!data.agentId) return;
     const syncProfileToCloud = async () => {
@@ -726,60 +737,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const unlockedAchievementsCount = data.achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0);
         
         let questsCompleted = 0;
-        try { const qs = JSON.parse(localStorage.getItem('sinevia-quests') || '{}'); questsCompleted = qs.completedCount || 0; } catch {}
+        try { 
+          const qsRaw = localStorage.getItem('sinevia-quests-v1');
+          if (qsRaw) {
+             const qs = JSON.parse(qsRaw);
+             questsCompleted = (qs.completedQuests && Array.isArray(qs.completedQuests)) ? qs.completedQuests.length : 0; 
+          }
+        } catch (e) { console.warn("Görevler çekilirken hata:", e); }
+
+        const currentSyncString = `${data.level}-${data.totalXp}-${watchedMoviesCount}-${watchedSeriesCount}-${watchedEpisodesCount}-${unlockedAchievementsCount}-${questsCompleted}`;
+        
+        if (lastSyncedProfileRef.current === currentSyncString) return; 
 
         await supabase.from('profiles').upsert({
           agent_id: data.agentId, nickname: data.nickname || 'Yeni Üye', level: data.level || 1, total_xp: data.totalXp || 0,
           movies_watched: watchedMoviesCount, series_watched: watchedSeriesCount, episodes_watched: watchedEpisodesCount,
           achievements_unlocked: unlockedAchievementsCount, quests_completed: questsCompleted, last_seen: new Date().toISOString()
         }, { onConflict: 'agent_id' });
+
+        lastSyncedProfileRef.current = currentSyncString;
+
       } catch (err) { console.error(err); }
     };
-    const timer = setTimeout(() => syncProfileToCloud(), 2000); 
-    return () => clearTimeout(timer);
+    
+    syncProfileToCloud(); 
+    const interval = setInterval(() => syncProfileToCloud(), 3000); 
+    return () => clearInterval(interval);
   }, [data]);
-
-  const lastCheckRef = useRef({
-    message: new Date().toISOString(),
-    friend: new Date().toISOString(),
-    list: new Date().toISOString(),
-  });
 
   useEffect(() => {
     if (!data.notificationsEnabled || !data.agentId) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    const interval = setInterval(async () => {
-      try {
-        if (data.notifyMessages !== false) {
-          const { data: msgs } = await supabase.from('messages').select('id, created_at').eq('receiver_id', data.agentId).gt('created_at', lastCheckRef.current.message);
-          if (msgs && msgs.length > 0) {
-            new Notification('Sinevia - Yeni Mesaj 💬', { body: 'Ağından yeni bir mesajın var!', icon: '/icon.png' });
-            lastCheckRef.current.message = msgs.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at;
-          }
+    const channel = supabase.channel('realtime:push_notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${data.agentId}` }, () => {
+        if (data.notifyMessages !== false) new Notification('Sinevia - Yeni Mesaj 💬', { body: 'Ağından yeni bir mesajın var!', icon: '/icon.png' });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friendships', filter: `receiver_id=eq.${data.agentId}` }, (payload) => {
+        if (data.notifyFriendRequests !== false && payload.new.status === 'pending') {
+          new Notification('Sinevia - Yeni Bağlantı 👤', { body: 'Biri sana arkadaşlık isteği gönderdi!', icon: '/icon.png' });
         }
-
-        if (data.notifyFriendRequests !== false) {
-          const { data: reqs } = await supabase.from('friendships').select('id, created_at').eq('receiver_id', data.agentId).eq('status', 'pending').gt('created_at', lastCheckRef.current.friend);
-          if (reqs && reqs.length > 0) {
-            new Notification('Sinevia - Yeni Bağlantı 👤', { body: 'Biri sana arkadaşlık isteği gönderdi!', icon: '/icon.png' });
-            lastCheckRef.current.friend = reqs.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at;
-          }
-        }
-
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'recommendations', filter: `receiver_id=eq.${data.agentId}` }, (payload) => {
         if (data.notifyLists !== false) {
-          const { data: recs } = await supabase.from('recommendations').select('id, list_title, created_at').eq('receiver_id', data.agentId).gt('created_at', lastCheckRef.current.list);
-          if (recs && recs.length > 0) {
-            new Notification('Sinevia - Yeni Liste 🎁', { body: `Sana özel bir tavsiye listesi gönderildi: "${recs[0].list_title}"`, icon: '/icon.png' });
-            lastCheckRef.current.list = recs.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at;
-          }
+          new Notification('Sinevia - Yeni Liste 🎁', { body: `Sana özel bir tavsiye listesi gönderildi: "${payload.new.list_title}"`, icon: '/icon.png' });
         }
-      } catch (e) {
-        console.error('Bildirim radar hatası:', e);
-      }
-    }, 10000);
+      })
+      .subscribe();
 
-    return () => clearInterval(interval);
+    return () => { supabase.removeChannel(channel); };
   }, [data.notificationsEnabled, data.agentId, data.notifyMessages, data.notifyFriendRequests, data.notifyLists]);
 
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => { const id = uid(); setAchievementToasts({ type: 'add', toast: { ...item, id } }); setTimeout(() => setAchievementToasts({ type: 'remove', id }), DISPLAY_DURATION_MS); }, []);
