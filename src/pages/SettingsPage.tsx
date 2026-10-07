@@ -3,7 +3,7 @@ import {
   Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X,
   AlertTriangle, Wrench, SlidersHorizontal, Smartphone, PlayCircle, Palette,
   Sparkles, Moon, Sun, Award, Share2, FolderPlus, ChevronDown, ThumbsUp, ThumbsDown,
-  Bell, BellRing, BellOff, UserCircle, Key, Copy // YENİ İKONLAR EKLENDİ
+  Bell, BellRing, BellOff, UserCircle, Key, Copy, MessageSquare, Gift, UserPlus, ShieldCheck
 } from 'lucide-react';
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
@@ -70,20 +70,25 @@ export default function SettingsPage() {
     data, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData, resetData,
     exportShareList, toggleLockedNames, addCriterion, editCriterion,
-    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, showToast,
-    setNickname, recoverIdentity // YENİ: İsim değiştirme ve hesap kurtarma eklendi
+    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleSpecificNotification, showToast,
+    setNickname, recoverIdentity
   } = useApp();
 
   const { resetQuestData } = useQuests(); 
   const { isInstallable, installPWA } = usePWAInstall();
 
-  // KİMLİK YÖNETİMİ STATELERİ (YENİ)
+  // KİMLİK YÖNETİMİ VE CİHAZ TAŞIMA STATELERİ
   const [editingNickname, setEditingNickname] = useState(false);
   const [tempNickname, setTempNickname] = useState(data.nickname || '');
   const [isRecoverMode, setIsRecoverMode] = useState(false);
   const [recAgentId, setRecAgentId] = useState('');
   const [recKey, setRecKey] = useState('');
   const [recNickname, setRecNickname] = useState('');
+  const [recSecretToken, setRecSecretToken] = useState('');
+  const [transferBundleInput, setTransferBundleInput] = useState('');
+
+  // Mevcut cihazdaki gizli güvenlik imzasını al
+  const currentSecretToken = typeof window !== 'undefined' ? (localStorage.getItem('sinevia_secret_token') || '') : '';
 
   const [newGenre, setNewGenre] = useState('');
   const [newCollection, setNewCollection] = useState('');
@@ -130,23 +135,74 @@ export default function SettingsPage() {
     { id: 'ocean', name: 'Aurora', desc: 'Buz Mavisi & İndigo', icon: Sparkles, previewBg: '#020617', textMode: 'dark', colors: ['#38bdf8', '#6366f1', '#2dd4bf'] },
   ];
 
-  // KİMLİK YÖNETİMİ FONKSİYONLARI (YENİ)
   const handleSaveNickname = () => {
     if (!tempNickname.trim()) return;
     setNickname(tempNickname.trim());
     setEditingNickname(false);
   };
 
+  // Tek tıkla tüm kimlik ve güvenlik imzasını paketleyip kopyalar
+  const handleCopyTransferCode = () => {
+    try {
+      const payload = {
+        a: data.agentId || '',
+        n: data.nickname || '',
+        r: data.recoveryKey || '',
+        s: localStorage.getItem('sinevia_secret_token') || ''
+      };
+      const encoded = 'SNV-TRANSFER-' + btoa(encodeURIComponent(JSON.stringify(payload)));
+      navigator.clipboard.writeText(encoded);
+      showToast('Cihaz Taşıma Kodu kopyalandı! Yeni cihazına yapıştırabilirsin.', 'success');
+    } catch (err) {
+      showToast('Taşıma kodu oluşturulurken hata oluştu.', 'error');
+    }
+  };
+
+  // Cihaz taşıma kodunu yapıştırınca kutuları otomatik doldurur
+  const handleParseTransferCode = (val: string) => {
+    setTransferBundleInput(val);
+    const trimmed = val.trim();
+    if (trimmed.startsWith('SNV-TRANSFER-')) {
+      try {
+        const base64Part = trimmed.replace('SNV-TRANSFER-', '');
+        const decoded = JSON.parse(decodeURIComponent(atob(base64Part)));
+        if (decoded.a) setRecAgentId(decoded.a);
+        if (decoded.n) setRecNickname(decoded.n);
+        if (decoded.r) setRecKey(decoded.r);
+        if (decoded.s) setRecSecretToken(decoded.s);
+        showToast('Taşıma kodu çözüldü! Bilgiler otomatik dolduruldu.', 'success');
+      } catch (err) {
+        // Henüz tam yapıştırılmamış veya hatalı kod
+      }
+    }
+  };
+
   const handleRecoverIdentity = () => {
     if (!recAgentId.trim() || !recKey.trim() || !recNickname.trim()) {
-      showToast('Lütfen tüm alanları doldurun!', 'error');
+      showToast('Lütfen Ağ Kodu, İsim ve Kurtarma Anahtarı alanlarını doldurun!', 'error');
       return;
     }
+
+    // Eğer güvenlik imzası (secret_token) girildiyse tarayıcıya mühürle
+    const tokenToSave = recSecretToken.trim();
+    if (tokenToSave) {
+      localStorage.setItem('sinevia_secret_token', tokenToSave);
+    }
+
     recoverIdentity(recAgentId.trim().toUpperCase(), recKey.trim(), recNickname.trim());
     setIsRecoverMode(false);
     setRecAgentId('');
     setRecKey('');
     setRecNickname('');
+    setRecSecretToken('');
+    setTransferBundleInput('');
+
+    // Yeni güvenlik başlığının (x-agent-token) Supabase istemcisine geçmesi için sayfayı yenile
+    if (tokenToSave) {
+      setTimeout(() => {
+        window.location.reload();
+      }, 600);
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -261,7 +317,6 @@ export default function SettingsPage() {
         Ayarlar
       </h1>
 
-      {/* YENİ: KİŞİSEL KİMLİK & AĞ YÖNETİMİ */}
       <CollapsibleSection
         title="Kişisel Kimlik ve Ağ Yönetimi"
         icon={<UserCircle size={18} className="text-emerald-400 flex-shrink-0" />}
@@ -274,8 +329,6 @@ export default function SettingsPage() {
         desc="Ağ üzerinde görünen ismini değiştir veya başka bir cihaza geçtiğinde kimliğini kurtar."
       >
         <div className="space-y-4">
-          
-          {/* İSİM DEĞİŞTİRME */}
           <div className="bg-ink-950/50 border border-ink-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <label className="block text-xs font-bold text-ink-400 mb-1 uppercase tracking-wider">Ağ İsminiz</label>
@@ -314,22 +367,64 @@ export default function SettingsPage() {
                   <Copy size={12} className="text-ink-500 group-hover:text-red-400" />
                 </div>
               </button>
+              {currentSecretToken && (
+                <button onClick={() => copyToClipboard(currentSecretToken, 'Güvenlik İmzan')} className="flex items-center justify-between gap-3 bg-ink-900 border border-ink-700 hover:border-amber-500/30 px-3 py-1.5 rounded-lg transition-colors group">
+                  <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Güvenlik İmzan:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-amber-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{currentSecretToken}</span>
+                    <Copy size={12} className="text-ink-500 group-hover:text-amber-400" />
+                  </div>
+                </button>
+              )}
             </div>
           </div>
 
+          {/* YENİ: TEK TIKLA CİHAZ TAŞIMA PAKETİ */}
+          <div className="bg-gradient-to-r from-emerald-950/30 to-azure-950/30 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <ShieldCheck size={18} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-black text-white uppercase tracking-wider">Tek Tıkla Cihaz Taşıma Kodu</h4>
+                <p className="text-[11px] text-ink-300 mt-0.5 leading-relaxed">
+                  Farklı bir tarayıcıya (ör. Opera) veya cihaza geçerken tüm kimlik ve güvenlik imzanı tek seferde taşımak için bu kodu kopyala.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleCopyTransferCode}
+              className="flex-shrink-0 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-emerald-500/10"
+            >
+              <Copy size={14} /> Taşıma Kodunu Kopyala
+            </button>
+          </div>
+
           <p className="text-xs text-ink-500 italic bg-ink-900/30 p-2 rounded-lg border border-ink-800/50">
-            <strong>ÖNEMLİ:</strong> Cihaz değiştirirsen veya verilerini silersen, sosyal ağdaki seviyeni ve arkadaşlarını geri getirmek için <strong>Ağ Kodun</strong> ve <strong>Kurtarma Anahtarın</strong> gerekir. Lütfen bu ikisini güvenli bir yere kopyala!
+            <strong>ÖNEMLİ:</strong> Cihaz değiştirirsen veya verilerini silersen, sosyal ağdaki seviyeni, mesajlarını ve arkadaşlarını geri getirmek için <strong>Cihaz Taşıma Kodun</strong> (veya Ağ Kodun + Kurtarma Anahtarın + Güvenlik İmzan) gerekir. Lütfen güvenli bir yere kaydet!
           </p>
 
-          {/* KİMLİK KURTARMA BÖLÜMÜ */}
           <div className="mt-2 pt-4 border-t border-ink-800">
             {!isRecoverMode ? (
               <button onClick={() => setIsRecoverMode(true)} className="flex items-center gap-2 text-xs font-bold text-azure-400 hover:text-azure-300 transition-colors">
-                <Key size={14} /> Başka bir hesabı (Kimliği) bu cihaza kurtar
+                <Key size={14} /> Başka bir hesabı (Kimliği) bu cihaza kurtar / taşı
               </button>
             ) : (
               <div className="bg-azure-950/20 border border-azure-500/30 rounded-xl p-4 space-y-3 animate-fade-in">
-                <h3 className="text-sm font-bold text-azure-400 flex items-center gap-2 mb-2"><Key size={16} /> Kimlik Kurtarma Aracı</h3>
+                <h3 className="text-sm font-bold text-azure-400 flex items-center gap-2 mb-2"><Key size={16} /> Kimlik & Cihaz Taşıma Aracı</h3>
+                
+                {/* HIZLI TAŞIMA KODU YAPIŞTIRMA ALANI */}
+                <div className="bg-ink-950/80 border border-emerald-500/30 rounded-lg p-3 mb-3">
+                  <label className="block text-[10px] font-black text-emerald-400 mb-1 uppercase tracking-wider">
+                    Hızlı Yöntem: Cihaz Taşıma Kodunu Yapıştır (Otomatik Doldurur)
+                  </label>
+                  <input
+                    type="text"
+                    value={transferBundleInput}
+                    onChange={(e) => handleParseTransferCode(e.target.value)}
+                    placeholder="SNV-TRANSFER-... ile başlayan kodu buraya yapıştır"
+                    className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ Kodu (SNV-..)</label>
@@ -339,13 +434,17 @@ export default function SettingsPage() {
                     <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ İsmin</label>
                     <input type="text" value={recNickname} onChange={(e) => setRecNickname(e.target.value)} placeholder="Eski ismin..." className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs text-white focus:border-azure-500 outline-none" />
                   </div>
-                  <div className="sm:col-span-2">
+                  <div>
                     <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Gizli Kurtarma Anahtarı</label>
-                    <input type="password" value={recKey} onChange={(e) => setRecKey(e.target.value)} placeholder="Karmaşık anahtarı buraya yapıştır..." className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-azure-500 outline-none" />
+                    <input type="password" value={recKey} onChange={(e) => setRecKey(e.target.value)} placeholder="Kurtarma anahtarın..." className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-azure-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-amber-400/90 mb-1 uppercase tracking-wider">Güvenlik İmzan (sec_...)</label>
+                    <input type="password" value={recSecretToken} onChange={(e) => setRecSecretToken(e.target.value)} placeholder="Mesaj/Profil yetkisi için (sec_...)" className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-amber-500 outline-none" />
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <button onClick={handleRecoverIdentity} className="flex-1 bg-azure-600 hover:bg-azure-500 text-white py-2 rounded-lg font-bold text-xs transition-colors">Kimliği Kurtar</button>
+                  <button onClick={handleRecoverIdentity} className="flex-1 bg-azure-600 hover:bg-azure-500 text-white py-2 rounded-lg font-bold text-xs transition-colors">Kimliği Kurtar & Eşitle</button>
                   <button onClick={() => setIsRecoverMode(false)} className="flex-1 bg-ink-800 hover:bg-ink-700 text-white py-2 rounded-lg font-bold text-xs transition-colors">İptal</button>
                 </div>
               </div>
@@ -354,7 +453,7 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
-      {/* CİHAZ BİLDİRİMLERİ (PUSH NOTIFICATIONS) */}
+      {/* YENİ: KAPSAMLI AKILLI BİLDİRİM MERKEZİ */}
       <CollapsibleSection
         title="Akıllı Cihaz Bildirimleri"
         icon={data.notificationsEnabled ? <BellRing size={18} className="text-emerald-400 flex-shrink-0 animate-pulse" /> : <BellOff size={18} className="text-ink-500 flex-shrink-0" />}
@@ -365,40 +464,96 @@ export default function SettingsPage() {
             </span>
           )
         }
-        desc="Film saati yaklaştığında veya canlı izleme sayacı sıfırlandığında sistemin seni uyarmasına izin ver."
+        desc="Film saatleri, canlı izleme sayaçları ve Sinevia Ağı'ndaki tüm mesaj ve arkadaşlık bildirimleri."
       >
-        <div className="bg-ink-950/50 border border-ink-800 rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-white mb-1">Cihaz Bildirimleri (Push API)</h3>
-            <p className="text-xs text-ink-400">Planlanan filme 15 dk kala ve sayaç sıfırlandığında haber ver.</p>
-          </div>
-          <button
-            onClick={async () => {
-              if (data.notificationsEnabled) {
-                toggleNotifications(false);
-                showToast('Bildirimler kapatıldı.', 'info');
-              } else {
-                if (!('Notification' in window)) {
-                  showToast('Kullandığınız tarayıcı bildirimleri desteklemiyor.', 'error');
-                  return;
-                }
-                const perm = await Notification.requestPermission();
-                if (perm === 'granted') {
-                  toggleNotifications(true);
-                  showToast('Harika! Bildirim izni alındı. Artık maratonları kaçırmayacaksın.', 'success');
+        <div className="bg-ink-950/50 border border-ink-800 rounded-2xl p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-white mb-1">Cihaz Bildirimleri (Push API)</h3>
+              <p className="text-xs text-ink-400">Tarayıcının sana bilgisayarında/telefonunda bildirim göndermesine izin ver.</p>
+            </div>
+            <button
+              onClick={async () => {
+                if (data.notificationsEnabled) {
+                  toggleNotifications(false);
+                  showToast('Ana bildirim sistemi kapatıldı.', 'info');
                 } else {
-                  showToast('Bildirim izni reddedildi. Tarayıcı ayarlarından izin vermelisin.', 'warning');
+                  if (!('Notification' in window)) {
+                    showToast('Kullandığınız tarayıcı bildirimleri desteklemiyor.', 'error');
+                    return;
+                  }
+                  const perm = await Notification.requestPermission();
+                  if (perm === 'granted') {
+                    toggleNotifications(true);
+                    showToast('Harika! Bildirim izni alındı.', 'success');
+                  } else {
+                    showToast('Bildirim izni reddedildi. Tarayıcı ayarlarından izin vermelisin.', 'warning');
+                  }
                 }
-              }
-            }}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${data.notificationsEnabled ? 'bg-emerald-500' : 'bg-ink-700'}`}
-          >
-            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-          </button>
+              }}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${data.notificationsEnabled ? 'bg-emerald-500' : 'bg-ink-700'}`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          {/* SINEVIA AĞI ÖZEL BİLDİRİM KONTROLLERİ */}
+          {data.notificationsEnabled && (
+            <div className="mt-4 pt-4 border-t border-ink-800 space-y-3">
+              <h4 className="text-[10px] font-black text-ink-500 uppercase tracking-widest mb-3">Sosyal Ağ Bildirim Tercihleri</h4>
+              
+              <div className="flex items-center justify-between p-2.5 bg-ink-900/50 rounded-xl border border-ink-800/60">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-azure-500/10 text-azure-400 flex items-center justify-center"><MessageSquare size={13} /></div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">Sohbet Mesajları</span>
+                    <span className="text-[9px] text-ink-500 font-medium">Biri sana mesaj attığında</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => toggleSpecificNotification('notifyMessages', data.notifyMessages === false ? true : false)}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${data.notifyMessages !== false ? 'bg-azure-500' : 'bg-ink-700'}`}
+                >
+                  <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notifyMessages !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 bg-ink-900/50 rounded-xl border border-ink-800/60">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center"><UserPlus size={13} /></div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">Arkadaşlık İstekleri</span>
+                    <span className="text-[9px] text-ink-500 font-medium">Ağına katılmak istediklerinde</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => toggleSpecificNotification('notifyFriendRequests', data.notifyFriendRequests === false ? true : false)}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${data.notifyFriendRequests !== false ? 'bg-emerald-500' : 'bg-ink-700'}`}
+                >
+                  <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notifyFriendRequests !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 bg-ink-900/50 rounded-xl border border-ink-800/60">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-violet-500/10 text-violet-400 flex items-center justify-center"><Gift size={13} /></div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">Gelen Listeler</span>
+                    <span className="text-[9px] text-ink-500 font-medium">Sana tavsiye gönderildiğinde</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => toggleSpecificNotification('notifyLists', data.notifyLists === false ? true : false)}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${data.notifyLists !== false ? 'bg-violet-500' : 'bg-ink-700'}`}
+                >
+                  <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notifyLists !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </CollapsibleSection>
 
-      {/* GÖRSEL ATMOSFER & TEMA MOTORU */}
       <CollapsibleSection
         title="Görsel Atmosfer & Tema"
         icon={<Palette size={18} className="text-gold-400 flex-shrink-0" />}
@@ -447,7 +602,6 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
-      {/* İZLEME KAYNAĞI ŞABLONU */}
       <CollapsibleSection
         title="Alternatif İzleme Kaynağı"
         icon={<PlayCircle size={18} className="text-azure-400 flex-shrink-0" />}
@@ -485,7 +639,6 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
-      {/* PUANLAMA KRİTERLERİ */}
       <CollapsibleSection
         title="Puanlama Kriterleri"
         icon={<SlidersHorizontal size={18} className="text-gold-400 flex-shrink-0" />}
@@ -593,7 +746,6 @@ export default function SettingsPage() {
         />
       )}
 
-      {/* DEĞERLENDİRME BAŞLIKLARI YÖNETİMİ */}
       <CollapsibleSection
         title="Değerlendirme Başlıkları"
         icon={<Award size={18} className="text-gold-400 flex-shrink-0" />}
@@ -621,7 +773,6 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Övgü Yorumları */}
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2">
             <ThumbsUp size={14} className="text-emerald-400" />
@@ -637,7 +788,6 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Eleştiriler */}
         <div>
           <div className="flex items-center gap-2 mb-2">
             <ThumbsDown size={14} className="text-red-400" />
@@ -663,7 +813,6 @@ export default function SettingsPage() {
         />
       )}
 
-      {/* TÜR YÖNETİMİ */}
       <CollapsibleSection
         title="Tür Yönetimi"
         icon={<Tag size={18} className="text-gold-400 flex-shrink-0" />}
@@ -711,7 +860,6 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
-      {/* KOLEKSİYON YÖNETİMİ */}
       <CollapsibleSection
         title="Koleksiyon Yönetimi"
         icon={<Boxes size={18} className="text-azure-400 flex-shrink-0" />}
@@ -790,42 +938,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ARKADAŞLA LİSTE PAYLAŞ / EKSİKLERİ SEÇ & EKLE */}
-      <CollapsibleSection
-        title="Arkadaşla Liste Paylaş"
-        icon={<Share2 size={18} className="text-azure-400 flex-shrink-0" />}
-        defaultOpen={false}
-        badge={
-          <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-azure-500/20 text-azure-300 border border-azure-500/30">
-            Seçmeli & Başarım Destekli
-          </span>
-        }
-        desc="Arkadaşına film/dizi listeni gönderebilir veya onun listesindeki sende olmayan yapımları seçerek kendi kütüphanene ekleyebilirsin!"
-      >
-        <div className="flex flex-col sm:flex-row gap-2.5">
-          <button
-            onClick={exportShareList}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-azure-600 hover:bg-azure-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md shadow-azure-500/10"
-          >
-            <Share2 size={16} /> Paylaşım Listesi İndir
-          </button>
-          <button
-            onClick={() => shareFileRef.current?.click()}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-ink-800 hover:bg-ink-700 text-azure-300 border border-azure-500/40 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all"
-          >
-            <FolderPlus size={16} /> Arkadaş Listesi Yükle (Seç & Ekle)
-          </button>
-          <input
-            ref={shareFileRef}
-            type="file"
-            accept="application/json"
-            onChange={handleShareFileImport}
-            className="hidden"
-          />
-        </div>
-      </CollapsibleSection>
+      {/* ARKADAŞLA LİSTE PAYLAŞ (ARTIK NETWORK SAYFASINDA OLDUĞU İÇİN GİZLENDİ / SADECE YEDEKLEME KALDI) */}
 
-      {/* TAM YEDEKLE / GERİ YÜKLE */}
       <CollapsibleSection
         title="Tam Yedekle / Geri Yükle"
         icon={<Download size={18} className="text-emerald-400 flex-shrink-0" />}
@@ -852,7 +966,6 @@ export default function SettingsPage() {
         />
       )}
 
-      {/* GELİŞTİRİCİ / TEST AYARLARI */}
       <CollapsibleSection
         title="Geliştirici / Test Ayarları"
         icon={<Wrench size={18} className="text-gold-400 flex-shrink-0" />}
@@ -869,7 +982,6 @@ export default function SettingsPage() {
         </button>
       </CollapsibleSection>
 
-      {/* İKİ AŞAMALI (ÇİFT ONAYLI) TÜM VERİLERİ SIFIRLAMA */}
       <div className="bg-red-950/20 border border-red-800/40 rounded-2xl p-4 sm:p-5 shadow-xl transition-all">
         <h2 className="text-base sm:text-lg font-semibold text-red-400 mb-1 flex items-center gap-2">
           <AlertTriangle size={18} className="text-red-400" /> Verileri Sıfırla
