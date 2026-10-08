@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Users, UserPlus, Trophy, Activity, Check, X, Star, Plus, Copy, RefreshCw,
   Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift,
-  ListVideo, Search, Filter, Eye, Info, MessageSquare, MessageCircle,
-  Crown, Radio, Flame, ExternalLink, FileText
+  ListVideo, Eye, Info, MessageSquare, MessageCircle, Crown, Radio, Flame,
+  ExternalLink, FileText
 } from 'lucide-react';
 import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
 import type { ShowcaseItem } from '../context/AppContext';
@@ -12,6 +12,8 @@ import { uid } from '../lib/utils';
 import AgentProfileModal from '../components/AgentProfileModal';
 import ShowcaseEditorModal from '../components/ShowcaseEditorModal';
 import ChatHubModal, { renderChatMessageBubble } from '../components/ChatHubModal';
+import RecommendationModals from '../components/RecommendationModals';
+import type { Movie } from '../types';
 
 function timeAgo(dateString: string) {
   if (!dateString) return '';
@@ -107,19 +109,13 @@ export default function NetworkPage() {
   // AKIŞ VE TAVSİYE LİSTESİ MODALLARI
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [showSendModal, setShowSendModal] = useState(false);
-  const [sendTargetId, setSendTargetId] = useState('');
-  const [sendListTitle, setSendListTitle] = useState('');
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterGenre, setFilterGenre] = useState('');
-  const [viewingList, setViewingList] = useState<any>(null);
+  const [viewingList, setViewingList] = useState<any | null>(null);
+  const [listToDelete, setListToDelete] = useState<string | null>(null);
 
-  // VİTRİN VE MESAJ MERKEZİ MODALLARI
+  // VİTRİN, MESAJ MERKEZİ VE ARKADAŞ SİLME MODALLARI
   const [showShowcaseModal, setShowShowcaseModal] = useState(false);
   const [isChatHubOpen, setIsChatHubOpen] = useState(false);
   const [initialDirectChatId, setInitialDirectChatId] = useState<string | null>(null);
-
-  const [listToDelete, setListToDelete] = useState<string | null>(null);
   const [friendToRemove, setFriendToRemove] = useState<string | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -140,9 +136,9 @@ export default function NetworkPage() {
   const myStatsSummary = useMemo(() => ({
     xp: data.totalXp || 0,
     level: data.level || 1,
-    moviesWatched: data.movies.filter(m => m.watched).length,
-    episodesWatched: data.series.reduce((sum, s) => sum + (s.episodes?.filter(e => e.watched).length || 0), 0),
-    achievementsUnlocked: data.achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0),
+    moviesWatched: data.movies.filter((m: Movie) => m.watched).length,
+    episodesWatched: data.series.reduce((sum: number, s: any) => sum + (s.episodes?.filter((e: any) => e.watched).length || 0), 0),
+    achievementsUnlocked: data.achievements.reduce((acc: number, curr: any) => acc + (curr.unlockedTiers?.length || 0), 0),
   }), [data.totalXp, data.level, data.movies, data.series, data.achievements]);
 
   const openProfileModal = async (targetId: string, initialTab: ProfileTabType = 'stats') => {
@@ -199,7 +195,7 @@ export default function NetworkPage() {
         else if (f.status === 'pending') { if (f.receiver_id === data.agentId) incoming.push(f); else outgoing.push(f); }
       });
 
-      const allRelevantIds = Array.from(new Set([data.agentId, ...Array.from(acceptedIds), ...incoming.map(i => i.requester_id), ...outgoing.map(o => o.receiver_id)]));
+      const allRelevantIds = Array.from(new Set([data.agentId, ...Array.from(acceptedIds), ...incoming.map((i: any) => i.requester_id), ...outgoing.map((o: any) => o.receiver_id)]));
 
       const { data: recData } = await supabase.from('recommendations').select('*').or(`receiver_id.eq.${data.agentId},sender_id.eq.${data.agentId}`).order('created_at', { ascending: false });
       const recList = recData || [];
@@ -229,11 +225,11 @@ export default function NetworkPage() {
       setProfilesMap({ ...pMap });
       setLeaderboard(leadersData || []);
 
-      const acceptedFriends = Array.from(acceptedIds).map(id => {
+      const acceptedFriends = Array.from(acceptedIds).map((id: string) => {
         const profile = pMap[id] || { nickname: 'Ajan Aranıyor...', agent_id: id };
         const friendship = fList.find((f: any) => f.status === 'accepted' && (f.requester_id === id || f.receiver_id === id));
         return { ...profile, friendship_id: friendship?.id };
-      }).filter(f => f.friendship_id);
+      }).filter((f: any) => f.friendship_id);
 
       setFriends(acceptedFriends); setPendingIncoming(incoming); setPendingOutgoing(outgoing);
 
@@ -301,7 +297,7 @@ export default function NetworkPage() {
     const code = friendCode.trim().toUpperCase();
     if (!code) return;
     if (code === data.agentId) { showToast('Kendini ekleyemezsin!', 'warning'); return; }
-    if (friends.some(f => f.agent_id === code) || pendingOutgoing.some(p => p.receiver_id === code) || pendingIncoming.some(p => p.requester_id === code)) { showToast('Zaten bir bağınız var.', 'warning'); return; }
+    if (friends.some((f: any) => f.agent_id === code) || pendingOutgoing.some((p: any) => p.receiver_id === code) || pendingIncoming.some((p: any) => p.requester_id === code)) { showToast('Zaten bir bağınız var.', 'warning'); return; }
 
     try {
       const { data: targetProfile } = await supabase.from('profiles').select('agent_id').eq('agent_id', code).maybeSingle();
@@ -336,8 +332,8 @@ export default function NetworkPage() {
   const handleNavigateFromLog = (logItem: any, addIfMissing = false) => {
     const cleanTitle = (logItem.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim();
     const alreadyInLib =
-      data.movies.some(m => m.title.toLowerCase() === cleanTitle.toLowerCase()) ||
-      data.series.some(s => s.title.toLowerCase() === cleanTitle.toLowerCase());
+      data.movies.some((m: Movie) => m.title.toLowerCase() === cleanTitle.toLowerCase()) ||
+      data.series.some((s: any) => s.title.toLowerCase() === cleanTitle.toLowerCase());
 
     if (!alreadyInLib && addIfMissing) {
       handleAddToLibrary(logItem, false);
@@ -352,37 +348,12 @@ export default function NetworkPage() {
     window.dispatchEvent(new CustomEvent('navigate-tab', { detail: targetTab }));
   };
 
-  const handleSendList = async () => {
-    if (!sendTargetId) { showToast('Lütfen arkadaş seç!', 'error'); return; }
-    if (!sendListTitle.trim()) { showToast('Listene bir isim ver!', 'error'); return; }
-    if (selectedItemIds.length === 0) { showToast('En az bir yapım seçmelisin!', 'error'); return; }
-
-    const combinedItems = [...data.movies.map(m => ({ ...m, type: 'movie' })), ...data.series.map(s => ({ ...s, type: 'series' }))];
-    const itemsToSend = combinedItems.filter(x => selectedItemIds.includes(x.id)).map(x => ({ id: x.id, title: x.title, type: x.type, poster: x.posterUrl || null, genres: x.genres, year: x.year || '' }));
-
-    try {
-      await supabase.from('recommendations').insert([{ id: uid(), sender_id: data.agentId, receiver_id: sendTargetId, list_title: sendListTitle.trim(), items: itemsToSend, status: 'pending' }]);
-      showToast('Liste gönderildi!', 'success'); setShowSendModal(false); setSendListTitle(''); setSelectedItemIds([]); setSendTargetId(''); setSyncTick(t => t + 1);
-    } catch { showToast('Hata oluştu!', 'error'); }
-  };
-
   const handleViewList = async (list: any) => {
     setViewingList(list);
     if (list.status === 'pending' && list.receiver_id === data.agentId) {
       await supabase.from('recommendations').update({ status: 'viewed' }).eq('id', list.id);
       setSyncTick(t => t + 1);
     }
-  };
-
-  const executeDeleteList = async () => {
-    if (!listToDelete) return;
-    try {
-      await supabase.from('recommendations').delete().eq('id', listToDelete);
-      if (viewingList?.id === listToDelete) setViewingList(null);
-      showToast('Liste başarıyla silindi!', 'success');
-      setSyncTick(t => t + 1);
-    } catch { showToast('Liste silinirken hata oluştu.', 'error'); }
-    setListToDelete(null);
   };
 
   const handleSaveShowcase = async (newShowcase: ShowcaseItem[]) => {
@@ -397,19 +368,10 @@ export default function NetworkPage() {
     }
   };
 
-  const filteredLibraryItems = useMemo(() => {
-    const combined = [...data.movies.map(m => ({ ...m, type: 'movie' })), ...data.series.map(s => ({ ...s, type: 'series' }))];
-    return combined.filter(item => {
-      const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesGenre = filterGenre ? item.genres.includes(filterGenre) : true;
-      return matchesSearch && matchesGenre;
-    }).sort((a, b) => a.title.localeCompare(b.title));
-  }, [data.movies, data.series, searchQuery, filterGenre]);
-
   const liveWatchingList = useMemo(() => {
     const list: { friend: any; radar: NonNullable<ReturnType<typeof getLiveRadarStatus>>; isMe?: boolean }[] = [];
 
-    const myActiveMovie = data.movies.find(m => !m.watched && m.startedAt);
+    const myActiveMovie = data.movies.find((m: Movie) => !m.watched && m.startedAt);
     if (myActiveMovie && myActiveMovie.startedAt) {
       const tInfo = getMovieTimerInfo(myActiveMovie, radarTick);
       const progress = Math.min(100, Math.max(3, Math.round((tInfo.elapsedMins / tInfo.maxMins) * 100)));
@@ -429,7 +391,7 @@ export default function NetworkPage() {
       });
     }
 
-    friends.forEach(f => {
+    friends.forEach((f: any) => {
       if (f.agent_id === data.agentId) return;
       const prof = profilesMap[f.agent_id] || f;
       const radar = getLiveRadarStatus(prof?.currently_watching, radarTick);
@@ -443,7 +405,7 @@ export default function NetworkPage() {
 
   // AKIŞ AKILLI FİLTRELEME VE AĞIN GÜNDEMİ (TRENDING) HESAPLAMASI
   const filteredFeed = useMemo(() => {
-    return feed.filter(log => {
+    return feed.filter((log: any) => {
       if (feedFilter === 'masterpieces') return Number(log.rating || 0) >= 8;
       if (feedFilter === 'notes') return Boolean(log.note && String(log.note).trim().length > 0);
       if (feedFilter === 'movies') return log.item_type === 'movie';
@@ -455,7 +417,7 @@ export default function NetworkPage() {
   const trendingFeedItem = useMemo(() => {
     if (feed.length === 0) return null;
     const counts: Record<string, { count: number; totalRating: number; ratedCount: number; sampleLog: any; cleanTitle: string }> = {};
-    feed.forEach(log => {
+    feed.forEach((log: any) => {
       const cleanTitle = (log.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim();
       const key = cleanTitle.toLowerCase();
       if (!key) return;
@@ -484,12 +446,12 @@ export default function NetworkPage() {
 
   // LİDERLİK TABLOSU SIRALAMASI VE KAPSAM FİLTRESİ
   const sortedLeaderboard = useMemo(() => {
-    const friendIdSet = new Set([data.agentId, ...friends.map(f => f.agent_id)]);
+    const friendIdSet = new Set([data.agentId, ...friends.map((f: any) => f.agent_id)]);
     const baseList = leaderboardScope === 'friends'
-      ? leaderboard.filter(u => friendIdSet.has(u.agent_id))
+      ? leaderboard.filter((u: any) => friendIdSet.has(u.agent_id))
       : leaderboard;
 
-    return [...baseList].sort((a, b) => {
+    return [...baseList].sort((a: any, b: any) => {
       if (leaderboardCategory === 'xp') return (b.total_xp || 0) - (a.total_xp || 0);
       if (leaderboardCategory === 'level') return (b.level || 0) - (a.level || 0);
       if (leaderboardCategory === 'movies') return (b.movies_watched || 0) - (a.movies_watched || 0);
@@ -510,11 +472,11 @@ export default function NetworkPage() {
     return '';
   };
 
-  const incomingLists = recommendations.filter(r => r.receiver_id === data.agentId);
-  const unreadListsCount = incomingLists.filter(r => r.status === 'pending').length;
-  const outgoingLists = recommendations.filter(r => r.sender_id === data.agentId);
-  const totalUnread = Object.values(unreadMessages).reduce((a, b) => a + b, 0);
-  const myValidShowcase = (data.showcase || []).filter(s => s && s.title);
+  const incomingLists = recommendations.filter((r: any) => r.receiver_id === data.agentId);
+  const unreadListsCount = incomingLists.filter((r: any) => r.status === 'pending').length;
+  const outgoingLists = recommendations.filter((r: any) => r.sender_id === data.agentId);
+  const totalUnread = Object.values(unreadMessages).reduce((a: number, b: number) => a + b, 0);
+  const myValidShowcase = (data.showcase || []).filter((s: any) => s && s.title);
 
   if (loading) {
     return (
@@ -563,8 +525,8 @@ export default function NetworkPage() {
             </div>
             {myValidShowcase.length > 0 ? (
               <div className="flex items-center gap-1.5">
-                {myValidShowcase.map((sc, i) => {
-                  const poster = sc?.posterUrl || (sc as any)?.poster;
+                {myValidShowcase.map((sc: any, i: number) => {
+                  const poster = sc?.posterUrl || sc?.poster;
                   return (
                     <div key={i} className="w-8 h-11 rounded-lg bg-ink-950 border border-gold-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow">
                       {poster ? (
@@ -768,7 +730,7 @@ export default function NetworkPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
-                {filteredFeed.map((log) => {
+                {filteredFeed.map((log: any) => {
                   const profile = profilesMap[log.agent_id];
                   if (!profile) return null;
                   const liveStatus = getLiveRadarStatus(profile.currently_watching, radarTick);
@@ -835,9 +797,14 @@ export default function NetworkPage() {
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-violet-500/10 text-violet-400 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-violet-500/20 rotate-3 shadow-lg">
                   <Gift size={32} />
                 </div>
-                <h2 className="text-lg sm:text-2xl font-black text-white mb-2">Arkadaşlarına Özel Liste Gönder</h2>
-                <p className="text-xs sm:text-sm text-ink-400 mb-6 max-w-md mx-auto leading-relaxed">En sevdiğin yapımları devasa kütüphanenden seçerek özel bir koleksiyon olarak arkadaşına yolla.</p>
-                <button onClick={() => setShowSendModal(true)} className="bg-violet-600 hover:bg-violet-500 text-white px-8 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all flex items-center gap-2.5 mx-auto uppercase tracking-wider">
+                <h2 className="text-lg sm:text-2xl font-black text-white mb-2">Arkadaşlarına Özel Koleksiyon Gönder</h2>
+                <p className="text-xs sm:text-sm text-ink-400 mb-6 max-w-md mx-auto leading-relaxed">
+                  En sevdiğin yapımları kendi puanların ve özel notunla birlikte seçerek arkadaşına tavsiye listesi olarak yolla.
+                </p>
+                <button
+                  onClick={() => setShowSendModal(true)}
+                  className="bg-violet-600 hover:bg-violet-500 text-white px-8 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all flex items-center gap-2.5 mx-auto uppercase tracking-wider"
+                >
                   <ListVideo size={18} /> Liste Oluştur & Gönder
                 </button>
               </div>
@@ -845,7 +812,7 @@ export default function NetworkPage() {
 
             <div>
               <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-4 pl-2 flex items-center gap-2">
-                <Inbox size={16} className="text-violet-400" /> Sana Gelen Listeler
+                <Inbox size={16} className="text-violet-400" /> Sana Gelen Listeler ({incomingLists.length})
               </h3>
               {incomingLists.length === 0 ? (
                 <div className="text-center py-10 bg-ink-950 border border-ink-800 border-dashed rounded-2xl">
@@ -853,25 +820,56 @@ export default function NetworkPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {incomingLists.map(list => {
+                  {incomingLists.map((list: any) => {
                     const p = profilesMap[list.sender_id] || { nickname: 'Bilinmeyen' };
                     const isNew = list.status === 'pending';
+                    const itemsArr: any[] = Array.isArray(list.items) ? list.items : [];
+                    const listNote = itemsArr[0]?.listNote || null;
+
                     return (
-                      <div key={list.id} className="bg-ink-950 border border-ink-800 hover:border-violet-500/40 p-5 rounded-2xl transition-colors flex items-center justify-between group shadow-sm relative">
-                        {isNew && <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 rounded-full border-2 border-ink-950" title="Yeni Liste" />}
-                        <div className="min-w-0 pr-4">
-                          <h4 className="text-base font-bold text-white truncate mb-1">{list.list_title}</h4>
-                          <div className="text-[11px] text-ink-400 flex items-center gap-1.5 flex-wrap">
-                            <span className="text-violet-400 font-bold">{p.nickname}</span> gönderdi
-                            <span className="text-ink-600">•</span>
-                            <span className="bg-ink-900 px-2 py-0.5 rounded text-ink-300 font-mono">{list.items?.length || 0} İçerik</span>
+                      <div key={list.id} className="bg-ink-950 border border-ink-800 hover:border-violet-500/40 p-5 rounded-2xl transition-colors flex flex-col justify-between gap-4 group shadow-sm relative">
+                        {isNew && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-ink-950 animate-pulse" title="Yeni Liste" />}
+                        <div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h4 className="text-base font-bold text-white truncate mb-1">{list.list_title}</h4>
+                              <div className="text-[11px] text-ink-400 flex items-center gap-1.5 flex-wrap">
+                                <span className="text-violet-400 font-bold">{p.nickname}</span> gönderdi
+                                <span className="text-ink-600">•</span>
+                                <span className="bg-ink-900 px-2 py-0.5 rounded text-ink-300 font-mono">{itemsArr.length} İçerik</span>
+                              </div>
+                            </div>
+
+                            {itemsArr.length > 0 && (
+                              <div className="flex items-center -space-x-2 shrink-0">
+                                {itemsArr.slice(0, 3).map((it: any, idx: number) =>
+                                  it.poster ? (
+                                    <img key={idx} src={it.poster} alt="" className="w-7 h-10 rounded-md object-cover border border-ink-950 shadow" />
+                                  ) : null
+                                )}
+                              </div>
+                            )}
                           </div>
+
+                          {listNote && (
+                            <p className="text-[11px] text-ink-300 italic mt-2.5 line-clamp-2 bg-ink-900/60 px-2.5 py-1.5 rounded-xl border border-ink-800/80">
+                              "{listNote}"
+                            </p>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button onClick={() => handleViewList(list)} className="bg-ink-900 hover:bg-violet-500/20 text-violet-400 border border-ink-800 hover:border-violet-500/50 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm">
-                            İncele
+
+                        <div className="flex items-center gap-2 pt-2 border-t border-ink-800/60">
+                          <button
+                            onClick={() => handleViewList(list)}
+                            className="flex-1 bg-ink-900 hover:bg-violet-500/20 text-violet-300 border border-ink-800 hover:border-violet-500/50 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm"
+                          >
+                            Listeyi Aç & İncele
                           </button>
-                          <button onClick={() => setListToDelete(list.id)} className="p-2.5 bg-ink-900 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 border border-ink-800 hover:border-red-500/50 rounded-xl transition-all shadow-sm" title="Listeyi Sil">
+                          <button
+                            onClick={() => setListToDelete(list.id)}
+                            className="p-2.5 bg-ink-900 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 border border-ink-800 hover:border-red-500/50 rounded-xl transition-all shadow-sm"
+                            title="Listeyi Sil"
+                          >
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -885,20 +883,34 @@ export default function NetworkPage() {
             {outgoingLists.length > 0 && (
               <div className="pt-6 border-t border-ink-800/60">
                 <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-4 pl-2 flex items-center gap-2">
-                  <Send size={16} className="text-ink-400" /> Senin Gönderdiklerin
+                  <Send size={16} className="text-ink-400" /> Senin Gönderdiklerin ({outgoingLists.length})
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {outgoingLists.map(list => {
+                  {outgoingLists.map((list: any) => {
                     const p = profilesMap[list.receiver_id] || { nickname: 'Bilinmeyen' };
                     return (
-                      <div key={list.id} className="bg-ink-950/50 border border-ink-800/50 p-4 rounded-2xl flex items-center justify-between opacity-70">
+                      <div key={list.id} className="bg-ink-950/60 border border-ink-800/60 p-4 rounded-2xl flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <h4 className="text-sm font-bold text-ink-300 truncate mb-1">{list.list_title}</h4>
-                          <div className="text-[11px] text-ink-500">Kime: {p.nickname} • {list.items?.length || 0} içerik</div>
+                          <h4 className="text-sm font-bold text-ink-200 truncate mb-1">{list.list_title}</h4>
+                          <div className="text-[11px] text-ink-500">
+                            Kime: <span className="text-ink-300 font-bold">{p.nickname}</span> • {list.items?.length || 0} içerik
+                          </div>
                         </div>
-                        <button onClick={() => setListToDelete(list.id)} className="p-2.5 bg-ink-900/50 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 border border-transparent hover:border-red-500/30 rounded-xl transition-all" title="Listeyi Sil">
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => handleViewList(list)}
+                            className="px-3 py-2 bg-ink-900 hover:bg-ink-800 text-ink-300 border border-ink-800 rounded-xl text-xs font-bold transition-all"
+                          >
+                            Gör
+                          </button>
+                          <button
+                            onClick={() => setListToDelete(list.id)}
+                            className="p-2 bg-ink-900/50 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 border border-transparent hover:border-red-500/30 rounded-xl transition-all"
+                            title="Listeyi Sil"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -965,7 +977,7 @@ export default function NetworkPage() {
             {/* ŞAMPİYONLAR PODYUMU (İLK 3 AJAN) */}
             {sortedLeaderboard.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-2">
-                {[1, 0, 2].map(podiumIdx => {
+                {[1, 0, 2].map((podiumIdx: number) => {
                   const user = sortedLeaderboard[podiumIdx];
                   if (!user) return <div key={podiumIdx} className="hidden md:block" />;
                   const rank = podiumIdx + 1;
@@ -1006,7 +1018,7 @@ export default function NetworkPage() {
 
                       {uShowcase.length > 0 && (
                         <div className="flex items-center justify-center gap-1.5 mt-3 pt-3 border-t border-ink-800/80 w-full">
-                          {uShowcase.slice(0, 4).map((sc, i) => {
+                          {uShowcase.slice(0, 4).map((sc: any, i: number) => {
                             const pUrl = sc.posterUrl || sc.poster;
                             return pUrl ? (
                               <img key={i} src={pUrl} alt={sc.title} className="w-7 h-10 rounded-md object-cover border border-ink-700" title={sc.title} />
@@ -1029,7 +1041,7 @@ export default function NetworkPage() {
               </div>
 
               <div className="divide-y divide-ink-800/30">
-                {sortedLeaderboard.map((user, index) => {
+                {sortedLeaderboard.map((user: any, index: number) => {
                   const isMe = user.agent_id === data.agentId;
                   const rank = index + 1;
                   let rankColor = 'text-ink-500';
@@ -1097,7 +1109,7 @@ export default function NetworkPage() {
                   <div>
                     <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-3 pl-2">Gelen İstekler</h3>
                     <div className="space-y-2">
-                      {pendingIncoming.map(req => {
+                      {pendingIncoming.map((req: any) => {
                         const p = profilesMap[req.requester_id] || { nickname: 'Bilinmeyen', agent_id: req.requester_id };
                         return (
                           <div key={req.id} className="flex items-center justify-between bg-ink-950 border border-ink-800 p-3 sm:p-4 rounded-2xl shadow-sm">
@@ -1122,7 +1134,7 @@ export default function NetworkPage() {
                   <div>
                     <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-3 pl-2">Giden İstekler</h3>
                     <div className="space-y-2">
-                      {pendingOutgoing.map(req => {
+                      {pendingOutgoing.map((req: any) => {
                         const p = profilesMap[req.receiver_id] || { nickname: 'Bekleniyor...', agent_id: req.receiver_id };
                         return (
                           <div key={req.id} className="flex items-center justify-between bg-ink-950 border border-ink-800/50 p-3 sm:p-4 rounded-2xl opacity-70">
@@ -1152,7 +1164,7 @@ export default function NetworkPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {friends.map(f => {
+                  {friends.map((f: any) => {
                     const unread = unreadMessages[f.agent_id] || 0;
                     const prof = profilesMap[f.agent_id] || f;
                     const liveStatus = getLiveRadarStatus(prof?.currently_watching, radarTick);
@@ -1182,7 +1194,7 @@ export default function NetworkPage() {
 
                           {fShowcase.length > 0 && (
                             <div className="hidden sm:flex items-center -space-x-2 mr-2">
-                              {fShowcase.slice(0, 4).map((sc, idx) => {
+                              {fShowcase.slice(0, 4).map((sc: any, idx: number) => {
                                 const pUrl = sc.posterUrl || sc.poster;
                                 return pUrl ? (
                                   <img key={idx} src={pUrl} alt={sc.title} className="w-7 h-10 rounded-md object-cover border border-ink-950 shadow-md" title={sc.title} />
@@ -1231,7 +1243,7 @@ export default function NetworkPage() {
                   level: data.level,
                   total_xp: data.totalXp,
                   movies_watched: myStatsSummary.moviesWatched,
-                  series_watched: data.series.filter(s => s.episodes?.every(e => e.watched)).length,
+                  series_watched: data.series.filter((s: any) => s.episodes?.every((e: any) => e.watched)).length,
                   episodes_watched: myStatsSummary.episodesWatched,
                   achievements_unlocked: myStatsSummary.achievementsUnlocked,
                   showcase: data.showcase || []
@@ -1256,7 +1268,7 @@ export default function NetworkPage() {
           setChatInput={setChatInput}
           onSendMessage={() => handleProfileSendMessage()}
           onOpenMediaShare={() => setProfileMediaShareOpen(true)}
-          renderChatMessageItem={(msg, allMsgList, isGroupChat) =>
+          renderChatMessageItem={(msg: any, allMsgList: any[], isGroupChat: boolean) =>
             renderChatMessageBubble({
               msg,
               allMsgList,
@@ -1306,10 +1318,24 @@ export default function NetworkPage() {
         onClearInitialDirectChat={() => setInitialDirectChatId(null)}
         externalMediaShareOpen={profileMediaShareOpen}
         onCloseExternalMediaShare={() => setProfileMediaShareOpen(false)}
-        onSendProfileMediaCard={(encoded) => handleProfileSendMessage(encoded)}
+        onSendProfileMediaCard={(encoded: string) => handleProfileSendMessage(encoded)}
       />
 
-      {/* 4. AKIŞ DETAY MODALI */}
+      {/* 4. YENİ TAVSİYE KOLEKSİYONU GÖNDERME & İNCELEME MODALLARI */}
+      <RecommendationModals
+        myAgentId={data.agentId ?? null}
+        friends={friends}
+        profilesMap={profilesMap}
+        showSendModal={showSendModal}
+        setShowSendModal={setShowSendModal}
+        viewingList={viewingList}
+        setViewingList={setViewingList}
+        listToDelete={listToDelete}
+        setListToDelete={setListToDelete}
+        onTriggerSync={() => setSyncTick(t => t + 1)}
+      />
+
+      {/* 5. AKIŞ DETAY MODALI */}
       {selectedLog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedLog(null)}>
           <div onClick={e => e.stopPropagation()} className="w-full max-w-xl bg-ink-950 border border-ink-800 rounded-3xl overflow-hidden shadow-2xl relative flex flex-col md:flex-row max-h-[90vh]">
@@ -1381,8 +1407,8 @@ export default function NetworkPage() {
               {(() => {
                 const cleanTitle = (selectedLog.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim().toLowerCase();
                 const alreadyInMyLib =
-                  data.movies.some(m => m.title.toLowerCase() === cleanTitle) ||
-                  data.series.some(s => s.title.toLowerCase() === cleanTitle);
+                  data.movies.some((m: Movie) => m.title.toLowerCase() === cleanTitle) ||
+                  data.series.some((s: any) => s.title.toLowerCase() === cleanTitle);
 
                 return (
                   <div className="space-y-2 mt-auto shrink-0">
@@ -1419,203 +1445,7 @@ export default function NetworkPage() {
         </div>
       )}
 
-      {/* 5. LİSTE GÖNDERME MODALI */}
-      {showSendModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setShowSendModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-5xl h-[85vh] bg-ink-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-4 sm:p-5 border-b border-ink-800 bg-ink-900/50 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30"><Send size={18} /></div>
-                <h2 className="text-base sm:text-lg font-black text-white">Arkadaşına Tavsiye Gönder</h2>
-              </div>
-              <button onClick={() => setShowSendModal(false)} className="text-ink-500 hover:text-white p-1.5 rounded-lg bg-ink-900"><X size={18} /></button>
-            </div>
-
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-              <div className="w-full md:w-72 p-5 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/20 flex flex-col gap-5 overflow-y-auto custom-scrollbar shrink-0">
-                <div>
-                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-2">1. Kime Gidecek?</label>
-                  <select
-                    value={sendTargetId}
-                    onChange={(e) => setSendTargetId(e.target.value)}
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
-                  >
-                    <option value="">-- Arkadaş Seç --</option>
-                    {friends.map(f => (
-                      <option key={f.agent_id} value={f.agent_id}>{f.nickname}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-2">2. Listenin Adı</label>
-                  <input
-                    type="text"
-                    value={sendListTitle}
-                    onChange={(e) => setSendListTitle(e.target.value)}
-                    placeholder="Örn: Bilim Kurgu Şaheserleri"
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
-                  />
-                </div>
-                <div className="pt-3 border-t border-ink-800">
-                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-3">3. Kütüphaneni Filtrele</label>
-                  <div className="relative mb-3">
-                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
-                    <input
-                      type="text"
-                      placeholder="İsimle Ara..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
-                    />
-                  </div>
-                  <div className="relative">
-                    <Filter size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
-                    <select
-                      value={filterGenre}
-                      onChange={(e) => setFilterGenre(e.target.value)}
-                      className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none appearance-none"
-                    >
-                      <option value="">Tüm Türler</option>
-                      {data.genres.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 flex flex-col overflow-hidden bg-ink-950 relative">
-                <div className="p-4 border-b border-ink-800 flex items-center justify-between bg-ink-900/40">
-                  <span className="text-[11px] font-bold text-ink-400 uppercase tracking-widest">Kütüphanen</span>
-                  <span className="text-xs text-violet-400 font-bold bg-violet-500/10 px-3 py-1 rounded-lg border border-violet-500/20">{selectedItemIds.length} Yapım Seçildi</span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
-                  {filteredLibraryItems.length === 0 ? (
-                    <div className="text-center py-12 text-ink-600 text-sm italic border border-ink-800 border-dashed rounded-2xl">Sonuç bulunamadı.</div>
-                  ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
-                      {filteredLibraryItems.map(item => {
-                        const isSelected = selectedItemIds.includes(item.id);
-                        return (
-                          <div
-                            key={item.id}
-                            onClick={() => setSelectedItemIds(prev => isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id])}
-                            className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer group border-2 transition-all ${isSelected ? 'border-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.4)] scale-95' : 'border-transparent hover:border-ink-600 bg-ink-900'}`}
-                          >
-                            {item.posterUrl ? (
-                              <img src={item.posterUrl} alt="poster" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-ink-700">
-                                {item.type === 'series' ? <Tv size={32} /> : <Film size={32} />}
-                              </div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2.5 pt-8">
-                              <h3 className="text-[10px] sm:text-[11px] font-bold text-white line-clamp-2 leading-tight drop-shadow-md">{item.title}</h3>
-                            </div>
-                            <div className={`absolute inset-0 bg-violet-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
-                              <div className="w-10 h-10 rounded-full bg-violet-500 text-white flex items-center justify-center shadow-xl">
-                                <Check size={20} strokeWidth={4} />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-5 border-t border-ink-800 bg-ink-950 flex gap-3 shrink-0">
-              <button onClick={() => setShowSendModal(false)} className="px-6 py-3.5 bg-ink-900 text-ink-300 rounded-xl text-sm font-bold hover:bg-ink-800 transition-colors">İptal</button>
-              <button onClick={handleSendList} className="flex-1 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-black transition-colors flex items-center justify-center gap-2 uppercase tracking-wider shadow-lg shadow-violet-500/20">
-                <Send size={18} /> Listeyi Gönder ({selectedItemIds.length})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 6. LİSTE İNCELEME MODALI */}
-      {viewingList && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setViewingList(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-5xl bg-ink-950 border border-ink-700 rounded-3xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl">
-            <div className="p-5 sm:p-6 border-b border-ink-800 bg-ink-900/40 relative shrink-0">
-              <button onClick={() => setViewingList(null)} className="absolute top-5 right-5 text-ink-500 hover:text-white bg-ink-900 p-2 rounded-full transition-colors"><X size={18} /></button>
-              <div className="pr-12">
-                <div className="text-[11px] font-bold text-violet-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Gift size={14} /> Tavsiye Listesi</div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white mb-2 leading-tight">{viewingList.list_title}</h2>
-                <div className="text-sm text-ink-400">Gönderen: <span className="text-white font-bold">{profilesMap[viewingList.sender_id]?.nickname || 'Bilinmeyen'}</span></div>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 custom-scrollbar bg-ink-950">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {viewingList.items?.map((item: any, idx: number) => {
-                  const alreadyHas = data.movies.some(m => m.title.toLowerCase() === item.title.toLowerCase()) || data.series.some(s => s.title.toLowerCase() === item.title.toLowerCase());
-                  return (
-                    <div key={idx} className="relative aspect-[2/3] rounded-xl overflow-hidden group border border-ink-800 bg-ink-900 shadow-md">
-                      {item.poster ? (
-                        <img src={item.poster} alt="poster" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-ink-700">
-                          {item.type === 'series' ? <Tv size={32} /> : <Film size={32} />}
-                        </div>
-                      )}
-
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-3 pt-10">
-                        <h4 className="text-[11px] sm:text-xs font-bold text-white line-clamp-2 leading-tight mb-1 drop-shadow-md">{item.title}</h4>
-                        <div className="text-[9px] text-ink-400 uppercase tracking-widest">{item.type === 'series' ? 'Dizi' : 'Film'} {item.year ? `• ${item.year}` : ''}</div>
-                      </div>
-
-                      <div className="absolute top-2.5 right-2.5">
-                        {alreadyHas ? (
-                          <div className="bg-emerald-500/90 text-white p-2 rounded-lg shadow-md backdrop-blur-sm" title="Zaten Kütüphanende">
-                            <Check size={16} strokeWidth={3} />
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleAddToLibrary(item, true)}
-                            className="bg-violet-600 hover:bg-violet-500 text-white p-2 rounded-lg shadow-xl backdrop-blur-sm transition-all hover:scale-110"
-                            title="Kütüphaneme Ekle"
-                          >
-                            <Plus size={16} strokeWidth={3} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-5 border-t border-ink-800 bg-ink-950 flex gap-3 shrink-0">
-              <button onClick={() => setListToDelete(viewingList.id)} className="px-5 sm:px-6 py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-sm font-bold transition-colors tracking-widest uppercase flex items-center justify-center gap-2">
-                <Trash2 size={18} /> <span className="hidden sm:inline">Sil</span>
-              </button>
-              <button onClick={() => setViewingList(null)} className="flex-1 py-3.5 bg-ink-900 hover:bg-ink-800 text-white rounded-xl text-sm font-bold transition-colors tracking-widest uppercase">
-                Pencereyi Kapat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SİLME ONAY MODALLARI */}
-      {listToDelete && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setListToDelete(null)}>
-          <div onClick={e => e.stopPropagation()} className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
-            <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-              <Trash2 size={24} />
-            </div>
-            <h3 className="text-lg font-black text-white mb-2">Listeyi Sil</h3>
-            <p className="text-sm text-ink-300 mb-6">Bu listeyi kalıcı olarak silmek istediğine emin misin? Bu işlem geri alınamaz.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setListToDelete(null)} className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors">İptal</button>
-              <button onClick={executeDeleteList} className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20">Evet, Sil</button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* 6. ARKADAŞLIKTAN ÇIKARMA ONAY MODALI */}
       {friendToRemove && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setFriendToRemove(null)}>
           <div onClick={e => e.stopPropagation()} className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
