@@ -31,6 +31,15 @@ export interface AIMessage { id: string; sender: 'user' | 'ai'; text: string; ti
 export interface MovieExtraData { keywords?: string[]; directors?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; inPastQueue?: boolean; }
 export interface SeriesExtraData { keywords?: string[]; creators?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; }
 
+export interface ShowcaseItem {
+  id: string;
+  title: string;
+  type: 'movie' | 'series';
+  posterUrl?: string | null;
+  year?: string;
+  rating?: number | null;
+}
+
 export interface ExtendedAppData extends AppData { 
   aiChatHistory?: AIMessage[]; 
   theme?: string; 
@@ -43,6 +52,7 @@ export interface ExtendedAppData extends AppData {
   agentId?: string;      
   nickname?: string;     
   recoveryKey?: string;  
+  showcase?: ShowcaseItem[];
 }
 
 export function generateAgentId() {
@@ -166,7 +176,8 @@ function defaultData(): ExtendedAppData {
     showLockedNames: false, aiChatHistory: [], theme: 'default',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
     weeklyPlan: [], notificationsEnabled: false,
-    notifyMessages: true, notifyFriendRequests: true, notifyLists: true
+    notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
+    showcase: []
   };
 }
 
@@ -218,7 +229,8 @@ type Action =
   | { type: 'TOGGLE_NOTIFICATIONS'; enabled: boolean }
   | { type: 'SET_NICKNAME'; nickname: string }
   | { type: 'RECOVER_IDENTITY'; agentId: string; recoveryKey: string; nickname: string }
-  | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean };
+  | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean }
+  | { type: 'SET_SHOWCASE'; showcase: ShowcaseItem[] };
 
 const FIXED_BUGGED_ACHIEVEMENTS = new Set(['selective_critic', 'weekend_cinema', 'loyalty_test', 'break_taker', 'lost_colony', 'final_phobia', 'ghost_viewer', 'secret_critic']);
 
@@ -531,6 +543,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'TOGGLE_SPECIFIC_NOTIFICATION') return { ...state, [action.key]: action.enabled };
   if (action.type === 'SET_NICKNAME') return { ...state, nickname: action.nickname };
   if (action.type === 'RECOVER_IDENTITY') return { ...state, agentId: action.agentId, recoveryKey: action.recoveryKey, nickname: action.nickname };
+  if (action.type === 'SET_SHOWCASE') return { ...state, showcase: action.showcase.slice(0, 4) };
 
   let nextState = { ...state };
   switch (action.type) {
@@ -688,6 +701,7 @@ interface AppContextValue {
   weeklyPlan: WeeklyPlanItem[]; addPlanItem: (movie: Movie, date: string, time: string) => boolean; deletePlanItem: (id: string) => void; updatePlanItem: (id: string, date: string, time: string) => boolean;
   grantXp: (xp: number) => void; toggleNotifications: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
   setNickname: (nickname: string) => void; recoverIdentity: (agentId: string, recoveryKey: string, nickname: string) => void;
+  updateShowcase: (items: ShowcaseItem[]) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -708,6 +722,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (parsedData.notifyMessages === undefined) parsedData.notifyMessages = true;
         if (parsedData.notifyFriendRequests === undefined) parsedData.notifyFriendRequests = true;
         if (parsedData.notifyLists === undefined) parsedData.notifyLists = true;
+        if (!Array.isArray(parsedData.showcase)) parsedData.showcase = [];
         return parsedData;
       }
     } catch {} return defaultData();
@@ -726,7 +741,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { document.body.setAttribute('data-theme', data.theme || 'default'); }, [data.theme]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
 
-  // YENİ: SUPABASE PROFİL SENKRONİZASYONU (AKILLI KONTROL VE SÜREKLİ TARAMA)
+  // SUPABASE PROFİL SENKRONİZASYONU (CANLI RADAR VE VİTRİN DAHİL)
   useEffect(() => {
     if (!data.agentId) return;
     const syncProfileToCloud = async () => {
@@ -745,14 +760,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         } catch (e) { console.warn("Görevler çekilirken hata:", e); }
 
-        const currentSyncString = `${data.level}-${data.totalXp}-${watchedMoviesCount}-${watchedSeriesCount}-${watchedEpisodesCount}-${unlockedAchievementsCount}-${questsCompleted}`;
+        // CANLI RADAR: Şu an sayacı açık olan filmi bul
+        const activeMovie = data.movies.find(m => !m.watched && m.startedAt);
+        let currentlyWatchingPayload: any = null;
+        if (activeMovie && activeMovie.startedAt) {
+          const timerInfo = getMovieTimerInfo(activeMovie);
+          currentlyWatchingPayload = {
+            id: activeMovie.id,
+            title: activeMovie.title,
+            posterUrl: activeMovie.posterUrl || null,
+            year: activeMovie.year || '',
+            startedAt: activeMovie.startedAt,
+            runtime: timerInfo.maxMins,
+            isPaused: timerInfo.isPaused,
+            elapsedMins: timerInfo.elapsedMins,
+            updatedAt: new Date().toISOString()
+          };
+        }
+
+        const showcasePayload = data.showcase || [];
+
+        const currentSyncString = JSON.stringify({
+          lvl: data.level,
+          xp: data.totalXp,
+          nick: data.nickname,
+          m: watchedMoviesCount,
+          s: watchedSeriesCount,
+          e: watchedEpisodesCount,
+          a: unlockedAchievementsCount,
+          q: questsCompleted,
+          cw: currentlyWatchingPayload ? `${currentlyWatchingPayload.id}-${currentlyWatchingPayload.startedAt}-${currentlyWatchingPayload.elapsedMins}` : 'none',
+          sc: showcasePayload.map(x => x.id).join(',')
+        });
         
         if (lastSyncedProfileRef.current === currentSyncString) return; 
 
         await supabase.from('profiles').upsert({
-          agent_id: data.agentId, nickname: data.nickname || 'Yeni Üye', level: data.level || 1, total_xp: data.totalXp || 0,
-          movies_watched: watchedMoviesCount, series_watched: watchedSeriesCount, episodes_watched: watchedEpisodesCount,
-          achievements_unlocked: unlockedAchievementsCount, quests_completed: questsCompleted, last_seen: new Date().toISOString()
+          agent_id: data.agentId,
+          nickname: data.nickname || 'Yeni Üye',
+          level: data.level || 1,
+          total_xp: data.totalXp || 0,
+          movies_watched: watchedMoviesCount,
+          series_watched: watchedSeriesCount,
+          episodes_watched: watchedEpisodesCount,
+          achievements_unlocked: unlockedAchievementsCount,
+          quests_completed: questsCompleted,
+          currently_watching: currentlyWatchingPayload,
+          showcase: showcasePayload,
+          last_seen: new Date().toISOString()
         }, { onConflict: 'agent_id' });
 
         lastSyncedProfileRef.current = currentSyncString;
@@ -812,6 +867,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleSpecificNotification = useCallback((key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => dispatch({ type: 'TOGGLE_SPECIFIC_NOTIFICATION', key, enabled }), []);
   const setNickname = useCallback((nickname: string) => { dispatch({ type: 'SET_NICKNAME', nickname }); showToast('Kullanıcı adı güncellendi!', 'success'); }, [showToast]);
   const recoverIdentity = useCallback((agentId: string, recoveryKey: string, nickname: string) => { dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey, nickname }); showToast('Kimlik başarıyla kurtarıldı!', 'success'); }, [showToast]);
+  const updateShowcase = useCallback((showcase: ShowcaseItem[]) => { dispatch({ type: 'SET_SHOWCASE', showcase }); showToast('Profil vitrinin güncellendi!', 'success'); }, [showToast]);
 
   const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
     if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
@@ -938,7 +994,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updatePlanItem = useCallback((id: string, date: string, time: string): boolean => { const item = (data.weeklyPlan || []).find((p) => p.id === id); const conflict = findPlanConflict(date, time, item?.runtime, id); if (conflict) { showToast(`⛔ Çakışma var: "${conflict.title}"`, 'warning'); return false; } dispatch({ type: 'UPDATE_PLAN_ITEM', id, date, time }); showToast('Plan güncellendi', 'success'); return true; }, [data.weeklyPlan, findPlanConflict, showToast]);
 
   return (
-    <AppContext.Provider value={{ data, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleSpecificNotification }}>
+    <AppContext.Provider value={{ data, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleSpecificNotification }}>
       {children}
     </AppContext.Provider>
   );

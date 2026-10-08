@@ -1,10 +1,20 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Users, UserPlus, Trophy, Activity, Check, X, Clock, Star, Plus, Copy, RefreshCw, Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift, ListVideo, Search, Filter, Eye, Info, MessageSquare, BarChart2, CheckSquare, MessageCircle, UserCheck, CheckCircle2, LogOut, Settings, UserMinus, Crown } from 'lucide-react';
-import { useApp, isPositiveTag } from '../context/AppContext';
+import {
+  Users, UserPlus, Trophy, Activity, Check, X, Star, Plus, Copy, RefreshCw,
+  Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift,
+  ListVideo, Search, Filter, Eye, Info, MessageSquare, MessageCircle,
+  Crown, Radio, Flame, ExternalLink, FileText
+} from 'lucide-react';
+import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
+import type { ShowcaseItem } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { uid } from '../lib/utils';
+import AgentProfileModal from '../components/AgentProfileModal';
+import ShowcaseEditorModal from '../components/ShowcaseEditorModal';
+import ChatHubModal, { renderChatMessageBubble } from '../components/ChatHubModal';
 
 function timeAgo(dateString: string) {
+  if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -15,15 +25,61 @@ function timeAgo(dateString: string) {
   return date.toLocaleDateString('tr-TR');
 }
 
+function getLiveRadarStatus(cw: any, nowMs = Date.now()) {
+  if (!cw) return null;
+  let parsedCw = cw;
+  if (typeof cw === 'string') {
+    try { parsedCw = JSON.parse(cw); } catch { return null; }
+  }
+  if (!parsedCw || !parsedCw.title) return null;
+
+  if (parsedCw.updatedAt) {
+    const diffHours = (nowMs - new Date(parsedCw.updatedAt).getTime()) / 3600000;
+    if (diffHours > 6) return null;
+  }
+
+  const maxMins = parsedCw.runtime && parsedCw.runtime > 0 ? Number(parsedCw.runtime) : 115;
+  let elapsedMins = Number(parsedCw.elapsedMins) || 0;
+  let isPaused = Boolean(parsedCw.isPaused);
+
+  if (parsedCw.startedAt && typeof parsedCw.startedAt === 'string') {
+    if (parsedCw.startedAt.startsWith('PAUSED:')) {
+      isPaused = true;
+      const sec = parseInt(parsedCw.startedAt.slice(7), 10) || 0;
+      elapsedMins = Math.floor(sec / 60);
+    } else {
+      const startMs = new Date(parsedCw.startedAt).getTime();
+      if (!isNaN(startMs)) {
+        elapsedMins = Math.min(maxMins, Math.max(0, Math.floor((nowMs - startMs) / 60000)));
+      }
+    }
+  }
+  const progress = Math.min(100, Math.max(3, Math.round((elapsedMins / maxMins) * 100)));
+  return {
+    id: parsedCw.id || '',
+    title: parsedCw.title,
+    posterUrl: parsedCw.posterUrl || null,
+    year: parsedCw.year || '',
+    elapsedMins,
+    maxMins,
+    isPaused,
+    progress
+  };
+}
+
 type TabType = 'feed' | 'friends' | 'lists' | 'leaderboard';
+type FeedFilterType = 'all' | 'masterpieces' | 'notes' | 'movies' | 'series';
 type LeaderboardCategory = 'xp' | 'level' | 'movies' | 'episodes' | 'achievements' | 'quests';
+type LeaderboardScope = 'global' | 'friends';
 type ProfileTabType = 'stats' | 'chat';
 
 export default function NetworkPage() {
-  const { data, showToast, addMovie, addSeries } = useApp();
+  const { data, showToast, addMovie, addSeries, updateShowcase } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('feed');
+  const [feedFilter, setFeedFilter] = useState<FeedFilterType>('all');
   const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('xp');
-  
+  const [leaderboardScope, setLeaderboardScope] = useState<LeaderboardScope>('global');
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [friendCode, setFriendCode] = useState('');
@@ -31,7 +87,7 @@ export default function NetworkPage() {
 
   const [profilesMap, setProfilesMap] = useState<Record<string, any>>({});
   const profilesMapRef = useRef<Record<string, any>>({});
-  
+
   const [friends, setFriends] = useState<any[]>([]);
   const [pendingIncoming, setPendingIncoming] = useState<any[]>([]);
   const [pendingOutgoing, setPendingOutgoing] = useState<any[]>([]);
@@ -39,13 +95,16 @@ export default function NetworkPage() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [unreadMessages, setUnreadMessages] = useState<Record<string, number>>({});
-  
+
+  // PROFİL MODALI STATELERİ
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [profileTab, setProfileTab] = useState<ProfileTabType>('stats');
   const [friendLogs, setFriendLogs] = useState<any[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [profileMediaShareOpen, setProfileMediaShareOpen] = useState(false);
 
+  // AKIŞ VE TAVSİYE LİSTESİ MODALLARI
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendTargetId, setSendTargetId] = useState('');
@@ -55,178 +114,74 @@ export default function NetworkPage() {
   const [filterGenre, setFilterGenre] = useState('');
   const [viewingList, setViewingList] = useState<any>(null);
 
+  // VİTRİN VE MESAJ MERKEZİ MODALLARI
+  const [showShowcaseModal, setShowShowcaseModal] = useState(false);
+  const [isChatHubOpen, setIsChatHubOpen] = useState(false);
+  const [initialDirectChatId, setInitialDirectChatId] = useState<string | null>(null);
+
   const [listToDelete, setListToDelete] = useState<string | null>(null);
   const [friendToRemove, setFriendToRemove] = useState<string | null>(null);
 
-  const [isChatHubOpen, setIsChatHubOpen] = useState(false);
-  const [hubTab, setHubTab] = useState<'direct' | 'group'>('direct');
-  const [hubActiveChat, setHubActiveChat] = useState<{ id: string, type: 'direct' | 'group', name?: string, members?: any[], created_by?: string } | null>(null);
-  const [hubInboxDirect, setHubInboxDirect] = useState<any[]>([]);
-  const [hubInboxGroup, setHubInboxGroup] = useState<any[]>([]);
-  const [hubMessages, setHubMessages] = useState<any[]>([]);
-  const [hubInput, setHubInput] = useState('');
-  
-  const [groupActionConf, setGroupActionConf] = useState<{ id: string, name: string, action: 'leave' | 'delete' } | null>(null);
-  const [showGroupManager, setShowGroupManager] = useState(false);
-  const [memberToKick, setMemberToKick] = useState<{ id: string, name: string } | null>(null);
-  
   const chatScrollRef = useRef<HTMLDivElement>(null);
-  const hubScrollRef = useRef<HTMLDivElement>(null);
   const viewingProfileIdRef = useRef<string | null>(null);
-  const hubActiveChatRef = useRef<{ id: string, type: 'direct' | 'group', name?: string, members?: any[], created_by?: string } | null>(null);
-  
-  const [hubCreateMode, setHubCreateMode] = useState<'direct' | 'group' | null>(null);
-  const [newDirectCode, setNewDirectCode] = useState('');
-  const [newGroupName, setNewGroupName] = useState('');
-  const [newGroupMembers, setNewGroupMembers] = useState<string[]>([]);
 
   const [syncTick, setSyncTick] = useState(0);
+  const [radarTick, setRadarTick] = useState(Date.now());
 
   useEffect(() => { profilesMapRef.current = profilesMap; }, [profilesMap]);
   useEffect(() => { viewingProfileIdRef.current = viewingProfileId; }, [viewingProfileId]);
-  useEffect(() => { hubActiveChatRef.current = hubActiveChat; }, [hubActiveChat]);
+
+  useEffect(() => {
+    const t = setInterval(() => setRadarTick(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  // KENDİ İSTATİSTİKLERİMİZ (1v1 AJAN DÜELLOSU İÇİN)
+  const myStatsSummary = useMemo(() => ({
+    xp: data.totalXp || 0,
+    level: data.level || 1,
+    moviesWatched: data.movies.filter(m => m.watched).length,
+    episodesWatched: data.series.reduce((sum, s) => sum + (s.episodes?.filter(e => e.watched).length || 0), 0),
+    achievementsUnlocked: data.achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0),
+  }), [data.totalXp, data.level, data.movies, data.series, data.achievements]);
 
   const openProfileModal = async (targetId: string, initialTab: ProfileTabType = 'stats') => {
-    if (targetId === data.agentId) return; 
+    if (!targetId) return;
     setViewingProfileId(targetId);
     setProfileTab(initialTab);
     setChatMessages([]);
-    const { data: logsData } = await supabase.from('network_logs').select('*').eq('agent_id', targetId).order('created_at', { ascending: false }).limit(30);
+
+    const [{ data: logsData }, { data: freshProfile }] = await Promise.all([
+      supabase.from('network_logs').select('*').eq('agent_id', targetId).order('created_at', { ascending: false }).limit(50),
+      supabase.from('profiles').select('*').eq('agent_id', targetId).maybeSingle()
+    ]);
+    if (freshProfile) {
+      setProfilesMap(prev => ({ ...prev, [targetId]: freshProfile }));
+    }
     setFriendLogs(logsData || []);
   };
 
   useEffect(() => {
     const loadProfileChat = async () => {
-      if (viewingProfileId && profileTab === 'chat' && data.agentId) {
-        const { data: rawMsgs } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${viewingProfileId}),and(sender_id.eq.${viewingProfileId},receiver_id.eq.${data.agentId})`).order('created_at', { ascending: true });
-        
+      if (viewingProfileId && viewingProfileId !== data.agentId && profileTab === 'chat' && data.agentId) {
+        const { data: rawMsgs } = await supabase
+          .from('messages')
+          .select('*')
+          .or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${viewingProfileId}),and(sender_id.eq.${viewingProfileId},receiver_id.eq.${data.agentId})`)
+          .order('created_at', { ascending: true });
+
         setChatMessages((prev: any[]) => {
           const newMsgs = (rawMsgs || []).filter((m: any) => !m.group_id);
           const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
           const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.receiver_id === viewingProfileId && !m.group_id);
-          return [...newMsgs, ...localOnly].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          return [...newMsgs, ...localOnly].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         });
-        
+
         await supabase.from('messages').update({ is_read: true }).eq('receiver_id', data.agentId).eq('sender_id', viewingProfileId).eq('is_read', false);
       }
     };
     loadProfileChat();
   }, [viewingProfileId, profileTab, data.agentId, syncTick]);
-
-  const loadHubInbox = useCallback(async () => {
-    if (!data.agentId) return;
-    try {
-      const { data: rawDirectMsgs } = await supabase.from('messages').select('*').or(`sender_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).order('created_at', { ascending: false });
-      const directMsgs = (rawDirectMsgs || []).filter((m: any) => !m.group_id);
-
-      const dMap = new Map();
-      directMsgs.forEach((msg: any) => {
-        const otherId = msg.sender_id === data.agentId ? msg.receiver_id : msg.sender_id;
-        if (!otherId) return;
-        if (!dMap.has(otherId)) {
-          dMap.set(otherId, {
-            id: otherId, type: 'direct',
-            lastMessage: msg.content, created_at: msg.created_at,
-            unread: msg.receiver_id === data.agentId && !msg.is_read ? 1 : 0
-          });
-        } else if (msg.receiver_id === data.agentId && !msg.is_read) {
-          dMap.get(otherId).unread += 1;
-        }
-      });
-
-      const { data: memberOf } = await supabase.from('chat_group_members').select('group_id').eq('agent_id', data.agentId);
-      const gMap = new Map();
-      if (memberOf && memberOf.length > 0) {
-        const gIds = memberOf.map((m: any) => m.group_id);
-        const { data: groupsData } = await supabase.from('chat_groups').select('*').in('id', gIds);
-        
-        if (groupsData) {
-          const { data: gMsgs } = await supabase.from('messages').select('*').in('group_id', gIds).order('created_at', { ascending: false });
-          groupsData.forEach((g: any) => {
-            const lastMsg = gMsgs?.find((m: any) => m.group_id === g.id);
-            gMap.set(g.id, {
-              id: g.id, type: 'group', name: g.name, created_by: g.created_by,
-              lastMessage: lastMsg ? `${lastMsg.sender_id === data.agentId ? 'Sen' : 'Biri'}: ${lastMsg.content}` : 'Grup oluşturuldu',
-              created_at: lastMsg ? lastMsg.created_at : g.created_at,
-              unread: 0 
-            });
-          });
-        }
-      }
-
-      setHubInboxDirect(Array.from(dMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-      setHubInboxGroup(Array.from(gMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-
-      const unknownIds = Array.from(dMap.values()).filter(i => !profilesMapRef.current[i.id]).map(i => i.id);
-      if (unknownIds.length > 0) {
-        const { data: newProfs } = await supabase.from('profiles').select('*').in('agent_id', unknownIds);
-        if (newProfs) {
-          setProfilesMap(prev => {
-            const updated = { ...prev };
-            newProfs.forEach((p: any) => updated[p.agent_id] = p);
-            return updated;
-          });
-        }
-      }
-    } catch (err) { console.error(err); }
-  }, [data.agentId]);
-
-  const loadHubMessages = useCallback(async () => {
-    if (!hubActiveChat || !data.agentId) return;
-    try {
-      if (hubActiveChat.type === 'direct') {
-        const { data: rawMsgs } = await supabase.from('messages').select('*').or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${hubActiveChat.id}),and(sender_id.eq.${hubActiveChat.id},receiver_id.eq.${data.agentId})`).order('created_at', { ascending: true });
-        
-        setHubMessages((prev: any[]) => {
-          const newMsgs = (rawMsgs || []).filter((m: any) => !m.group_id);
-          const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
-          const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.receiver_id === hubActiveChat.id && !m.group_id);
-          return [...newMsgs, ...localOnly].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        });
-        
-        await supabase.from('messages').update({ is_read: true }).eq('receiver_id', data.agentId).eq('sender_id', hubActiveChat.id).eq('is_read', false);
-      } else {
-        const { data: msgs, error } = await supabase.from('messages').select('*').eq('group_id', hubActiveChat.id).order('created_at', { ascending: true });
-        if(error) console.error("Grup mesajı çekme hatası:", error);
-        
-        setHubMessages((prev: any[]) => {
-          const newMsgs = msgs || [];
-          const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
-          const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.group_id === hubActiveChat.id);
-          return [...newMsgs, ...localOnly].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        });
-        
-        try {
-          const { data: members } = await supabase.from('chat_group_members').select('agent_id').eq('group_id', hubActiveChat.id);
-          if (members) {
-            const allIds = members.map((m: any) => m.agent_id);
-            if (!allIds.includes(data.agentId)) {
-               setHubActiveChat(null);
-               setShowGroupManager(false);
-               showToast('Bu gruptan çıkarıldınız.', 'warning');
-               return;
-            }
-
-            const mIds = allIds.filter((id: string) => id !== data.agentId);
-            if (JSON.stringify(hubActiveChat.members) !== JSON.stringify(mIds)) {
-              setHubActiveChat(prev => prev ? { ...prev, members: mIds } : null);
-            }
-            const unknownIds = mIds.filter((id: string) => !profilesMapRef.current[id]);
-            if (unknownIds.length > 0) {
-              const { data: newProfs } = await supabase.from('profiles').select('*').in('agent_id', unknownIds);
-              if (newProfs) {
-                setProfilesMap(prev => {
-                  const updated = { ...prev };
-                  newProfs.forEach((p: any) => updated[p.agent_id] = p);
-                  return updated;
-                });
-              }
-            }
-          }
-        } catch(e) {}
-      }
-    } catch (err) { console.error(err); }
-  }, [hubActiveChat?.id, hubActiveChat?.type, data.agentId]);
 
   const fetchData = useCallback(async (isSilent = false) => {
     if (!data.agentId) return;
@@ -240,12 +195,12 @@ export default function NetworkPage() {
       const outgoing: any[] = [];
 
       fList.forEach((f: any) => {
-        if (f.status === 'accepted') { acceptedIds.add(f.requester_id === data.agentId ? f.receiver_id : f.requester_id); } 
+        if (f.status === 'accepted') { acceptedIds.add(f.requester_id === data.agentId ? f.receiver_id : f.requester_id); }
         else if (f.status === 'pending') { if (f.receiver_id === data.agentId) incoming.push(f); else outgoing.push(f); }
       });
 
-      const allRelevantIds = Array.from(new Set([...Array.from(acceptedIds), ...incoming.map(i => i.requester_id), ...outgoing.map(o => o.receiver_id)]));
-      
+      const allRelevantIds = Array.from(new Set([data.agentId, ...Array.from(acceptedIds), ...incoming.map(i => i.requester_id), ...outgoing.map(o => o.receiver_id)]));
+
       const { data: recData } = await supabase.from('recommendations').select('*').or(`receiver_id.eq.${data.agentId},sender_id.eq.${data.agentId}`).order('created_at', { ascending: false });
       const recList = recData || [];
       recList.forEach((r: any) => {
@@ -256,19 +211,23 @@ export default function NetworkPage() {
 
       const { data: unreadDataRaw } = await supabase.from('messages').select('sender_id, group_id').eq('receiver_id', data.agentId).eq('is_read', false);
       const unreadData = (unreadDataRaw || []).filter((m: any) => !m.group_id);
-      
+
       const unreads: Record<string, number> = {};
       unreadData.forEach((msg: any) => { unreads[msg.sender_id] = (unreads[msg.sender_id] || 0) + 1; });
       setUnreadMessages(unreads);
 
       let pMap = { ...profilesMapRef.current };
-      const missingIds = allRelevantIds.filter(id => !pMap[id]);
-      
-      if (missingIds.length > 0) {
-        const { data: profilesData } = await supabase.from('profiles').select('*').in('agent_id', missingIds);
+      if (allRelevantIds.length > 0) {
+        const { data: profilesData } = await supabase.from('profiles').select('*').in('agent_id', allRelevantIds);
         (profilesData || []).forEach((p: any) => { pMap[p.agent_id] = p; });
-        setProfilesMap(pMap);
       }
+
+      const { data: leadersData } = await supabase.from('profiles').select('*').order('total_xp', { ascending: false }).limit(100);
+      if (leadersData) {
+        leadersData.forEach((p: any) => { pMap[p.agent_id] = p; });
+      }
+      setProfilesMap({ ...pMap });
+      setLeaderboard(leadersData || []);
 
       const acceptedFriends = Array.from(acceptedIds).map(id => {
         const profile = pMap[id] || { nickname: 'Ajan Aranıyor...', agent_id: id };
@@ -279,46 +238,35 @@ export default function NetworkPage() {
       setFriends(acceptedFriends); setPendingIncoming(incoming); setPendingOutgoing(outgoing);
 
       if (acceptedIds.size > 0) {
-        const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(50);
+        const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(60);
         setFeed(logsData || []);
       } else { setFeed([]); }
 
-      const { data: leadersData } = await supabase.from('profiles').select('*').order('total_xp', { ascending: false }).limit(100);
-      setLeaderboard(leadersData || []);
-
-    } catch (error: any) { console.error('Ağ hatası:', error); } 
+    } catch (error: any) { console.error('Ağ hatası:', error); }
     finally { if (!isSilent) setLoading(false); setRefreshing(false); }
   }, [data.agentId]);
 
   useEffect(() => {
-    fetchData(); 
+    fetchData();
     if (!data.agentId) return;
-    
+
     const channel = supabase.channel('sinevia_global_socket')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload: any) => {
-          const newMsg = payload.new;
-          
-          const vTarget = viewingProfileIdRef.current;
-          if (vTarget && !newMsg.group_id) {
-              if ((newMsg.sender_id === data.agentId && newMsg.receiver_id === vTarget) || 
-                  (newMsg.sender_id === vTarget && newMsg.receiver_id === data.agentId)) {
-                  setChatMessages((prev: any[]) => prev.some((m: any) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
-              }
+        const newMsg = payload.new;
+        const vTarget = viewingProfileIdRef.current;
+        if (vTarget && !newMsg.group_id) {
+          if ((newMsg.sender_id === data.agentId && newMsg.receiver_id === vTarget) ||
+              (newMsg.sender_id === vTarget && newMsg.receiver_id === data.agentId)) {
+            setChatMessages((prev: any[]) => prev.some((m: any) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
           }
-
-          const hChat = hubActiveChatRef.current;
-          if (hChat) {
-              if (hChat.type === 'direct' && !newMsg.group_id) {
-                  if ((newMsg.sender_id === data.agentId && newMsg.receiver_id === hChat.id) || 
-                      (newMsg.sender_id === hChat.id && newMsg.receiver_id === data.agentId)) {
-                      setHubMessages((prev: any[]) => prev.some((m: any) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
-                  }
-              } else if (hChat.type === 'group' && newMsg.group_id === hChat.id) {
-                  setHubMessages((prev: any[]) => prev.some((m: any) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
-              }
-          }
-          
-          setSyncTick(t => t + 1);
+        }
+        setSyncTick(t => t + 1);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload: any) => {
+        if (payload.new && payload.new.agent_id) {
+          setProfilesMap(prev => ({ ...prev, [payload.new.agent_id]: payload.new }));
+        }
+        setSyncTick(t => t + 1);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_group_members' }, () => setSyncTick(t => t + 1))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'network_logs' }, () => setSyncTick(t => t + 1))
@@ -330,153 +278,23 @@ export default function NetworkPage() {
   }, [data.agentId, fetchData]);
 
   useEffect(() => {
-    if (syncTick > 0) {
-      fetchData(true);
-      if (isChatHubOpen) loadHubInbox();
-    }
-  }, [syncTick, fetchData, loadHubInbox, isChatHubOpen]);
+    if (syncTick > 0) fetchData(true);
+  }, [syncTick, fetchData]);
 
   useEffect(() => {
-    if (isChatHubOpen) {
-      loadHubInbox();
-    }
-  }, [isChatHubOpen, loadHubInbox]);
-
-  useEffect(() => {
-    if (isChatHubOpen && hubActiveChat?.id) {
-      loadHubMessages();
-    }
-  }, [hubActiveChat?.id, loadHubMessages, isChatHubOpen]);
-
-  useEffect(() => {
-    if (hubScrollRef.current) { hubScrollRef.current.scrollTop = hubScrollRef.current.scrollHeight; }
-  }, [hubMessages]);
-
-  useEffect(() => {
-    if (chatScrollRef.current) { chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight; }
+    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
   }, [chatMessages]);
 
-  const handleProfileSendMessage = async () => {
-    if (!chatInput.trim() || !viewingProfileId) return;
-    const content = chatInput.trim();
-    setChatInput('');
+  const handleProfileSendMessage = async (customContent?: string) => {
+    const content = (customContent !== undefined ? customContent : chatInput).trim();
+    if (!content || !viewingProfileId) return;
+    if (customContent === undefined) setChatInput('');
     try {
       const newMsg = { id: uid(), sender_id: data.agentId, receiver_id: viewingProfileId, group_id: null, content, created_at: new Date().toISOString(), is_read: false };
       setChatMessages((prev: any[]) => [...prev, newMsg]);
       await supabase.from('messages').insert([newMsg]);
       setSyncTick(t => t + 1);
-    } catch (err) { showToast('Mesaj gönderilemedi', 'error'); }
-  };
-
-  const handleHubSendMessage = async () => {
-    if (!hubInput.trim() || !hubActiveChat) return;
-    const content = hubInput.trim();
-    setHubInput('');
-    
-    try {
-      if (hubActiveChat.type === 'direct') {
-        const newMsg = { id: uid(), sender_id: data.agentId, receiver_id: hubActiveChat.id, group_id: null, content, created_at: new Date().toISOString(), is_read: false };
-        setHubMessages((prev: any[]) => [...prev, newMsg]);
-        await supabase.from('messages').insert([newMsg]);
-      } else {
-        const newMsg = { id: uid(), group_id: hubActiveChat.id, sender_id: data.agentId, receiver_id: null, content, created_at: new Date().toISOString(), is_read: true };
-        setHubMessages((prev: any[]) => [...prev, newMsg]);
-        await supabase.from('messages').insert([newMsg]);
-      }
-      setSyncTick(t => t + 1);
-    } catch (err) { showToast('Mesaj gönderilemedi', 'error'); }
-  };
-
-  const executeGroupAction = async () => {
-    if (!groupActionConf) return;
-    try {
-      if (groupActionConf.action === 'delete') {
-        await supabase.from('chat_groups').delete().eq('id', groupActionConf.id);
-        await supabase.from('chat_group_members').delete().eq('group_id', groupActionConf.id);
-        await supabase.from('messages').delete().eq('group_id', groupActionConf.id);
-        showToast('Grup başarıyla silindi.', 'success');
-      } else {
-        await supabase.from('chat_group_members').delete().eq('group_id', groupActionConf.id).eq('agent_id', data.agentId);
-        showToast('Gruptan ayrıldınız.', 'info');
-      }
-      setHubActiveChat(null);
-      setGroupActionConf(null);
-      setSyncTick(t => t + 1);
-    } catch (err) {
-      showToast('İşlem sırasında hata oluştu.', 'error');
-    }
-  };
-
-  const handleAddMemberToGroup = async (agentId: string) => {
-    if (!hubActiveChat || hubActiveChat.type !== 'group') return;
-    try {
-      await supabase.from('chat_group_members').insert([{ group_id: hubActiveChat.id, agent_id: agentId }]);
-      const updatedMembers = [...(hubActiveChat.members || []), agentId];
-      setHubActiveChat(prev => prev ? { ...prev, members: updatedMembers } : null);
-      showToast('Ajan gruba eklendi!', 'success');
-      setSyncTick(t => t + 1);
-    } catch (err) {
-      showToast('Ekleme başarısız!', 'error');
-    }
-  };
-
-  const handleKickMemberFromGroup = async (agentId: string) => {
-    if (!hubActiveChat || hubActiveChat.type !== 'group') return;
-    try {
-      await supabase.from('chat_group_members').delete().eq('group_id', hubActiveChat.id).eq('agent_id', agentId);
-      const updatedMembers = (hubActiveChat.members || []).filter(id => id !== agentId);
-      setHubActiveChat(prev => prev ? { ...prev, members: updatedMembers } : null);
-      showToast('Ajan gruptan atıldı.', 'info');
-      setMemberToKick(null);
-      setSyncTick(t => t + 1);
-    } catch (err) {
-      showToast('Atma işlemi başarısız!', 'error');
-    }
-  };
-
-  const handleStartNewDirectChat = async () => {
-    const code = newDirectCode.trim().toUpperCase();
-    if (!code) return;
-    if (code === data.agentId) { showToast('Kendinle konuşamazsın!', 'warning'); return; }
-    
-    try {
-      const { data: targetProfile } = await supabase.from('profiles').select('*').eq('agent_id', code).maybeSingle();
-      if (!targetProfile) { showToast('Kullanıcı bulunamadı!', 'error'); return; }
-      
-      setProfilesMap(prev => ({ ...prev, [code]: targetProfile }));
-      setHubCreateMode(null);
-      setNewDirectCode('');
-      setHubTab('direct');
-      setHubMessages([]); 
-      setHubActiveChat({ id: code, type: 'direct' });
-    } catch (err) { showToast('Hata oluştu', 'error'); }
-  };
-
-  const handleCreateGroup = async () => {
-    if (!newGroupName.trim()) { showToast('Gruba bir isim ver!', 'warning'); return; }
-    if (newGroupMembers.length === 0) { showToast('En az bir kişi seç!', 'warning'); return; }
-
-    try {
-      const groupId = `GRP-${uid().slice(0,8)}`;
-      await supabase.from('chat_groups').insert([{ id: groupId, name: newGroupName.trim(), created_by: data.agentId }]);
-      
-      const members = [...newGroupMembers, data.agentId].map(id => ({ group_id: groupId, agent_id: id }));
-      await supabase.from('chat_group_members').insert(members);
-
-      const newG = { id: groupId, type: 'group', name: newGroupName.trim(), created_by: data.agentId, lastMessage: 'Grup oluşturuldu', created_at: new Date().toISOString(), unread: 0 };
-      setHubInboxGroup((prev: any[]) => [newG, ...prev]);
-
-      showToast('Grup kuruldu!', 'success');
-      setHubCreateMode(null);
-      setNewGroupName('');
-      setNewGroupMembers([]);
-      setHubTab('group');
-      setHubMessages([]); 
-      setHubActiveChat({ id: groupId, type: 'group', name: newGroupName.trim(), members: newGroupMembers, created_by: data.agentId });
-      setSyncTick(t => t + 1);
-    } catch (err) {
-      showToast('Sistem hatası!', 'error');
-    }
+    } catch { showToast('Mesaj gönderilemedi', 'error'); }
   };
 
   const handleSendRequest = async () => {
@@ -490,28 +308,48 @@ export default function NetworkPage() {
       if (!targetProfile) { showToast('Bu kimlik koduna sahip bir kullanıcı bulunamadı!', 'error'); return; }
       await supabase.from('friendships').insert([{ id: uid(), requester_id: data.agentId, receiver_id: code, status: 'pending' }]);
       showToast('Arkadaşlık isteği gönderildi!', 'success'); setFriendCode(''); setSyncTick(t => t + 1);
-    } catch (err) { showToast('İstek gönderilirken hata oluştu.', 'error'); }
+    } catch { showToast('İstek gönderilirken hata oluştu.', 'error'); }
   };
 
   const handleAccept = async (friendshipId: string) => {
-    try { await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId); showToast('Kabul edildi!', 'success'); setSyncTick(t => t + 1); } 
-    catch (err) { showToast('Hata oluştu.', 'error'); }
+    try { await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId); showToast('Kabul edildi!', 'success'); setSyncTick(t => t + 1); }
+    catch { showToast('Hata oluştu.', 'error'); }
   };
 
   const handleRemove = async (friendshipId: string, isReject = false) => {
-    try { await supabase.from('friendships').delete().eq('id', friendshipId); showToast(isReject ? 'İstek reddedildi.' : 'Arkadaşlıktan çıkarıldı.', 'info'); setSyncTick(t => t + 1); } 
-    catch (err) { showToast('Hata oluştu.', 'error'); }
+    try { await supabase.from('friendships').delete().eq('id', friendshipId); showToast(isReject ? 'İstek reddedildi.' : 'Arkadaşlıktan çıkarıldı.', 'info'); setSyncTick(t => t + 1); }
+    catch { showToast('Hata oluştu.', 'error'); }
   };
 
   const handleAddToLibrary = (item: any, isFromList = false) => {
     const title = isFromList ? item.title : item.item_title;
     const type = isFromList ? item.type : item.item_type;
-    const poster = isFromList ? item.poster : item.item_poster;
+    const poster = isFromList ? (item.poster || item.posterUrl) : item.item_poster;
     const genres = item.genres || [];
     const year = item.year || '';
-    const cleanTitle = title.replace(/\s\(S\d+\sB\d+\)$/i, '').trim();
+    const cleanTitle = (title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim();
     const success = type === 'series' ? addSeries(cleanTitle, genres, [1], poster) : addMovie(cleanTitle, year, genres, null, undefined, poster);
     if (success) showToast(`"${cleanTitle}" kütüphanene eklendi!`, 'success');
+  };
+
+  // AKIŞ DETAY MODALINDAN DOĞRUDAN FİLM / DİZİ LİSTESİNE YÖNLENDİRME
+  const handleNavigateFromLog = (logItem: any, addIfMissing = false) => {
+    const cleanTitle = (logItem.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim();
+    const alreadyInLib =
+      data.movies.some(m => m.title.toLowerCase() === cleanTitle.toLowerCase()) ||
+      data.series.some(s => s.title.toLowerCase() === cleanTitle.toLowerCase());
+
+    if (!alreadyInLib && addIfMissing) {
+      handleAddToLibrary(logItem, false);
+    }
+
+    try {
+      sessionStorage.setItem('sinevia_focus_media_title', cleanTitle);
+    } catch {}
+
+    const targetTab = logItem.item_type === 'series' ? 'series' : 'movies';
+    setSelectedLog(null);
+    window.dispatchEvent(new CustomEvent('navigate-tab', { detail: targetTab }));
   };
 
   const handleSendList = async () => {
@@ -525,7 +363,7 @@ export default function NetworkPage() {
     try {
       await supabase.from('recommendations').insert([{ id: uid(), sender_id: data.agentId, receiver_id: sendTargetId, list_title: sendListTitle.trim(), items: itemsToSend, status: 'pending' }]);
       showToast('Liste gönderildi!', 'success'); setShowSendModal(false); setSendListTitle(''); setSelectedItemIds([]); setSendTargetId(''); setSyncTick(t => t + 1);
-    } catch (err) { showToast('Hata oluştu!', 'error'); }
+    } catch { showToast('Hata oluştu!', 'error'); }
   };
 
   const handleViewList = async (list: any) => {
@@ -543,8 +381,20 @@ export default function NetworkPage() {
       if (viewingList?.id === listToDelete) setViewingList(null);
       showToast('Liste başarıyla silindi!', 'success');
       setSyncTick(t => t + 1);
-    } catch (err) { showToast('Liste silinirken hata oluştu.', 'error'); }
+    } catch { showToast('Liste silinirken hata oluştu.', 'error'); }
     setListToDelete(null);
+  };
+
+  const handleSaveShowcase = async (newShowcase: ShowcaseItem[]) => {
+    updateShowcase(newShowcase);
+    setShowShowcaseModal(false);
+    if (data.agentId) {
+      await supabase.from('profiles').update({ showcase: newShowcase }).eq('agent_id', data.agentId);
+      setProfilesMap(prev => ({
+        ...prev,
+        [data.agentId!]: { ...(prev[data.agentId!] || {}), showcase: newShowcase }
+      }));
+    }
   };
 
   const filteredLibraryItems = useMemo(() => {
@@ -556,47 +406,197 @@ export default function NetworkPage() {
     }).sort((a, b) => a.title.localeCompare(b.title));
   }, [data.movies, data.series, searchQuery, filterGenre]);
 
-  const sortedLeaderboard = [...leaderboard].sort((a, b) => {
-    if (leaderboardCategory === 'xp') return b.total_xp - a.total_xp;
-    if (leaderboardCategory === 'level') return b.level - a.level;
-    if (leaderboardCategory === 'movies') return (b.movies_watched || 0) - (a.movies_watched || 0);
-    if (leaderboardCategory === 'episodes') return (b.episodes_watched || 0) - (a.episodes_watched || 0);
-    if (leaderboardCategory === 'achievements') return (b.achievements_unlocked || 0) - (a.achievements_unlocked || 0);
-    if (leaderboardCategory === 'quests') return (b.quests_completed || 0) - (a.quests_completed || 0);
-    return 0;
-  });
+  const liveWatchingList = useMemo(() => {
+    const list: { friend: any; radar: NonNullable<ReturnType<typeof getLiveRadarStatus>>; isMe?: boolean }[] = [];
+
+    const myActiveMovie = data.movies.find(m => !m.watched && m.startedAt);
+    if (myActiveMovie && myActiveMovie.startedAt) {
+      const tInfo = getMovieTimerInfo(myActiveMovie, radarTick);
+      const progress = Math.min(100, Math.max(3, Math.round((tInfo.elapsedMins / tInfo.maxMins) * 100)));
+      list.push({
+        friend: { agent_id: data.agentId, nickname: `${data.nickname || 'Sen'} (Sen)` },
+        radar: {
+          id: myActiveMovie.id,
+          title: myActiveMovie.title,
+          posterUrl: myActiveMovie.posterUrl || null,
+          year: myActiveMovie.year || '',
+          elapsedMins: tInfo.elapsedMins,
+          maxMins: tInfo.maxMins,
+          isPaused: tInfo.isPaused,
+          progress
+        },
+        isMe: true
+      });
+    }
+
+    friends.forEach(f => {
+      if (f.agent_id === data.agentId) return;
+      const prof = profilesMap[f.agent_id] || f;
+      const radar = getLiveRadarStatus(prof?.currently_watching, radarTick);
+      if (radar) {
+        list.push({ friend: prof, radar, isMe: false });
+      }
+    });
+
+    return list;
+  }, [data.movies, data.agentId, data.nickname, friends, profilesMap, radarTick]);
+
+  // AKIŞ AKILLI FİLTRELEME VE AĞIN GÜNDEMİ (TRENDING) HESAPLAMASI
+  const filteredFeed = useMemo(() => {
+    return feed.filter(log => {
+      if (feedFilter === 'masterpieces') return Number(log.rating || 0) >= 8;
+      if (feedFilter === 'notes') return Boolean(log.note && String(log.note).trim().length > 0);
+      if (feedFilter === 'movies') return log.item_type === 'movie';
+      if (feedFilter === 'series') return log.item_type === 'series';
+      return true;
+    });
+  }, [feed, feedFilter]);
+
+  const trendingFeedItem = useMemo(() => {
+    if (feed.length === 0) return null;
+    const counts: Record<string, { count: number; totalRating: number; ratedCount: number; sampleLog: any; cleanTitle: string }> = {};
+    feed.forEach(log => {
+      const cleanTitle = (log.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim();
+      const key = cleanTitle.toLowerCase();
+      if (!key) return;
+      if (!counts[key]) {
+        counts[key] = { count: 0, totalRating: 0, ratedCount: 0, sampleLog: log, cleanTitle };
+      }
+      counts[key].count += 1;
+      if (log.rating) {
+        counts[key].totalRating += Number(log.rating);
+        counts[key].ratedCount += 1;
+      }
+    });
+    const sorted = Object.values(counts).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      const avgB = b.ratedCount > 0 ? b.totalRating / b.ratedCount : 0;
+      const avgA = a.ratedCount > 0 ? a.totalRating / a.ratedCount : 0;
+      return avgB - avgA;
+    });
+    const top = sorted[0];
+    if (!top) return null;
+    return {
+      ...top,
+      avgRating: top.ratedCount > 0 ? Number((top.totalRating / top.ratedCount).toFixed(1)) : null,
+    };
+  }, [feed]);
+
+  // LİDERLİK TABLOSU SIRALAMASI VE KAPSAM FİLTRESİ
+  const sortedLeaderboard = useMemo(() => {
+    const friendIdSet = new Set([data.agentId, ...friends.map(f => f.agent_id)]);
+    const baseList = leaderboardScope === 'friends'
+      ? leaderboard.filter(u => friendIdSet.has(u.agent_id))
+      : leaderboard;
+
+    return [...baseList].sort((a, b) => {
+      if (leaderboardCategory === 'xp') return (b.total_xp || 0) - (a.total_xp || 0);
+      if (leaderboardCategory === 'level') return (b.level || 0) - (a.level || 0);
+      if (leaderboardCategory === 'movies') return (b.movies_watched || 0) - (a.movies_watched || 0);
+      if (leaderboardCategory === 'episodes') return (b.episodes_watched || 0) - (a.episodes_watched || 0);
+      if (leaderboardCategory === 'achievements') return (b.achievements_unlocked || 0) - (a.achievements_unlocked || 0);
+      if (leaderboardCategory === 'quests') return (b.quests_completed || 0) - (a.quests_completed || 0);
+      return 0;
+    });
+  }, [leaderboard, leaderboardScope, leaderboardCategory, friends, data.agentId]);
+
+  const getLeaderboardScoreText = (user: any) => {
+    if (leaderboardCategory === 'xp') return `${user.total_xp || 0} XP`;
+    if (leaderboardCategory === 'level') return `Lvl ${user.level || 1}`;
+    if (leaderboardCategory === 'movies') return `${user.movies_watched || 0} Film`;
+    if (leaderboardCategory === 'episodes') return `${user.episodes_watched || 0} Bölüm`;
+    if (leaderboardCategory === 'achievements') return `${user.achievements_unlocked || 0} Başarım`;
+    if (leaderboardCategory === 'quests') return `${user.quests_completed || 0} Görev`;
+    return '';
+  };
 
   const incomingLists = recommendations.filter(r => r.receiver_id === data.agentId);
   const unreadListsCount = incomingLists.filter(r => r.status === 'pending').length;
   const outgoingLists = recommendations.filter(r => r.sender_id === data.agentId);
   const totalUnread = Object.values(unreadMessages).reduce((a, b) => a + b, 0);
+  const myValidShowcase = (data.showcase || []).filter(s => s && s.title);
 
-  if (loading) { return <div className="flex items-center justify-center h-64 text-emerald-400 animate-pulse font-bold tracking-widest uppercase text-sm">Ağ Bağlantısı Kuruluyor...</div>; }
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-emerald-400 animate-pulse font-bold tracking-widest uppercase text-sm">
+        Ağ Bağlantısı Kuruluyor...
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-5 pb-10 animate-fade-in font-sans px-2 sm:px-0">
-      
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-ink-950 border border-ink-800/60 rounded-2xl p-4 sm:p-5 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-black text-2xl sm:text-3xl">
-            {data.nickname?.[0]?.toUpperCase() || 'U'}
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">{data.nickname}</h1>
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-lg">Lvl {data.level}</span>
-              <span className="text-xs font-mono text-ink-300 px-2 py-0.5 bg-ink-900 rounded-lg border border-ink-800">{data.totalXp} XP</span>
+
+      {/* KENDİ ÜST PROFİL VE VİTRİN BARIN */}
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 bg-ink-950 border border-ink-800/60 rounded-2xl p-4 sm:p-5 shadow-sm">
+        <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-start">
+          <button
+            onClick={() => data.agentId && openProfileModal(data.agentId)}
+            className="flex items-center gap-4 text-left group"
+            title="Profilimi Önizle"
+          >
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-azure-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-2xl sm:text-3xl group-hover:scale-105 transition-transform">
+              {data.nickname?.[0]?.toUpperCase() || 'U'}
             </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-white leading-tight group-hover:text-emerald-300 transition-colors">{data.nickname}</h1>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-lg">Lvl {data.level}</span>
+                <span className="text-xs font-mono text-ink-300 px-2 py-0.5 bg-ink-900 rounded-lg border border-ink-800">{data.totalXp} XP</span>
+              </div>
+            </div>
+          </button>
+
+          {/* KENDİ VİTRİN ÖNİZLEMESİ */}
+          <div
+            onClick={() => setShowShowcaseModal(true)}
+            className="hidden sm:flex items-center gap-2 bg-ink-900/70 hover:bg-ink-900 border border-gold-500/30 px-3.5 py-2 rounded-2xl cursor-pointer transition-all"
+            title="Vitrinimi Düzenle"
+          >
+            <div className="mr-1 text-left">
+              <div className="text-[9px] font-black uppercase tracking-widest text-gold-400 flex items-center gap-1">
+                <Crown size={11} /> Vitrinim
+              </div>
+              <div className="text-[10px] text-ink-400">
+                {myValidShowcase.length > 0 ? `${myValidShowcase.length} Başyapıt` : 'Afiş Seç'}
+              </div>
+            </div>
+            {myValidShowcase.length > 0 ? (
+              <div className="flex items-center gap-1.5">
+                {myValidShowcase.map((sc, i) => {
+                  const poster = sc?.posterUrl || (sc as any)?.poster;
+                  return (
+                    <div key={i} className="w-8 h-11 rounded-lg bg-ink-950 border border-gold-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow">
+                      {poster ? (
+                        <img src={poster} alt={sc.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <Film size={12} className="text-gold-400" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="w-8 h-11 rounded-lg bg-gold-500/10 border border-dashed border-gold-500/40 flex items-center justify-center text-gold-400">
+                <Plus size={14} />
+              </div>
+            )}
           </div>
         </div>
-        
-        <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-          <button onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }} className="flex-1 sm:flex-none flex items-center gap-3 bg-ink-900/50 hover:bg-ink-800 border border-ink-800 hover:border-emerald-500/40 px-4 py-3 rounded-xl transition-all group justify-center">
-            <span className="text-xs text-ink-500 font-bold uppercase tracking-wider hidden sm:inline">Ağ Kodun:</span>
-            <span className="font-mono text-emerald-400 text-sm sm:text-lg font-black tracking-widest">{data.agentId}</span>
-            <Copy size={16} className="text-ink-500 group-hover:text-emerald-400 transition-colors" />
+
+        <div className="flex flex-wrap sm:flex-row items-center gap-2 w-full lg:w-auto">
+          <button onClick={() => setShowShowcaseModal(true)} className="sm:hidden w-full flex items-center justify-center gap-2 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 text-gold-400 px-4 py-2.5 rounded-xl transition-all">
+            <Crown size={15} />
+            <span className="text-xs font-black uppercase tracking-wider">Vitrinim ({myValidShowcase.length}/4)</span>
           </button>
-          <button onClick={() => setIsChatHubOpen(true)} className="flex-1 sm:flex-none w-full sm:w-auto flex items-center justify-center gap-2 bg-azure-600/20 hover:bg-azure-600/30 border border-azure-500/30 text-azure-400 px-6 py-3 rounded-xl transition-all shadow-sm">
+          <button onClick={() => data.agentId && openProfileModal(data.agentId)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-ink-900 hover:bg-ink-800 border border-ink-700 text-ink-200 px-4 py-3 rounded-xl text-xs font-bold transition-all">
+            <Eye size={15} className="text-emerald-400" /> Profilim
+          </button>
+          <button onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }} className="flex-1 sm:flex-none flex items-center gap-2.5 bg-ink-900/50 hover:bg-ink-800 border border-ink-800 hover:border-emerald-500/40 px-4 py-3 rounded-xl transition-all group justify-center">
+            <span className="font-mono text-emerald-400 text-sm font-black tracking-widest">{data.agentId}</span>
+            <Copy size={15} className="text-ink-500 group-hover:text-emerald-400 transition-colors" />
+          </button>
+          <button onClick={() => setIsChatHubOpen(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-azure-600/20 hover:bg-azure-600/30 border border-azure-500/30 text-azure-400 px-5 py-3 rounded-xl transition-all shadow-sm">
             <MessageCircle size={18} />
             <span className="text-xs sm:text-sm font-bold uppercase tracking-wider">Mesaj Merkezi</span>
             {totalUnread > 0 && <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1">{totalUnread}</span>}
@@ -604,6 +604,7 @@ export default function NetworkPage() {
         </div>
       </div>
 
+      {/* ANA SEKMELER */}
       <div className="flex flex-wrap bg-ink-900/40 p-1.5 rounded-2xl border border-ink-800 overflow-hidden">
         {[
           { id: 'feed', label: 'Akış', icon: Activity },
@@ -611,9 +612,9 @@ export default function NetworkPage() {
           { id: 'lists', label: 'Listeler', icon: Inbox, badge: unreadListsCount },
           { id: 'leaderboard', label: 'Sıralama', icon: Trophy }
         ].map(tab => (
-          <button 
+          <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as TabType)} 
+            onClick={() => setActiveTab(tab.id as TabType)}
             className={`flex-1 min-w-[90px] sm:min-w-[120px] flex items-center justify-center gap-2 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all relative ${activeTab === tab.id ? 'bg-ink-800 text-white shadow-md border border-ink-700/50 scale-[1.02]' : 'text-ink-500 hover:text-ink-300'}`}
           >
             <tab.icon size={16} className={activeTab === tab.id && tab.id === 'feed' ? 'text-emerald-400' : activeTab === tab.id && tab.id === 'friends' ? 'text-azure-400' : activeTab === tab.id && tab.id === 'lists' ? 'text-violet-400' : activeTab === tab.id ? 'text-gold-400' : ''} />
@@ -624,28 +625,162 @@ export default function NetworkPage() {
       </div>
 
       <div className="min-h-[600px]">
+        {/* ============================== */}
+        {/* 1. SEKME: AKIŞ (FEED) */}
+        {/* ============================== */}
         {activeTab === 'feed' && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="flex justify-between items-center px-2 mb-3">
-              <h2 className="text-xs sm:text-sm font-black text-ink-500 uppercase tracking-widest">Ağında Neler Oluyor?</h2>
-              <button onClick={() => fetchData(false)} className="text-ink-400 hover:text-emerald-400 transition-colors bg-ink-900/50 p-2 rounded-lg border border-ink-800"><RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /></button>
+          <div className="space-y-5 animate-fade-in">
+            {/* CANLI RADAR PANELİ */}
+            <div className={`border rounded-3xl p-4 sm:p-5 shadow-lg relative overflow-hidden transition-all ${liveWatchingList.length > 0 ? 'bg-gradient-to-r from-red-950/30 via-ink-950 to-ink-950 border-red-500/30' : 'bg-ink-950/80 border-ink-800/70'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-3 w-3">
+                    {liveWatchingList.length > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
+                    <span className={`relative inline-flex rounded-full h-3 w-3 ${liveWatchingList.length > 0 ? 'bg-red-500' : 'bg-ink-600'}`}></span>
+                  </span>
+                  <h3 className={`text-xs sm:text-sm font-black uppercase tracking-widest flex items-center gap-1.5 ${liveWatchingList.length > 0 ? 'text-red-400' : 'text-ink-400'}`}>
+                    <Radio size={15} /> Canlı Radar — Şu An İzleyenler ({liveWatchingList.length})
+                  </h3>
+                </div>
+              </div>
+
+              {liveWatchingList.length === 0 ? (
+                <div className="text-xs text-ink-500 py-1">
+                  Şu an senin veya arkadaşlarının açık bir film sayacı yok. Bir filmin izleme sayacını başlattığında burada canlı yayınlanır!
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {liveWatchingList.map(({ friend, radar }) => (
+                    <div
+                      key={friend.agent_id}
+                      onClick={() => openProfileModal(friend.agent_id)}
+                      className="bg-ink-900/70 hover:bg-ink-900 border border-red-500/20 hover:border-red-500/50 rounded-2xl p-3 flex items-center gap-3.5 transition-all group cursor-pointer"
+                    >
+                      <div className="w-12 h-16 rounded-xl bg-ink-950 overflow-hidden shrink-0 border border-ink-800 relative">
+                        {radar.posterUrl ? (
+                          <img src={radar.posterUrl} alt={radar.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <Film size={20} className="text-ink-600 m-auto mt-5" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-xs font-black text-white truncate group-hover:text-red-300 transition-colors">{friend.nickname}</span>
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
+                            {radar.isPaused ? '⏸️ Duraklattı' : '🔴 Canlı'}
+                          </span>
+                        </div>
+                        <div className="text-xs sm:text-sm font-bold text-ink-100 truncate">{radar.title}</div>
+                        <div className="mt-2">
+                          <div className="flex justify-between text-[10px] font-mono text-ink-400 mb-1">
+                            <span>{radar.elapsedMins}. dk</span>
+                            <span>{radar.maxMins} dk</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-ink-950 rounded-full overflow-hidden border border-ink-800">
+                            <div className="h-full bg-gradient-to-r from-red-500 to-amber-500 rounded-full transition-all duration-500" style={{ width: `${radar.progress}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {feed.length === 0 ? (
+            {/* AĞIN GÜNDEMİ */}
+            {trendingFeedItem && (
+              <div
+                onClick={() => setSelectedLog(trendingFeedItem.sampleLog)}
+                className="bg-gradient-to-r from-amber-500/10 via-ink-900/80 to-ink-950 border border-gold-500/30 hover:border-gold-400/60 rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-4 cursor-pointer transition-all group"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-14 rounded-lg bg-ink-950 overflow-hidden shrink-0 border border-gold-500/30">
+                    {trendingFeedItem.sampleLog.item_poster ? (
+                      <img src={trendingFeedItem.sampleLog.item_poster} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Flame size={18} className="text-gold-400 m-auto mt-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gold-400 flex items-center gap-1">
+                        <Flame size={12} /> Ağın Gündemi
+                      </span>
+                      {trendingFeedItem.avgRating && (
+                        <span className="text-[10px] font-black bg-gold-500/20 text-gold-300 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                          <Star size={9} className="fill-gold-300" /> Ort. {trendingFeedItem.avgRating}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-sm sm:text-base font-black text-white truncate group-hover:text-gold-300 transition-colors">
+                      {trendingFeedItem.cleanTitle}
+                    </h4>
+                    <p className="text-[11px] text-ink-400">
+                      Son aktivitelerde arkadaşların arasında <span className="text-white font-bold">{trendingFeedItem.count} kez</span> izlendi.
+                    </p>
+                  </div>
+                </div>
+                <span className="hidden sm:inline-flex items-center gap-1 text-xs font-black text-gold-400 bg-gold-500/10 border border-gold-500/25 px-3 py-2 rounded-xl group-hover:bg-gold-500 group-hover:text-ink-950 transition-all shrink-0">
+                  <Eye size={14} /> İncele
+                </span>
+              </div>
+            )}
+
+            {/* AKILLI AKIŞ FİLTRELERİ */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5 bg-ink-950 p-1.5 rounded-2xl border border-ink-800">
+                {[
+                  { id: 'all', label: 'Tümü', icon: Activity },
+                  { id: 'masterpieces', label: '★ 8+ Başyapıtlar', icon: Crown },
+                  { id: 'notes', label: 'Eleştirmen Notlular', icon: FileText },
+                  { id: 'movies', label: 'Sadece Filmler', icon: Film },
+                  { id: 'series', label: 'Sadece Diziler', icon: Tv },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFeedFilter(f.id as FeedFilterType)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      feedFilter === f.id
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                        : 'text-ink-400 hover:text-white hover:bg-ink-900'
+                    }`}
+                  >
+                    <f.icon size={13} className={feedFilter === f.id ? 'text-emerald-400' : 'opacity-70'} />
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => fetchData(false)}
+                className="text-ink-400 hover:text-emerald-400 transition-colors bg-ink-950 px-3 py-2 rounded-xl border border-ink-800 flex items-center gap-1.5 text-xs font-bold"
+              >
+                <RefreshCw size={14} className={refreshing ? 'animate-spin text-emerald-400' : ''} /> Yenile
+              </button>
+            </div>
+
+            {filteredFeed.length === 0 ? (
               <div className="text-center py-20 bg-ink-950 border border-ink-800 border-dashed rounded-3xl">
                 <Activity size={40} className="mx-auto text-ink-800 mb-4" />
-                <p className="text-sm text-ink-500 font-bold uppercase tracking-widest">Akış Bomboş</p>
+                <p className="text-sm text-ink-500 font-bold uppercase tracking-widest">
+                  {feed.length === 0 ? 'Akış Bomboş' : 'Bu Filtreye Uygun Aktivite Yok'}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
-                {feed.map((log) => {
+                {filteredFeed.map((log) => {
                   const profile = profilesMap[log.agent_id];
                   if (!profile) return null;
-                  
+                  const liveStatus = getLiveRadarStatus(profile.currently_watching, radarTick);
+                  const hasNote = Boolean(log.note && String(log.note).trim().length > 0);
+
                   return (
                     <div key={log.id} className="bg-ink-950 hover:bg-ink-900 border border-ink-800 rounded-2xl overflow-hidden transition-all group flex flex-col relative shadow-md hover:shadow-lg">
                       <button onClick={() => openProfileModal(log.agent_id)} className="p-3 border-b border-ink-800/60 bg-ink-900/40 flex items-start gap-3 hover:bg-ink-800/60 transition-colors text-left w-full">
-                        <div className="w-8 h-8 rounded-lg bg-ink-800 flex items-center justify-center text-xs font-black text-emerald-400 flex-shrink-0 border border-ink-700">{profile.nickname?.[0]?.toUpperCase() || '?'}</div>
+                        <div className="relative shrink-0">
+                          <div className="w-8 h-8 rounded-lg bg-ink-800 flex items-center justify-center text-xs font-black text-emerald-400 border border-ink-700">{profile.nickname?.[0]?.toUpperCase() || '?'}</div>
+                          {liveStatus && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-ink-950 animate-pulse" />}
+                        </div>
                         <div className="flex flex-col flex-1 min-w-0">
                           <span className="text-sm font-bold text-white leading-snug group-hover:text-emerald-300 break-words pr-1 line-clamp-2">{profile.nickname}</span>
                           <span className="text-[9px] sm:text-[10px] text-ink-500 font-mono mt-1">{timeAgo(log.created_at)}</span>
@@ -663,7 +798,13 @@ export default function NetworkPage() {
                           <Eye size={24} className="text-emerald-400 mb-2" />
                           <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-white">İncelemeyi Gör</span>
                         </div>
-                        
+
+                        {hasNote && (
+                          <div className="absolute top-2 left-2 bg-ink-950/85 text-azure-400 p-1.5 rounded-lg border border-azure-500/30 shadow" title="Eleştirmen Notu İçeriyor">
+                            <FileText size={12} />
+                          </div>
+                        )}
+
                         {log.rating && (
                           <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 bg-ink-950/90 text-gold-400 text-xs sm:text-sm font-black px-2 py-1 rounded-lg border border-gold-500/30 backdrop-blur-sm flex items-center gap-1 shadow-lg">
                             <Star size={12} className="fill-gold-400" /> {log.rating}
@@ -683,6 +824,9 @@ export default function NetworkPage() {
           </div>
         )}
 
+        {/* ============================== */}
+        {/* 2. SEKME: LİSTELER */}
+        {/* ============================== */}
         {activeTab === 'lists' && (
           <div className="space-y-6 sm:space-y-8 animate-fade-in">
             <div className="bg-gradient-to-r from-violet-950/40 to-ink-950 border border-violet-500/20 rounded-3xl p-6 sm:p-10 text-center shadow-xl relative overflow-hidden">
@@ -692,7 +836,7 @@ export default function NetworkPage() {
                   <Gift size={32} />
                 </div>
                 <h2 className="text-lg sm:text-2xl font-black text-white mb-2">Arkadaşlarına Özel Liste Gönder</h2>
-                <p className="text-xs sm:text-sm text-ink-400 mb-6 max-w-md mx-auto leading-relaxed">En sevdiğin yapımları devasa kütüphanenden seçerek özel bir koleksiyon (Örn: Bu Yılın En İyileri) olarak arkadaşına yolla.</p>
+                <p className="text-xs sm:text-sm text-ink-400 mb-6 max-w-md mx-auto leading-relaxed">En sevdiğin yapımları devasa kütüphanenden seçerek özel bir koleksiyon olarak arkadaşına yolla.</p>
                 <button onClick={() => setShowSendModal(true)} className="bg-violet-600 hover:bg-violet-500 text-white px-8 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all flex items-center gap-2.5 mx-auto uppercase tracking-wider">
                   <ListVideo size={18} /> Liste Oluştur & Gönder
                 </button>
@@ -764,26 +908,119 @@ export default function NetworkPage() {
           </div>
         )}
 
+        {/* ============================== */}
+        {/* 3. SEKME: LİDERLİK TABLOSU & ŞAMPİYONLAR PODYUMU */}
+        {/* ============================== */}
         {activeTab === 'leaderboard' && (
-          <div className="space-y-5 animate-fade-in">
-            <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
-              {[
-                { id: 'xp', label: 'XP', icon: Sparkles }, { id: 'level', label: 'Seviye', icon: Zap },
-                { id: 'movies', label: 'Film', icon: Film }, { id: 'episodes', label: 'Bölüm', icon: Tv },
-                { id: 'achievements', label: 'Başarım', icon: Medal }, { id: 'quests', label: 'Görev', icon: Activity },
-              ].map(cat => (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              <div className="flex bg-ink-950 p-1.5 rounded-2xl border border-ink-800 self-start">
                 <button
-                  key={cat.id}
-                  onClick={() => setLeaderboardCategory(cat.id as LeaderboardCategory)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all uppercase tracking-wider ${
-                    leaderboardCategory === cat.id ? 'bg-ink-800 text-gold-400 border border-ink-700 shadow-md scale-[1.02]' : 'bg-ink-950 text-ink-500 border border-ink-800/50 hover:text-ink-300'
+                  onClick={() => setLeaderboardScope('global')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                    leaderboardScope === 'global'
+                      ? 'bg-gold-500 text-ink-950 shadow'
+                      : 'text-ink-400 hover:text-white'
                   }`}
                 >
-                  <cat.icon size={14} className={leaderboardCategory === cat.id ? "text-gold-400" : "opacity-70"} /> {cat.label}
+                  <Trophy size={13} /> Tüm Sinevia Ağı
                 </button>
-              ))}
+                <button
+                  onClick={() => setLeaderboardScope('friends')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                    leaderboardScope === 'friends'
+                      ? 'bg-azure-500 text-white shadow'
+                      : 'text-ink-400 hover:text-white'
+                  }`}
+                >
+                  <Users size={13} /> Sadece Arkadaşlarım ({friends.length + 1})
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 flex-1 max-w-2xl">
+                {[
+                  { id: 'xp', label: 'XP', icon: Sparkles },
+                  { id: 'level', label: 'Seviye', icon: Zap },
+                  { id: 'movies', label: 'Film', icon: Film },
+                  { id: 'episodes', label: 'Bölüm', icon: Tv },
+                  { id: 'achievements', label: 'Başarım', icon: Medal },
+                  { id: 'quests', label: 'Görev', icon: Activity },
+                ].map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setLeaderboardCategory(cat.id as LeaderboardCategory)}
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-xl text-xs font-bold transition-all uppercase tracking-wider ${
+                      leaderboardCategory === cat.id
+                        ? 'bg-ink-800 text-gold-400 border border-gold-500/40 shadow-md'
+                        : 'bg-ink-950 text-ink-500 border border-ink-800/50 hover:text-ink-300'
+                    }`}
+                  >
+                    <cat.icon size={13} className={leaderboardCategory === cat.id ? 'text-gold-400' : 'opacity-70'} />
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
+            {/* ŞAMPİYONLAR PODYUMU (İLK 3 AJAN) */}
+            {sortedLeaderboard.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-2">
+                {[1, 0, 2].map(podiumIdx => {
+                  const user = sortedLeaderboard[podiumIdx];
+                  if (!user) return <div key={podiumIdx} className="hidden md:block" />;
+                  const rank = podiumIdx + 1;
+                  const isMe = user.agent_id === data.agentId;
+                  const uShowcase: any[] = Array.isArray(user.showcase) ? user.showcase.filter((x: any) => x && x.title) : [];
+
+                  const badgeStyle =
+                    rank === 1
+                      ? 'from-yellow-400 via-amber-500 to-orange-500 text-ink-950 border-gold-400/60 shadow-[0_0_35px_rgba(250,204,21,0.2)] md:min-h-[230px]'
+                      : rank === 2
+                      ? 'from-slate-300 to-slate-400 text-ink-950 border-slate-400/40 md:min-h-[200px]'
+                      : 'from-amber-600 to-amber-700 text-white border-amber-600/40 md:min-h-[190px]';
+
+                  return (
+                    <div
+                      key={user.agent_id}
+                      onClick={() => openProfileModal(user.agent_id)}
+                      className={`bg-gradient-to-b from-ink-900 to-ink-950 border rounded-3xl p-5 flex flex-col items-center text-center relative cursor-pointer group transition-all hover:-translate-y-1 ${
+                        rank === 1 ? 'border-gold-500/50 order-1 md:order-2' : rank === 2 ? 'border-slate-500/30 order-2 md:order-1' : 'border-amber-700/40 order-3'
+                      }`}
+                    >
+                      <div className={`px-3 py-1 rounded-full bg-gradient-to-r ${badgeStyle} text-[11px] font-black uppercase tracking-widest flex items-center gap-1 mb-3 shadow-md`}>
+                        <Crown size={13} /> #{rank} Şampiyon
+                      </div>
+
+                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl mb-2.5 border ${
+                        rank === 1 ? 'bg-gold-500/15 text-gold-400 border-gold-500/40' : 'bg-ink-800 text-white border-ink-700'
+                      }`}>
+                        {user.nickname?.[0]?.toUpperCase() || '?'}
+                      </div>
+
+                      <div className="text-base font-black text-white group-hover:text-gold-300 transition-colors truncate max-w-full">
+                        {user.nickname} {isMe && <span className="text-emerald-400 text-xs">(Sen)</span>}
+                      </div>
+                      <div className="text-xs font-mono text-gold-400 font-black mt-1 bg-ink-900 px-3 py-1 rounded-xl border border-ink-800">
+                        {getLeaderboardScoreText(user)}
+                      </div>
+
+                      {uShowcase.length > 0 && (
+                        <div className="flex items-center justify-center gap-1.5 mt-3 pt-3 border-t border-ink-800/80 w-full">
+                          {uShowcase.slice(0, 4).map((sc, i) => {
+                            const pUrl = sc.posterUrl || sc.poster;
+                            return pUrl ? (
+                              <img key={i} src={pUrl} alt={sc.title} className="w-7 h-10 rounded-md object-cover border border-ink-700" title={sc.title} />
+                            ) : null;
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* TAM LİDERLİK TABLOSU */}
             <div className="bg-ink-950 border border-ink-800/60 rounded-3xl overflow-hidden shadow-sm">
               <div className="grid grid-cols-12 gap-3 px-4 py-3 bg-ink-900/40 border-b border-ink-800 text-[10px] sm:text-xs font-black text-ink-500 uppercase tracking-widest">
                 <div className="col-span-1 text-center">#</div>
@@ -800,32 +1037,34 @@ export default function NetworkPage() {
                   else if (rank === 2) rankColor = 'text-slate-300 text-lg';
                   else if (rank === 3) rankColor = 'text-amber-600 text-lg';
 
-                  let scoreText = '';
-                  if (leaderboardCategory === 'xp') scoreText = `${user.total_xp} XP`;
-                  if (leaderboardCategory === 'level') scoreText = `Lvl ${user.level}`;
-                  if (leaderboardCategory === 'movies') scoreText = `${user.movies_watched || 0}`;
-                  if (leaderboardCategory === 'episodes') scoreText = `${user.episodes_watched || 0}`;
-                  if (leaderboardCategory === 'achievements') scoreText = `${user.achievements_unlocked || 0}`;
-                  if (leaderboardCategory === 'quests') scoreText = `${user.quests_completed || 0}`;
+                  const liveStatus = getLiveRadarStatus(user.currently_watching, radarTick);
 
                   return (
-                    <button 
-                      key={user.agent_id} 
+                    <button
+                      key={user.agent_id}
                       onClick={() => openProfileModal(user.agent_id)}
                       className={`w-full text-left grid grid-cols-12 gap-3 p-3.5 items-center transition-colors ${isMe ? 'bg-ink-900/50' : 'hover:bg-ink-900/30'} cursor-pointer`}
                     >
                       <div className={`col-span-1 text-center font-mono text-sm sm:text-base font-black ${rankColor}`}>{rank}</div>
                       <div className="col-span-8 sm:col-span-8 flex items-center gap-3 min-w-0 pl-2">
-                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-xs sm:text-sm ${isMe ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-ink-800 text-ink-300 border border-ink-700'}`}>
+                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl shrink-0 flex items-center justify-center font-black text-xs sm:text-sm relative ${isMe ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-ink-800 text-ink-300 border border-ink-700'}`}>
                           {user.nickname?.[0]?.toUpperCase() || '?'}
+                          {liveStatus && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-ink-950 animate-pulse" />}
                         </div>
                         <div className="truncate flex items-center gap-2">
                           <span className={`text-sm sm:text-base font-bold truncate ${isMe ? 'text-emerald-400' : 'text-ink-100'}`}>{user.nickname}</span>
                           {isMe && <span className="hidden sm:inline-block text-[9px] bg-ink-800 text-ink-400 px-1.5 py-0.5 rounded uppercase font-bold border border-ink-700">Sen</span>}
+                          {liveStatus && (
+                            <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full truncate max-w-[180px]">
+                              🔴 {liveStatus.title}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="col-span-3 sm:col-span-3 text-right pr-2">
-                        <span className="text-sm sm:text-base font-black text-white font-mono bg-ink-900 px-3 py-1.5 rounded-lg border border-ink-800 shadow-inner">{scoreText}</span>
+                        <span className="text-sm sm:text-base font-black text-white font-mono bg-ink-900 px-3 py-1.5 rounded-lg border border-ink-800 shadow-inner">
+                          {getLeaderboardScoreText(user)}
+                        </span>
                       </div>
                     </button>
                   );
@@ -835,6 +1074,9 @@ export default function NetworkPage() {
           </div>
         )}
 
+        {/* ============================== */}
+        {/* 4. SEKME: ARKADAŞLAR */}
+        {/* ============================== */}
         {activeTab === 'friends' && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-ink-950 border border-azure-500/20 rounded-3xl p-5 sm:p-6 shadow-sm">
@@ -912,24 +1154,52 @@ export default function NetworkPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {friends.map(f => {
                     const unread = unreadMessages[f.agent_id] || 0;
+                    const prof = profilesMap[f.agent_id] || f;
+                    const liveStatus = getLiveRadarStatus(prof?.currently_watching, radarTick);
+                    const fShowcase: any[] = Array.isArray(prof?.showcase) ? prof.showcase.filter((x: any) => x && x.title) : [];
+
                     return (
                       <div key={f.agent_id} className="flex items-center justify-between bg-ink-950 border border-ink-800 p-4 rounded-2xl hover:border-azure-500/50 transition-colors group shadow-sm">
                         <button onClick={() => openProfileModal(f.agent_id)} className="flex items-center gap-4 text-left flex-1 min-w-0">
-                          <div className="relative">
+                          <div className="relative shrink-0">
                             <div className="w-12 h-12 rounded-xl bg-azure-500/10 border border-azure-500/20 flex items-center justify-center font-black text-azure-400 text-lg">{f.nickname?.[0]?.toUpperCase() || '?'}</div>
                             {unread > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full border-2 border-ink-950" />}
+                            {liveStatus && !unread && <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-ink-950 animate-pulse" />}
                           </div>
-                          <div className="leading-tight truncate">
+                          <div className="leading-tight truncate flex-1">
                             <div className="text-base font-bold text-white truncate mb-1">{f.nickname}</div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-[10px] bg-ink-900 px-2 py-0.5 rounded border border-ink-800 text-gold-400 font-bold">Lvl {f.level}</span>
-                              <span className="text-[10px] text-ink-500 font-mono hidden sm:inline-block">Son: {timeAgo(f.last_seen)}</span>
+                              {liveStatus ? (
+                                <span className="text-[10px] bg-red-500/15 border border-red-500/30 text-red-400 px-2 py-0.5 rounded font-bold truncate max-w-[180px]">
+                                  🔴 {liveStatus.title} ({liveStatus.elapsedMins}. dk)
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-ink-500 font-mono hidden sm:inline-block">Son: {timeAgo(f.last_seen)}</span>
+                              )}
                             </div>
                           </div>
+
+                          {fShowcase.length > 0 && (
+                            <div className="hidden sm:flex items-center -space-x-2 mr-2">
+                              {fShowcase.slice(0, 4).map((sc, idx) => {
+                                const pUrl = sc.posterUrl || sc.poster;
+                                return pUrl ? (
+                                  <img key={idx} src={pUrl} alt={sc.title} className="w-7 h-10 rounded-md object-cover border border-ink-950 shadow-md" title={sc.title} />
+                                ) : null;
+                              })}
+                            </div>
+                          )}
                         </button>
-                        
-                        <div className="flex items-center gap-2 pl-3">
-                          <button onClick={() => { setIsChatHubOpen(true); setHubMessages([]); setHubTab('direct'); setHubActiveChat({ id: f.agent_id, type: 'direct' }); }} className="p-3 text-ink-400 hover:text-azure-400 bg-ink-900 hover:bg-azure-500/10 rounded-xl transition-colors border border-transparent hover:border-azure-500/30 relative">
+
+                        <div className="flex items-center gap-2 pl-2">
+                          <button
+                            onClick={() => {
+                              setInitialDirectChatId(f.agent_id);
+                              setIsChatHubOpen(true);
+                            }}
+                            className="p-3 text-ink-400 hover:text-azure-400 bg-ink-900 hover:bg-azure-500/10 rounded-xl transition-colors border border-transparent hover:border-azure-500/30 relative"
+                          >
                             <MessageSquare size={18} />
                             {unread > 0 && <span className="absolute -top-2 -right-2 text-[10px] font-black bg-red-500 text-white px-2 py-0.5 rounded-full shadow-md">{unread}</span>}
                           </button>
@@ -946,388 +1216,390 @@ export default function NetworkPage() {
       </div>
 
       {/* ============================== */}
-      {/* MODALS */}
+      {/* BAĞIMSIZ MODALLAR */}
       {/* ============================== */}
 
-      {/* MESAJLAŞMA MERKEZİ (CHAT HUB) MODALI */}
-      {isChatHubOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-5 bg-black/90 backdrop-blur-md animate-fade-in" onClick={() => setIsChatHubOpen(false)}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-5xl h-[85vh] bg-ink-950 border border-azure-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-            <button onClick={() => setIsChatHubOpen(false)} className="absolute top-4 right-4 z-20 text-ink-400 hover:text-white p-2 rounded-full hover:bg-ink-800 transition-colors"><X size={18} /></button>
-            
-            {/* SOL PANEL: Gelen Kutusu ve Sekmeler */}
-            <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/30 flex flex-col shrink-0">
-              <div className="p-4 border-b border-ink-800">
-                <h2 className="text-lg font-black text-white flex items-center gap-2 mb-4"><MessageCircle className="text-azure-400" /> Mesajlar</h2>
-                
-                <div className="flex gap-1 bg-ink-900/50 p-1 rounded-xl mb-4">
-                  <button onClick={() => setHubTab('direct')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${hubTab === 'direct' ? 'bg-ink-800 text-white shadow' : 'text-ink-500 hover:text-ink-300'}`}>Birebir</button>
-                  <button onClick={() => setHubTab('group')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${hubTab === 'group' ? 'bg-indigo-600/30 text-indigo-300 shadow' : 'text-ink-500 hover:text-ink-300'}`}>Gruplar</button>
-                </div>
+      {/* 1. PROFİL MODALI */}
+      {viewingProfileId && (
+        <AgentProfileModal
+          viewingProfileId={viewingProfileId}
+          profile={
+            viewingProfileId === data.agentId
+              ? {
+                  agent_id: data.agentId,
+                  nickname: data.nickname,
+                  level: data.level,
+                  total_xp: data.totalXp,
+                  movies_watched: myStatsSummary.moviesWatched,
+                  series_watched: data.series.filter(s => s.episodes?.every(e => e.watched)).length,
+                  episodes_watched: myStatsSummary.episodesWatched,
+                  achievements_unlocked: myStatsSummary.achievementsUnlocked,
+                  showcase: data.showcase || []
+                }
+              : (profilesMap[viewingProfileId] || { nickname: 'Bilinmeyen Ajan', level: 1, total_xp: 0 })
+          }
+          isOwnProfile={viewingProfileId === data.agentId}
+          liveStatus={
+            viewingProfileId === data.agentId
+              ? (liveWatchingList.find(x => x.isMe)?.radar || null)
+              : getLiveRadarStatus(profilesMap[viewingProfileId]?.currently_watching, radarTick)
+          }
+          friendLogs={friendLogs}
+          myMovies={data.movies}
+          mySeries={data.series}
+          myShowcase={data.showcase || []}
+          myStats={myStatsSummary}
+          profileTab={profileTab}
+          setProfileTab={setProfileTab}
+          chatMessages={chatMessages}
+          chatInput={chatInput}
+          setChatInput={setChatInput}
+          onSendMessage={() => handleProfileSendMessage()}
+          onOpenMediaShare={() => setProfileMediaShareOpen(true)}
+          renderChatMessageItem={(msg, allMsgList, isGroupChat) =>
+            renderChatMessageBubble({
+              msg,
+              allMsgList,
+              isGroupChat,
+              myAgentId: data.agentId ?? null,
+              profilesMap,
+              myMovies: data.movies,
+              mySeries: data.series,
+              onAddToLibrary: handleAddToLibrary,
+              showToast,
+            })
+          }
+          onAddToLibrary={handleAddToLibrary}
+          onOpenShowcaseEditor={() => { setViewingProfileId(null); setShowShowcaseModal(true); }}
+          onClose={() => setViewingProfileId(null)}
+          chatScrollRef={chatScrollRef}
+        />
+      )}
 
-                {hubTab === 'direct' ? (
-                  <button onClick={() => setHubCreateMode('direct')} className="w-full bg-ink-900 hover:bg-ink-800 border border-ink-700 text-ink-100 text-xs font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"><UserPlus size={14}/> Yeni Sohbet</button>
-                ) : (
-                  <button onClick={() => setHubCreateMode('group')} className="w-full bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 text-xs font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"><Users size={14}/> Yeni Grup Kur</button>
-                )}
-              </div>
+      {/* 2. VİTRİN DÜZENLEME MODALI */}
+      <ShowcaseEditorModal
+        isOpen={showShowcaseModal}
+        initialShowcase={data.showcase || []}
+        movies={data.movies}
+        series={data.series}
+        onSave={handleSaveShowcase}
+        onClose={() => setShowShowcaseModal(false)}
+        showToast={showToast}
+      />
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
-                {hubTab === 'direct' ? (
-                  hubInboxDirect.length === 0 ? (
-                    <div className="text-center text-xs text-ink-500 py-10 italic">Birebir sohbetin yok.</div>
-                  ) : (
-                    hubInboxDirect.map(chat => {
-                      const prof = profilesMap[chat.id];
-                      const isActive = hubActiveChat?.id === chat.id;
-                      return (
-                        <button 
-                          key={chat.id} 
-                          onClick={() => { 
-                            if(hubActiveChat?.id !== chat.id) {
-                              setHubMessages([]); 
-                              setHubActiveChat({ id: chat.id, type: 'direct' }); 
-                              setHubCreateMode(null); 
-                            }
-                          }}
-                          className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 transition-all ${isActive ? 'bg-azure-500/10 border border-azure-500/30' : 'bg-transparent hover:bg-ink-900/50 border border-transparent'}`}
-                        >
-                          <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-black text-lg bg-ink-800 text-ink-300">
-                            {prof?.nickname?.[0]?.toUpperCase() || '?'}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className={`text-sm font-bold truncate pr-2 ${isActive ? 'text-azure-400' : 'text-white'}`}>{prof?.nickname || 'Bilinmeyen'}</span>
-                              <span className="text-[9px] text-ink-500">{timeAgo(chat.created_at)}</span>
-                            </div>
-                            <div className="text-[11px] text-ink-400 truncate pr-4">{chat.lastMessage}</div>
-                          </div>
-                          {chat.unread > 0 && <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-[9px] font-black text-white shrink-0">{chat.unread}</div>}
-                        </button>
-                      )
-                    })
-                  )
-                ) : (
-                  hubInboxGroup.length === 0 ? (
-                    <div className="text-center text-xs text-ink-500 py-10 italic">Henüz bir gruba dahil değilsin.</div>
-                  ) : (
-                    hubInboxGroup.map(chat => {
-                      const isActive = hubActiveChat?.id === chat.id;
-                      return (
-                        <button 
-                          key={chat.id} 
-                          onClick={() => { 
-                            if(hubActiveChat?.id !== chat.id) {
-                              setHubMessages([]);
-                              setHubActiveChat({ id: chat.id, type: 'group', name: chat.name, created_by: chat.created_by }); 
-                              setHubCreateMode(null); 
-                            }
-                          }}
-                          className={`w-full text-left p-3 rounded-2xl flex items-center gap-3 transition-all ${isActive ? 'bg-indigo-500/10 border border-indigo-500/30' : 'bg-transparent hover:bg-ink-900/50 border border-transparent'}`}
-                        >
-                          <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-black text-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                            <Users size={20} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className={`text-sm font-bold truncate pr-2 ${isActive ? 'text-indigo-400' : 'text-white'}`}>{chat.name}</span>
-                              <span className="text-[9px] text-ink-500">{timeAgo(chat.created_at)}</span>
-                            </div>
-                            <div className="text-[11px] text-ink-400 truncate pr-4">{chat.lastMessage}</div>
-                          </div>
-                        </button>
-                      )
-                    })
-                  )
-                )}
-              </div>
-            </div>
+      {/* 3. MESAJLAŞMA MERKEZİ (CHAT HUB) MODALI */}
+      <ChatHubModal
+        isOpen={isChatHubOpen}
+        onClose={() => setIsChatHubOpen(false)}
+        myAgentId={data.agentId ?? null}
+        myNickname={data.nickname || 'Ajan'}
+        friends={friends}
+        profilesMap={profilesMap}
+        setProfilesMap={setProfilesMap}
+        movies={data.movies}
+        series={data.series}
+        onAddToLibrary={handleAddToLibrary}
+        showToast={showToast}
+        syncTick={syncTick}
+        onTriggerSync={() => setSyncTick(t => t + 1)}
+        initialDirectChatId={initialDirectChatId}
+        onClearInitialDirectChat={() => setInitialDirectChatId(null)}
+        externalMediaShareOpen={profileMediaShareOpen}
+        onCloseExternalMediaShare={() => setProfileMediaShareOpen(false)}
+        onSendProfileMediaCard={(encoded) => handleProfileSendMessage(encoded)}
+      />
 
-            {/* SAĞ PANEL: Sohbet veya Yeni Oluşturma Ekranı */}
-            <div className="flex-1 flex flex-col bg-ink-950 relative overflow-hidden">
-              {hubCreateMode === 'direct' ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
-                  <div className="w-16 h-16 bg-azure-500/10 rounded-full flex items-center justify-center border border-azure-500/30 mb-4"><UserPlus size={24} className="text-azure-400" /></div>
-                  <h3 className="text-xl font-black text-white mb-2">Yeni Birebir Sohbet</h3>
-                  <p className="text-sm text-ink-400 mb-6 max-w-sm">Arkadaşının 12 haneli ajan kodunu girerek hemen özel bir konuşma başlat.</p>
-                  <input type="text" placeholder="SNV-XXXX-XXXX" value={newDirectCode} onChange={e => setNewDirectCode(e.target.value)} className="w-full max-w-xs bg-ink-900 border border-ink-800 text-center rounded-xl px-4 py-3 text-white font-mono uppercase tracking-widest focus:border-azure-500 outline-none mb-4" />
-                  <button onClick={handleStartNewDirectChat} disabled={!newDirectCode.trim()} className="w-full max-w-xs bg-azure-600 hover:bg-azure-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors">Sohbete Başla</button>
-                </div>
-              ) : hubCreateMode === 'group' ? (
-                <div className="flex-1 flex flex-col p-6 animate-fade-in">
-                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-ink-800">
-                    <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center border border-indigo-500/30"><Users size={20} className="text-indigo-400" /></div>
-                    <div>
-                      <h3 className="text-lg font-black text-white">Yeni Grup Kur</h3>
-                      <p className="text-[11px] text-ink-400">Sinevia Ağı üzerinde kendi özel topluluğunu oluştur.</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-5 overflow-y-auto custom-scrollbar pr-2 pb-20">
-                    <div>
-                      <label className="block text-[11px] font-bold text-ink-500 uppercase tracking-widest mb-2">Grup Adı</label>
-                      <input type="text" placeholder="Örn: Hafta Sonu Maratoncuları" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} className="w-full bg-ink-900 border border-ink-800 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-ink-500 uppercase tracking-widest mb-3">Üyeleri Seç ({friends.length} Arkadaş)</label>
-                      {friends.length === 0 ? (
-                        <div className="text-xs text-ink-500 italic p-4 bg-ink-900/50 rounded-xl border border-ink-800">Henüz ağında kimse yok.</div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {friends.map(f => {
-                            const isSelected = newGroupMembers.includes(f.agent_id);
-                            return (
-                              <div key={f.agent_id} onClick={() => setNewGroupMembers(prev => isSelected ? prev.filter(id => id !== f.agent_id) : [...prev, f.agent_id])} className={`p-3 rounded-xl border cursor-pointer flex items-center gap-3 transition-colors ${isSelected ? 'bg-indigo-500/10 border-indigo-500/40' : 'bg-ink-900/40 border-ink-800 hover:border-ink-700'}`}>
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${isSelected ? 'bg-indigo-500 text-white' : 'bg-ink-800 text-ink-300'}`}>{f.nickname?.[0]?.toUpperCase() || '?'}</div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-sm font-bold text-white truncate">{f.nickname}</div>
-                                  <div className="text-[9px] text-ink-500 font-mono">{f.agent_id}</div>
-                                </div>
-                                {isSelected && <Check size={16} className="text-indigo-400" />}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="absolute bottom-0 left-0 w-full p-5 bg-ink-950 border-t border-ink-800">
-                    <button onClick={handleCreateGroup} disabled={!newGroupName.trim() || newGroupMembers.length === 0} className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
-                      <Users size={18} /> Grubu Oluştur ({newGroupMembers.length + 1} Kişi)
-                    </button>
-                  </div>
-                </div>
-              ) : !hubActiveChat ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center opacity-60">
-                  <MessageCircle size={48} className="text-ink-700 mb-4" />
-                  <h3 className="text-lg font-black text-ink-400 mb-1">Mesajlaşma Merkezi</h3>
-                  <p className="text-sm text-ink-600">Yandan bir sohbet seçin veya yeni bir konuşma başlatın.</p>
-                  
-                  <div className="bg-ink-900/50 border border-ink-800 p-4 rounded-2xl mt-6 text-left max-w-sm">
-                    <div className="flex items-center gap-2 text-amber-400 text-[10px] font-black uppercase tracking-widest mb-2"><Info size={14}/> Geçmiş Mesajlar Görünmüyor Mu?</div>
-                    <p className="text-xs text-ink-400 leading-relaxed">Farklı bir tarayıcıdan (örneğin Opera) girdiğinizde eski mesajlarınızı görmek için "Hesabım" sayfasından asıl kullandığınız Ağ Kodunu içeri aktarmalısınız.</p>
-                  </div>
-                </div>
+      {/* 4. AKIŞ DETAY MODALI */}
+      {selectedLog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedLog(null)}>
+          <div onClick={e => e.stopPropagation()} className="w-full max-w-xl bg-ink-950 border border-ink-800 rounded-3xl overflow-hidden shadow-2xl relative flex flex-col md:flex-row max-h-[90vh]">
+            <button onClick={() => setSelectedLog(null)} className="absolute top-4 right-4 z-20 w-8 h-8 bg-ink-900/80 hover:bg-ink-800 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-colors"><X size={16} /></button>
+
+            <div className="w-full md:w-2/5 h-64 md:h-auto bg-ink-900 relative shrink-0">
+              {selectedLog.item_poster ? (
+                <img src={selectedLog.item_poster} alt="poster" className="w-full h-full object-cover" />
               ) : (
-                <>
-                  <div className="h-16 border-b border-ink-800 bg-ink-900/40 flex items-center justify-between pl-5 pr-14 sm:pr-16 shrink-0 relative">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${hubActiveChat.type === 'group' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-ink-800 text-emerald-400'}`}>
-                        {hubActiveChat.type === 'group' ? <Users size={16} /> : (profilesMap[hubActiveChat.id]?.nickname?.[0]?.toUpperCase() || '?')}
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-black text-white">{hubActiveChat.type === 'group' ? hubActiveChat.name : (profilesMap[hubActiveChat.id]?.nickname || 'Ajan')}</h3>
-                        {hubActiveChat.type === 'group' ? (
-                          <div className="text-[10px] text-ink-400 font-medium truncate max-w-[200px] sm:max-w-[300px]">Siz, {hubActiveChat.members?.map(id => profilesMap[id]?.nickname?.split(' ')[0] || 'Ajan').join(', ')}</div>
-                        ) : (
-                          <div className="text-[10px] text-ink-500 font-mono flex items-center gap-1"><CheckCircle2 size={10}/> Aktif Bağlantı</div>
-                        )}
-                      </div>
-                    </div>
-                    {hubActiveChat.type === 'group' && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setShowGroupManager(true)}
-                          className="p-2 text-ink-400 hover:text-indigo-400 bg-ink-900 hover:bg-indigo-500/10 rounded-xl transition-colors"
-                          title="Grubu Yönet"
-                        >
-                          <Settings size={18} />
-                        </button>
-                        <button
-                          onClick={() => setGroupActionConf({
-                            id: hubActiveChat.id,
-                            name: hubActiveChat.name || 'Grup',
-                            action: hubActiveChat.created_by === data.agentId ? 'delete' : 'leave'
-                          })}
-                          className="p-2 text-ink-500 hover:text-red-400 bg-ink-900 hover:bg-red-500/10 rounded-xl transition-colors"
-                          title={hubActiveChat.created_by === data.agentId ? "Grubu Sil" : "Gruptan Ayrıl"}
-                        >
-                          {hubActiveChat.created_by === data.agentId ? <Trash2 size={18} /> : <LogOut size={18} />}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar" ref={hubScrollRef}>
-                    {hubMessages.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-xs font-bold text-ink-600 uppercase tracking-widest">İlk mesajı sen gönder</div>
-                    ) : (
-                      <div className="space-y-4">
-                        {hubMessages.map(msg => {
-                          const isMe = msg.sender_id === data.agentId;
-                          const showName = hubActiveChat.type === 'group' && !isMe;
-                          return (
-                            <div key={msg.id} className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${isMe ? 'self-end items-end ml-auto' : 'self-start items-start'}`}>
-                              {showName && <span className="text-[10px] font-bold text-ink-500 mb-1 ml-1">{profilesMap[msg.sender_id]?.nickname || 'Ajan'}</span>}
-                              <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${isMe ? 'bg-azure-600 text-white rounded-tr-sm' : 'bg-ink-800 text-ink-100 rounded-tl-sm border border-ink-700/50'}`}>
-                                {msg.content}
-                              </div>
-                              <span className="text-[9px] text-ink-600 font-medium mt-1.5 px-1">{new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4 bg-ink-900 border-t border-ink-800 shrink-0">
-                    <div className="flex gap-3 relative">
-                      <input 
-                        type="text" 
-                        value={hubInput}
-                        onChange={(e) => setHubInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleHubSendMessage()}
-                        placeholder={hubActiveChat.type === 'group' ? "Gruba yaz..." : "Mesaj gönder..."}
-                        className="flex-1 bg-ink-950 border border-ink-700 rounded-2xl px-5 py-3.5 text-sm text-white focus:border-azure-500 outline-none pr-12"
-                      />
-                      <button 
-                        onClick={handleHubSendMessage}
-                        disabled={!hubInput.trim()}
-                        className="absolute right-2 top-2 bottom-2 w-10 bg-azure-600 hover:bg-azure-500 rounded-xl flex items-center justify-center text-white disabled:opacity-50 transition-colors"
-                      >
-                        <Send size={16} className="ml-0.5" />
-                      </button>
-                    </div>
-                  </div>
-                </>
+                <div className="w-full h-full flex items-center justify-center text-ink-700">
+                  {selectedLog.item_type === 'series' ? <Tv size={48} /> : <Film size={48} />}
+                </div>
               )}
+              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink-950 to-transparent md:hidden" />
             </div>
-            
-            {/* GRUP YÖNETİMİ MODALI */}
-            {showGroupManager && hubActiveChat?.type === 'group' && (
-              <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowGroupManager(false)}>
-                <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-ink-950 border border-indigo-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-                  <div className="p-5 border-b border-ink-800 flex items-center justify-between bg-ink-900/50 shrink-0">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30"><Settings size={18} /></div>
-                      <h2 className="text-lg font-black text-white">Grup Yönetimi</h2>
-                    </div>
-                    <button onClick={() => setShowGroupManager(false)} className="text-ink-500 hover:text-white p-2 rounded-xl bg-ink-900 transition-colors"><X size={18}/></button>
-                  </div>
 
-                  <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
-                    {/* Mevcut Üyeler */}
-                    <div>
-                      <h3 className="text-[11px] font-black uppercase text-ink-500 tracking-widest mb-3">Mevcut Üyeler ({hubActiveChat.members?.length ? hubActiveChat.members.length + 1 : 1})</h3>
-                      <div className="space-y-2">
-                        {/* Kurucu (Kendisi veya başkası) */}
-                        <div className="flex justify-between items-center bg-ink-900/30 p-3 rounded-xl border border-ink-800">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-ink-800 text-ink-300 flex items-center justify-center font-bold text-sm">
-                              {hubActiveChat.created_by === data.agentId ? data.nickname?.[0]?.toUpperCase() : profilesMap[hubActiveChat.created_by!]?.nickname?.[0]?.toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold text-white flex items-center gap-1.5">
-                                {hubActiveChat.created_by === data.agentId ? 'Sen (Kurucu)' : profilesMap[hubActiveChat.created_by!]?.nickname}
-                                <Crown size={12} className="text-gold-400" />
-                              </div>
-                              <div className="text-[10px] text-ink-500 font-mono">{hubActiveChat.created_by}</div>
-                            </div>
+            <div className="p-5 md:p-6 md:w-3/5 flex flex-col -mt-8 md:mt-0 relative z-10">
+              <div className="mb-4">
+                <button onClick={() => { setSelectedLog(null); openProfileModal(selectedLog.agent_id); }} className="flex items-center gap-2 mb-3 hover:opacity-80 transition-opacity text-left bg-ink-900/60 p-2 rounded-xl border border-ink-800/50">
+                  <div className="w-6 h-6 rounded-md bg-ink-800 text-emerald-400 flex items-center justify-center text-[11px] font-black">{profilesMap[selectedLog.agent_id]?.nickname?.[0]?.toUpperCase() || '?'}</div>
+                  <span className="text-sm text-ink-300 font-bold">{profilesMap[selectedLog.agent_id]?.nickname} <span className="font-normal text-ink-500">inceliyor</span></span>
+                </button>
+                <h2 className="text-2xl font-black text-white leading-tight mb-1.5">{selectedLog.item_title}</h2>
+                <div className="text-[11px] text-ink-500 uppercase tracking-widest font-bold">{selectedLog.item_type === 'series' ? 'Dizi' : 'Film'} • {timeAgo(selectedLog.created_at)}</div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar mb-5">
+                {(selectedLog.rating || (selectedLog.review_tags && selectedLog.review_tags.length > 0)) && (
+                  <div className="flex flex-wrap items-center gap-2 mb-5">
+                    {selectedLog.rating && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gold-500/10 text-gold-400 rounded-lg border border-gold-500/20 font-black text-sm">
+                        <Star size={16} className="fill-gold-400" /> {selectedLog.rating}/10
+                      </div>
+                    )}
+                    {selectedLog.review_tags?.map((tag: string) => (
+                      <span key={tag} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg border ${isPositiveTag(tag, data.tagSentiments) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {selectedLog.note ? (
+                  <div className="bg-ink-900/50 p-4 rounded-2xl border border-ink-800/50 relative">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-ink-500 mb-2 flex items-center gap-1.5"><Info size={12} /> Eleştirmen Notu</div>
+                    {(() => {
+                      const rawNote = selectedLog.note;
+                      const hasSpoiler = selectedLog.is_spoiler || rawNote.toLowerCase().includes('[spoiler]') || rawNote.toLowerCase().includes('#spoiler');
+                      const cleanNote = rawNote.replace(/[spoiler]/gi, '').replace(/#spoiler/gi, '').trim();
+                      const isRevealed = revealedSpoilers[selectedLog.id];
+
+                      if (hasSpoiler && !isRevealed) {
+                        return (
+                          <div onClick={() => setRevealedSpoilers(prev => ({ ...prev, [selectedLog.id]: true }))} className="cursor-pointer bg-red-500/10 border border-red-500/20 rounded-xl p-5 flex flex-col items-center justify-center gap-2 text-red-400 hover:bg-red-500/20 transition-all text-center">
+                            <ShieldAlert size={24} className="animate-pulse" />
+                            <span className="text-xs font-black uppercase tracking-widest">Spoiler İçeriyor</span>
+                            <span className="text-[10px] opacity-70">Okumak için tıklayın</span>
                           </div>
-                        </div>
-
-                        {/* Diğer Üyeler */}
-                        {hubActiveChat.members?.map(id => {
-                          if (id === hubActiveChat.created_by) return null;
-                          return (
-                            <div key={id} className="flex justify-between items-center bg-ink-900/30 p-3 rounded-xl border border-ink-800">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-ink-800 text-ink-300 flex items-center justify-center font-bold text-sm">{profilesMap[id]?.nickname?.[0]?.toUpperCase() || '?'}</div>
-                                <div>
-                                  <div className="text-sm font-bold text-white">{profilesMap[id]?.nickname || 'Bilinmeyen'}</div>
-                                  <div className="text-[10px] text-ink-500 font-mono">{id}</div>
-                                </div>
-                              </div>
-                              {hubActiveChat.created_by === data.agentId && (
-                                <button onClick={() => setMemberToKick({ id, name: profilesMap[id]?.nickname || 'Ajan' })} className="p-2 text-ink-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Gruptan At">
-                                  <UserMinus size={16} />
-                                </button>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Yeni Üye Ekle */}
-                    <div>
-                      <h3 className="text-[11px] font-black uppercase text-ink-500 tracking-widest mb-3">Ajan Ekle</h3>
-                      <div className="space-y-2">
-                        {(() => {
-                          const availableFriends = friends.filter(f => !hubActiveChat.members?.includes(f.agent_id) && f.agent_id !== hubActiveChat.created_by);
-                          if (availableFriends.length === 0) {
-                            return <div className="text-xs text-ink-600 italic p-3 border border-ink-800 border-dashed rounded-xl text-center">Eklenebilecek başka arkadaşın yok.</div>;
-                          }
-                          return availableFriends.map(f => (
-                            <div key={f.agent_id} className="flex justify-between items-center bg-ink-900/30 p-3 rounded-xl border border-ink-800">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-ink-800 text-ink-300 flex items-center justify-center font-bold text-sm">{f.nickname?.[0]?.toUpperCase()}</div>
-                                <div>
-                                  <div className="text-sm font-bold text-white">{f.nickname}</div>
-                                  <div className="text-[10px] text-ink-500 font-mono">{f.agent_id}</div>
-                                </div>
-                              </div>
-                              <button onClick={() => handleAddMemberToGroup(f.agent_id)} className="p-2 text-ink-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors" title="Gruba Ekle">
-                                <UserPlus size={16} />
-                              </button>
-                            </div>
-                          ));
-                        })()}
-                      </div>
-                    </div>
+                        );
+                      }
+                      return <p className="text-sm sm:text-base text-ink-200 italic leading-relaxed">"{cleanNote}"</p>;
+                    })()}
                   </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-ink-600 italic">Kullanıcı yazılı bir değerlendirme bırakmamış.</p>
+                )}
               </div>
-            )}
-            
-            {/* ÜYE ATMA ONAY MODALI */}
-            {memberToKick && (
-              <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setMemberToKick(null)}>
-                <div onClick={e => e.stopPropagation()} className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
-                  <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-                    <UserMinus size={24} />
+
+              {(() => {
+                const cleanTitle = (selectedLog.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim().toLowerCase();
+                const alreadyInMyLib =
+                  data.movies.some(m => m.title.toLowerCase() === cleanTitle) ||
+                  data.series.some(s => s.title.toLowerCase() === cleanTitle);
+
+                return (
+                  <div className="space-y-2 mt-auto shrink-0">
+                    {alreadyInMyLib ? (
+                      <button
+                        onClick={() => handleNavigateFromLog(selectedLog, false)}
+                        className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 uppercase tracking-wider"
+                      >
+                        <ExternalLink size={16} />
+                        {selectedLog.item_type === 'series' ? 'Dizi Listemde Bu Yapıma Git' : 'Film Listemde Bu Filme Git'}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleNavigateFromLog(selectedLog, true)}
+                          className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 uppercase tracking-wider"
+                        >
+                          <ExternalLink size={16} />
+                          Kütüphaneme Ekle & {selectedLog.item_type === 'series' ? 'Dizilere' : 'Filmlere'} Git
+                        </button>
+                        <button
+                          onClick={() => { handleAddToLibrary(selectedLog); setSelectedLog(null); }}
+                          className="w-full py-2.5 bg-ink-900 hover:bg-ink-800 border border-ink-700 text-ink-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider"
+                        >
+                          <Plus size={15} /> Sadece Kütüphaneme Ekle
+                        </button>
+                      </>
+                    )}
                   </div>
-                  <h3 className="text-lg font-black text-white mb-2">Ajanı At</h3>
-                  <p className="text-sm text-ink-300 mb-6">"{memberToKick.name}" adlı ajanı gruptan atmak istediğinize emin misiniz?</p>
-                  <div className="flex gap-3">
-                    <button onClick={() => setMemberToKick(null)} className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors">İptal</button>
-                    <button onClick={() => handleKickMemberFromGroup(memberToKick.id)} className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20">Evet, At</button>
-                  </div>
-                </div>
-              </div>
-            )}
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}
 
-      {/* UYGULAMA İÇİ ONAY MODALLARI */}
-      
-      {/* YENİ: Grup Çıkma/Silme Onayı */}
-      {groupActionConf && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setGroupActionConf(null)}>
-          <div onClick={e => e.stopPropagation()} className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
-            <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-              {groupActionConf.action === 'delete' ? <Trash2 size={24} /> : <LogOut size={24} className="ml-1" />}
+      {/* 5. LİSTE GÖNDERME MODALI */}
+      {showSendModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setShowSendModal(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-5xl h-[85vh] bg-ink-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-ink-800 bg-ink-900/50 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30"><Send size={18} /></div>
+                <h2 className="text-base sm:text-lg font-black text-white">Arkadaşına Tavsiye Gönder</h2>
+              </div>
+              <button onClick={() => setShowSendModal(false)} className="text-ink-500 hover:text-white p-1.5 rounded-lg bg-ink-900"><X size={18} /></button>
             </div>
-            <h3 className="text-lg font-black text-white mb-2">
-              {groupActionConf.action === 'delete' ? 'Grubu Sil' : 'Gruptan Ayrıl'}
-            </h3>
-            <p className="text-sm text-ink-300 mb-6">
-              {groupActionConf.action === 'delete'
-                ? `"${groupActionConf.name}" grubunu tamamen silmek istediğinize emin misiniz? Tüm mesajlar ve grup silinecektir.`
-                : `"${groupActionConf.name}" grubundan ayrılmak istediğinize emin misiniz?`}
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setGroupActionConf(null)} className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors">İptal</button>
-              <button onClick={executeGroupAction} className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20">
-                {groupActionConf.action === 'delete' ? 'Evet, Sil' : 'Evet, Ayrıl'}
+
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+              <div className="w-full md:w-72 p-5 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/20 flex flex-col gap-5 overflow-y-auto custom-scrollbar shrink-0">
+                <div>
+                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-2">1. Kime Gidecek?</label>
+                  <select
+                    value={sendTargetId}
+                    onChange={(e) => setSendTargetId(e.target.value)}
+                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
+                  >
+                    <option value="">-- Arkadaş Seç --</option>
+                    {friends.map(f => (
+                      <option key={f.agent_id} value={f.agent_id}>{f.nickname}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-2">2. Listenin Adı</label>
+                  <input
+                    type="text"
+                    value={sendListTitle}
+                    onChange={(e) => setSendListTitle(e.target.value)}
+                    placeholder="Örn: Bilim Kurgu Şaheserleri"
+                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
+                  />
+                </div>
+                <div className="pt-3 border-t border-ink-800">
+                  <label className="block text-[11px] font-bold text-ink-400 uppercase tracking-widest mb-3">3. Kütüphaneni Filtrele</label>
+                  <div className="relative mb-3">
+                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
+                    <input
+                      type="text"
+                      placeholder="İsimle Ara..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Filter size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
+                    <select
+                      value={filterGenre}
+                      onChange={(e) => setFilterGenre(e.target.value)}
+                      className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-violet-500 outline-none appearance-none"
+                    >
+                      <option value="">Tüm Türler</option>
+                      {data.genres.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 flex flex-col overflow-hidden bg-ink-950 relative">
+                <div className="p-4 border-b border-ink-800 flex items-center justify-between bg-ink-900/40">
+                  <span className="text-[11px] font-bold text-ink-400 uppercase tracking-widest">Kütüphanen</span>
+                  <span className="text-xs text-violet-400 font-bold bg-violet-500/10 px-3 py-1 rounded-lg border border-violet-500/20">{selectedItemIds.length} Yapım Seçildi</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
+                  {filteredLibraryItems.length === 0 ? (
+                    <div className="text-center py-12 text-ink-600 text-sm italic border border-ink-800 border-dashed rounded-2xl">Sonuç bulunamadı.</div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4">
+                      {filteredLibraryItems.map(item => {
+                        const isSelected = selectedItemIds.includes(item.id);
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => setSelectedItemIds(prev => isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id])}
+                            className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer group border-2 transition-all ${isSelected ? 'border-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.4)] scale-95' : 'border-transparent hover:border-ink-600 bg-ink-900'}`}
+                          >
+                            {item.posterUrl ? (
+                              <img src={item.posterUrl} alt="poster" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-ink-700">
+                                {item.type === 'series' ? <Tv size={32} /> : <Film size={32} />}
+                              </div>
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2.5 pt-8">
+                              <h3 className="text-[10px] sm:text-[11px] font-bold text-white line-clamp-2 leading-tight drop-shadow-md">{item.title}</h3>
+                            </div>
+                            <div className={`absolute inset-0 bg-violet-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
+                              <div className="w-10 h-10 rounded-full bg-violet-500 text-white flex items-center justify-center shadow-xl">
+                                <Check size={20} strokeWidth={4} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 border-t border-ink-800 bg-ink-950 flex gap-3 shrink-0">
+              <button onClick={() => setShowSendModal(false)} className="px-6 py-3.5 bg-ink-900 text-ink-300 rounded-xl text-sm font-bold hover:bg-ink-800 transition-colors">İptal</button>
+              <button onClick={handleSendList} className="flex-1 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-black transition-colors flex items-center justify-center gap-2 uppercase tracking-wider shadow-lg shadow-violet-500/20">
+                <Send size={18} /> Listeyi Gönder ({selectedItemIds.length})
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 1. Liste Silme Onayı */}
+      {/* 6. LİSTE İNCELEME MODALI */}
+      {viewingList && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setViewingList(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-5xl bg-ink-950 border border-ink-700 rounded-3xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl">
+            <div className="p-5 sm:p-6 border-b border-ink-800 bg-ink-900/40 relative shrink-0">
+              <button onClick={() => setViewingList(null)} className="absolute top-5 right-5 text-ink-500 hover:text-white bg-ink-900 p-2 rounded-full transition-colors"><X size={18} /></button>
+              <div className="pr-12">
+                <div className="text-[11px] font-bold text-violet-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Gift size={14} /> Tavsiye Listesi</div>
+                <h2 className="text-2xl sm:text-3xl font-black text-white mb-2 leading-tight">{viewingList.list_title}</h2>
+                <div className="text-sm text-ink-400">Gönderen: <span className="text-white font-bold">{profilesMap[viewingList.sender_id]?.nickname || 'Bilinmeyen'}</span></div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 custom-scrollbar bg-ink-950">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {viewingList.items?.map((item: any, idx: number) => {
+                  const alreadyHas = data.movies.some(m => m.title.toLowerCase() === item.title.toLowerCase()) || data.series.some(s => s.title.toLowerCase() === item.title.toLowerCase());
+                  return (
+                    <div key={idx} className="relative aspect-[2/3] rounded-xl overflow-hidden group border border-ink-800 bg-ink-900 shadow-md">
+                      {item.poster ? (
+                        <img src={item.poster} alt="poster" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-ink-700">
+                          {item.type === 'series' ? <Tv size={32} /> : <Film size={32} />}
+                        </div>
+                      )}
+
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-3 pt-10">
+                        <h4 className="text-[11px] sm:text-xs font-bold text-white line-clamp-2 leading-tight mb-1 drop-shadow-md">{item.title}</h4>
+                        <div className="text-[9px] text-ink-400 uppercase tracking-widest">{item.type === 'series' ? 'Dizi' : 'Film'} {item.year ? `• ${item.year}` : ''}</div>
+                      </div>
+
+                      <div className="absolute top-2.5 right-2.5">
+                        {alreadyHas ? (
+                          <div className="bg-emerald-500/90 text-white p-2 rounded-lg shadow-md backdrop-blur-sm" title="Zaten Kütüphanende">
+                            <Check size={16} strokeWidth={3} />
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleAddToLibrary(item, true)}
+                            className="bg-violet-600 hover:bg-violet-500 text-white p-2 rounded-lg shadow-xl backdrop-blur-sm transition-all hover:scale-110"
+                            title="Kütüphaneme Ekle"
+                          >
+                            <Plus size={16} strokeWidth={3} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 border-t border-ink-800 bg-ink-950 flex gap-3 shrink-0">
+              <button onClick={() => setListToDelete(viewingList.id)} className="px-5 sm:px-6 py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-sm font-bold transition-colors tracking-widest uppercase flex items-center justify-center gap-2">
+                <Trash2 size={18} /> <span className="hidden sm:inline">Sil</span>
+              </button>
+              <button onClick={() => setViewingList(null)} className="flex-1 py-3.5 bg-ink-900 hover:bg-ink-800 text-white rounded-xl text-sm font-bold transition-colors tracking-widest uppercase">
+                Pencereyi Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SİLME ONAY MODALLARI */}
       {listToDelete && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setListToDelete(null)}>
           <div onClick={e => e.stopPropagation()} className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
@@ -1344,7 +1616,6 @@ export default function NetworkPage() {
         </div>
       )}
 
-      {/* 2. Arkadaş Silme Onayı */}
       {friendToRemove && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setFriendToRemove(null)}>
           <div onClick={e => e.stopPropagation()} className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
@@ -1360,192 +1631,6 @@ export default function NetworkPage() {
           </div>
         </div>
       )}
-
-      {/* 4. PROFİL İNCELEME (STALK) MODALI */}
-      {viewingProfileId && (() => {
-        const p = profilesMap[viewingProfileId] || { nickname: 'Bilinmeyen Ajan', level: 0, total_xp: 0 };
-        return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setViewingProfileId(null)}>
-            <div onClick={e => e.stopPropagation()} className="w-full max-w-3xl bg-ink-950 border border-azure-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[85vh]">
-              
-              <div className="p-6 sm:p-8 border-b border-ink-800 bg-ink-900/80 flex flex-col relative shrink-0 overflow-hidden">
-                <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-azure-900/20 to-transparent pointer-events-none" />
-                <div className="absolute -top-20 -right-20 w-64 h-64 bg-azure-500/10 blur-[80px] rounded-full pointer-events-none" />
-                
-                <button onClick={() => setViewingProfileId(null)} className="absolute top-4 right-4 text-ink-400 hover:text-white p-2 rounded-full hover:bg-ink-800/80 relative z-20 transition-colors"><X size={18} /></button>
-
-                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 relative z-10 text-center sm:text-left mt-2">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-azure-500 to-indigo-600 flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.3)] border-2 border-azure-400/50 rotate-3 transform hover:rotate-0 transition-transform duration-300">
-                    <span className="text-4xl sm:text-5xl font-black text-white drop-shadow-md">{p.nickname[0]?.toUpperCase()}</span>
-                  </div>
-                  <div className="flex-1 mt-2 sm:mt-0">
-                    <div className="text-[10px] text-azure-400 font-bold uppercase tracking-widest mb-1 flex items-center justify-center sm:justify-start gap-1.5"><ShieldAlert size={12}/> Sinevia Ajanı</div>
-                    <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">{p.nickname}</h2>
-                    <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
-                      <span className="text-[10px] font-bold text-azure-950 bg-azure-400 px-2.5 py-1 rounded-lg uppercase tracking-widest shadow-md">Lvl {p.level}</span>
-                      <span className="text-[10px] font-bold text-gold-400 bg-gold-500/10 border border-gold-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1"><Sparkles size={10}/> {p.total_xp} XP</span>
-                      <span className="text-[10px] text-ink-400 font-mono bg-ink-950/80 px-2 py-1 rounded border border-ink-800">Kod: {viewingProfileId}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex border-b border-ink-800 bg-ink-950 shrink-0">
-                <button 
-                  onClick={() => setProfileTab('stats')}
-                  className={`flex-1 py-3.5 text-xs sm:text-sm font-bold transition-colors border-b-2 flex items-center justify-center gap-2 ${profileTab === 'stats' ? 'border-azure-500 text-azure-400 bg-azure-500/5' : 'border-transparent text-ink-400 hover:text-ink-200 hover:bg-ink-900/50'}`}
-                >
-                  <BarChart2 size={16} /> Profil & Kıyaslama
-                </button>
-                <button 
-                  onClick={() => setProfileTab('chat')}
-                  className={`flex-1 py-3.5 text-xs sm:text-sm font-bold transition-colors border-b-2 flex items-center justify-center gap-2 ${profileTab === 'chat' ? 'border-azure-500 text-azure-400 bg-azure-500/5' : 'border-transparent text-ink-400 hover:text-ink-200 hover:bg-ink-900/50'}`}
-                >
-                  <MessageSquare size={16} /> Canlı Sohbet
-                </button>
-              </div>
-
-              {profileTab === 'stats' && (
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar space-y-6">
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 mb-6">
-                    <div className="bg-ink-900/60 border border-ink-800 p-4 rounded-2xl flex flex-col items-center justify-center shadow-sm relative overflow-hidden group">
-                      <Film size={20} className="text-ink-700 absolute -right-2 -bottom-2 opacity-20 group-hover:scale-125 transition-transform" />
-                      <div className="text-2xl font-black text-white mb-0.5">{p.movies_watched || 0}</div>
-                      <div className="text-[9px] font-bold text-ink-500 uppercase tracking-widest text-center">Film<br/>İzledi</div>
-                    </div>
-                    <div className="bg-ink-900/60 border border-ink-800 p-4 rounded-2xl flex flex-col items-center justify-center shadow-sm relative overflow-hidden group">
-                      <Tv size={20} className="text-ink-700 absolute -right-2 -bottom-2 opacity-20 group-hover:scale-125 transition-transform" />
-                      <div className="text-2xl font-black text-white mb-0.5">{p.series_watched || 0}</div>
-                      <div className="text-[9px] font-bold text-ink-500 uppercase tracking-widest text-center">Dizi<br/>Bitirdi</div>
-                    </div>
-                    <div className="bg-ink-900/60 border border-ink-800 p-4 rounded-2xl flex flex-col items-center justify-center shadow-sm relative overflow-hidden group">
-                      <Activity size={20} className="text-ink-700 absolute -right-2 -bottom-2 opacity-20 group-hover:scale-125 transition-transform" />
-                      <div className="text-2xl font-black text-white mb-0.5">{p.episodes_watched || 0}</div>
-                      <div className="text-[9px] font-bold text-ink-500 uppercase tracking-widest text-center">Bölüm<br/>İzledi</div>
-                    </div>
-                    <div className="bg-ink-900/60 border border-ink-800 p-4 rounded-2xl flex flex-col items-center justify-center shadow-sm relative overflow-hidden group">
-                      <Medal size={20} className="text-gold-700 absolute -right-2 -bottom-2 opacity-20 group-hover:scale-125 transition-transform" />
-                      <div className="text-2xl font-black text-gold-400 mb-0.5">{p.achievements_unlocked || 0}</div>
-                      <div className="text-[9px] font-bold text-gold-500/50 uppercase tracking-widest text-center">Başarım<br/>Açtı</div>
-                    </div>
-                    <div className="bg-ink-900/60 border border-ink-800 p-4 rounded-2xl flex flex-col items-center justify-center shadow-sm relative overflow-hidden group col-span-2 sm:col-span-1">
-                      <CheckSquare size={20} className="text-orange-700 absolute -right-2 -bottom-2 opacity-20 group-hover:scale-125 transition-transform" />
-                      <div className="text-2xl font-black text-orange-400 mb-0.5">{p.quests_completed || 0}</div>
-                      <div className="text-[9px] font-bold text-orange-500/50 uppercase tracking-widest text-center">Görev<br/>Bitti</div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-[11px] font-black text-ink-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <Activity size={14} className="text-azure-400" /> Son İzledikleri & Ortak Zevkleriniz
-                    </h3>
-                    
-                    {friendLogs.length === 0 ? (
-                      <div className="text-center py-10 border border-ink-800 border-dashed rounded-2xl text-sm text-ink-500">
-                        Henüz bir aktivitesi yok.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {friendLogs.map(log => {
-                          const myMovieMatch = data.movies.find(m => m.title.toLowerCase() === log.item_title.toLowerCase());
-                          const mySeriesMatch = data.series.find(s => s.title.toLowerCase() === log.item_title.toLowerCase());
-                          const myMatch = log.item_type === 'movie' ? myMovieMatch : mySeriesMatch;
-                          const iWatched = myMovieMatch?.watched || (mySeriesMatch && mySeriesMatch.episodes.some(e => e.watched));
-                          
-                          const hisRating = log.rating;
-                          let myRating = myMovieMatch?.rating;
-                          if (log.item_type === 'series' && mySeriesMatch) {
-                            const ratedEps = mySeriesMatch.episodes.filter(e => e.rating !== null);
-                            if (ratedEps.length > 0) myRating = ratedEps.reduce((a,b) => a + (b.rating||0), 0) / ratedEps.length;
-                          }
-
-                          return (
-                            <div key={log.id} className="bg-ink-900/30 border border-ink-800 rounded-2xl p-3 sm:p-4 flex gap-4 items-start sm:items-center group">
-                              <div className="w-14 sm:w-16 aspect-[2/3] bg-ink-900 rounded-lg overflow-hidden flex-shrink-0 border border-ink-700 shadow-sm">
-                                {log.item_poster ? <img src={log.item_poster} className="w-full h-full object-cover" /> : <Film size={20} className="text-ink-600 m-auto mt-6" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-sm sm:text-base font-bold text-white truncate leading-tight">{log.item_title}</h4>
-                                <div className="text-[10px] text-ink-500 mb-2 mt-0.5">{timeAgo(log.created_at)}</div>
-                                
-                                {iWatched ? (
-                                  <div className="flex items-center gap-4 bg-ink-950/80 rounded-xl border border-ink-800/80 p-2 inline-flex shadow-inner">
-                                    <div className="flex flex-col items-center px-2 sm:px-3">
-                                      <span className="text-[9px] font-bold text-ink-500 uppercase tracking-widest mb-0.5">Puanı</span>
-                                      <span className={`text-[11px] sm:text-xs font-black ${hisRating ? 'text-azure-400' : 'text-ink-600'}`}>{hisRating || '-'}</span>
-                                    </div>
-                                    <div className="w-px h-8 bg-ink-800"></div>
-                                    <div className="flex flex-col items-center px-2 sm:px-3">
-                                      <span className="text-[9px] font-bold text-ink-500 uppercase tracking-widest mb-0.5">Senin</span>
-                                      <span className={`text-[11px] sm:text-xs font-black ${myRating ? 'text-emerald-400' : 'text-ink-600'}`}>{myRating ? (myRating % 1 === 0 ? myRating : myRating.toFixed(1)) : '-'}</span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="text-[10px] sm:text-[11px] font-bold text-ink-600 bg-ink-950 border border-ink-800/50 px-2.5 py-1.5 rounded-lg inline-block">Sen henüz izlemedin</div>
-                                )}
-                              </div>
-                              {!myMatch && (
-                                <button onClick={() => handleAddToLibrary(log)} className="mt-2 sm:mt-0 mr-1 w-10 h-10 rounded-full bg-ink-800 hover:bg-emerald-500/20 text-ink-400 hover:text-emerald-400 flex items-center justify-center transition-all border border-transparent hover:border-emerald-500/30 flex-shrink-0" title="Kütüphaneme Ekle">
-                                  <Plus size={18} />
-                                </button>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {profileTab === 'chat' && (
-                <div className="flex flex-col flex-1 overflow-hidden bg-ink-950 relative">
-                  <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar" ref={chatScrollRef}>
-                    {chatMessages.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-ink-500 opacity-60">
-                        <MessageSquare size={40} className="mb-3" />
-                        <p className="text-sm font-bold uppercase tracking-widest">Sohbeti Başlat</p>
-                      </div>
-                    ) : (
-                      chatMessages.map(msg => {
-                        const isMe = msg.sender_id === data.agentId;
-                        return (
-                          <div key={msg.id} className={`flex flex-col max-w-[85%] sm:max-w-[75%] ${isMe ? 'self-end items-end ml-auto' : 'self-start items-start'}`}>
-                            <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${isMe ? 'bg-azure-600 text-white rounded-tr-sm' : 'bg-ink-800 text-ink-100 rounded-tl-sm border border-ink-700/50'}`}>
-                              {msg.content}
-                            </div>
-                            <span className="text-[9px] sm:text-[10px] text-ink-500 font-bold mt-1 px-1.5">{new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                  
-                  <div className="p-3 sm:p-4 bg-ink-900 border-t border-ink-800 shrink-0">
-                    <div className="flex gap-2 sm:gap-3">
-                      <input 
-                        type="text" 
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleProfileSendMessage()}
-                        placeholder="Bir mesaj yaz..."
-                        className="flex-1 bg-ink-950 border border-ink-700 rounded-full px-5 py-3 text-sm text-white focus:border-azure-500 outline-none"
-                      />
-                      <button 
-                        onClick={handleProfileSendMessage}
-                        disabled={!chatInput.trim()}
-                        className="w-12 h-12 rounded-full bg-azure-600 hover:bg-azure-500 text-white flex items-center justify-center flex-shrink-0 disabled:opacity-50 transition-colors shadow-lg shadow-azure-500/20"
-                      >
-                        <Send size={18} className="ml-1" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
