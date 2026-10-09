@@ -34,6 +34,7 @@ interface AgentProfileModalProps {
     xp: number;
     level: number;
     moviesWatched: number;
+    pastMoviesWatched: number;
     episodesWatched: number;
     achievementsUnlocked: number;
   };
@@ -211,8 +212,9 @@ export default function AgentProfileModal({
       }
     }
 
+    const totalMoviesCombined = (profile?.movies_watched || 0) + (profile?.past_movies_watched || 0);
     const estHours = Math.round(
-      ((profile?.movies_watched || 0) * 115 + (profile?.episodes_watched || 0) * 42) / 60
+      (totalMoviesCombined * 115 + (profile?.episodes_watched || 0) * 42) / 60
     );
 
     return { topGenres, avgRating, ratingsCount: ratings.length, persona, personaDesc, estHours };
@@ -693,9 +695,10 @@ export default function AgentProfileModal({
             )}
 
             {/* 2. BÖLÜM: KARİYER İSTATİSTİK KARTLARI */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
-                { label: 'İzlenen Film', val: profile?.movies_watched || 0, icon: Film, color: 'text-emerald-400', border: 'border-emerald-500/25', bg: 'from-emerald-500/15' },
+                { label: 'Güncel Film', val: profile?.movies_watched || 0, icon: Film, color: 'text-emerald-400', border: 'border-emerald-500/25', bg: 'from-emerald-500/15' },
+                { label: 'Önceden Film', val: profile?.past_movies_watched || 0, icon: History, color: 'text-fuchsia-400', border: 'border-fuchsia-500/25', bg: 'from-fuchsia-500/15' },
                 { label: 'Biten Dizi', val: profile?.series_watched || 0, icon: Tv, color: 'text-azure-400', border: 'border-azure-500/25', bg: 'from-azure-500/15' },
                 { label: 'İzlenen Bölüm', val: profile?.episodes_watched || 0, icon: Activity, color: 'text-violet-400', border: 'border-violet-500/25', bg: 'from-violet-500/15' },
                 { label: 'Açılan Başarım', val: profile?.achievements_unlocked || 0, icon: Medal, color: 'text-gold-400', border: 'border-gold-500/25', bg: 'from-gold-500/15' },
@@ -779,7 +782,8 @@ export default function AgentProfileModal({
                   <div className="space-y-3 my-auto">
                     {[
                       { label: 'Toplam XP', myVal: myStats.xp, hisVal: profile?.total_xp || 0 },
-                      { label: 'İzlenen Film', myVal: myStats.moviesWatched, hisVal: profile?.movies_watched || 0 },
+                      { label: 'Güncel Film', myVal: myStats.moviesWatched, hisVal: profile?.movies_watched || 0 },
+                      { label: 'Önceden Film', myVal: myStats.pastMoviesWatched, hisVal: profile?.past_movies_watched || 0 },
                       { label: 'İzlenen Bölüm', myVal: myStats.episodesWatched, hisVal: profile?.episodes_watched || 0 },
                       { label: 'Başarım', myVal: myStats.achievementsUnlocked, hisVal: profile?.achievements_unlocked || 0 },
                     ].map(row => {

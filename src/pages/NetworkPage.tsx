@@ -3,7 +3,7 @@ import {
   Users, UserPlus, Trophy, Activity, Check, X, Star, Plus, Copy, RefreshCw,
   Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift,
   ListVideo, Eye, Info, MessageSquare, MessageCircle, Crown, Radio, Flame,
-  ExternalLink, FileText, Award
+  ExternalLink, FileText, Award, History
 } from 'lucide-react';
 import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
 import type { ShowcaseItem } from '../context/AppContext';
@@ -71,7 +71,7 @@ function getLiveRadarStatus(cw: any, nowMs = Date.now()) {
 
 type TabType = 'feed' | 'friends' | 'lists' | 'leaderboard';
 type FeedFilterType = 'all' | 'masterpieces' | 'notes' | 'movies' | 'series';
-type LeaderboardCategory = 'xp' | 'level' | 'movies' | 'episodes' | 'achievements' | 'quests';
+type LeaderboardCategory = 'xp' | 'level' | 'movies' | 'past_movies' | 'episodes' | 'achievements' | 'quests';
 type LeaderboardScope = 'global' | 'friends';
 type ProfileTabType = 'stats' | 'chat';
 
@@ -112,7 +112,6 @@ export default function NetworkPage() {
   const [viewingList, setViewingList] = useState<any | null>(null);
   const [listToDelete, setListToDelete] = useState<string | null>(null);
 
-  // VİTRİN, MESAJ MERKEZİ VE ARKADAŞ SİLME MODALLARI
   const [showShowcaseModal, setShowShowcaseModal] = useState(false);
   const [isChatHubOpen, setIsChatHubOpen] = useState(false);
   const [initialDirectChatId, setInitialDirectChatId] = useState<string | null>(null);
@@ -132,14 +131,18 @@ export default function NetworkPage() {
     return () => clearInterval(t);
   }, []);
 
-  // KENDİ İSTATİSTİKLERİMİZ (1v1 AJAN DÜELLOSU İÇİN)
+  // YEREL KULLANICININ İSTATİSTİKLERİ: VERİTABANINI BEKLEMEDEN ANINDA HESAPLAR
+  const localMoviesWatched = useMemo(() => data.movies.filter((m: Movie) => m.watched && !m.isPastWatch).length, [data.movies]);
+  const localPastMoviesWatched = useMemo(() => data.movies.filter((m: Movie) => m.watched && m.isPastWatch).length, [data.movies]);
+
   const myStatsSummary = useMemo(() => ({
     xp: data.totalXp || 0,
     level: data.level || 1,
-    moviesWatched: data.movies.filter((m: Movie) => m.watched).length,
+    moviesWatched: localMoviesWatched,
+    pastMoviesWatched: localPastMoviesWatched,
     episodesWatched: data.series.reduce((sum: number, s: any) => sum + (s.episodes?.filter((e: any) => e.watched).length || 0), 0),
     achievementsUnlocked: data.achievements.reduce((acc: number, curr: any) => acc + (curr.unlockedTiers?.length || 0), 0),
-  }), [data.totalXp, data.level, data.movies, data.series, data.achievements]);
+  }), [data.totalXp, data.level, localMoviesWatched, localPastMoviesWatched, data.series, data.achievements]);
 
   const openProfileModal = async (targetId: string, initialTab: ProfileTabType = 'stats') => {
     if (!targetId) return;
@@ -215,12 +218,26 @@ export default function NetworkPage() {
       let pMap = { ...profilesMapRef.current };
       if (allRelevantIds.length > 0) {
         const { data: profilesData } = await supabase.from('profiles').select('*').in('agent_id', allRelevantIds);
-        (profilesData || []).forEach((p: any) => { pMap[p.agent_id] = p; });
+        (profilesData || []).forEach((p: any) => { 
+          // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
+          if (p.agent_id === data.agentId) {
+            p.movies_watched = localMoviesWatched;
+            p.past_movies_watched = localPastMoviesWatched;
+          }
+          pMap[p.agent_id] = p; 
+        });
       }
 
       const { data: leadersData } = await supabase.from('profiles').select('*').order('total_xp', { ascending: false }).limit(100);
       if (leadersData) {
-        leadersData.forEach((p: any) => { pMap[p.agent_id] = p; });
+        leadersData.forEach((p: any) => { 
+          // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
+          if (p.agent_id === data.agentId) {
+            p.movies_watched = localMoviesWatched;
+            p.past_movies_watched = localPastMoviesWatched;
+          }
+          pMap[p.agent_id] = p; 
+        });
       }
       setProfilesMap({ ...pMap });
       setLeaderboard(leadersData || []);
@@ -240,7 +257,7 @@ export default function NetworkPage() {
 
     } catch (error: any) { console.error('Ağ hatası:', error); }
     finally { if (!isSilent) setLoading(false); setRefreshing(false); }
-  }, [data.agentId]);
+  }, [data.agentId, localMoviesWatched, localPastMoviesWatched]);
 
   useEffect(() => {
     fetchData();
@@ -260,7 +277,15 @@ export default function NetworkPage() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload: any) => {
         if (payload.new && payload.new.agent_id) {
-          setProfilesMap(prev => ({ ...prev, [payload.new.agent_id]: payload.new }));
+          setProfilesMap(prev => {
+            const updated = { ...payload.new };
+            // GELEN SOKET VERİSİNDE DE KENDİ VERİMİZİ DÜZELTİYORUZ
+            if (updated.agent_id === data.agentId) {
+              updated.movies_watched = localMoviesWatched;
+              updated.past_movies_watched = localPastMoviesWatched;
+            }
+            return { ...prev, [updated.agent_id]: updated };
+          });
         }
         setSyncTick(t => t + 1);
       })
@@ -271,7 +296,7 @@ export default function NetworkPage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [data.agentId, fetchData]);
+  }, [data.agentId, fetchData, localMoviesWatched, localPastMoviesWatched]);
 
   useEffect(() => {
     if (syncTick > 0) fetchData(true);
@@ -455,6 +480,7 @@ export default function NetworkPage() {
       if (leaderboardCategory === 'xp') return (b.total_xp || 0) - (a.total_xp || 0);
       if (leaderboardCategory === 'level') return (b.level || 0) - (a.level || 0);
       if (leaderboardCategory === 'movies') return (b.movies_watched || 0) - (a.movies_watched || 0);
+      if (leaderboardCategory === 'past_movies') return (b.past_movies_watched || 0) - (a.past_movies_watched || 0);
       if (leaderboardCategory === 'episodes') return (b.episodes_watched || 0) - (a.episodes_watched || 0);
       if (leaderboardCategory === 'achievements') return (b.achievements_unlocked || 0) - (a.achievements_unlocked || 0);
       if (leaderboardCategory === 'quests') return (b.quests_completed || 0) - (a.quests_completed || 0);
@@ -465,7 +491,8 @@ export default function NetworkPage() {
   const getLeaderboardScoreText = (user: any) => {
     if (leaderboardCategory === 'xp') return `${user.total_xp || 0} XP`;
     if (leaderboardCategory === 'level') return `Lvl ${user.level || 1}`;
-    if (leaderboardCategory === 'movies') return `${user.movies_watched || 0} Film`;
+    if (leaderboardCategory === 'movies') return `${user.movies_watched || 0} Güncel Film`;
+    if (leaderboardCategory === 'past_movies') return `${user.past_movies_watched || 0} Önc. Film`;
     if (leaderboardCategory === 'episodes') return `${user.episodes_watched || 0} Bölüm`;
     if (leaderboardCategory === 'achievements') return `${user.achievements_unlocked || 0} Başarım`;
     if (leaderboardCategory === 'quests') return `${user.quests_completed || 0} Görev`;
@@ -478,7 +505,6 @@ export default function NetworkPage() {
   const totalUnread = Object.values(unreadMessages).reduce((a: number, b: number) => a + b, 0);
   const myValidShowcase = (data.showcase || []).filter((s: any) => s && s.title);
 
-  // İlk 3 podyumda gösterildiği için alt tablo 4. sıradan başlar
   const topThreeLeaderboard = sortedLeaderboard.slice(0, 3);
   const remainingLeaderboard = sortedLeaderboard.slice(3);
 
@@ -954,11 +980,12 @@ export default function NetworkPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 flex-1 max-w-2xl">
+              <div className="flex flex-wrap gap-1.5 flex-1 max-w-3xl">
                 {[
                   { id: 'xp', label: 'XP', icon: Sparkles },
                   { id: 'level', label: 'Seviye', icon: Zap },
-                  { id: 'movies', label: 'Film', icon: Film },
+                  { id: 'movies', label: 'Güncel Film', icon: Film },
+                  { id: 'past_movies', label: 'Önc. Film', icon: History },
                   { id: 'episodes', label: 'Bölüm', icon: Tv },
                   { id: 'achievements', label: 'Başarım', icon: Medal },
                   { id: 'quests', label: 'Görev', icon: Activity },
@@ -993,7 +1020,6 @@ export default function NetworkPage() {
                     ? user.showcase.filter((x: any) => x && x.title)
                     : [];
 
-                  // 1., 2. ve 3. Sıra İçin Özel Lüks Renk Paletleri
                   const theme =
                     rank === 1
                       ? {
@@ -1060,14 +1086,12 @@ export default function NetworkPage() {
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/60 to-transparent" />
 
-                        {/* SOL ÜST SIRA ROZETİ */}
                         <div className="absolute top-3 left-3 z-10">
                           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r ${theme.badgeBg} border text-[10px] font-black uppercase tracking-widest shadow-lg`}>
                             <RankIcon size={12} /> {theme.rankTitle}
                           </div>
                         </div>
 
-                        {/* SAĞ ÜST CANLI İZLEME VEYA SEVİYE ROZETİ */}
                         <div className="absolute top-3 right-3 z-10">
                           {liveStatus ? (
                             <span className="inline-flex items-center gap-1 bg-red-500/90 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow animate-pulse">
@@ -1081,7 +1105,6 @@ export default function NetworkPage() {
                         </div>
                       </div>
 
-                      {/* AVATAR VE KİMLİK BÖLÜMÜ */}
                       <div className="px-5 pb-5 -mt-10 relative z-10 flex flex-col items-center text-center flex-1">
                         <div className="relative mb-3">
                           <div className={`${rank === 1 ? 'w-20 h-20' : 'w-16 h-16'} rounded-2xl bg-gradient-to-br ${theme.avatarRing} p-[2px] transition-transform duration-300 group-hover:scale-105`}>
@@ -1096,7 +1119,6 @@ export default function NetworkPage() {
                           </div>
                         </div>
 
-                        {/* AJAN İSMİ */}
                         <div className="flex items-center justify-center gap-1.5 max-w-full">
                           <h3 className={`${rank === 1 ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'} font-black text-white group-hover:text-gold-300 transition-colors truncate`}>
                             {user.nickname}
@@ -1108,28 +1130,30 @@ export default function NetworkPage() {
                           )}
                         </div>
 
-                        {/* SEÇİLİ KATEGORİ ANA PUANI */}
                         <div className={`mt-2.5 px-4 py-1.5 rounded-xl border font-mono text-sm sm:text-base font-black ${theme.scoreColor} shadow-inner`}>
                           {getLeaderboardScoreText(user)}
                         </div>
 
-                        {/* MİNİ İSTATİSTİK ŞERİDİ */}
-                        <div className="grid grid-cols-3 gap-2 w-full mt-4 pt-3 border-t border-ink-800/80 text-center">
-                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-2 border border-ink-800/60">
-                            <div className="text-xs font-black text-emerald-400 font-mono">{user.movies_watched || 0}</div>
-                            <div className="text-[9px] text-ink-500 font-bold uppercase">Film</div>
+                        {/* MİNİ İSTATİSTİK ŞERİDİ (GÜNCEL VE ÖNCEDEN FİLM EKLENDİ) */}
+                        <div className="grid grid-cols-4 gap-1.5 w-full mt-4 pt-3 border-t border-ink-800/80 text-center">
+                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-1 sm:px-2 border border-ink-800/60">
+                            <div className="text-[11px] sm:text-xs font-black text-emerald-400 font-mono">{user.movies_watched || 0}</div>
+                            <div className="text-[8px] sm:text-[9px] text-ink-500 font-bold uppercase">Güncel</div>
                           </div>
-                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-2 border border-ink-800/60">
-                            <div className="text-xs font-black text-violet-400 font-mono">{user.episodes_watched || 0}</div>
-                            <div className="text-[9px] text-ink-500 font-bold uppercase">Bölüm</div>
+                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-1 sm:px-2 border border-ink-800/60">
+                            <div className="text-[11px] sm:text-xs font-black text-violet-400 font-mono">{user.past_movies_watched || 0}</div>
+                            <div className="text-[8px] sm:text-[9px] text-ink-500 font-bold uppercase">Önceden</div>
                           </div>
-                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-2 border border-ink-800/60">
-                            <div className="text-xs font-black text-gold-400 font-mono">{user.achievements_unlocked || 0}</div>
-                            <div className="text-[9px] text-ink-500 font-bold uppercase">Başarım</div>
+                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-1 sm:px-2 border border-ink-800/60">
+                            <div className="text-[11px] sm:text-xs font-black text-azure-400 font-mono">{user.episodes_watched || 0}</div>
+                            <div className="text-[8px] sm:text-[9px] text-ink-500 font-bold uppercase">Bölüm</div>
+                          </div>
+                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-1 sm:px-2 border border-ink-800/60">
+                            <div className="text-[11px] sm:text-xs font-black text-gold-400 font-mono">{user.achievements_unlocked || 0}</div>
+                            <div className="text-[8px] sm:text-[9px] text-ink-500 font-bold uppercase">Başarım</div>
                           </div>
                         </div>
 
-                        {/* VİTRİN AFİŞLERİ (VARSA) */}
                         {uShowcase.length > 0 && (
                           <div className="flex items-center justify-center gap-1.5 mt-3.5 w-full">
                             {uShowcase.slice(0, 4).map((sc: any, i: number) => {
@@ -1153,7 +1177,6 @@ export default function NetworkPage() {
               </div>
             )}
 
-            {/* 4. SIRADAN BAŞLAYAN LİDERLİK TABLOSU */}
             {remainingLeaderboard.length > 0 && (
               <div className="bg-ink-950 border border-ink-800/60 rounded-3xl overflow-hidden shadow-sm">
                 <div className="grid grid-cols-12 gap-3 px-4 py-3 bg-ink-900/40 border-b border-ink-800 text-[10px] sm:text-xs font-black text-ink-500 uppercase tracking-widest">
@@ -1165,7 +1188,7 @@ export default function NetworkPage() {
                 <div className="divide-y divide-ink-800/30">
                   {remainingLeaderboard.map((user: any, index: number) => {
                     const isMe = user.agent_id === data.agentId;
-                    const rank = index + 4; // İlk 3 üstte olduğu için 4'ten başlar
+                    const rank = index + 4;
                     const liveStatus = getLiveRadarStatus(user.currently_watching, radarTick);
 
                     return (
@@ -1386,6 +1409,7 @@ export default function NetworkPage() {
                   level: data.level,
                   total_xp: data.totalXp,
                   movies_watched: myStatsSummary.moviesWatched,
+                  past_movies_watched: myStatsSummary.pastMoviesWatched,
                   series_watched: data.series.filter((s: any) => s.episodes?.every((e: any) => e.watched)).length,
                   episodes_watched: myStatsSummary.episodesWatched,
                   achievements_unlocked: myStatsSummary.achievementsUnlocked,

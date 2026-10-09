@@ -4,7 +4,7 @@ import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, Ach
 import { normalize, uid, todayStr, daysBetween } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
-import { supabase } from '../lib/supabase'; 
+import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'sinevia-v1';
 export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
@@ -40,12 +40,12 @@ export interface ShowcaseItem {
   rating?: number | null;
 }
 
-export interface ExtendedAppData extends AppData { 
-  aiChatHistory?: AIMessage[]; 
-  theme?: string; 
-  reviewTags: string[]; 
-  tagSentiments?: Record<string, 'positive' | 'negative'>; 
-  notificationsEnabled?: boolean; 
+export interface ExtendedAppData extends AppData {
+  aiChatHistory?: AIMessage[];
+  theme?: string;
+  reviewTags: string[];
+  tagSentiments?: Record<string, 'positive' | 'negative'>;
+  notificationsEnabled?: boolean;
   notifyMessages?: boolean;
   notifyFriendRequests?: boolean;
   notifyLists?: boolean;
@@ -63,7 +63,7 @@ export function generateAgentId() {
 }
 
 export function generateRecoveryKey() {
-  return `${uid()}-${uid()}`; 
+  return `${uid()}-${uid()}`;
 }
 
 export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
@@ -200,6 +200,59 @@ function addNewGenres(currentGenres: string[], incomingGenres: string[]): string
   return newItems.length > 0 ? [...currentGenres, ...newItems] : currentGenres;
 }
 
+// -------------------------------------------------------------
+// YENİ EKLEME: XP DÜZELTME & SENKRONİZASYON ALGORİTMASI
+// -------------------------------------------------------------
+function synchronizeXPAndLevel(state: ExtendedAppData): ExtendedAppData {
+  let recalculatedXp = 0;
+
+  // 1. Temel İşlemlerden Gelen XP (İzleme Başına Sabit, Opsiyonel Kullanılabilir Ama Genelde Başarımdan Gelir)
+  // Mevcut yapıda XP ağırlıklı olarak Görevler (Quests) ve Başarımlar (Achievements) üzerinden geliyor.
+
+  // 2. Başarımlardan (Achievements) Kazanılan XP'yi Güncel Şemaya Göre Tekrar Hesapla
+  if (state.achievements && Array.isArray(state.achievements)) {
+    const achievementMap = new Map(ACHIEVEMENT_DEFS.map(def => [def.id, def]));
+    state.achievements.forEach(prog => {
+      const def = achievementMap.get(prog.achievementId);
+      if (def && prog.unlockedTiers && Array.isArray(prog.unlockedTiers)) {
+        prog.unlockedTiers.forEach(unlockedTierName => {
+          const tierDef = def.tiers.find(t => t.tier === unlockedTierName);
+          if (tierDef && tierDef.xp) {
+            recalculatedXp += tierDef.xp;
+          }
+        });
+      }
+    });
+  }
+
+  // 3. Görevlerden (Quests) Kazanılan XP'yi Tekrar Hesapla
+  try {
+    const qsRaw = localStorage.getItem('sinevia-quests-v1');
+    if (qsRaw) {
+      const qs = JSON.parse(qsRaw);
+      if (qs.completedQuests && Array.isArray(qs.completedQuests)) {
+        qs.completedQuests.forEach((completedQuest: any) => {
+          if (completedQuest.rewardXp) {
+            recalculatedXp += Number(completedQuest.rewardXp);
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("Görev XP'si hesaba katılamadı:", e);
+  }
+
+  // 4. Doğru Seviye ve XP Çıktısını Hazırla
+  const correctedLevelInfo = levelFromXp(recalculatedXp);
+  
+  return {
+    ...state,
+    totalXp: recalculatedXp,
+    level: correctedLevelInfo.level,
+    xp: correctedLevelInfo.currentLevelXp
+  };
+}
+
 type Action =
   | { type: 'ADD_MOVIE'; movie: Movie } | { type: 'DELETE_MOVIE'; id: string }
   | { type: 'START_WATCHING_MOVIE'; id: string; startedAt: string } | { type: 'CANCEL_WATCHING_MOVIE'; id: string }
@@ -230,7 +283,8 @@ type Action =
   | { type: 'SET_NICKNAME'; nickname: string }
   | { type: 'RECOVER_IDENTITY'; agentId: string; recoveryKey: string; nickname: string }
   | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean }
-  | { type: 'SET_SHOWCASE'; showcase: ShowcaseItem[] };
+  | { type: 'SET_SHOWCASE'; showcase: ShowcaseItem[] }
+  | { type: 'FORCE_XP_SYNC' }; // Manuel senkronizasyon tetikleyici.
 
 const FIXED_BUGGED_ACHIEVEMENTS = new Set(['selective_critic', 'weekend_cinema', 'loyalty_test', 'break_taker', 'lost_colony', 'final_phobia', 'ghost_viewer', 'secret_critic']);
 
@@ -491,12 +545,16 @@ export function applyAchievements(state: ExtendedAppData): ExtendedAppData {
     }
   }
 
+  // SON ADIM: Kazanılanları güncelledik, şimdi gerçek zamanlı senkronizasyonla tüm XP'yi baştan sağlama alıyoruz.
+  let stateWithAchievements = { ...state, achievements: newAchievements };
+  stateWithAchievements = synchronizeXPAndLevel(stateWithAchievements);
+
   if (unlocked.length > 0) {
-    const existingQueue = state.pendingToasts || [];
+    const existingQueue = stateWithAchievements.pendingToasts || [];
     const uniqueUnlocked = unlocked.filter((u) => !existingQueue.some((eq) => eq.achievementId === u.achievementId && eq.tier === u.tier));
-    return { ...state, achievements: newAchievements, pendingToasts: [...existingQueue, ...uniqueUnlocked] };
+    return { ...stateWithAchievements, pendingToasts: [...existingQueue, ...uniqueUnlocked] };
   }
-  return { ...state, achievements: newAchievements };
+  return stateWithAchievements;
 }
 
 export function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
@@ -519,17 +577,23 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       achievements: createInitialAchievements(action.data.achievements)
     });
   }
+  if (action.type === 'FORCE_XP_SYNC') {
+    // Sadece XP Senkronizasyonunu Manuel Tetikleme Emri
+    return synchronizeXPAndLevel(state);
+  }
   if (action.type === 'CONSUME_NEXT_TOAST') {
     const queue = state.pendingToasts || [];
     if (queue.length === 0) return state;
-    const currentToast = queue[0], remainingQueue = queue.slice(1), gainedXp = currentToast.xp || 0;
-    const newTotalXp = (state.totalXp || 0) + gainedXp;
-    const oldLevel = levelFromXp(state.totalXp || 0).level, levelData = levelFromXp(newTotalXp);
+    const currentToast = queue[0], remainingQueue = queue.slice(1);
+    // Artık XP eklemeyi consumeToast içinde manuel YAPMIYORUZ. 
+    // applyAchievements içindeki synchronizeXPAndLevel ana hesabı yapıyor. 
+    // (Böylece eski eklenenlerle yeni eklenenler çakışmaz, sadece bildirim çıkar)
+    
     return {
-      ...state, totalXp: newTotalXp, xp: levelData.currentLevelXp, level: levelData.level,
+      ...state,
       pendingToasts: remainingQueue,
-      pendingXpGain: { gained: gainedXp, oldTotal: state.totalXp || 0, newTotal: newTotalXp },
-      pendingLevelUp: levelData.level > oldLevel ? { newLevel: levelData.level } : state.pendingLevelUp
+      // Toast gösterilirken xpGain barı da çalışsın (görsel olarak)
+      pendingXpGain: { gained: currentToast.xp || 0, oldTotal: Math.max(0, (state.totalXp || 0) - (currentToast.xp || 0)), newTotal: state.totalXp || 0 }
     };
   }
   if (action.type === 'CLEAR_LEVELUP') return { ...state, pendingLevelUp: undefined };
@@ -548,6 +612,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   let nextState = { ...state };
   switch (action.type) {
     case 'GRANT_XP': {
+      // Görev veya özel etkinliklerden gelen dinamik XP'ler
       const newTotalXp = state.totalXp + action.xp, oldLevel = levelFromXp(state.totalXp).level, levelData = levelFromXp(newTotalXp);
       return { ...state, totalXp: newTotalXp, xp: levelData.currentLevelXp, level: levelData.level, pendingXpGain: { gained: action.xp, oldTotal: state.totalXp, newTotal: newTotalXp }, pendingLevelUp: levelData.level > oldLevel ? { newLevel: levelData.level } : state.pendingLevelUp };
     }
@@ -702,6 +767,7 @@ interface AppContextValue {
   grantXp: (xp: number) => void; toggleNotifications: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
   setNickname: (nickname: string) => void; recoverIdentity: (agentId: string, recoveryKey: string, nickname: string) => void;
   updateShowcase: (items: ShowcaseItem[]) => void;
+  forceXpSync: () => void; // Dışarıdan manuel tetikleme
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -713,7 +779,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored); const migrated = migrateLegacyPastCollection(parsed.movies, parsed.collections);
-        const parsedData: ExtendedAppData = { ...defaultData(), ...parsed, collections: migrated.collections, movies: migrated.movies, achievements: createInitialAchievements(parsed.achievements) };
+        let parsedData: ExtendedAppData = { ...defaultData(), ...parsed, collections: migrated.collections, movies: migrated.movies, achievements: createInitialAchievements(parsed.achievements) };
         if (!parsedData.agentId) parsedData.agentId = generateAgentId(); if (!parsedData.nickname) parsedData.nickname = 'Yeni Üye'; if (!parsedData.recoveryKey) parsedData.recoveryKey = generateRecoveryKey();
         if (parsedData.aiChatHistory) parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= Date.now() - 3 * 86400000);
         if (!parsedData.criteria) parsedData.criteria = defaultData().criteria; if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS; if (!parsedData.theme) parsedData.theme = 'default';
@@ -723,6 +789,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (parsedData.notifyFriendRequests === undefined) parsedData.notifyFriendRequests = true;
         if (parsedData.notifyLists === undefined) parsedData.notifyLists = true;
         if (!Array.isArray(parsedData.showcase)) parsedData.showcase = [];
+        
+        // Uygulama yüklenirken doğrudan XP ve Seviyeyi senkronize et
+        parsedData = synchronizeXPAndLevel(parsedData);
+        
         return parsedData;
       }
     } catch {} return defaultData();
@@ -746,7 +816,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!data.agentId) return;
     const syncProfileToCloud = async () => {
       try {
-        const watchedMoviesCount = data.movies.filter(m => m.watched).length;
+        const watchedMoviesCount = data.movies.filter(m => m.watched && !m.isPastWatch).length;
+        const pastMoviesCount = data.movies.filter(m => m.watched && m.isPastWatch).length;
         const watchedSeriesCount = data.series.filter(s => s.episodes?.every(e => e.watched)).length;
         const watchedEpisodesCount = data.series.reduce((sum, s) => sum + (s.episodes?.filter(e => e.watched).length || 0), 0);
         const unlockedAchievementsCount = data.achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0);
@@ -760,7 +831,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         } catch (e) { console.warn("Görevler çekilirken hata:", e); }
 
-        // CANLI RADAR: Şu an sayacı açık olan filmi bul
         const activeMovie = data.movies.find(m => !m.watched && m.startedAt);
         let currentlyWatchingPayload: any = null;
         if (activeMovie && activeMovie.startedAt) {
@@ -785,6 +855,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           xp: data.totalXp,
           nick: data.nickname,
           m: watchedMoviesCount,
+          pm: pastMoviesCount,
           s: watchedSeriesCount,
           e: watchedEpisodesCount,
           a: unlockedAchievementsCount,
@@ -800,7 +871,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           nickname: data.nickname || 'Yeni Üye',
           level: data.level || 1,
           total_xp: data.totalXp || 0,
-          movies_watched: watchedMoviesCount,
+          movies_watched: watchedMoviesCount,         
+          past_movies_watched: pastMoviesCount,       
           series_watched: watchedSeriesCount,
           episodes_watched: watchedEpisodesCount,
           achievements_unlocked: unlockedAchievementsCount,
@@ -993,8 +1065,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deletePlanItem = useCallback((id: string) => { dispatch({ type: 'DELETE_PLAN_ITEM', id }); showToast('Plan silindi', 'info'); }, [showToast]);
   const updatePlanItem = useCallback((id: string, date: string, time: string): boolean => { const item = (data.weeklyPlan || []).find((p) => p.id === id); const conflict = findPlanConflict(date, time, item?.runtime, id); if (conflict) { showToast(`⛔ Çakışma var: "${conflict.title}"`, 'warning'); return false; } dispatch({ type: 'UPDATE_PLAN_ITEM', id, date, time }); showToast('Plan güncellendi', 'success'); return true; }, [data.weeklyPlan, findPlanConflict, showToast]);
 
+  const forceXpSync = useCallback(() => {
+    dispatch({ type: 'FORCE_XP_SYNC' });
+    showToast('Tüm istatistikler ve başarımlar güncel değerlerle senkronize edildi.', 'info');
+  }, [showToast]);
+
   return (
-    <AppContext.Provider value={{ data, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleSpecificNotification }}>
+    <AppContext.Provider value={{ data, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleSpecificNotification, forceXpSync }}>
       {children}
     </AppContext.Provider>
   );
