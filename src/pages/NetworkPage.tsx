@@ -3,7 +3,7 @@ import {
   Users, UserPlus, Trophy, Activity, Check, X, Star, Plus, Copy, RefreshCw,
   Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift,
   ListVideo, Eye, Info, MessageSquare, MessageCircle, Crown, Radio, Flame,
-  ExternalLink, FileText
+  ExternalLink, FileText, Award
 } from 'lucide-react';
 import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
 import type { ShowcaseItem } from '../context/AppContext';
@@ -478,6 +478,10 @@ export default function NetworkPage() {
   const totalUnread = Object.values(unreadMessages).reduce((a: number, b: number) => a + b, 0);
   const myValidShowcase = (data.showcase || []).filter((s: any) => s && s.title);
 
+  // İlk 3 podyumda gösterildiği için alt tablo 4. sıradan başlar
+  const topThreeLeaderboard = sortedLeaderboard.slice(0, 3);
+  const remainingLeaderboard = sortedLeaderboard.slice(3);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-emerald-400 animate-pulse font-bold tracking-widest uppercase text-sm">
@@ -921,17 +925,18 @@ export default function NetworkPage() {
         )}
 
         {/* ============================== */}
-        {/* 3. SEKME: LİDERLİK TABLOSU & ŞAMPİYONLAR PODYUMU */}
+        {/* 3. SEKME: LİDERLİK TABLOSU & YENİ ŞAMPİYONLAR PODYUMU */}
         {/* ============================== */}
         {activeTab === 'leaderboard' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-7 animate-fade-in">
+            {/* FİLTRE VE KATEGORİ SEÇİM BARI */}
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
               <div className="flex bg-ink-950 p-1.5 rounded-2xl border border-ink-800 self-start">
                 <button
                   onClick={() => setLeaderboardScope('global')}
                   className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                     leaderboardScope === 'global'
-                      ? 'bg-gold-500 text-ink-950 shadow'
+                      ? 'bg-gradient-to-r from-gold-500 to-amber-500 text-ink-950 shadow-md'
                       : 'text-ink-400 hover:text-white'
                   }`}
                 >
@@ -941,7 +946,7 @@ export default function NetworkPage() {
                   onClick={() => setLeaderboardScope('friends')}
                   className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                     leaderboardScope === 'friends'
-                      ? 'bg-azure-500 text-white shadow'
+                      ? 'bg-azure-500 text-white shadow-md'
                       : 'text-ink-400 hover:text-white'
                   }`}
                 >
@@ -974,115 +979,253 @@ export default function NetworkPage() {
               </div>
             </div>
 
-            {/* ŞAMPİYONLAR PODYUMU (İLK 3 AJAN) */}
-            {sortedLeaderboard.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-2">
+            {/* YENİ TASARIM: ŞAMPİYONLAR PODYUMU (İLK 3) */}
+            {topThreeLeaderboard.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end pt-3">
                 {[1, 0, 2].map((podiumIdx: number) => {
-                  const user = sortedLeaderboard[podiumIdx];
+                  const user = topThreeLeaderboard[podiumIdx];
                   if (!user) return <div key={podiumIdx} className="hidden md:block" />;
+
                   const rank = podiumIdx + 1;
                   const isMe = user.agent_id === data.agentId;
-                  const uShowcase: any[] = Array.isArray(user.showcase) ? user.showcase.filter((x: any) => x && x.title) : [];
+                  const liveStatus = getLiveRadarStatus(user.currently_watching, radarTick);
+                  const uShowcase: any[] = Array.isArray(user.showcase)
+                    ? user.showcase.filter((x: any) => x && x.title)
+                    : [];
 
-                  const badgeStyle =
+                  // 1., 2. ve 3. Sıra İçin Özel Lüks Renk Paletleri
+                  const theme =
                     rank === 1
-                      ? 'from-yellow-400 via-amber-500 to-orange-500 text-ink-950 border-gold-400/60 shadow-[0_0_35px_rgba(250,204,21,0.2)] md:min-h-[230px]'
+                      ? {
+                          order: 'order-1 md:order-2 md:-translate-y-3',
+                          cardBorder: 'border-gold-400/60 hover:border-gold-300',
+                          cardGlow: 'shadow-[0_15px_50px_-12px_rgba(250,204,21,0.3)]',
+                          bannerFallback: 'from-amber-500/30 via-yellow-600/15 to-ink-950',
+                          avatarRing: 'from-yellow-300 via-amber-400 to-orange-500 shadow-[0_0_25px_rgba(250,204,21,0.45)]',
+                          badgeBg: 'from-yellow-300 via-amber-400 to-amber-500 text-ink-950 border-yellow-200',
+                          rankTitle: '1. ŞAMPİYON',
+                          scoreColor: 'text-gold-300 border-gold-500/40 bg-gold-500/10',
+                          icon: Crown,
+                        }
                       : rank === 2
-                      ? 'from-slate-300 to-slate-400 text-ink-950 border-slate-400/40 md:min-h-[200px]'
-                      : 'from-amber-600 to-amber-700 text-white border-amber-600/40 md:min-h-[190px]';
+                      ? {
+                          order: 'order-2 md:order-1',
+                          cardBorder: 'border-slate-300/40 hover:border-slate-200/70',
+                          cardGlow: 'shadow-[0_10px_35px_-12px_rgba(203,213,225,0.2)]',
+                          bannerFallback: 'from-slate-400/25 via-indigo-950/30 to-ink-950',
+                          avatarRing: 'from-slate-200 via-slate-300 to-slate-500 shadow-[0_0_20px_rgba(203,213,225,0.3)]',
+                          badgeBg: 'from-slate-200 via-slate-300 to-slate-400 text-ink-950 border-white/60',
+                          rankTitle: '2. GÜMÜŞ AJAN',
+                          scoreColor: 'text-slate-200 border-slate-400/30 bg-slate-400/10',
+                          icon: Award,
+                        }
+                      : {
+                          order: 'order-3 md:order-3',
+                          cardBorder: 'border-amber-600/45 hover:border-amber-500/70',
+                          cardGlow: 'shadow-[0_10px_35px_-12px_rgba(217,119,6,0.22)]',
+                          bannerFallback: 'from-amber-700/30 via-orange-950/25 to-ink-950',
+                          avatarRing: 'from-amber-400 via-amber-600 to-orange-700 shadow-[0_0_20px_rgba(217,119,6,0.3)]',
+                          badgeBg: 'from-amber-500 via-amber-600 to-orange-700 text-white border-amber-400/50',
+                          rankTitle: '3. BRONZ AJAN',
+                          scoreColor: 'text-amber-300 border-amber-500/35 bg-amber-500/10',
+                          icon: Medal,
+                        };
+
+                  const RankIcon = theme.icon;
 
                   return (
                     <div
                       key={user.agent_id}
                       onClick={() => openProfileModal(user.agent_id)}
-                      className={`bg-gradient-to-b from-ink-900 to-ink-950 border rounded-3xl p-5 flex flex-col items-center text-center relative cursor-pointer group transition-all hover:-translate-y-1 ${
-                        rank === 1 ? 'border-gold-500/50 order-1 md:order-2' : rank === 2 ? 'border-slate-500/30 order-2 md:order-1' : 'border-amber-700/40 order-3'
-                      }`}
+                      className={`relative rounded-[28px] bg-ink-950 border ${theme.cardBorder} ${theme.cardGlow} ${theme.order} overflow-hidden cursor-pointer group transition-all duration-300 hover:-translate-y-2 flex flex-col`}
                     >
-                      <div className={`px-3 py-1 rounded-full bg-gradient-to-r ${badgeStyle} text-[11px] font-black uppercase tracking-widest flex items-center gap-1 mb-3 shadow-md`}>
-                        <Crown size={13} /> #{rank} Şampiyon
-                      </div>
+                      {/* SİNEMATİK ÜST BANNER (VİTRİN AFİŞ KOLAJI VEYA NEON IŞIK) */}
+                      <div className={`relative ${rank === 1 ? 'h-28' : 'h-24'} w-full overflow-hidden bg-ink-900`}>
+                        {uShowcase.some((x: any) => x.posterUrl || x.poster) ? (
+                          <div className="absolute inset-0 grid grid-cols-4 gap-0.5 opacity-45 group-hover:scale-105 transition-transform duration-700">
+                            {[0, 1, 2, 3].map((i: number) => {
+                              const sc = uShowcase[i] || uShowcase[0];
+                              const pUrl = sc?.posterUrl || sc?.poster;
+                              return (
+                                <div key={i} className="w-full h-full bg-ink-950 overflow-hidden">
+                                  {pUrl && (
+                                    <img src={pUrl} alt="" className="w-full h-full object-cover filter blur-[1px] scale-110" />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className={`absolute inset-0 bg-gradient-to-br ${theme.bannerFallback}`} />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/60 to-transparent" />
 
-                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl mb-2.5 border ${
-                        rank === 1 ? 'bg-gold-500/15 text-gold-400 border-gold-500/40' : 'bg-ink-800 text-white border-ink-700'
-                      }`}>
-                        {user.nickname?.[0]?.toUpperCase() || '?'}
-                      </div>
-
-                      <div className="text-base font-black text-white group-hover:text-gold-300 transition-colors truncate max-w-full">
-                        {user.nickname} {isMe && <span className="text-emerald-400 text-xs">(Sen)</span>}
-                      </div>
-                      <div className="text-xs font-mono text-gold-400 font-black mt-1 bg-ink-900 px-3 py-1 rounded-xl border border-ink-800">
-                        {getLeaderboardScoreText(user)}
-                      </div>
-
-                      {uShowcase.length > 0 && (
-                        <div className="flex items-center justify-center gap-1.5 mt-3 pt-3 border-t border-ink-800/80 w-full">
-                          {uShowcase.slice(0, 4).map((sc: any, i: number) => {
-                            const pUrl = sc.posterUrl || sc.poster;
-                            return pUrl ? (
-                              <img key={i} src={pUrl} alt={sc.title} className="w-7 h-10 rounded-md object-cover border border-ink-700" title={sc.title} />
-                            ) : null;
-                          })}
+                        {/* SOL ÜST SIRA ROZETİ */}
+                        <div className="absolute top-3 left-3 z-10">
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r ${theme.badgeBg} border text-[10px] font-black uppercase tracking-widest shadow-lg`}>
+                            <RankIcon size={12} /> {theme.rankTitle}
+                          </div>
                         </div>
-                      )}
+
+                        {/* SAĞ ÜST CANLI İZLEME VEYA SEVİYE ROZETİ */}
+                        <div className="absolute top-3 right-3 z-10">
+                          {liveStatus ? (
+                            <span className="inline-flex items-center gap-1 bg-red-500/90 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow animate-pulse">
+                              🔴 Canlı İzliyor
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-black/70 backdrop-blur-md text-ink-200 border border-white/10 text-[10px] font-black px-2.5 py-1 rounded-full">
+                              LVL {user.level || 1}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* AVATAR VE KİMLİK BÖLÜMÜ */}
+                      <div className="px-5 pb-5 -mt-10 relative z-10 flex flex-col items-center text-center flex-1">
+                        <div className="relative mb-3">
+                          <div className={`${rank === 1 ? 'w-20 h-20' : 'w-16 h-16'} rounded-2xl bg-gradient-to-br ${theme.avatarRing} p-[2px] transition-transform duration-300 group-hover:scale-105`}>
+                            <div className="w-full h-full bg-ink-950 rounded-[14px] flex items-center justify-center">
+                              <span className={`${rank === 1 ? 'text-3xl' : 'text-2xl'} font-black text-white`}>
+                                {user.nickname?.[0]?.toUpperCase() || '?'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-xl bg-gradient-to-br ${theme.badgeBg} border border-ink-950 flex items-center justify-center font-mono font-black text-xs shadow-lg`}>
+                            #{rank}
+                          </div>
+                        </div>
+
+                        {/* AJAN İSMİ */}
+                        <div className="flex items-center justify-center gap-1.5 max-w-full">
+                          <h3 className={`${rank === 1 ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'} font-black text-white group-hover:text-gold-300 transition-colors truncate`}>
+                            {user.nickname}
+                          </h3>
+                          {isMe && (
+                            <span className="text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-md shrink-0">
+                              Sen
+                            </span>
+                          )}
+                        </div>
+
+                        {/* SEÇİLİ KATEGORİ ANA PUANI */}
+                        <div className={`mt-2.5 px-4 py-1.5 rounded-xl border font-mono text-sm sm:text-base font-black ${theme.scoreColor} shadow-inner`}>
+                          {getLeaderboardScoreText(user)}
+                        </div>
+
+                        {/* MİNİ İSTATİSTİK ŞERİDİ */}
+                        <div className="grid grid-cols-3 gap-2 w-full mt-4 pt-3 border-t border-ink-800/80 text-center">
+                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-2 border border-ink-800/60">
+                            <div className="text-xs font-black text-emerald-400 font-mono">{user.movies_watched || 0}</div>
+                            <div className="text-[9px] text-ink-500 font-bold uppercase">Film</div>
+                          </div>
+                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-2 border border-ink-800/60">
+                            <div className="text-xs font-black text-violet-400 font-mono">{user.episodes_watched || 0}</div>
+                            <div className="text-[9px] text-ink-500 font-bold uppercase">Bölüm</div>
+                          </div>
+                          <div className="bg-ink-900/50 rounded-xl py-1.5 px-2 border border-ink-800/60">
+                            <div className="text-xs font-black text-gold-400 font-mono">{user.achievements_unlocked || 0}</div>
+                            <div className="text-[9px] text-ink-500 font-bold uppercase">Başarım</div>
+                          </div>
+                        </div>
+
+                        {/* VİTRİN AFİŞLERİ (VARSA) */}
+                        {uShowcase.length > 0 && (
+                          <div className="flex items-center justify-center gap-1.5 mt-3.5 w-full">
+                            {uShowcase.slice(0, 4).map((sc: any, i: number) => {
+                              const pUrl = sc.posterUrl || sc.poster;
+                              return pUrl ? (
+                                <img
+                                  key={i}
+                                  src={pUrl}
+                                  alt={sc.title}
+                                  className="w-8 h-11 rounded-lg object-cover border border-ink-700 shadow-md group-hover:border-gold-500/40 transition-colors"
+                                  title={sc.title}
+                                />
+                              ) : null;
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
               </div>
             )}
 
-            {/* TAM LİDERLİK TABLOSU */}
-            <div className="bg-ink-950 border border-ink-800/60 rounded-3xl overflow-hidden shadow-sm">
-              <div className="grid grid-cols-12 gap-3 px-4 py-3 bg-ink-900/40 border-b border-ink-800 text-[10px] sm:text-xs font-black text-ink-500 uppercase tracking-widest">
-                <div className="col-span-1 text-center">#</div>
-                <div className="col-span-8 sm:col-span-8 pl-2">Ajan Adı</div>
-                <div className="col-span-3 sm:col-span-3 text-right pr-2">İstatistik</div>
-              </div>
+            {/* 4. SIRADAN BAŞLAYAN LİDERLİK TABLOSU */}
+            {remainingLeaderboard.length > 0 && (
+              <div className="bg-ink-950 border border-ink-800/60 rounded-3xl overflow-hidden shadow-sm">
+                <div className="grid grid-cols-12 gap-3 px-4 py-3 bg-ink-900/40 border-b border-ink-800 text-[10px] sm:text-xs font-black text-ink-500 uppercase tracking-widest">
+                  <div className="col-span-1 text-center">Sıra</div>
+                  <div className="col-span-8 sm:col-span-8 pl-2">Ajan Adı</div>
+                  <div className="col-span-3 sm:col-span-3 text-right pr-2">İstatistik</div>
+                </div>
 
-              <div className="divide-y divide-ink-800/30">
-                {sortedLeaderboard.map((user: any, index: number) => {
-                  const isMe = user.agent_id === data.agentId;
-                  const rank = index + 1;
-                  let rankColor = 'text-ink-500';
-                  if (rank === 1) rankColor = 'text-yellow-400 text-lg';
-                  else if (rank === 2) rankColor = 'text-slate-300 text-lg';
-                  else if (rank === 3) rankColor = 'text-amber-600 text-lg';
+                <div className="divide-y divide-ink-800/30">
+                  {remainingLeaderboard.map((user: any, index: number) => {
+                    const isMe = user.agent_id === data.agentId;
+                    const rank = index + 4; // İlk 3 üstte olduğu için 4'ten başlar
+                    const liveStatus = getLiveRadarStatus(user.currently_watching, radarTick);
 
-                  const liveStatus = getLiveRadarStatus(user.currently_watching, radarTick);
-
-                  return (
-                    <button
-                      key={user.agent_id}
-                      onClick={() => openProfileModal(user.agent_id)}
-                      className={`w-full text-left grid grid-cols-12 gap-3 p-3.5 items-center transition-colors ${isMe ? 'bg-ink-900/50' : 'hover:bg-ink-900/30'} cursor-pointer`}
-                    >
-                      <div className={`col-span-1 text-center font-mono text-sm sm:text-base font-black ${rankColor}`}>{rank}</div>
-                      <div className="col-span-8 sm:col-span-8 flex items-center gap-3 min-w-0 pl-2">
-                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl shrink-0 flex items-center justify-center font-black text-xs sm:text-sm relative ${isMe ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-ink-800 text-ink-300 border border-ink-700'}`}>
-                          {user.nickname?.[0]?.toUpperCase() || '?'}
-                          {liveStatus && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-ink-950 animate-pulse" />}
+                    return (
+                      <button
+                        key={user.agent_id}
+                        onClick={() => openProfileModal(user.agent_id)}
+                        className={`w-full text-left grid grid-cols-12 gap-3 p-3.5 items-center transition-colors ${
+                          isMe ? 'bg-emerald-950/20 hover:bg-emerald-950/30' : 'hover:bg-ink-900/40'
+                        } cursor-pointer group`}
+                      >
+                        <div className="col-span-1 text-center font-mono text-sm sm:text-base font-black text-ink-400 group-hover:text-white">
+                          #{rank}
                         </div>
-                        <div className="truncate flex items-center gap-2">
-                          <span className={`text-sm sm:text-base font-bold truncate ${isMe ? 'text-emerald-400' : 'text-ink-100'}`}>{user.nickname}</span>
-                          {isMe && <span className="hidden sm:inline-block text-[9px] bg-ink-800 text-ink-400 px-1.5 py-0.5 rounded uppercase font-bold border border-ink-700">Sen</span>}
-                          {liveStatus && (
-                            <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full truncate max-w-[180px]">
-                              🔴 {liveStatus.title}
+                        <div className="col-span-8 sm:col-span-8 flex items-center gap-3 min-w-0 pl-2">
+                          <div
+                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl shrink-0 flex items-center justify-center font-black text-xs sm:text-sm relative ${
+                              isMe
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-ink-800 text-ink-300 border border-ink-700'
+                            }`}
+                          >
+                            {user.nickname?.[0]?.toUpperCase() || '?'}
+                            {liveStatus && (
+                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-ink-950 animate-pulse" />
+                            )}
+                          </div>
+                          <div className="truncate flex items-center gap-2">
+                            <span
+                              className={`text-sm sm:text-base font-bold truncate ${
+                                isMe ? 'text-emerald-400' : 'text-ink-100 group-hover:text-white'
+                              }`}
+                            >
+                              {user.nickname}
                             </span>
-                          )}
+                            <span className="text-[10px] font-bold text-ink-500 bg-ink-900 px-2 py-0.5 rounded border border-ink-800 hidden sm:inline-block">
+                              Lvl {user.level || 1}
+                            </span>
+                            {isMe && (
+                              <span className="hidden sm:inline-block text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded uppercase font-black border border-emerald-500/30">
+                                Sen
+                              </span>
+                            )}
+                            {liveStatus && (
+                              <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full truncate max-w-[180px]">
+                                🔴 {liveStatus.title}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="col-span-3 sm:col-span-3 text-right pr-2">
-                        <span className="text-sm sm:text-base font-black text-white font-mono bg-ink-900 px-3 py-1.5 rounded-lg border border-ink-800 shadow-inner">
-                          {getLeaderboardScoreText(user)}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
+                        <div className="col-span-3 sm:col-span-3 text-right pr-2">
+                          <span className="text-xs sm:text-sm font-black text-white font-mono bg-ink-900 px-3 py-1.5 rounded-xl border border-ink-800 shadow-inner">
+                            {getLeaderboardScoreText(user)}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1321,7 +1464,7 @@ export default function NetworkPage() {
         onSendProfileMediaCard={(encoded: string) => handleProfileSendMessage(encoded)}
       />
 
-      {/* 4. YENİ TAVSİYE KOLEKSİYONU GÖNDERME & İNCELEME MODALLARI */}
+      {/* 4. TAVSİYE KOLEKSİYONU GÖNDERME & İNCELEME MODALLARI */}
       <RecommendationModals
         myAgentId={data.agentId ?? null}
         friends={friends}
