@@ -3,7 +3,8 @@ import {
   Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X,
   AlertTriangle, Wrench, SlidersHorizontal, Smartphone, PlayCircle, Palette,
   Sparkles, Moon, Sun, Award, Share2, FolderPlus, ChevronDown, ThumbsUp, ThumbsDown,
-  Bell, BellRing, BellOff, UserCircle, Key, Copy, MessageSquare, Gift, UserPlus, ShieldCheck
+  Bell, BellRing, BellOff, UserCircle, Key, Copy, MessageSquare, Gift, UserPlus, ShieldCheck,
+  LogOut
 } from 'lucide-react';
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
@@ -78,7 +79,6 @@ export default function SettingsPage() {
   const { resetQuestData } = useQuests(); 
   const { isInstallable, installPWA } = usePWAInstall();
 
-  // KİMLİK YÖNETİMİ VE CİHAZ TAŞIMA STATELERİ
   const [editingNickname, setEditingNickname] = useState(false);
   const [tempNickname, setTempNickname] = useState(data.nickname || '');
   const [isRecoverMode, setIsRecoverMode] = useState(false);
@@ -89,7 +89,6 @@ export default function SettingsPage() {
   const [transferBundleInput, setTransferBundleInput] = useState('');
   const [isCheckingName, setIsCheckingName] = useState(false);
 
-  // Mevcut cihazdaki gizli güvenlik imzasını al
   const currentSecretToken = typeof window !== 'undefined' ? (localStorage.getItem('sinevia_secret_token') || '') : '';
 
   const [newGenre, setNewGenre] = useState('');
@@ -100,6 +99,9 @@ export default function SettingsPage() {
   
   const [confirmResetStage, setConfirmResetStage] = useState<0 | 1>(0);
   const [showResetModal, setShowResetModal] = useState(false);
+  
+  // YENİ: Çıkış Yapma Modalı için State
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [editingGenre, setEditingGenre] = useState<string | null>(null);
   const [editGenreName, setEditGenreName] = useState('');
@@ -283,26 +285,28 @@ export default function SettingsPage() {
     setEditingReviewTag(null);
   };
 
-  // YENİ: KİMLİĞİ VE HER ŞEYİ KALICI OLARAK SİLEN TAM SIFIRLAMA FONKSİYONU
+  const handleDisconnectDevice = () => {
+    localStorage.removeItem('sinevia-v1');
+    localStorage.removeItem('sinevia-quests-v1');
+    localStorage.removeItem('sinevia_secret_token');
+    window.location.reload(); 
+  };
+
   const handleExecuteFullReset = async () => {
     try {
       if (data.agentId) {
-        // Eğer RLS yetkisi varsa veritabanından da ajanı siler.
         await supabase.from('profiles').delete().eq('agent_id', data.agentId);
       }
     } catch (e) {
       console.error("Buluttan silme hatası", e);
     }
     
-    // Uygulamanın tarayıcıdaki tüm izlerini siliyoruz
     localStorage.removeItem('sinevia-v1');
     localStorage.removeItem('sinevia-quests-v1');
     localStorage.removeItem('sinevia_secret_token');
     
     setShowResetModal(false);
     setConfirmResetStage(0);
-    
-    // Her şey silindiği için sayfayı yenileyip sistemi yeniden başlattırıyoruz
     window.location.reload(); 
   };
 
@@ -959,46 +963,6 @@ export default function SettingsPage() {
         )}
       </CollapsibleSection>
 
-      {isInstallable && (
-        <div className="bg-ink-900/80 border border-azure-500/30 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-              <Smartphone size={18} className="text-azure-400" /> Sinevia'yı Cihazına Yükle
-            </h2>
-            <p className="text-xs sm:text-sm text-ink-400 mt-0.5">Tarayıcı çubuğu olmadan tam ekran kullanmak için uygulamayı ana ekranına ekle.</p>
-          </div>
-          <button onClick={installPWA} className="w-full sm:w-auto bg-gradient-to-r from-azure-500 to-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg transition-all text-xs sm:text-sm">
-            Uygulamayı İndir
-          </button>
-        </div>
-      )}
-
-      <CollapsibleSection
-        title="Tam Yedekle / Geri Yükle"
-        icon={<Download size={18} className="text-emerald-400 flex-shrink-0" />}
-        defaultOpen={false}
-        desc="Tüm kişisel verilerini (geçmiş, puanlar ve başarımlar dahil) JSON dosyası olarak dışa veya içe aktar."
-      >
-        <div className="grid grid-cols-2 sm:flex gap-2.5">
-          <button onClick={exportData} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
-            <Download size={16} /> Yedek Al
-          </button>
-          <button onClick={() => fileRef.current?.click()} className="flex items-center justify-center gap-2 bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
-            <Upload size={16} /> Geri Yükle
-          </button>
-          <input ref={fileRef} type="file" accept="application/json" onChange={handleFileImport} className="hidden" />
-        </div>
-      </CollapsibleSection>
-
-      {deleteGenreTarget && (
-        <ConfirmDialog
-          title="Türü Sil"
-          message={`"${deleteGenreTarget}" türü silinecek. Bu türü kullanan film ve dizilerde bu tür etiketi kaldırılacak. Emin misin?`}
-          onConfirm={() => { deleteGenre(deleteGenreTarget); setDeleteGenreTarget(null); }}
-          onCancel={() => setDeleteGenreTarget(null)}
-        />
-      )}
-
       <CollapsibleSection
         title="Geliştirici / Test Ayarları"
         icon={<Wrench size={18} className="text-gold-400 flex-shrink-0" />}
@@ -1015,31 +979,89 @@ export default function SettingsPage() {
         </button>
       </CollapsibleSection>
 
-      {/* YENİ TAM Ölçekli Sıfırlama UI ve Mantığı */}
-      <div className="bg-red-950/20 border border-red-800/40 rounded-2xl p-4 sm:p-5 shadow-xl transition-all">
-        <h2 className="text-base sm:text-lg font-semibold text-red-400 mb-1 flex items-center gap-2">
-          <AlertTriangle size={18} className="text-red-400" /> Verileri Sıfırla
-        </h2>
-        <p className="text-xs sm:text-sm text-red-400/60 mb-3.5">
-          Tüm filmler, diziler, geçmiş, başarımlar, XP, Seviyeler, Ağ Kimliğin ve Kullanıcı Adın dahil olmak üzere <strong>her şey</strong> kalıcı olarak silinir. Bu işlem geri alınamaz.
-        </p>
-
-        {confirmResetStage === 0 ? (
-          <button onClick={() => setConfirmResetStage(1)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
-            <Trash2 size={16} /> Tüm Verileri Sıfırla
+      {/* --- KRTİK İŞLEMLER BÖLÜMÜ (EN ALTA ALINDI) --- */}
+      <CollapsibleSection
+        title="Tam Yedekle / Geri Yükle"
+        icon={<Download size={18} className="text-emerald-400 flex-shrink-0" />}
+        defaultOpen={false}
+        desc="Tüm kişisel verilerini (geçmiş, puanlar ve başarımlar dahil) çevrimdışı JSON dosyası olarak bilgisayarına indir."
+      >
+        <div className="grid grid-cols-2 sm:flex gap-2.5">
+          <button onClick={exportData} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md">
+            <Download size={16} /> Yedek Al
           </button>
-        ) : (
-          <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-xl bg-red-950/40 border border-red-800/60 animate-fade-in">
-            <span className="text-xs sm:text-sm text-red-400 font-bold w-full sm:w-auto">Emin misin? Bu işlemin geri dönüşü yok!</span>
-            <button onClick={() => setShowResetModal(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
-              <AlertTriangle size={14} /> Evet, Eminim
-            </button>
-            <button onClick={() => setConfirmResetStage(0)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-200 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
-              <X size={14} /> İptal Et
+          <button onClick={() => fileRef.current?.click()} className="flex items-center justify-center gap-2 bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
+            <Upload size={16} /> Geri Yükle
+          </button>
+          <input ref={fileRef} type="file" accept="application/json" onChange={handleFileImport} className="hidden" />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Hesap ve Cihaz Yönetimi"
+        icon={<AlertTriangle size={18} className="text-red-400 flex-shrink-0" />}
+        defaultOpen={false}
+        desc="Bu cihazdaki bağlantıyı kesebilir veya hesabını buluttan tamamen silebilirsin."
+      >
+        <div className="space-y-4">
+          {/* Çıkış Yap (Sadece Yerel Silme) */}
+          <div className="bg-ink-950/50 border border-ink-800 hover:border-amber-500/50 transition-colors rounded-2xl p-4 sm:p-5">
+            <h3 className="text-sm sm:text-base font-bold text-amber-400 mb-1.5 flex items-center gap-2">
+              <LogOut size={18} /> Bu Cihazdan Çıkış Yap
+            </h3>
+            <p className="text-xs sm:text-sm text-ink-400 mb-4 leading-relaxed">
+              Sadece bu tarayıcıdaki verileri temizler ve seni yeni bir "Sıfır" hesaba geçirir. 
+              Buluttaki asıl hesabın (veya Chrome'daki verilerin) <strong>asla zarar görmez.</strong> İstediğin zaman Taşıma Kodu ile geri dönebilirsin.
+            </p>
+            <button 
+              onClick={() => setShowLogoutModal(true)} 
+              className="w-full sm:w-auto flex justify-center bg-amber-600/10 hover:bg-amber-500 text-amber-500 hover:text-ink-950 border border-amber-500/50 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all"
+            >
+              Cihazdan Çıkış Yap
             </button>
           </div>
-        )}
-      </div>
+
+          {/* Tamamen Sıfırla (Buluttan Silme) */}
+          <div className="bg-red-950/20 border border-red-800/40 rounded-2xl p-4 sm:p-5 transition-all">
+            <h3 className="text-sm sm:text-base font-bold text-red-400 mb-1.5 flex items-center gap-2">
+              <Trash2 size={18} /> Hesabı Kalıcı Olarak Yok Et
+            </h3>
+            <p className="text-xs sm:text-sm text-red-400/70 mb-4 leading-relaxed">
+              Tüm kütüphanen, başarımların ve Ağ Kimliğin buluttan <strong>tamamen</strong> silinir. 
+              Bu işlemi diğer cihazlarından (Örn: Chrome) da geri alamazsın. Sinevia tamamen sıfırlanır.
+            </p>
+
+            {confirmResetStage === 0 ? (
+              <button 
+                onClick={() => setConfirmResetStage(1)} 
+                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all"
+              >
+                <Trash2 size={16} /> Hesabı Tamamen Yok Et
+              </button>
+            ) : (
+              <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-xl bg-red-950/40 border border-red-800/60 animate-fade-in">
+                <span className="text-xs sm:text-sm text-red-400 font-bold w-full sm:w-auto mb-1 sm:mb-0">Emin misin? Bu işlemin geri dönüşü yok!</span>
+                <button onClick={() => setShowResetModal(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-lg shadow-red-500/20">
+                  <AlertTriangle size={14} /> Evet, Eminim (Buluttan Sil)
+                </button>
+                <button onClick={() => setConfirmResetStage(0)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-200 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
+                  <X size={14} /> İptal Et
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* MODALLAR */}
+      {showLogoutModal && (
+        <ConfirmDialog
+          title="Cihazdan Çıkış Yap"
+          message="Bu cihazdaki hesabın (kimliğin) kapatılacak ve Sinevia sıfırlanacaktır. Taşıma Kodunu bir yere kaydettiğinden emin misin? Buluttaki verilerin silinmeyecek."
+          onConfirm={handleDisconnectDevice}
+          onCancel={() => setShowLogoutModal(false)}
+        />
+      )}
 
       {showResetModal && (
         <ConfirmDialog

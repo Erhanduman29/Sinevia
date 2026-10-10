@@ -3,10 +3,13 @@ import type { ReactNode } from 'react';
 import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion, WatchProvider, WeeklyPlanItem } from '../types';
 import { normalize, uid, todayStr, daysBetween } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
+import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
 import { supabase } from '../lib/supabase';
 
 const STORAGE_KEY = 'sinevia-v1';
+const QUEST_STORAGE_KEY = 'sinevia-quests-v1'; // YENİ EKLENDİ
+
 export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
 export const DEFAULT_REVIEW_TAGS = ['🔥 Başyapıt', '🎭 Oyunculuk Muazzam', '🤯 Ters Köşe Final', '🎵 Müzikler Efsane', '🎬 Görsellik Şahane', '🍿 Akıcı & Keyifli', '🧠 Beyin Yakan Kurgu', '💪 Tempo Yavaştı', '📉 Beklentimin Altında', '💩 Bok Gibi'];
@@ -53,6 +56,7 @@ export interface ExtendedAppData extends AppData {
   nickname?: string;     
   recoveryKey?: string;  
   showcase?: ShowcaseItem[];
+  lastCloudSync?: number;
 }
 
 export function generateAgentId() {
@@ -177,7 +181,8 @@ function defaultData(): ExtendedAppData {
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
     weeklyPlan: [], notificationsEnabled: false,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
-    showcase: []
+    showcase: [],
+    lastCloudSync: Date.now()
   };
 }
 
@@ -200,16 +205,24 @@ function addNewGenres(currentGenres: string[], incomingGenres: string[]): string
   return newItems.length > 0 ? [...currentGenres, ...newItems] : currentGenres;
 }
 
-// -------------------------------------------------------------
-// YENİ EKLEME: XP DÜZELTME & SENKRONİZASYON ALGORİTMASI
-// -------------------------------------------------------------
-function synchronizeXPAndLevel(state: ExtendedAppData): ExtendedAppData {
+export function getCleanHashString(stateObj: any, questStateRaw?: any) {
+  const clean = { ...stateObj };
+  delete clean.aiChatHistory;
+  delete clean.lastCloudSync;
+  delete clean.pendingToasts;
+  delete clean.pendingLevelUp;
+  delete clean.pendingXpGain;
+  
+  // YENİ: Görevleri de birleştirerek Hash hesaplıyoruz
+  if (questStateRaw) {
+     return JSON.stringify({ core: clean, quests: questStateRaw });
+  }
+  return JSON.stringify(clean);
+}
+
+function synchronizeXPAndLevel(state: ExtendedAppData, isSilent = false): ExtendedAppData {
   let recalculatedXp = 0;
 
-  // 1. Temel İşlemlerden Gelen XP (İzleme Başına Sabit, Opsiyonel Kullanılabilir Ama Genelde Başarımdan Gelir)
-  // Mevcut yapıda XP ağırlıklı olarak Görevler (Quests) ve Başarımlar (Achievements) üzerinden geliyor.
-
-  // 2. Başarımlardan (Achievements) Kazanılan XP'yi Güncel Şemaya Göre Tekrar Hesapla
   if (state.achievements && Array.isArray(state.achievements)) {
     const achievementMap = new Map(ACHIEVEMENT_DEFS.map(def => [def.id, def]));
     state.achievements.forEach(prog => {
@@ -217,40 +230,42 @@ function synchronizeXPAndLevel(state: ExtendedAppData): ExtendedAppData {
       if (def && prog.unlockedTiers && Array.isArray(prog.unlockedTiers)) {
         prog.unlockedTiers.forEach(unlockedTierName => {
           const tierDef = def.tiers.find(t => t.tier === unlockedTierName);
-          if (tierDef && tierDef.xp) {
-            recalculatedXp += tierDef.xp;
-          }
+          if (tierDef && tierDef.xp) recalculatedXp += tierDef.xp;
         });
       }
     });
   }
 
-  // 3. Görevlerden (Quests) Kazanılan XP'yi Tekrar Hesapla
   try {
-    const qsRaw = localStorage.getItem('sinevia-quests-v1');
+    const qsRaw = localStorage.getItem(QUEST_STORAGE_KEY);
     if (qsRaw) {
       const qs = JSON.parse(qsRaw);
       if (qs.completedQuests && Array.isArray(qs.completedQuests)) {
-        qs.completedQuests.forEach((completedQuest: any) => {
-          if (completedQuest.rewardXp) {
-            recalculatedXp += Number(completedQuest.rewardXp);
+        qs.completedQuests.forEach((questId: string) => {
+          const questDef = QUEST_DEFS.find(q => q.id === questId);
+          if (questDef && questDef.xpReward) {
+            recalculatedXp += Number(questDef.xpReward);
           }
         });
       }
     }
-  } catch (e) {
-    console.warn("Görev XP'si hesaba katılamadı:", e);
-  }
+  } catch (e) {}
 
-  // 4. Doğru Seviye ve XP Çıktısını Hazırla
   const correctedLevelInfo = levelFromXp(recalculatedXp);
+  const oldLevel = state.level || 1; 
   
-  return {
+  const newState: ExtendedAppData = {
     ...state,
     totalXp: recalculatedXp,
     level: correctedLevelInfo.level,
     xp: correctedLevelInfo.currentLevelXp
   };
+
+  if (!isSilent && correctedLevelInfo.level > oldLevel) {
+    newState.pendingLevelUp = { newLevel: correctedLevelInfo.level };
+  }
+
+  return newState;
 }
 
 type Action =
@@ -284,7 +299,8 @@ type Action =
   | { type: 'RECOVER_IDENTITY'; agentId: string; recoveryKey: string; nickname: string }
   | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean }
   | { type: 'SET_SHOWCASE'; showcase: ShowcaseItem[] }
-  | { type: 'FORCE_XP_SYNC' }; // Manuel senkronizasyon tetikleyici.
+  | { type: 'FORCE_XP_SYNC' }
+  | { type: 'SYNC_FROM_CLOUD_STORAGE'; data: ExtendedAppData; questData?: any }; 
 
 const FIXED_BUGGED_ACHIEVEMENTS = new Set(['selective_critic', 'weekend_cinema', 'loyalty_test', 'break_taker', 'lost_colony', 'final_phobia', 'ghost_viewer', 'secret_critic']);
 
@@ -545,9 +561,8 @@ export function applyAchievements(state: ExtendedAppData): ExtendedAppData {
     }
   }
 
-  // SON ADIM: Kazanılanları güncelledik, şimdi gerçek zamanlı senkronizasyonla tüm XP'yi baştan sağlama alıyoruz.
   let stateWithAchievements = { ...state, achievements: newAchievements };
-  stateWithAchievements = synchronizeXPAndLevel(stateWithAchievements);
+  stateWithAchievements = synchronizeXPAndLevel(stateWithAchievements, false);
 
   if (unlocked.length > 0) {
     const existingQueue = stateWithAchievements.pendingToasts || [];
@@ -558,16 +573,28 @@ export function applyAchievements(state: ExtendedAppData): ExtendedAppData {
 }
 
 export function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
+  if (action.type === 'SYNC_FROM_CLOUD_STORAGE') {
+    // YENİ: Eğer buluttan Quest (Görev) verisi gelirse, onu da Quest Context'e çaktırmadan kaydediyoruz
+    if (action.questData) {
+      localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(action.questData));
+    }
+    return applyAchievements({
+      ...defaultData(),
+      ...(action.data as any)
+    });
+  }
+
+  if (action.type === 'RECOVER_IDENTITY') {
+    return { ...state, agentId: action.agentId, recoveryKey: action.recoveryKey, nickname: action.nickname };
+  }
+
   if (action.type === 'IMPORT_DATA') {
     const migrated = migrateLegacyPastCollection(action.data.movies, action.data.collections);
-    
-    // KORUMA KALKANI: Yedekleme dosyası yüklense bile kimliğini ezmez.
     const preservedIdentity = {
       agentId: state.agentId,
       nickname: state.nickname,
       recoveryKey: state.recoveryKey
     };
-
     return applyAchievements({
       ...defaultData(),
       ...action.data,
@@ -578,21 +605,16 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     });
   }
   if (action.type === 'FORCE_XP_SYNC') {
-    // Sadece XP Senkronizasyonunu Manuel Tetikleme Emri
-    return synchronizeXPAndLevel(state);
+    return synchronizeXPAndLevel(state, false);
   }
   if (action.type === 'CONSUME_NEXT_TOAST') {
     const queue = state.pendingToasts || [];
     if (queue.length === 0) return state;
     const currentToast = queue[0], remainingQueue = queue.slice(1);
-    // Artık XP eklemeyi consumeToast içinde manuel YAPMIYORUZ. 
-    // applyAchievements içindeki synchronizeXPAndLevel ana hesabı yapıyor. 
-    // (Böylece eski eklenenlerle yeni eklenenler çakışmaz, sadece bildirim çıkar)
     
     return {
       ...state,
       pendingToasts: remainingQueue,
-      // Toast gösterilirken xpGain barı da çalışsın (görsel olarak)
       pendingXpGain: { gained: currentToast.xp || 0, oldTotal: Math.max(0, (state.totalXp || 0) - (currentToast.xp || 0)), newTotal: state.totalXp || 0 }
     };
   }
@@ -606,13 +628,11 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'TOGGLE_NOTIFICATIONS') return { ...state, notificationsEnabled: action.enabled };
   if (action.type === 'TOGGLE_SPECIFIC_NOTIFICATION') return { ...state, [action.key]: action.enabled };
   if (action.type === 'SET_NICKNAME') return { ...state, nickname: action.nickname };
-  if (action.type === 'RECOVER_IDENTITY') return { ...state, agentId: action.agentId, recoveryKey: action.recoveryKey, nickname: action.nickname };
   if (action.type === 'SET_SHOWCASE') return { ...state, showcase: action.showcase.slice(0, 4) };
 
   let nextState = { ...state };
   switch (action.type) {
     case 'GRANT_XP': {
-      // Görev veya özel etkinliklerden gelen dinamik XP'ler
       const newTotalXp = state.totalXp + action.xp, oldLevel = levelFromXp(state.totalXp).level, levelData = levelFromXp(newTotalXp);
       return { ...state, totalXp: newTotalXp, xp: levelData.currentLevelXp, level: levelData.level, pendingXpGain: { gained: action.xp, oldTotal: state.totalXp, newTotal: newTotalXp }, pendingLevelUp: levelData.level > oldLevel ? { newLevel: levelData.level } : state.pendingLevelUp };
     }
@@ -767,7 +787,7 @@ interface AppContextValue {
   grantXp: (xp: number) => void; toggleNotifications: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
   setNickname: (nickname: string) => void; recoverIdentity: (agentId: string, recoveryKey: string, nickname: string) => void;
   updateShowcase: (items: ShowcaseItem[]) => void;
-  forceXpSync: () => void; // Dışarıdan manuel tetikleme
+  forceXpSync: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -790,9 +810,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (parsedData.notifyLists === undefined) parsedData.notifyLists = true;
         if (!Array.isArray(parsedData.showcase)) parsedData.showcase = [];
         
-        // Uygulama yüklenirken doğrudan XP ve Seviyeyi senkronize et
-        parsedData = synchronizeXPAndLevel(parsedData);
-        
+        parsedData = synchronizeXPAndLevel(parsedData, true);
         return parsedData;
       }
     } catch {} return defaultData();
@@ -800,8 +818,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [isQuestCelebrating, setIsQuestCelebrating] = useState(false);
   const toastsRef = useRef<ToastItem[]>([]); const achievementToastsRef = useRef<AchievementToastItem[]>([]); const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const isProcessingToastRef = useRef(false); const [queueTick, setQueueTick] = useState(0);
-  const notifiedTimerIds = useRef<Set<string>>(new Set()); const notifiedPlanIds = useRef<Set<string>>(new Set());
-  const lastSyncedProfileRef = useRef<string>("");
+  
+  // Hash içerisine "Görevleri" (Quests) de ekledik ki onlarda değişiklik olunca da dosya yüklensin
+  const lastSyncedStorageHash = useRef<string>(getCleanHashString(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}')));
 
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => { toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return toastsRef.current; }, []);
   const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
@@ -811,86 +830,161 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { document.body.setAttribute('data-theme', data.theme || 'default'); }, [data.theme]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
 
-  // SUPABASE PROFİL SENKRONİZASYONU (CANLI RADAR VE VİTRİN DAHİL)
+  // AÇILIŞ KONTROLÜ (BOOT CHECK)
   useEffect(() => {
     if (!data.agentId) return;
-    const syncProfileToCloud = async () => {
+
+    const performStartupCheck = async () => {
       try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('last_cloud_sync')
+          .eq('agent_id', data.agentId)
+          .single();
+
+        if (!error && profile && profile.last_cloud_sync) {
+          const cloudTime = Number(profile.last_cloud_sync);
+          const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          const localTime = localData.lastCloudSync || 0;
+
+          if (cloudTime > localTime + 2000) { 
+            const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
+            const fetchUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
+
+            const response = await fetch(fetchUrl, { cache: 'no-store' });
+            if (response.ok) {
+              const text = await response.text();
+              const incomingJson = JSON.parse(text);
+              
+              // İndirilen paketten görevleri ayır
+              const coreData = incomingJson.core || incomingJson;
+              const questData = incomingJson.quests;
+
+              lastSyncedStorageHash.current = getCleanHashString(coreData, questData);
+              coreData.lastCloudSync = cloudTime; 
+              
+              const updatedLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+              updatedLocalData.lastCloudSync = cloudTime;
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLocalData));
+
+              dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
+              showToast('Yokluğunda yapılan güncellemeler eşitlendi!', 'info');
+            }
+          }
+        }
+      } catch (e) {}
+    };
+
+    performStartupCheck();
+  }, [data.agentId]);
+
+  // YÜKLEYİCİ (UPLOAD)
+  useEffect(() => {
+    if (!data.agentId) return;
+
+    const syncToStorage = async () => {
+      try {
+        const currentQuestState = JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}');
+        // Kütüphaneyi ve Görevleri aynı dosyaya paketliyoruz
+        const jsonData = getCleanHashString(data, currentQuestState);
+        
+        if (lastSyncedStorageHash.current === jsonData) return;
+
+        const fileName = `${data.agentId}.json`;
+        const fileObj = new Blob([jsonData], { type: 'application/json' });
+
+        const { error: uploadError } = await supabase.storage
+          .from('sinevia_saves')
+          .upload(fileName, fileObj, {
+            cacheControl: '0',
+            upsert: true,
+            contentType: 'application/json'
+          });
+
+        if (uploadError) throw uploadError;
+
         const watchedMoviesCount = data.movies.filter(m => m.watched && !m.isPastWatch).length;
         const pastMoviesCount = data.movies.filter(m => m.watched && m.isPastWatch).length;
         const watchedSeriesCount = data.series.filter(s => s.episodes?.every(e => e.watched)).length;
         const watchedEpisodesCount = data.series.reduce((sum, s) => sum + (s.episodes?.filter(e => e.watched).length || 0), 0);
         const unlockedAchievementsCount = data.achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0);
         
-        let questsCompleted = 0;
-        try { 
-          const qsRaw = localStorage.getItem('sinevia-quests-v1');
-          if (qsRaw) {
-             const qs = JSON.parse(qsRaw);
-             questsCompleted = (qs.completedQuests && Array.isArray(qs.completedQuests)) ? qs.completedQuests.length : 0; 
-          }
-        } catch (e) { console.warn("Görevler çekilirken hata:", e); }
-
         const activeMovie = data.movies.find(m => !m.watched && m.startedAt);
-        let currentlyWatchingPayload: any = null;
+        let cwPayload: any = null;
         if (activeMovie && activeMovie.startedAt) {
-          const timerInfo = getMovieTimerInfo(activeMovie);
-          currentlyWatchingPayload = {
-            id: activeMovie.id,
-            title: activeMovie.title,
-            posterUrl: activeMovie.posterUrl || null,
-            year: activeMovie.year || '',
-            startedAt: activeMovie.startedAt,
-            runtime: timerInfo.maxMins,
-            isPaused: timerInfo.isPaused,
-            elapsedMins: timerInfo.elapsedMins,
-            updatedAt: new Date().toISOString()
-          };
+          const tInfo = getMovieTimerInfo(activeMovie);
+          cwPayload = { id: activeMovie.id, title: activeMovie.title, posterUrl: activeMovie.posterUrl || null, year: activeMovie.year || '', startedAt: activeMovie.startedAt, runtime: tInfo.maxMins, isPaused: tInfo.isPaused, elapsedMins: tInfo.elapsedMins, updatedAt: new Date().toISOString() };
         }
 
-        const showcasePayload = data.showcase || [];
+        const currentSecretToken = localStorage.getItem('sinevia_secret_token') || '';
+        const newSyncTime = new Date().getTime();
+        const qsCompletedCount = (currentQuestState.completedQuests && Array.isArray(currentQuestState.completedQuests)) ? currentQuestState.completedQuests.length : 0;
 
-        const currentSyncString = JSON.stringify({
-          lvl: data.level,
-          xp: data.totalXp,
-          nick: data.nickname,
-          m: watchedMoviesCount,
-          pm: pastMoviesCount,
-          s: watchedSeriesCount,
-          e: watchedEpisodesCount,
-          a: unlockedAchievementsCount,
-          q: questsCompleted,
-          cw: currentlyWatchingPayload ? `${currentlyWatchingPayload.id}-${currentlyWatchingPayload.startedAt}-${currentlyWatchingPayload.elapsedMins}` : 'none',
-          sc: showcasePayload.map(x => x.id).join(',')
-        });
-        
-        if (lastSyncedProfileRef.current === currentSyncString) return; 
-
-        await supabase.from('profiles').upsert({
-          agent_id: data.agentId,
-          nickname: data.nickname || 'Yeni Üye',
-          level: data.level || 1,
-          total_xp: data.totalXp || 0,
-          movies_watched: watchedMoviesCount,         
-          past_movies_watched: pastMoviesCount,       
-          series_watched: watchedSeriesCount,
-          episodes_watched: watchedEpisodesCount,
-          achievements_unlocked: unlockedAchievementsCount,
-          quests_completed: questsCompleted,
-          currently_watching: currentlyWatchingPayload,
-          showcase: showcasePayload,
-          last_seen: new Date().toISOString()
+        const { error: dbError } = await supabase.from('profiles').upsert({
+          agent_id: data.agentId, nickname: data.nickname || 'Yeni Üye', level: data.level || 1, total_xp: data.totalXp || 0,
+          movies_watched: watchedMoviesCount, past_movies_watched: pastMoviesCount, series_watched: watchedSeriesCount, episodes_watched: watchedEpisodesCount,
+          achievements_unlocked: unlockedAchievementsCount, quests_completed: qsCompletedCount,
+          currently_watching: cwPayload, showcase: data.showcase || [], last_seen: new Date().toISOString(),
+          last_cloud_sync: newSyncTime,
+          secret_token: currentSecretToken
         }, { onConflict: 'agent_id' });
 
-        lastSyncedProfileRef.current = currentSyncString;
+        if (dbError) console.error("SUPABASE DETAYLI HATA:", dbError);
 
-      } catch (err) { console.error(err); }
+        const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        localData.lastCloudSync = newSyncTime;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+
+        lastSyncedStorageHash.current = jsonData;
+      } catch (err) { }
     };
     
-    syncProfileToCloud(); 
-    const interval = setInterval(() => syncProfileToCloud(), 3000); 
+    // GÖREVLERİN güncellenme ihtimaline karşı tarama aralığını her 3.5 saniyede tetiklenecek bir interval'a alıyoruz ki manuel müdahale kaçmasın
+    const interval = setInterval(() => syncToStorage(), 3500); 
     return () => clearInterval(interval);
   }, [data]);
+
+  // CANLI DİNLEYİCİ (REALTIME DOWNLOAD)
+  useEffect(() => {
+    if (!data.agentId) return;
+
+    const channel = supabase.channel('realtime:cloud_storage_sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `agent_id=eq.${data.agentId}` }, async (payload) => {
+        if (payload.new && payload.new.last_cloud_sync) {
+          const incomingTime = Number(payload.new.last_cloud_sync);
+          const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          const currentLocalTime = localData.lastCloudSync || 0;
+
+          if (incomingTime > currentLocalTime + 2000) { 
+            const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
+            const fetchUrl = `${urlData.publicUrl}?t=${incomingTime}`;
+
+            try {
+              const response = await fetch(fetchUrl, { cache: 'no-store' });
+              if (response.ok) {
+                const text = await response.text();
+                const incomingJson = JSON.parse(text);
+                
+                const coreData = incomingJson.core || incomingJson;
+                const questData = incomingJson.quests;
+
+                lastSyncedStorageHash.current = getCleanHashString(coreData, questData);
+                coreData.lastCloudSync = incomingTime; 
+                
+                const updatedLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+                updatedLocalData.lastCloudSync = incomingTime;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLocalData));
+
+                dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
+              }
+            } catch (e) { }
+          }
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [data.agentId]);
 
   useEffect(() => {
     if (!data.notificationsEnabled || !data.agentId) return;
@@ -938,7 +1032,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []);
   const toggleSpecificNotification = useCallback((key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => dispatch({ type: 'TOGGLE_SPECIFIC_NOTIFICATION', key, enabled }), []);
   const setNickname = useCallback((nickname: string) => { dispatch({ type: 'SET_NICKNAME', nickname }); showToast('Kullanıcı adı güncellendi!', 'success'); }, [showToast]);
-  const recoverIdentity = useCallback((agentId: string, recoveryKey: string, nickname: string) => { dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey, nickname }); showToast('Kimlik başarıyla kurtarıldı!', 'success'); }, [showToast]);
+  
+  const recoverIdentity = useCallback(async (agentId: string, recoveryKey: string, nickname: string) => { 
+    dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey, nickname }); 
+
+    try {
+      const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${agentId}.json`);
+      const fetchUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
+
+      const response = await fetch(fetchUrl, { cache: 'no-store' });
+      if (response.ok) {
+        const text = await response.text();
+        const recoveredData = JSON.parse(text);
+        
+        const coreData = recoveredData.core || recoveredData;
+        const questData = recoveredData.quests;
+
+        lastSyncedStorageHash.current = getCleanHashString(coreData, questData);
+        
+        coreData.agentId = agentId;
+        coreData.recoveryKey = recoveryKey;
+        coreData.nickname = nickname;
+        
+        dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData, questData });
+        showToast('Kimlik ve Tüm Kütüphane başarıyla eşitlendi!', 'success');
+        return;
+      }
+    } catch (e) {}
+
+    showToast('Kimlik aktarıldı (Ancak bulut yedeği bulunamadı).', 'success'); 
+  }, [showToast]);
+  
   const updateShowcase = useCallback((showcase: ShowcaseItem[]) => { dispatch({ type: 'SET_SHOWCASE', showcase }); showToast('Profil vitrinin güncellendi!', 'success'); }, [showToast]);
 
   const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
