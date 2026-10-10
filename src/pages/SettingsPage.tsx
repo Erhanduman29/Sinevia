@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import ShareImportModal from '../components/ShareImportModal';
 import { uid } from '../lib/utils';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { supabase } from '../lib/supabase';
 
 function CollapsibleSection({
   title, icon, iconClass, desc, badge, defaultOpen = false, children,
@@ -86,6 +87,7 @@ export default function SettingsPage() {
   const [recNickname, setRecNickname] = useState('');
   const [recSecretToken, setRecSecretToken] = useState('');
   const [transferBundleInput, setTransferBundleInput] = useState('');
+  const [isCheckingName, setIsCheckingName] = useState(false);
 
   // Mevcut cihazdaki gizli güvenlik imzasını al
   const currentSecretToken = typeof window !== 'undefined' ? (localStorage.getItem('sinevia_secret_token') || '') : '';
@@ -96,7 +98,8 @@ export default function SettingsPage() {
   const [editCollName, setEditCollName] = useState('');
   const [confirmDeleteColl, setConfirmDeleteColl] = useState<string | null>(null);
   
-  const [confirmResetStage, setConfirmResetStage] = useState<0 | 1 | 2>(0);
+  const [confirmResetStage, setConfirmResetStage] = useState<0 | 1>(0);
+  const [showResetModal, setShowResetModal] = useState(false);
 
   const [editingGenre, setEditingGenre] = useState<string | null>(null);
   const [editGenreName, setEditGenreName] = useState('');
@@ -135,13 +138,43 @@ export default function SettingsPage() {
     { id: 'ocean', name: 'Aurora', desc: 'Buz Mavisi & İndigo', icon: Sparkles, previewBg: '#020617', textMode: 'dark', colors: ['#38bdf8', '#6366f1', '#2dd4bf'] },
   ];
 
-  const handleSaveNickname = () => {
-    if (!tempNickname.trim()) return;
-    setNickname(tempNickname.trim());
-    setEditingNickname(false);
+  const handleSaveNickname = async () => {
+    const newName = tempNickname.trim();
+    if (!newName) {
+      showToast('İsim boş bırakılamaz.', 'error');
+      return;
+    }
+    
+    if (newName.toLowerCase() === (data.nickname || '').toLowerCase()) {
+      setEditingNickname(false);
+      return;
+    }
+
+    setIsCheckingName(true);
+    try {
+      const { data: existingUser, error } = await supabase
+        .from('profiles')
+        .select('nickname')
+        .ilike('nickname', newName)
+        .neq('agent_id', data.agentId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (existingUser) {
+        showToast('Bu isim daha önce alınmış! Başka bir isim seçmelisin.', 'warning');
+      } else {
+        setNickname(newName);
+        setEditingNickname(false);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('İsim kontrolü sırasında bir ağ hatası oluştu.', 'error');
+    } finally {
+      setIsCheckingName(false);
+    }
   };
 
-  // Tek tıkla tüm kimlik ve güvenlik imzasını paketleyip kopyalar
   const handleCopyTransferCode = () => {
     try {
       const payload = {
@@ -158,7 +191,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Cihaz taşıma kodunu yapıştırınca kutuları otomatik doldurur
   const handleParseTransferCode = (val: string) => {
     setTransferBundleInput(val);
     const trimmed = val.trim();
@@ -171,9 +203,7 @@ export default function SettingsPage() {
         if (decoded.r) setRecKey(decoded.r);
         if (decoded.s) setRecSecretToken(decoded.s);
         showToast('Taşıma kodu çözüldü! Bilgiler otomatik dolduruldu.', 'success');
-      } catch (err) {
-        // Henüz tam yapıştırılmamış veya hatalı kod
-      }
+      } catch (err) {}
     }
   };
 
@@ -183,7 +213,6 @@ export default function SettingsPage() {
       return;
     }
 
-    // Eğer güvenlik imzası (secret_token) girildiyse tarayıcıya mühürle
     const tokenToSave = recSecretToken.trim();
     if (tokenToSave) {
       localStorage.setItem('sinevia_secret_token', tokenToSave);
@@ -197,7 +226,6 @@ export default function SettingsPage() {
     setRecSecretToken('');
     setTransferBundleInput('');
 
-    // Yeni güvenlik başlığının (x-agent-token) Supabase istemcisine geçmesi için sayfayı yenile
     if (tokenToSave) {
       setTimeout(() => {
         window.location.reload();
@@ -222,14 +250,6 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = () => importData(reader.result as string);
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const handleShareFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setShareImportJson(reader.result as string);
     reader.readAsText(file);
     e.target.value = '';
   };
@@ -263,10 +283,26 @@ export default function SettingsPage() {
     setEditingReviewTag(null);
   };
 
-  const handleExecuteFullReset = () => {
-    resetQuestData(); 
-    resetData(); 
+  // YENİ: KİMLİĞİ VE HER ŞEYİ KALICI OLARAK SİLEN TAM SIFIRLAMA FONKSİYONU
+  const handleExecuteFullReset = async () => {
+    try {
+      if (data.agentId) {
+        // Eğer RLS yetkisi varsa veritabanından da ajanı siler.
+        await supabase.from('profiles').delete().eq('agent_id', data.agentId);
+      }
+    } catch (e) {
+      console.error("Buluttan silme hatası", e);
+    }
+    
+    // Uygulamanın tarayıcıdaki tüm izlerini siliyoruz
+    localStorage.removeItem('sinevia-v1');
+    localStorage.removeItem('sinevia-quests-v1');
+    localStorage.removeItem('sinevia_secret_token');
+    
+    setShowResetModal(false);
     setConfirmResetStage(0);
+    
+    // Her şey silindiği için sayfayı yenileyip sistemi yeniden başlattırıyoruz
     window.location.reload(); 
   };
 
@@ -340,9 +376,12 @@ export default function SettingsPage() {
                     onChange={(e) => setTempNickname(e.target.value)}
                     className="bg-ink-900 border border-emerald-500/50 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none w-48"
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveNickname()}
+                    disabled={isCheckingName}
                   />
-                  <button onClick={handleSaveNickname} className="text-emerald-400 hover:text-emerald-300 p-1"><Check size={18} /></button>
-                  <button onClick={() => { setEditingNickname(false); setTempNickname(data.nickname || ''); }} className="text-ink-400 hover:text-ink-200 p-1"><X size={18} /></button>
+                  <button onClick={handleSaveNickname} disabled={isCheckingName} className={`text-emerald-400 hover:text-emerald-300 p-1 ${isCheckingName ? 'opacity-50' : ''}`}>
+                    {isCheckingName ? <span className="animate-spin inline-block w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full" /> : <Check size={18} />}
+                  </button>
+                  <button onClick={() => { setEditingNickname(false); setTempNickname(data.nickname || ''); }} disabled={isCheckingName} className="text-ink-400 hover:text-ink-200 p-1"><X size={18} /></button>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
@@ -379,7 +418,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* YENİ: TEK TIKLA CİHAZ TAŞIMA PAKETİ */}
           <div className="bg-gradient-to-r from-emerald-950/30 to-azure-950/30 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-2.5">
               <ShieldCheck size={18} className="text-emerald-400 flex-shrink-0 mt-0.5" />
@@ -411,7 +449,6 @@ export default function SettingsPage() {
               <div className="bg-azure-950/20 border border-azure-500/30 rounded-xl p-4 space-y-3 animate-fade-in">
                 <h3 className="text-sm font-bold text-azure-400 flex items-center gap-2 mb-2"><Key size={16} /> Kimlik & Cihaz Taşıma Aracı</h3>
                 
-                {/* HIZLI TAŞIMA KODU YAPIŞTIRMA ALANI */}
                 <div className="bg-ink-950/80 border border-emerald-500/30 rounded-lg p-3 mb-3">
                   <label className="block text-[10px] font-black text-emerald-400 mb-1 uppercase tracking-wider">
                     Hızlı Yöntem: Cihaz Taşıma Kodunu Yapıştır (Otomatik Doldurur)
@@ -453,7 +490,6 @@ export default function SettingsPage() {
         </div>
       </CollapsibleSection>
 
-      {/* YENİ: KAPSAMLI AKILLI BİLDİRİM MERKEZİ */}
       <CollapsibleSection
         title="Akıllı Cihaz Bildirimleri"
         icon={data.notificationsEnabled ? <BellRing size={18} className="text-emerald-400 flex-shrink-0 animate-pulse" /> : <BellOff size={18} className="text-ink-500 flex-shrink-0" />}
@@ -497,7 +533,6 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          {/* SINEVIA AĞI ÖZEL BİLDİRİM KONTROLLERİ */}
           {data.notificationsEnabled && (
             <div className="mt-4 pt-4 border-t border-ink-800 space-y-3">
               <h4 className="text-[10px] font-black text-ink-500 uppercase tracking-widest mb-3">Sosyal Ağ Bildirim Tercihleri</h4>
@@ -938,8 +973,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ARKADAŞLA LİSTE PAYLAŞ (ARTIK NETWORK SAYFASINDA OLDUĞU İÇİN GİZLENDİ / SADECE YEDEKLEME KALDI) */}
-
       <CollapsibleSection
         title="Tam Yedekle / Geri Yükle"
         icon={<Download size={18} className="text-emerald-400 flex-shrink-0" />}
@@ -982,40 +1015,40 @@ export default function SettingsPage() {
         </button>
       </CollapsibleSection>
 
+      {/* YENİ TAM Ölçekli Sıfırlama UI ve Mantığı */}
       <div className="bg-red-950/20 border border-red-800/40 rounded-2xl p-4 sm:p-5 shadow-xl transition-all">
         <h2 className="text-base sm:text-lg font-semibold text-red-400 mb-1 flex items-center gap-2">
           <AlertTriangle size={18} className="text-red-400" /> Verileri Sıfırla
         </h2>
         <p className="text-xs sm:text-sm text-red-400/60 mb-3.5">
-          Tüm filmler, diziler, geçmiş, başarımlar, XP, Seviyeler ve kazanılan Rozetler dahil olmak üzere her şey kalıcı olarak silinir. Bu işlem geri alınamaz.
+          Tüm filmler, diziler, geçmiş, başarımlar, XP, Seviyeler, Ağ Kimliğin ve Kullanıcı Adın dahil olmak üzere <strong>her şey</strong> kalıcı olarak silinir. Bu işlem geri alınamaz.
         </p>
 
         {confirmResetStage === 0 ? (
           <button onClick={() => setConfirmResetStage(1)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
             <Trash2 size={16} /> Tüm Verileri Sıfırla
           </button>
-        ) : confirmResetStage === 1 ? (
-          <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-xl bg-red-950/40 border border-red-800/60">
+        ) : (
+          <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-xl bg-red-950/40 border border-red-800/60 animate-fade-in">
             <span className="text-xs sm:text-sm text-red-400 font-bold w-full sm:w-auto">Emin misin? Bu işlemin geri dönüşü yok!</span>
-            <button onClick={() => setConfirmResetStage(2)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
+            <button onClick={() => setShowResetModal(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
               <AlertTriangle size={14} /> Evet, Eminim
             </button>
             <button onClick={() => setConfirmResetStage(0)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-200 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
               <X size={14} /> İptal Et
             </button>
           </div>
-        ) : (
-          <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-xl bg-red-900 border border-red-500 animate-pulse">
-            <span className="text-xs sm:text-sm text-white font-black w-full sm:w-auto">SON UYARI! HER ŞEY SİLİNECEK!</span>
-            <button onClick={handleExecuteFullReset} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-black/40 hover:bg-black/60 text-red-300 px-4 py-2 rounded-xl font-black text-xs sm:text-sm transition-all border border-red-400">
-              SİSTEMİ TAMAMEN SIFIRLA
-            </button>
-            <button onClick={() => setConfirmResetStage(0)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-white px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all">
-              Geri Dön
-            </button>
-          </div>
         )}
       </div>
+
+      {showResetModal && (
+        <ConfirmDialog
+          title="SON UYARI! HER ŞEY SİLİNECEK!"
+          message="Kullanıcı kimliğin, ağ ismin, kurtarma anahtarın dahil tüm verilerin tamamen silinecek. Sinevia sanki cihaza yeni kurulmuş gibi sıfırdan başlayacak. Onaylıyor musun?"
+          onConfirm={handleExecuteFullReset}
+          onCancel={() => { setShowResetModal(false); setConfirmResetStage(0); }}
+        />
+      )}
 
       {shareImportJson && (
         <ShareImportModal rawJson={shareImportJson} onClose={() => setShareImportJson(null)} />
