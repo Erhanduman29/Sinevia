@@ -4,7 +4,7 @@ import {
   AlertTriangle, Wrench, SlidersHorizontal, PlayCircle, Palette,
   Sparkles, Moon, Sun, Award, ChevronDown, ThumbsUp, ThumbsDown,
   BellRing, BellOff, UserCircle, Key, Copy, MessageSquare, Gift, UserPlus, ShieldCheck,
-  LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal
+  LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal, Flame
 } from 'lucide-react';
 import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -181,6 +181,8 @@ export default function SettingsPage() {
     { id: 'monokai', name: 'Monokai Neon', desc: 'Sıcak Yeşil, Pembe & Mavi', icon: Code, previewBg: '#272822', textMode: 'dark', colors: ['#f92672', '#a6e22e', '#66d9ef'] },
     { id: 'paper-light', name: 'Kâğıt Sepya', desc: 'Sepya, Mürekkep Mavi & Bordo', icon: FileText, previewBg: '#f5f0e6', textMode: 'light', colors: ['#b45309', '#1d4ed8', '#be123c'] },
     { id: 'retro-amber', name: 'Retro Amber CRT', desc: 'Amber, Turuncu & Soluk Sarı', icon: Terminal, previewBg: '#140c02', textMode: 'dark', colors: ['#ffab00', '#ff7a00', '#ffe082'] },
+    { id: 'premium-dark', name: 'Premium Koyu', desc: 'Cam Yüzeyler & Kırmızı Vurgu', icon: Flame, previewBg: '#0a0a0d', textMode: 'dark', colors: ['#e8384f', '#ff6b7a', '#8e1220'] },
+    { id: 'plain-dark', name: 'Sade Koyu', desc: 'Minimal, Sakin Gri Vurgu', icon: Moon, previewBg: '#111113', textMode: 'dark', colors: ['#7c7c85', '#8e8e97', '#6b6b73'] },
   ];
 
   const handleSaveNickname = async () => {

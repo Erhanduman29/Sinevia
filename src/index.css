@@ -222,6 +222,59 @@ body[data-theme="retro-amber"] {
   --text-main: #ffdf9e;
 }
 
+/* 13. PREMIUM KOYU (Cam yüzeyler · İnce saydam çizgiler · Kırmızı vurgu) */
+body[data-theme="premium-dark"] {
+  --bg-base: #0a0a0d;
+  --bg-surface: rgba(255, 255, 255, 0.04);
+  --bg-card: rgba(255, 255, 255, 0.07);
+  --border-dim: rgba(244, 244, 242, 0.12);
+
+  --color-1: #e8384f; /* Premium Kırmızı */
+  --color-2: #ff6b7a; /* Açık Kırmızı (hi) */
+  --color-3: #8e1220; /* Derin Bordo (deep) */
+
+  --blob-1: rgba(232, 56, 79, 0.18);
+  --blob-2: rgba(255, 107, 122, 0.14);
+  --blob-3: rgba(142, 18, 32, 0.2);
+
+  --text-main: #f4f4f2;
+
+  /* Premium tokenları (sinevia-premium.html ile aynı isimler) */
+  --ink: #f4f4f2;
+  --muted: #9a9a96;
+  --red: #e8384f;
+  --red-hi: #ff6b7a;
+  --red-deep: #8e1220;
+  --line: rgba(244, 244, 242, 0.07);
+  --line-2: rgba(244, 244, 242, 0.13);
+  --glass: linear-gradient(155deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018) 55%, rgba(255, 255, 255, 0.03));
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface2: rgba(255, 255, 255, 0.07);
+  --r: 16px;
+  --r-lg: 22px;
+  --r-sm: 10px;
+  --shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+  --glow: 0 0 0 1px rgba(232, 56, 79, 0.35), 0 8px 32px -8px rgba(232, 56, 79, 0.45);
+}
+
+/* 14. PLAIN KOYU (Sade · Minimal · Gölgesiz, sakin tek vurgu) */
+body[data-theme="plain-dark"] {
+  --bg-base: #111113;
+  --bg-surface: rgba(23, 23, 26, 0.96);
+  --bg-card: rgba(30, 30, 34, 0.92);
+  --border-dim: rgba(124, 124, 133, 0.28);
+
+  --color-1: #7c7c85; /* Sakin Gri */
+  --color-2: #8e8e97; /* Açık Gri */
+  --color-3: #6b6b73; /* Koyu Gri */
+
+  --blob-1: rgba(124, 124, 133, 0.07);
+  --blob-2: rgba(142, 142, 151, 0.05);
+  --blob-3: rgba(107, 107, 115, 0.05);
+
+  --text-main: #f2f2f4;
+}
+
 body {
   background-color: var(--bg-base) !important;
   color: var(--text-main) !important;

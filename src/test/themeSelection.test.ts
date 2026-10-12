@@ -34,13 +34,14 @@ function getInitialState(): ExtendedAppData {
 }
 
 describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
-  test('tam 12 tema sunulmalı ve id’leri benzersiz olmalı', () => {
+  test('tam 14 tema sunulmalı ve id’leri benzersiz olmalı', () => {
     const ids = getThemeIds();
     expect(ids).toEqual([
       'default', 'light', 'cyberpunk', 'blood', 'matrix', 'ocean',
       'dracula', 'nord', 'solarized-dark', 'monokai', 'paper-light', 'retro-amber',
+      'premium-dark', 'plain-dark',
     ]);
-    expect(new Set(ids).size).toBe(12);
+    expect(new Set(ids).size).toBe(14);
   });
 
   test('her tema kartının adı, açıklaması, önizleme rengi ve 3 renk paleti tanımlı olmalı', () => {
@@ -49,7 +50,7 @@ describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
       .map((l) => l.trim())
       .filter((l) => l.startsWith("{ id: '"));
 
-    expect(lines).toHaveLength(12);
+    expect(lines).toHaveLength(14);
 
     lines.forEach((line) => {
       expect(line).toMatch(/name: '[^']+'/);
@@ -74,7 +75,7 @@ describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
 describe('TEMA SEÇİMİ — CSS KARŞILIKLARI', () => {
   test('varsayılan tema HARİÇ her tema için body[data-theme] kuralı index.css’te olmalı', () => {
     const ids = getThemeIds().filter((id) => id !== 'default');
-    expect(ids.length).toBe(11);
+    expect(ids.length).toBe(13);
 
     ids.forEach((id) => {
       expect(cssSource.includes(`body[data-theme="${id}"]`), `CSS'te ${id} teması tanımsız`).toBe(true);
