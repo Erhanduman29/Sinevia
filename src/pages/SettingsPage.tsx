@@ -19,6 +19,79 @@ import { supabase } from '../lib/supabase';
 import { isSoundEnabled, setSoundEnabled } from '../lib/sound';
 
 // ---------------------------------------------------------------------------
+// PREMIUM YÜZEY & BUTON DİLİ — sinevia-premium.html ile aynı tokenlar.
+// Tüm değerler tema CSS değişkenlerine bağlıdır; premium tokenı olmayan
+// temalarda (plain-dark vb.) zincir fallback → tüm temalarda tanımlı
+// --color-*/--bg-* değişkenleri → literal değer sırasıyla devreye girer.
+// ---------------------------------------------------------------------------
+const PREMIUM_CARD_BG = 'var(--glass, var(--bg-card, rgba(255, 255, 255, .04)))';
+const PREMIUM_ROW_BG = 'var(--glass, var(--bg-surface, rgba(255, 255, 255, .03)))';
+const PREMIUM_LINE = 'var(--line-2, var(--border-dim, rgba(244, 244, 242, .13)))';
+const PREMIUM_LINE_SOFT = 'var(--line, var(--border-dim, rgba(244, 244, 242, .07)))';
+const PREMIUM_RADIUS = 'var(--r, 16px)';
+const PREMIUM_RADIUS_LG = 'var(--r-lg, 22px)';
+const PREMIUM_RADIUS_SM = 'var(--r-sm, 10px)';
+const PREMIUM_RED_GRAD =
+  'linear-gradient(150deg, var(--red-hi, var(--color-2, #ff6b7a)) 0%, var(--red, var(--color-1, #e8384f)) 45%, var(--red-deep, var(--color-3, #8e1220)) 130%)';
+const PREMIUM_RED_GLOW =
+  '0 10px 28px -10px rgba(232, 56, 79, .75), inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 6px rgba(0, 0, 0, .25)';
+
+/** Cam yüzey kart stili (bölüm panelleri). */
+const premiumCardStyle: React.CSSProperties = {
+  background: PREMIUM_CARD_BG,
+  border: `1px solid ${PREMIUM_LINE}`,
+  borderRadius: PREMIUM_RADIUS_LG,
+  boxShadow: 'var(--shadow, 0 18px 40px -22px rgba(0, 0, 0, .5)), inset 0 1px 0 rgba(255, 255, 255, .07)',
+};
+
+/** Cam satır / iç panel stili (kart içi ayar satırları). */
+const premiumRowStyle: React.CSSProperties = {
+  background: PREMIUM_ROW_BG,
+  border: `1px solid ${PREMIUM_LINE_SOFT}`,
+  borderRadius: PREMIUM_RADIUS,
+  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, .06)',
+};
+
+/** Premium birincil buton (btn-p): kırmızı gradyan + iç parlaklık + derinlik. */
+const BTN_P =
+  'inline-flex items-center justify-center gap-2 font-extrabold uppercase tracking-wider transition-all duration-300 hover:-translate-y-0.5 active:translate-y-px disabled:opacity-40 disabled:pointer-events-none';
+const BTN_P_STYLE: React.CSSProperties = {
+  background: PREMIUM_RED_GRAD,
+  borderRadius: PREMIUM_RADIUS_SM,
+  color: '#fff',
+  boxShadow: PREMIUM_RED_GLOW,
+};
+
+/** Premium ikincil buton (btn-s): cam yüzey + ince ayraç + blur. */
+const BTN_S =
+  'inline-flex items-center justify-center gap-2 font-bold uppercase tracking-wider transition-all duration-300 hover:-translate-y-0.5 active:translate-y-px disabled:opacity-40 disabled:pointer-events-none';
+const BTN_S_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(150deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05))',
+  border: `1px solid ${PREMIUM_LINE}`,
+  borderRadius: PREMIUM_RADIUS_SM,
+  boxShadow: '0 8px 22px -12px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .16)',
+  backdropFilter: 'blur(8px)',
+};
+
+/** Anahtar (switch) izi: açıkken kırmızı gradyan + parlama, kapalıyken cam. */
+function switchTrackStyle(on: boolean): React.CSSProperties {
+  return {
+    background: on
+      ? 'linear-gradient(90deg, var(--red-deep, var(--color-3, #8e1220)), var(--red, var(--color-1, #e8384f)) 60%, var(--red-hi, var(--color-2, #ff6b7a)))'
+      : 'var(--surface2, rgba(127, 127, 140, .35))',
+    boxShadow: on
+      ? 'inset 0 2px 5px rgba(0, 0, 0, .4), 0 0 16px -4px rgba(232, 56, 79, .8)'
+      : 'inset 0 2px 5px rgba(0, 0, 0, .35)',
+  };
+}
+
+/** Switch tutamağı: fildişi gradyan + yumuşak gölge (premium parıltı). */
+const SWITCH_KNOB_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(150deg, #fff, #d9d9dc)',
+  boxShadow: '0 2px 6px rgba(0, 0, 0, .5)',
+};
+
+// ---------------------------------------------------------------------------
 // AYAR SEKMELERİ — içerik aynıdır, yalnızca görsel gruplama yapılır.
 // ---------------------------------------------------------------------------
 type SettingsTabId = 'general' | 'visual' | 'notifications' | 'shortcuts' | 'game';
@@ -65,10 +138,11 @@ function CollapsibleSection({
     try { localStorage.setItem(storageKey, String(next)); } catch {}
   };
   return (
-    <div className="bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl shadow-xl overflow-hidden">
+    <div className="overflow-hidden backdrop-blur-sm" style={premiumCardStyle}>
       <button
         onClick={toggle}
-        className="w-full flex items-center justify-between gap-2 p-4 sm:p-5 hover:bg-ink-800/30 transition-colors text-left"
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 p-4 sm:p-5 hover:bg-white/[.04] transition-colors text-left"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <h2 className="text-base sm:text-lg font-semibold text-ink-100 flex items-center gap-2 truncate">
@@ -83,8 +157,11 @@ function CollapsibleSection({
         />
       </button>
       {open && (
-        <div className="px-4 sm:px-5 pb-4 sm:pb-5 animate-fade-in">
-          {desc && <p className="text-xs sm:text-sm text-ink-400 mb-3.5">{desc}</p>}
+        <div
+          className="px-4 sm:px-5 pb-4 sm:pb-5 animate-fade-in"
+          style={{ borderTop: `1px solid ${PREMIUM_LINE_SOFT}` }}
+        >
+          {desc && <p className="text-xs sm:text-sm text-ink-400 mb-3.5 mt-3.5">{desc}</p>}
           {children}
         </div>
       )}
@@ -403,8 +480,11 @@ export default function SettingsPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 animate-fade-in pb-10">
       <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gold-500/20 border border-gold-500/30 flex items-center justify-center">
-          <Settings size={20} className="text-gold-400" />
+        <div
+          className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center"
+          style={{ borderRadius: 'var(--r-sm, 10px)', background: PREMIUM_RED_GRAD, color: '#fff', boxShadow: '0 8px 22px -8px rgba(232, 56, 79, .7), inset 0 1px 0 rgba(255, 255, 255, .35)' }}
+        >
+          <Settings size={20} />
         </div>
         Ayarlar
       </h1>
@@ -412,9 +492,13 @@ export default function SettingsPage() {
       {/* TUTORIAL MERKEZİ GİRİŞİ */}
       <button
         onClick={() => setCenterOpen(true)}
-        className="w-full flex items-center gap-4 p-5 rounded-2xl bg-gradient-to-r from-gold-500/10 via-ink-900/60 to-ink-900/40 hover:from-gold-500/20 border border-gold-500/30 hover:border-gold-500/50 text-left transition-all group shadow-lg"
+        className="w-full flex items-center gap-4 p-5 rounded-[var(--r-lg,22px)] border text-left transition-all group backdrop-blur-sm hover:-translate-y-0.5"
+        style={{ ...premiumCardStyle, borderRadius: 'var(--r-lg, 22px)' }}
       >
-        <div className="w-12 h-12 rounded-2xl bg-gold-500/20 border border-gold-500/40 flex items-center justify-center flex-shrink-0 text-gold-300 group-hover:scale-110 transition-transform">
+        <div
+          className="w-12 h-12 flex items-center justify-center flex-shrink-0 text-white group-hover:scale-110 transition-transform"
+          style={{ borderRadius: 'var(--r, 16px)', background: PREMIUM_RED_GRAD, boxShadow: '0 8px 22px -8px rgba(232, 56, 79, .75), inset 0 1px 0 rgba(255, 255, 255, .35)' }}
+        >
           <BookOpen size={22} />
         </div>
         <div className="min-w-0 flex-1">
@@ -422,13 +506,23 @@ export default function SettingsPage() {
           <div className="text-xs text-ink-400">Uygulamayı adım adım öğren, istediğin turu tekrar izle.</div>
         </div>
         <div className="text-right flex-shrink-0">
-          <div className="text-lg font-black text-gold-300 font-mono leading-none">{progress.completed.length + progress.academyDone.length}</div>
+          <div
+            className="text-lg font-black font-mono leading-none"
+            style={{ background: 'linear-gradient(100deg, var(--red-hi, #ff6b7a), #fff 70%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
+          >
+            {progress.completed.length + progress.academyDone.length}
+          </div>
           <div className="text-[9px] font-black uppercase tracking-widest text-ink-500">Tamamlanan</div>
         </div>
       </button>
 
       {/* AYAR SEKMELERİ — içerik ve koruma mantığı aynıdır, yalnızca görsel gruplama. */}
-      <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mx-1 px-1 hide-scrollbar">
+      <div
+        className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mx-1 px-1 hide-scrollbar p-1.5"
+        style={{ background: PREMIUM_ROW_BG, borderRadius: PREMIUM_RADIUS, border: `1px solid ${PREMIUM_LINE_SOFT}` }}
+        role="tablist"
+        aria-label="Ayar sekmeleri"
+      >
         {SETTINGS_TABS.map((tab) => {
           const isActive = activeSettingsTab === tab.id;
           const TabIcon = tab.icon;
@@ -436,11 +530,25 @@ export default function SettingsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveSettingsTab(tab.id)}
+              role="tab"
+              aria-selected={isActive}
               aria-current={isActive ? 'page' : undefined}
               className={
                 isActive
-                  ? 'flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap bg-gold-500/15 text-gold-300 border border-gold-500/40 shadow-lg shadow-gold-500/10 transition-all'
-                  : 'flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap bg-ink-900/60 text-ink-400 border border-ink-700/50 hover:text-ink-200 hover:border-ink-600 transition-all'
+                  ? 'flex items-center gap-1.5 px-3 sm:px-4 py-2 whitespace-nowrap text-xs sm:text-sm font-bold transition-all duration-300'
+                  : 'flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-[var(--r-sm,10px)] whitespace-nowrap text-xs sm:text-sm font-bold text-ink-400 hover:text-ink-200 hover:bg-white/[.05] border border-transparent hover:border-[color:var(--line-2,rgba(244,244,242,.13))] transition-all duration-300'
+              }
+              style={
+                isActive
+                  ? {
+                      background: PREMIUM_RED_GRAD,
+                      borderRadius: 'var(--r-sm, 10px)',
+                      color: '#fff',
+                      border: '1px solid transparent',
+                      boxShadow:
+                        '0 6px 22px -8px rgba(232, 56, 79, .55), inset 0 1px 0 rgba(255, 255, 255, .25)',
+                    }
+                  : undefined
               }
             >
               <TabIcon size={15} />
@@ -464,7 +572,7 @@ export default function SettingsPage() {
             desc="Ağ üzerinde görünen ismini değiştir veya başka bir cihaza geçtiğinde kimliğini kurtar."
           >
             <div className="space-y-4">
-              <div className="bg-ink-950/50 border border-ink-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={premiumRowStyle}>
                 <div>
                   <label className="block text-xs font-bold text-ink-400 mb-1 uppercase tracking-wider">Ağ İsminiz</label>
                   {editingNickname ? (
@@ -517,7 +625,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-emerald-950/30 to-azure-950/30 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="rounded-[var(--r,16px)] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-white/[.09]" style={{ background: 'linear-gradient(120deg, rgba(232, 56, 79, .12), transparent 80%)' }}>
                 <div className="flex items-start gap-2.5">
                   <ShieldCheck size={18} className="text-emerald-400 flex-shrink-0 mt-0.5" />
                   <div>
@@ -529,7 +637,8 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={handleCopyTransferCode}
-                  className="flex-shrink-0 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-emerald-500/10"
+                  className={`${BTN_P} flex-shrink-0 px-4 py-2.5 text-xs`}
+                  style={BTN_P_STYLE}
                 >
                   <Copy size={14} /> Taşıma Kodunu Kopyala
                 </button>
@@ -580,8 +689,8 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <div className="flex gap-2 mt-2">
-                      <button onClick={handleRecoverIdentity} className="flex-1 bg-azure-600 hover:bg-azure-500 text-white py-2 rounded-lg font-bold text-xs transition-colors">Kimliği Kurtar & Eşitle</button>
-                      <button onClick={() => setIsRecoverMode(false)} className="flex-1 bg-ink-800 hover:bg-ink-700 text-white py-2 rounded-lg font-bold text-xs transition-colors">İptal</button>
+                      <button onClick={handleRecoverIdentity} className={`${BTN_P} flex-1 py-2 text-xs`} style={BTN_P_STYLE}>Kimliği Kurtar & Eşitle</button>
+                      <button onClick={() => setIsRecoverMode(false)} className={`${BTN_S} flex-1 py-2 text-xs text-ink-200`} style={BTN_S_STYLE}>İptal</button>
                     </div>
                   </div>
                 )}
@@ -604,7 +713,7 @@ export default function SettingsPage() {
                 className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddGenre()}
               />
-              <button onClick={handleAddGenre} disabled={!newGenre.trim()} className="flex items-center gap-1 bg-gold-500 hover:bg-gold-600 text-ink-950 px-3.5 py-2 rounded-xl font-black text-xs sm:text-sm transition-all disabled:opacity-40">
+              <button onClick={handleAddGenre} disabled={!newGenre.trim()} className={`${BTN_P} px-3.5 py-2 text-xs sm:text-sm`} style={BTN_P_STYLE}>
                 <Plus size={16} /> Ekle
               </button>
             </div>
@@ -651,7 +760,7 @@ export default function SettingsPage() {
                 className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500/50 transition-all"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddCollection()}
               />
-              <button onClick={handleAddCollection} disabled={!newCollection.trim()} className="flex items-center gap-1 bg-azure-500 hover:bg-azure-600 text-white px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all disabled:opacity-40">
+              <button onClick={handleAddCollection} disabled={!newCollection.trim()} className={`${BTN_P} px-3.5 py-2 text-xs sm:text-sm`} style={BTN_P_STYLE}>
                 <Plus size={16} /> Ekle
               </button>
             </div>
@@ -730,7 +839,8 @@ export default function SettingsPage() {
               />
               <button
                 onClick={() => updateAltWatchTemplate(altTemplate)}
-                className="flex items-center justify-center gap-1.5 bg-gold-500 hover:bg-gold-600 text-ink-950 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm transition-all"
+                className={`${BTN_P} px-4 py-2.5 text-xs sm:text-sm`}
+                style={BTN_P_STYLE}
               >
                 <Check size={16} /> Kaydet
               </button>
@@ -751,11 +861,12 @@ export default function SettingsPage() {
                   // Akademi dersi: "Verini Yedekle"
                   notifyEvent('backup_created');
                 }}
-                className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md"
+                className={`${BTN_P} px-4 py-2.5 text-xs sm:text-sm`}
+                style={BTN_P_STYLE}
               >
                 <Download size={16} /> Yedek Al
               </button>
-              <button onClick={() => fileRef.current?.click()} className="flex items-center justify-center gap-2 bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
+              <button onClick={() => fileRef.current?.click()} className={`${BTN_S} px-4 py-2.5 text-xs sm:text-sm text-ink-200`} style={BTN_S_STYLE}>
                 <Upload size={16} /> Geri Yükle
               </button>
               <input ref={fileRef} type="file" accept="application/json" onChange={handleFileImport} className="hidden" />
@@ -780,7 +891,8 @@ export default function SettingsPage() {
                 </p>
                 <button 
                   onClick={() => setShowLogoutModal(true)} 
-                  className="w-full sm:w-auto flex justify-center bg-amber-600/10 hover:bg-amber-500 text-amber-500 hover:text-ink-950 border border-amber-500/50 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all"
+                  className={`${BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm tracking-wider`}
+                  style={{ ...BTN_S_STYLE, color: '#fbbf24', border: '1px solid rgba(251, 191, 36, .45)' }}
                 >
                   Cihazdan Çıkış Yap
                 </button>
@@ -799,17 +911,18 @@ export default function SettingsPage() {
                 {confirmResetStage === 0 ? (
                   <button 
                     onClick={() => setConfirmResetStage(1)} 
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all"
+                    className={`${BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm tracking-wider`}
+                    style={{ ...BTN_S_STYLE, color: '#f87171', border: '1px solid rgba(248, 113, 113, .45)', background: 'rgba(248, 113, 113, .08)' }}
                   >
                     <Trash2 size={16} /> Hesabı Tamamen Yok Et
                   </button>
                 ) : (
-                  <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-xl bg-red-950/40 border border-red-800/60 animate-fade-in">
+                  <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-[var(--r,16px)] bg-red-950/40 border border-red-800/60 animate-fade-in">
                     <span className="text-xs sm:text-sm text-red-400 font-bold w-full sm:w-auto mb-1 sm:mb-0">Emin misin? Bu işlemin geri dönüşü yok!</span>
-                    <button onClick={() => setShowResetModal(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-lg shadow-red-500/20">
+                    <button onClick={() => setShowResetModal(true)} className={`${BTN_P} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm`} style={BTN_P_STYLE}>
                       <AlertTriangle size={14} /> Evet, Eminim (Buluttan Sil)
                     </button>
-                    <button onClick={() => setConfirmResetStage(0)} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-ink-200 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all">
+                    <button onClick={() => setConfirmResetStage(0)} className={`${BTN_S} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm text-ink-200`} style={BTN_S_STYLE}>
                       <X size={14} /> İptal Et
                     </button>
                   </div>
@@ -888,7 +1001,7 @@ export default function SettingsPage() {
             }
             desc="Film saatleri, canlı izleme sayaçları ve Sinevia Ağı'ndaki tüm mesaj ve arkadaşlık bildirimleri."
           >
-            <div className="bg-ink-950/50 border border-ink-800 rounded-2xl p-4 sm:p-5">
+            <div className="p-4 sm:p-5" style={premiumRowStyle}>
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h3 className="text-sm font-bold text-white mb-1">Cihaz Bildirimleri (Push API)</h3>
@@ -913,9 +1026,16 @@ export default function SettingsPage() {
                       }
                     }
                   }}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${data.notificationsEnabled ? 'bg-emerald-500' : 'bg-ink-700'}`}
+                  role="switch"
+                  aria-checked={data.notificationsEnabled}
+                  aria-label="Cihaz bildirimleri"
+                  className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
+                  style={switchTrackStyle(data.notificationsEnabled)}
                 >
-                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                    style={SWITCH_KNOB_STYLE}
+                  />
                 </button>
               </div>
 
@@ -923,7 +1043,7 @@ export default function SettingsPage() {
                 <div className="mt-4 pt-4 border-t border-ink-800 space-y-3">
                   <h4 className="text-[10px] font-black text-ink-500 uppercase tracking-widest mb-3">Sosyal Ağ Bildirim Tercihleri</h4>
               
-                  <div className="flex items-center justify-between p-2.5 bg-ink-900/50 rounded-xl border border-ink-800/60">
+                  <div className="flex items-center justify-between p-2.5 bg-white/[.03] rounded-[var(--r-sm,10px)] border border-white/[.07]">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-azure-500/10 text-azure-400 flex items-center justify-center"><MessageSquare size={13} /></div>
                       <div>
@@ -933,13 +1053,20 @@ export default function SettingsPage() {
                     </div>
                     <button
                       onClick={() => toggleSpecificNotification('notifyMessages', data.notifyMessages === false ? true : false)}
-                      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${data.notifyMessages !== false ? 'bg-azure-500' : 'bg-ink-700'}`}
+                      role="switch"
+                      aria-checked={data.notifyMessages !== false}
+                      aria-label="Sohbet mesajı bildirimleri"
+                      className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out"
+                      style={switchTrackStyle(data.notifyMessages !== false)}
                     >
-                      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notifyMessages !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${data.notifyMessages !== false ? 'translate-x-4' : 'translate-x-0'}`}
+                        style={SWITCH_KNOB_STYLE}
+                      />
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between p-2.5 bg-ink-900/50 rounded-xl border border-ink-800/60">
+                  <div className="flex items-center justify-between p-2.5 bg-white/[.03] rounded-[var(--r-sm,10px)] border border-white/[.07]">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center"><UserPlus size={13} /></div>
                       <div>
@@ -949,13 +1076,20 @@ export default function SettingsPage() {
                     </div>
                     <button
                       onClick={() => toggleSpecificNotification('notifyFriendRequests', data.notifyFriendRequests === false ? true : false)}
-                      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${data.notifyFriendRequests !== false ? 'bg-emerald-500' : 'bg-ink-700'}`}
+                      role="switch"
+                      aria-checked={data.notifyFriendRequests !== false}
+                      aria-label="Arkadaşlık isteği bildirimleri"
+                      className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out"
+                      style={switchTrackStyle(data.notifyFriendRequests !== false)}
                     >
-                      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notifyFriendRequests !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${data.notifyFriendRequests !== false ? 'translate-x-4' : 'translate-x-0'}`}
+                        style={SWITCH_KNOB_STYLE}
+                      />
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between p-2.5 bg-ink-900/50 rounded-xl border border-ink-800/60">
+                  <div className="flex items-center justify-between p-2.5 bg-white/[.03] rounded-[var(--r-sm,10px)] border border-white/[.07]">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-violet-500/10 text-violet-400 flex items-center justify-center"><Gift size={13} /></div>
                       <div>
@@ -965,9 +1099,16 @@ export default function SettingsPage() {
                     </div>
                     <button
                       onClick={() => toggleSpecificNotification('notifyLists', data.notifyLists === false ? true : false)}
-                      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${data.notifyLists !== false ? 'bg-violet-500' : 'bg-ink-700'}`}
+                      role="switch"
+                      aria-checked={data.notifyLists !== false}
+                      aria-label="Gelen liste bildirimleri"
+                      className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out"
+                      style={switchTrackStyle(data.notifyLists !== false)}
                     >
-                      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${data.notifyLists !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${data.notifyLists !== false ? 'translate-x-4' : 'translate-x-0'}`}
+                        style={SWITCH_KNOB_STYLE}
+                      />
                     </button>
                   </div>
                 </div>
@@ -987,7 +1128,7 @@ export default function SettingsPage() {
             }
             desc="Seviye atlama, başarım ve görev tamamlama seslerini açıp kapat."
           >
-            <div className="bg-ink-950/50 border border-ink-800 rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-4">
+            <div className="p-4 sm:p-5 flex items-center justify-between gap-4" style={premiumRowStyle}>
               <div>
                 <h3 className="text-sm font-bold text-white mb-1">Ses Efektleri</h3>
                 <p className="text-xs text-ink-400">Başarım, seviye atlama ve görev müziği gibi kısa efektler.</p>
@@ -995,16 +1136,14 @@ export default function SettingsPage() {
               <button
                 onClick={handleToggleSound}
                 aria-pressed={soundOn}
-                className={
-                  'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ' +
-                  (soundOn ? 'bg-azure-500' : 'bg-ink-700')
-                }
+                role="switch"
+                aria-label="Ses efektleri"
+                className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
+                style={switchTrackStyle(soundOn)}
               >
                 <span
-                  className={
-                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ' +
-                    (soundOn ? 'translate-x-5' : 'translate-x-0')
-                  }
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${soundOn ? 'translate-x-5' : 'translate-x-0'}`}
+                  style={SWITCH_KNOB_STYLE}
                 />
               </button>
             </div>
@@ -1029,9 +1168,8 @@ export default function SettingsPage() {
               <div className="hidden sm:block" />
               <button
                 onClick={() => (isAddingCrit ? resetCritForm() : setIsAddingCrit(true))}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold transition-all text-xs ${
-                  isAddingCrit ? 'bg-ink-800 text-ink-300 border border-ink-700' : 'bg-gold-500/20 text-gold-400 border border-gold-500/30'
-                }`}
+                className={`${isAddingCrit ? BTN_S : BTN_P} flex-shrink-0 px-3 py-2 text-xs`}
+                style={isAddingCrit ? { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' } : BTN_P_STYLE}
               >
                 {isAddingCrit ? <X size={15} /> : <Plus size={15} />}
                 <span>{isAddingCrit ? 'İptal' : 'Yeni Kriter'}</span>
@@ -1039,7 +1177,7 @@ export default function SettingsPage() {
             </div>
 
             {isAddingCrit && (
-              <div className="mb-5 bg-ink-950/50 border border-ink-800 rounded-xl p-3.5 sm:p-4 space-y-4 animate-fade-in">
+              <div className="mb-5 p-3.5 sm:p-4 space-y-4 animate-fade-in" style={premiumRowStyle}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-bold text-ink-400 mb-1.5 uppercase tracking-wider">Kriter Adı</label>
@@ -1085,7 +1223,7 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 </div>
-                <button onClick={handleSaveCriterion} disabled={!critName.trim()} className="w-full bg-gold-500 hover:bg-gold-600 text-ink-950 py-2.5 rounded-xl font-black text-xs sm:text-sm transition-all disabled:opacity-50">
+                <button onClick={handleSaveCriterion} disabled={!critName.trim()} className={`${BTN_P} w-full py-2.5 text-xs sm:text-sm`} style={BTN_P_STYLE}>
                   {editingCritId ? 'Kriteri Güncelle' : 'Kriteri Kaydet'}
                 </button>
               </div>
@@ -1096,7 +1234,10 @@ export default function SettingsPage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                 {data.criteria.map((c) => (
-                  <div key={c.id} className={`border rounded-xl p-3 flex flex-col gap-2 transition-all ${editingCritId === c.id ? 'bg-gold-500/10 border-gold-500/50 shadow-md' : 'bg-ink-800/50 border-ink-700/50'}`}>
+                  <div
+                    key={c.id}
+                    className={`rounded-[var(--r-sm,10px)] p-3 flex flex-col gap-2 transition-all border ${editingCritId === c.id ? 'bg-white/[.06] border-white/[.22] shadow-md' : 'bg-white/[.03] border-white/[.09] hover:border-white/[.18]'}`}
+                  >
                     <div className="flex items-start justify-between">
                       <div>
                         <h4 className="text-xs sm:text-sm font-bold text-white">{c.name}</h4>
@@ -1139,7 +1280,7 @@ export default function SettingsPage() {
                 className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddReviewTag()}
               />
-              <button onClick={handleAddReviewTag} disabled={!newReviewTag.trim()} className="flex items-center justify-center gap-1 bg-gold-500 hover:bg-gold-600 text-ink-950 px-3.5 py-2 rounded-xl font-black text-xs sm:text-sm transition-all disabled:opacity-40">
+              <button onClick={handleAddReviewTag} disabled={!newReviewTag.trim()} className={`${BTN_P} px-3.5 py-2 text-xs sm:text-sm`} style={BTN_P_STYLE}>
                 <Plus size={16} /> Ekle
               </button>
             </div>
@@ -1183,9 +1324,8 @@ export default function SettingsPage() {
           >
             <button
               onClick={toggleLockedNames}
-              className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all ${
-                data.showLockedNames ? 'bg-gold-500 text-ink-950 shadow-lg' : 'bg-ink-800 text-ink-300 hover:bg-ink-700 border border-ink-700'
-              }`}
+              className={`${data.showLockedNames ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
+              style={data.showLockedNames ? BTN_P_STYLE : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
             >
               {data.showLockedNames ? 'Görünürlüğü Kapat (Normal Mod)' : 'Kilitli İsimleri Göster (Test Modu)'}
             </button>
