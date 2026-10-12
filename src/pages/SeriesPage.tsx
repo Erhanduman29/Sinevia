@@ -18,6 +18,252 @@ import type { Series, Episode } from '../types';
 
 type SortMode = 'az' | 'recent' | 'rating';
 
+/* ============================================================
+   PREMIUM STILLER (svp- öneki · tema token'larına fallback'li)
+   Kaynak: sinevia-premium.html — cam yüzeyler · kırmızı vurgu · shine
+   ============================================================ */
+const SERIES_PREMIUM_CSS = `
+.svp-card {
+  border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  border-radius: var(--r-lg, 22px);
+  background: var(--glass, var(--bg-surface, rgba(255,255,255,.05)));
+  box-shadow: var(--shadow, 0 20px 48px -24px rgba(0,0,0,.75)), inset 0 1px 0 rgba(255,255,255,.07);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: transform .28s cubic-bezier(.2,.7,.3,1), border-color .28s, box-shadow .28s;
+}
+.svp-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(232,56,79,.45);
+  box-shadow: 0 30px 56px -22px rgba(0,0,0,.9), 0 0 36px -14px rgba(232,56,79,.45), inset 0 1px 0 rgba(255,255,255,.1);
+}
+.svp-panel {
+  border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  border-radius: var(--r-lg, 22px);
+  background: var(--glass, var(--bg-surface, rgba(255,255,255,.05)));
+  box-shadow: var(--shadow, 0 20px 48px -24px rgba(0,0,0,.75)), inset 0 1px 0 rgba(255,255,255,.07);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.svp-grad-text {
+  background: linear-gradient(100deg, var(--ink, var(--text-main, #f4f4f2)) 25%, var(--muted, #9a9a96));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* --- premium buton sistemi (btn-p / btn-s ruhu) --- */
+.svp-btn-p, .svp-btn-s {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  font-weight: 800; letter-spacing: .04em;
+  border-radius: 13px; border: 1px solid transparent;
+  transition: .25s cubic-bezier(.2,.7,.3,1);
+  white-space: nowrap;
+}
+.svp-btn-p::after, .svp-btn-s::after {
+  content: ''; position: absolute; top: 0; left: -80%; width: 55%; height: 100%; z-index: -1;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent);
+  transform: skewX(-20deg); transition: left .5s ease;
+}
+.svp-btn-p:hover::after, .svp-btn-s:hover::after { left: 130%; }
+.svp-btn-p:active, .svp-btn-s:active { transform: translateY(1px) scale(.985); }
+.svp-btn-p {
+  color: #fff;
+  background: linear-gradient(150deg, var(--red-hi, var(--color-2, #ff6b7a)) 0%, var(--red, var(--color-1, #e8384f)) 45%, var(--red-deep, var(--color-3, #8e1220)) 130%);
+  box-shadow: 0 10px 28px -10px rgba(232,56,79,.75), inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 6px rgba(0,0,0,.25);
+}
+.svp-btn-p:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -10px rgba(232,56,79,.9), inset 0 1px 0 rgba(255,255,255,.4);
+}
+.svp-btn-s {
+  color: var(--ink, var(--text-main, #f4f4f2));
+  background: linear-gradient(150deg, rgba(255,255,255,.14), rgba(255,255,255,.05));
+  border-color: rgba(255,255,255,.16);
+  box-shadow: 0 8px 22px -12px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.16);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.svp-btn-s:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(150deg, rgba(255,255,255,.2), rgba(255,255,255,.08));
+  border-color: rgba(255,255,255,.3);
+}
+.svp-btn-p:disabled, .svp-btn-s:disabled { opacity: .4; pointer-events: none; }
+.svp-btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+  border-radius: 12px; border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  background: var(--surface, rgba(255,255,255,.04));
+  color: var(--muted, #9a9a96);
+  transition: .24s cubic-bezier(.2,.7,.3,1);
+}
+.svp-btn-ghost:hover {
+  transform: translateY(-2px);
+  color: var(--ink, var(--text-main, #f4f4f2));
+  border-color: rgba(232,56,79,.55);
+  box-shadow: 0 10px 26px -12px rgba(232,56,79,.7);
+}
+
+/* --- tab + chip sistemi (aktif = kırmızı) --- */
+.svp-tab {
+  border-radius: 12px; border: 1px solid transparent;
+  font-weight: 800; letter-spacing: .03em;
+  transition: .22s cubic-bezier(.2,.7,.3,1);
+  color: var(--muted, #9a9a96);
+  background: transparent;
+}
+.svp-tab:hover:not(.svp-tab-on) { color: var(--ink, var(--text-main, #f4f4f2)); background: var(--surface, rgba(255,255,255,.05)); }
+.svp-tab-on {
+  color: #fff;
+  background: linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)));
+  border-color: transparent;
+  box-shadow: 0 8px 22px -8px rgba(232,56,79,.8), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.svp-tab-on .svp-tab-n { color: #fff; }
+.svp-tab-n { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; opacity: .85; }
+.svp-chip {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: .3rem;
+  padding: .34rem .7rem; border-radius: 99px;
+  font-size: 11px; font-weight: 800; letter-spacing: .05em;
+  border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  background: var(--surface, rgba(255,255,255,.04));
+  color: var(--muted, #9a9a96);
+  transition: .22s cubic-bezier(.2,.7,.3,1);
+}
+.svp-chip:hover:not(.svp-chip-on) { color: var(--ink, var(--text-main, #f4f4f2)); border-color: rgba(255,255,255,.3); transform: translateY(-2px); }
+.svp-chip-on {
+  color: #fff;
+  background: linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)));
+  border-color: transparent;
+  box-shadow: 0 8px 22px -8px rgba(232,56,79,.8), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.svp-chip-on:hover { color: #fff; }
+.svp-count-pill {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--red-hi, var(--color-2, #ff6b7a));
+  background: rgba(232,56,79,.14); border: 1px solid rgba(232,56,79,.4);
+  padding: .3rem .65rem; border-radius: 99px; white-space: nowrap;
+}
+
+/* --- mono etiketler --- */
+.svp-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--muted, #9a9a96);
+}
+
+/* --- bölüm ilerleme barı (gradyan + shine) --- */
+.svp-prog {
+  position: relative; height: 8px; border-radius: 99px; overflow: hidden;
+  background: rgba(0,0,0,.45);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.7);
+}
+.svp-prog-fill {
+  position: absolute; inset: 0 auto 0 0; border-radius: 99px; overflow: hidden;
+  background: linear-gradient(90deg, var(--red-deep, var(--color-3, #8e1220)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-hi, var(--color-2, #ff6b7a)));
+  box-shadow: 0 0 12px rgba(232,56,79,.7);
+  transition: width .5s cubic-bezier(.2,.7,.3,1);
+}
+.svp-prog-fill::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.5), transparent);
+  transform: translateX(-100%);
+  animation: svp-shine 2.6s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes svp-shine { 60%, 100% { transform: translateX(100%); } }
+
+/* --- kart içi izleme linkleri --- */
+.svp-link {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .22rem .55rem; border-radius: 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: .03em;
+  border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  background: var(--surface, rgba(255,255,255,.05));
+  color: var(--muted, #9a9a96);
+  transition: .22s cubic-bezier(.2,.7,.3,1);
+}
+.svp-link:hover {
+  color: var(--ink, var(--text-main, #f4f4f2));
+  border-color: rgba(232,56,79,.5);
+  background: rgba(232,56,79,.12);
+  transform: translateY(-1px);
+}
+
+/* --- poster çerçevesi --- */
+.svp-poster {
+  position: relative; overflow: hidden; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: linear-gradient(160deg, #221D2A, #0D0D11);
+  box-shadow: 0 10px 26px -12px rgba(0,0,0,.9);
+  transition: .26s cubic-bezier(.2,.7,.3,1);
+}
+.svp-poster:hover {
+  border-color: rgba(232,56,79,.6);
+  box-shadow: 0 0 0 3px rgba(232,56,79,.16), 0 14px 30px -12px rgba(0,0,0,.95);
+}
+
+/* --- bölüm kutucukları --- */
+.svp-ep {
+  position: relative; width: 100%; height: 2.5rem;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  background: var(--surface, rgba(255,255,255,.04));
+  color: var(--muted, #9a9a96);
+  font-size: 11px; font-weight: 800;
+  transition: .22s cubic-bezier(.2,.7,.3,1);
+}
+.svp-ep-done {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(150deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 16px -8px rgba(232,56,79,.8);
+}
+.svp-ep-ready { color: var(--red-hi, var(--color-2, #ff6b7a)); cursor: pointer; }
+.svp-ep-ready:hover {
+  transform: translateY(-2px);
+  border-color: rgba(232,56,79,.65);
+  background: rgba(232,56,79,.12);
+  box-shadow: 0 0 0 3px rgba(232,56,79,.16), 0 8px 20px -10px rgba(232,56,79,.8);
+  color: #fff;
+}
+.svp-ep-lock {
+  border-style: dashed; cursor: not-allowed; opacity: .55;
+  color: var(--muted, #9a9a96);
+}
+
+/* --- sezon başlıkları --- */
+.svp-season {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink, var(--text-main, #f4f4f2));
+}
+.svp-done-tag {
+  display: inline-flex; align-items: center; gap: .25rem;
+  font-size: 9.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  color: #4ade80; background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.4);
+  padding: .18rem .55rem; border-radius: 99px;
+}
+
+/* --- aksiyon ikon butonları --- */
+.svp-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 11px; border: 1px solid transparent;
+  color: var(--muted, #9a9a96);
+  transition: .22s cubic-bezier(.2,.7,.3,1);
+}
+.svp-act:hover { transform: translateY(-2px); color: var(--ink, var(--text-main, #f4f4f2)); border-color: var(--line-2, var(--border-dim, rgba(244,244,242,.13))); background: var(--surface, rgba(255,255,255,.05)); }
+.svp-act-send:hover { color: var(--red-hi, var(--color-2, #ff6b7a)); border-color: rgba(232,56,79,.5); box-shadow: 0 8px 20px -10px rgba(232,56,79,.7); }
+.svp-act-del:hover { color: #f87171; border-color: rgba(248,113,113,.45); box-shadow: 0 8px 20px -10px rgba(248,113,113,.6); }
+
+/* --- boş durum kartı --- */
+.svp-empty {
+  border: 1px dashed var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  border-radius: var(--r-lg, 22px);
+  background: var(--glass, var(--bg-surface, rgba(255,255,255,.04)));
+}
+`;
+
 export default function SeriesPage() {
   const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, showToast } = useApp();
   const [showAdd, setShowAdd] = useState(false);
@@ -224,39 +470,47 @@ export default function SeriesPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      <style>{SERIES_PREMIUM_CSS}</style>
+
       {/* ÜST BAŞLIK & MOBİL UYUMLU AKSİYON BARI */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-azure-500/20 to-azure-700/20 border border-azure-500/30 flex items-center justify-center">
-              <Tv size={20} className="text-azure-300" />
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight uppercase flex items-center gap-2.5">
+            <div
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-[14px] flex items-center justify-center text-white flex-shrink-0"
+              style={{
+                background: 'linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)))',
+                boxShadow: '0 8px 22px -8px rgba(232,56,79,.85), inset 0 1px 0 rgba(255,255,255,.4)'
+              }}
+            >
+              <Tv size={20} />
             </div>
-            Diziler
+            <span className="svp-grad-text">Diziler</span>
           </h1>
 
           <button
             onClick={() => setShowAdd(true)}
-            className="sm:hidden flex items-center gap-1.5 bg-gradient-to-r from-azure-500 to-azure-600 text-white px-3.5 py-2 min-h-11 rounded-xl text-xs font-black shadow-lg shadow-azure-500/20"
+            className="svp-btn-p sm:hidden px-3.5 py-2 min-h-11 text-xs"
           >
             <Plus size={16} strokeWidth={2.5} /> Dizi Ekle
           </button>
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
-          {/* YENİ: Toplu Tavsiye Gönder Butonu */}
+          {/* ARKADAŞA TAVSİYE (TEKLİ & TOPLU) */}
           <button
             onClick={() => openSendModal()}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-violet-950/40 hover:bg-violet-900/60 text-violet-300 border border-violet-500/40 px-2.5 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-lg text-xs sm:text-sm font-bold transition-all shadow-sm"
+            className="svp-btn-s flex-1 sm:flex-none px-2.5 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
             title="Arkadaşına tekli veya çoklu dizi listesi öner"
           >
-            <Send size={15} className="flex-shrink-0 text-violet-400" />
+            <Send size={15} className="flex-shrink-0 text-[var(--red-hi,#ff6b7a)]" />
             <span className="truncate">Tavsiye Et</span>
           </button>
 
           <button
             onClick={handleSyncTMDBSeries}
             disabled={isSyncing}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800/80 hover:bg-ink-700 text-azure-300 border border-azure-500/30 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
+            className="svp-btn-s flex-1 sm:flex-none px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
           >
             <RefreshCw size={15} className={`flex-shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
             <span className="truncate">{isSyncing ? 'Taranıyor...' : 'Eksikleri Bul'}</span>
@@ -264,7 +518,7 @@ export default function SeriesPage() {
 
           <button
             onClick={() => setShowPick(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800/80 hover:bg-ink-700 text-azure-300 border border-azure-500/30 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm"
+            className="svp-btn-s flex-1 sm:flex-none px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
           >
             <Shuffle size={15} className="flex-shrink-0" />
             <span className="truncate">Ne İzlesem</span>
@@ -272,7 +526,7 @@ export default function SeriesPage() {
 
           <button
             onClick={() => setShowAdd(true)}
-            className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-azure-500 to-azure-600 text-white px-4 py-2.5 rounded-lg font-semibold hover:from-azure-400 hover:to-azure-500 transition-all shadow-lg shadow-azure-500/20 whitespace-nowrap"
+            className="svp-btn-p hidden sm:inline-flex px-4 py-2.5 text-sm"
           >
             <Plus size={18} />
             Dizi Ekle
@@ -284,30 +538,31 @@ export default function SeriesPage() {
       {data.series.length > 0 && (
         <div className="space-y-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="grid grid-cols-3 sm:flex bg-ink-900/80 rounded-xl p-1 border border-ink-700/60 gap-1">
+            <div
+              className="grid grid-cols-3 sm:flex rounded-[14px] p-1 gap-1"
+              style={{
+                background: 'var(--surface, rgba(255,255,255,.04))',
+                border: '1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)))',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,.06)'
+              }}
+            >
               <button
                 onClick={() => setWatchedFilter(null)}
-                className={`px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs font-bold rounded-lg transition-all truncate ${
-                  watchedFilter === null ? 'bg-ink-700 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-300'
-                }`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs truncate ${watchedFilter === null ? 'svp-tab-on' : ''}`}
               >
-                Tümü ({data.series.length})
+                Tümü <span className="svp-tab-n">({data.series.length})</span>
               </button>
               <button
                 onClick={() => setWatchedFilter(false)}
-                className={`px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs font-bold rounded-lg transition-all truncate ${
-                  watchedFilter === false ? 'bg-azure-500/20 text-azure-400 border border-azure-500/30' : 'text-ink-400 hover:text-ink-300'
-                }`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs truncate ${watchedFilter === false ? 'svp-tab-on' : ''}`}
               >
-                İzlenecek ({totalOngoing})
+                İzlenecek <span className="svp-tab-n">({totalOngoing})</span>
               </button>
               <button
                 onClick={() => setWatchedFilter(true)}
-                className={`px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs font-bold rounded-lg transition-all truncate ${
-                  watchedFilter === true ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-ink-400 hover:text-ink-300'
-                }`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs truncate ${watchedFilter === true ? 'svp-tab-on' : ''}`}
               >
-                Bitenler ({totalCompleted})
+                Bitenler <span className="svp-tab-n">({totalCompleted})</span>
               </button>
             </div>
 
@@ -315,16 +570,14 @@ export default function SeriesPage() {
               <button
                 type="button"
                 onClick={() => setIsFilterPanelOpen((prev) => !prev)}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold border transition-all ${
-                  isFilterPanelOpen || activeFilterCount > 0
-                    ? 'bg-azure-500/15 text-azure-300 border-azure-500/40 shadow-sm'
-                    : 'bg-ink-900/70 hover:bg-ink-800 text-ink-300 border-ink-700/60'
+                className={`svp-btn-ghost flex-1 sm:flex-none px-3.5 py-2 min-h-11 sm:min-h-0 text-xs font-bold ${
+                  isFilterPanelOpen || activeFilterCount > 0 ? 'svp-chip-on' : ''
                 }`}
               >
-                <SlidersHorizontal size={14} className="text-azure-400" />
-                <span>Ara & Filtrele</span>
+                <SlidersHorizontal size={14} />
+                <span>Ara &amp; Filtrele</span>
                 {activeFilterCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-azure-500 text-white text-[10px] font-black">
+                  <span className="svp-tab-n px-1.5 py-0.2 rounded-full bg-white/25 text-white text-[10px] font-black">
                     {activeFilterCount}
                   </span>
                 )}
@@ -336,7 +589,7 @@ export default function SeriesPage() {
                   type="button"
                   onClick={resetAllFilters}
                   title="Filtreleri sıfırla"
-                  className="p-2 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-bold transition-colors"
+                  className="p-2 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-xl text-red-300 border border-red-500/30 bg-red-500/15 hover:bg-red-500/25 text-xs font-bold transition-colors"
                 >
                   <X size={14} />
                 </button>
@@ -345,21 +598,27 @@ export default function SeriesPage() {
           </div>
 
           {isFilterPanelOpen && (
-            <div className="bg-ink-900/75 backdrop-blur-md border border-ink-700/70 rounded-2xl p-3 sm:p-4 space-y-3 shadow-xl animate-fade-in">
+            <div className="svp-panel p-3 sm:p-4 space-y-3 animate-fade-in-up">
               <div className="relative">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted,#9a9a96)]" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Dizi ara..."
-                  className="w-full bg-ink-950/90 border border-ink-700 rounded-xl pl-9 pr-8 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500/50 transition-all"
+                  className="w-full rounded-xl pl-9 pr-8 py-2.5 text-xs sm:text-sm outline-none transition-all"
+                  style={{
+                    background: 'var(--surface, rgba(255,255,255,.05))',
+                    border: '1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)))',
+                    color: 'var(--ink, var(--text-main, #f4f4f2))',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,.06)'
+                  }}
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => setSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white p-1 min-h-9 min-w-9 sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted,#9a9a96)] hover:text-[var(--ink,#f4f4f2)] p-1 min-h-9 min-w-9 sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                   >
                     <X size={14} />
                   </button>
@@ -367,42 +626,34 @@ export default function SeriesPage() {
               </div>
 
               <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
-                <div className="flex items-center gap-1 text-[11px] font-bold text-ink-400 mr-1 flex-shrink-0">
+                <div className="svp-mono flex items-center gap-1 mr-1 flex-shrink-0">
                   <Filter size={12} /> Sırala:
                 </div>
                 <button
                   onClick={() => setSortMode('az')}
-                  className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 min-h-9 sm:min-h-0 rounded-lg text-xs font-bold transition-all ${
-                    sortMode === 'az' ? 'bg-azure-500/20 border border-azure-500/30 text-azure-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'
-                  }`}
+                  className={`svp-chip ${sortMode === 'az' ? 'svp-chip-on' : ''}`}
                 >
                   <ArrowDownAZ size={13} /> A-Z
                 </button>
                 <button
                   onClick={() => setSortMode('recent')}
-                  className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 min-h-9 sm:min-h-0 rounded-lg text-xs font-bold transition-all ${
-                    sortMode === 'recent' ? 'bg-azure-500/20 border border-azure-500/30 text-azure-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'
-                  }`}
+                  className={`svp-chip ${sortMode === 'recent' ? 'svp-chip-on' : ''}`}
                 >
                   En Yeni
                 </button>
                 <button
                   onClick={() => setSortMode('rating')}
-                  className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 min-h-9 sm:min-h-0 rounded-lg text-xs font-bold transition-all ${
-                    sortMode === 'rating' ? 'bg-azure-500/20 border border-azure-500/30 text-azure-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'
-                  }`}
+                  className={`svp-chip ${sortMode === 'rating' ? 'svp-chip-on' : ''}`}
                 >
                   <StarIcon size={13} /> Puan
                 </button>
               </div>
 
               {allGenres.length > 0 && (
-                <div className="flex sm:flex-wrap gap-1.5 items-center overflow-x-auto hide-scrollbar pt-1 border-t border-ink-800/70">
+                <div className="flex sm:flex-wrap gap-1.5 items-center overflow-x-auto hide-scrollbar pt-2 border-t" style={{ borderColor: 'var(--line, rgba(244,244,242,.07))' }}>
                   <button
                     onClick={clearGenres}
-                    className={`flex-shrink-0 px-2.5 py-1 min-h-9 sm:min-h-0 rounded-full text-xs font-bold transition-all ${
-                      selectedGenres.size === 0 ? 'bg-azure-500 text-white' : 'bg-ink-950 text-ink-400 hover:bg-ink-800 hover:text-ink-200 border border-ink-800'
-                    }`}
+                    className={`svp-chip ${selectedGenres.size === 0 ? 'svp-chip-on' : ''}`}
                   >
                     Tüm Türler
                   </button>
@@ -412,9 +663,7 @@ export default function SeriesPage() {
                       <button
                         key={g}
                         onClick={() => toggleGenre(g)}
-                        className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1 min-h-9 sm:min-h-0 rounded-full text-xs font-bold transition-all ${
-                          active ? 'bg-azure-500 text-white' : 'bg-ink-950 text-ink-400 hover:bg-ink-800 hover:text-ink-200 border border-ink-800'
-                        }`}
+                        className={`svp-chip ${active ? 'svp-chip-on' : ''}`}
                       >
                         {active && <Check size={11} />}
                         {g}
@@ -429,25 +678,33 @@ export default function SeriesPage() {
       )}
 
       {data.series.length === 0 ? (
-        <div className="text-center py-16 text-ink-500">
-          <div className="w-16 h-16 rounded-2xl bg-ink-800/50 flex items-center justify-center mx-auto mb-4">
-            <Tv size={32} className="text-ink-600" />
+        <div className="svp-empty text-center py-16 px-6 text-[var(--muted,#9a9a96)]">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+            style={{
+              background: 'linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)))',
+              boxShadow: '0 10px 26px -10px rgba(232,56,79,.8), inset 0 1px 0 rgba(255,255,255,.4)'
+            }}
+          >
+            <Tv size={32} className="text-white" />
           </div>
-          <p className="text-lg font-medium">Henüz dizi yok.</p>
+          <p className="text-lg font-bold uppercase tracking-wide">Henüz dizi yok.</p>
           <p className="text-sm mt-1">Dizi ekleyerek başla!</p>
         </div>
       ) : sortedSeries.length === 0 ? (
-        <div className="text-center py-12 text-ink-500">
+        <div className="svp-empty text-center py-12 px-6 text-[var(--muted,#9a9a96)]">
           <Tv size={40} className="mx-auto mb-3 opacity-40" />
           <p>{watchedFilter === true ? 'Tamamen bitirdiğin bir dizi yok.' : watchedFilter === false ? 'Bölümleri kalan (izlenecek) dizi yok.' : 'Aramaya uygun dizi bulunamadı.'}</p>
         </div>
       ) : (
-        <div className="space-y-2.5 sm:space-y-3">
+        <div className="space-y-3 sm:space-y-4">
           {sortedSeries.map((s) => {
             const isExpanded = expandedSeries.has(s.id);
             const seasons = Array.from(new Set(s.episodes.map((e) => e.season))).sort((a, b) => a - b);
             const watchedCount = s.episodes.filter((e) => e.watched).length;
             const allWatched = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
+            const nextEp = getNextUnwatchedEpisode(s.episodes);
+            const progressPct = s.episodes.length > 0 ? Math.round((watchedCount / s.episodes.length) * 100) : 0;
 
             const watchLinks: { href: string; text: string; logo: string | null; icon: any }[] = [];
 
@@ -497,13 +754,13 @@ export default function SeriesPage() {
             }
 
             return (
-              <div key={s.id} className="flex flex-col sm:flex-row bg-ink-900/60 backdrop-blur-sm border border-ink-700/50 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all hover:border-ink-600/50 flex-wrap">
+              <div key={s.id} className="svp-card overflow-hidden flex flex-col sm:flex-row flex-wrap">
                 <div
                   onClick={() => toggleSeries(s.id)}
-                  className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 hover:bg-ink-800/40 transition-colors w-full cursor-pointer"
+                  className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 w-full cursor-pointer transition-colors hover:bg-[rgba(255,255,255,.03)]"
                 >
                   <div className="flex items-center gap-2.5 sm:gap-3 w-full min-w-0">
-                    {isExpanded ? <ChevronDown size={17} className="text-ink-500 flex-shrink-0" /> : <ChevronRight size={17} className="text-ink-500 flex-shrink-0" />}
+                    {isExpanded ? <ChevronDown size={17} className="text-[var(--red-hi,#ff6b7a)] flex-shrink-0" /> : <ChevronRight size={17} className="text-[var(--muted,#9a9a96)] flex-shrink-0" />}
 
                     <button
                       type="button"
@@ -512,28 +769,39 @@ export default function SeriesPage() {
                         setDetailSeriesId(s.id);
                       }}
                       title="Dizi Sinema Kartını Gör"
-                      className="w-14 sm:w-16 aspect-[2/3] flex-shrink-0 bg-ink-900 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-azure-500"
+                      className="svp-poster w-14 sm:w-16 aspect-[2/3] flex-shrink-0 flex items-center justify-center group/poster cursor-pointer focus:outline-none"
                     >
                       {s.posterUrl ? (
                         <img src={s.posterUrl} alt={s.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
                       ) : (
-                        <Tv size={16} className="text-ink-600" />
+                        <Tv size={16} className="text-[var(--muted,#9a9a96)]" />
                       )}
                       <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 p-1">
-                        <div className="w-6 h-6 rounded-full bg-azure-500 text-white flex items-center justify-center shadow-md">
+                        <div
+                          className="w-6 h-6 rounded-full text-white flex items-center justify-center shadow-md"
+                          style={{ background: 'linear-gradient(140deg, var(--red-hi, #ff6b7a), var(--red-deep, #8e1220))' }}
+                        >
                           <Eye size={13} />
                         </div>
                       </div>
                     </button>
 
                     <div className="text-left min-w-0 flex-1 flex flex-col justify-center">
-                      <div className={`font-bold text-sm sm:text-base truncate mb-0.5 ${allWatched ? 'text-ink-500' : 'text-ink-100'}`}>
+                      <div className={`font-black text-[13px] sm:text-[15px] uppercase tracking-tight truncate mb-0.5 ${allWatched ? 'opacity-55' : ''}`} style={{ color: 'var(--ink, var(--text-main, #f4f4f2))' }}>
                         {s.title}
                       </div>
 
-                      <div className="text-[11px] sm:text-xs text-ink-500 truncate mb-1.5">
-                        {s.genres.join(' · ') || 'Tür yok'} {s.year && ` · ${s.year}`}
+                      <div className="svp-mono truncate mb-1.5">
+                        {s.genres.join(' · ') || 'Tür yok'} {s.year && `· ${s.year}`}
                       </div>
+
+                      {!allWatched && nextEp && (
+                        <div className="mb-1.5">
+                          <span className="svp-count-pill">
+                            Sıradaki · S{nextEp.season}B{nextEp.episode}
+                          </span>
+                        </div>
+                      )}
 
                       <div className="flex gap-1.5 flex-wrap">
                         {watchLinks.map((link, idx) => {
@@ -545,7 +813,7 @@ export default function SeriesPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 bg-ink-800/80 hover:bg-azure-900/40 text-azure-400 border border-azure-500/30 px-2 py-0.5 min-h-9 sm:min-h-0 rounded-md text-[10px] font-semibold transition-all"
+                              className="svp-link"
                             >
                               {link.logo ? <img src={link.logo} alt="Platform" className="w-3 h-3 rounded-sm object-cover" /> : <Icon size={11} />}
                               <span>{link.text}</span>
@@ -557,19 +825,29 @@ export default function SeriesPage() {
                   </div>
                 </div>
 
-                <div className="flex sm:flex-col items-center justify-between sm:justify-center gap-2 px-3 py-2.5 sm:p-4 border-t border-ink-800/50 sm:border-t-0 sm:border-l shrink-0">
-                  <span className="text-[11px] sm:text-xs text-ink-400 bg-ink-800/60 px-2.5 py-0.5 rounded-full font-semibold">
-                    {watchedCount}/{s.episodes.length} bölüm
-                  </span>
+                <div className="flex sm:flex-col items-center sm:items-stretch justify-between sm:justify-center gap-2 px-3 py-3 sm:p-4 border-t sm:border-t-0 sm:border-l w-full sm:w-auto sm:min-w-[210px] shrink-0" style={{ borderColor: 'var(--line, rgba(244,244,242,.07))' }}>
+                  <div className="flex items-center justify-between sm:justify-start gap-2">
+                    <span className="svp-mono">
+                      <span style={{ color: 'var(--red-hi, var(--color-2, #ff6b7a))' }}>{watchedCount}</span>/{s.episodes.length} bölüm
+                    </span>
+                    {allWatched && (
+                      <span className="svp-done-tag"><Check size={10} /> Tamam</span>
+                    )}
+                  </div>
+
+                  {/* BÖLÜM İLERLEME BARI (gradyan + shine) */}
+                  <div className="svp-prog flex-1 min-w-[90px]" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label={`${s.title} ilerleme`}>
+                    <div className="svp-prog-fill" style={{ width: `${progressPct}%` }} />
+                  </div>
+
                   <div className="flex items-center gap-1.5">
-                    {/* YENİ: Arkadaşa Tavsiye Et Butonu */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         openSendModal(s);
                       }}
                       title="Arkadaşına Tavsiye Et"
-                      className="text-violet-400 hover:text-white bg-violet-500/10 hover:bg-violet-500/30 p-2.5 min-h-11 min-w-11 sm:p-1.5 sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-lg transition-colors border border-transparent hover:border-violet-500/50"
+                      className="svp-act svp-act-send p-2.5 min-h-11 min-w-11 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
                       <Send size={15} />
                     </button>
@@ -578,7 +856,8 @@ export default function SeriesPage() {
                         e.stopPropagation();
                         setEditTarget(s);
                       }}
-                      className="text-ink-500 hover:text-azure-400 bg-ink-900/50 hover:bg-ink-800 p-2.5 min-h-11 min-w-11 sm:p-1.5 sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-lg transition-colors border border-transparent hover:border-ink-700"
+                      title="Düzenle"
+                      className="svp-act p-2.5 min-h-11 min-w-11 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
                       <Edit2 size={15} />
                     </button>
@@ -587,7 +866,8 @@ export default function SeriesPage() {
                         e.stopPropagation();
                         setDeleteTarget(s);
                       }}
-                      className="text-ink-500 hover:text-red-400 bg-ink-900/50 hover:bg-ink-800 p-2.5 min-h-11 min-w-11 sm:p-1.5 sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-lg transition-colors border border-transparent hover:border-ink-700"
+                      title="Sil"
+                      className="svp-act svp-act-del p-2.5 min-h-11 min-w-11 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -595,21 +875,19 @@ export default function SeriesPage() {
                 </div>
 
                 {isExpanded && (
-                  <div className="w-full basis-full border-t border-ink-700/40 bg-ink-950/20">
+                  <div className="w-full basis-full border-t" style={{ borderColor: 'var(--line, rgba(244,244,242,.07))', background: 'rgba(0,0,0,.18)' }}>
                     {seasons.length === 0 ? (
-                      <div className="p-4 text-sm text-ink-500 text-center">Henüz bölüm eklenmedi.</div>
+                      <div className="p-4 text-sm text-center" style={{ color: 'var(--muted, #9a9a96)' }}>Henüz bölüm eklenmedi.</div>
                     ) : (
                       seasons.map((season) => {
                         const eps = s.episodes.filter((e) => e.season === season).sort((a, b) => a.episode - b.episode);
                         const seasonAllWatched = eps.length > 0 && eps.every((e) => e.watched);
                         return (
-                          <div key={season} className="p-3 sm:p-4 border-b border-ink-700/30 last:border-0">
-                            <div className="text-xs sm:text-sm font-semibold text-ink-300 mb-2.5 flex items-center gap-2">
+                          <div key={season} className="p-3 sm:p-4 border-b last:border-0" style={{ borderColor: 'var(--line, rgba(244,244,242,.07))' }}>
+                            <div className="svp-season mb-2.5 flex items-center gap-2">
                               {season}. Sezon
                               {seasonAllWatched && (
-                                <span className="text-green-400 text-xs flex items-center gap-0.5">
-                                  <Check size={13} /> Tamamlandı
-                                </span>
+                                <span className="svp-done-tag"><Check size={10} /> Tamamlandı</span>
                               )}
                             </div>
                             <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1.5">
@@ -642,9 +920,9 @@ export default function SeriesPage() {
         </div>
       )}
 
-      {/* YENİ: ARKADAŞA TAVSİYE MODALI (TEKLİ & ÇOKLU DİZİ DESTEKLİ, GRID TASARIMLI) */}
+      {/* ARKADAŞA TAVSİYE MODALI (TEKLİ & ÇOKLU DİZİ DESTEKLİ, GRID TASARIMLI) */}
       {showSendModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setShowSendModal(false)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in-up" onClick={() => setShowSendModal(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-4xl h-[85dvh] bg-ink-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 border-b border-ink-800 bg-ink-900/50 flex items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
@@ -657,7 +935,7 @@ export default function SeriesPage() {
             <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
               <div className="w-full md:w-64 p-4 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/20 flex flex-col gap-4 overflow-y-auto custom-scrollbar flex-shrink-0">
                 {loadingFriends ? (
-                  <div className="text-center py-6 text-xs text-ink-500 animate-pulse">Arkadaşların yükleniyor...</div>
+                  <div className="text-center py-6 text-xs text-ink-500 animate-pulse">Arkadaşlar yükleniyor...</div>
                 ) : friendsList.length === 0 ? (
                   <div className="text-center py-8 text-xs text-ink-500 bg-ink-900/40 rounded-2xl border border-ink-800">
                     Ağında ekli arkadaşın bulunamadı.
@@ -872,23 +1150,19 @@ function EpisodeBox({
       <button
         onClick={episode.watched ? onUnwatch : onRate}
         disabled={episode.watched ? false : !canWatch}
-        className={`w-full h-10 min-h-11 md:min-h-0 rounded-lg border-2 flex items-center justify-center transition-all ${
-          episode.watched
-            ? 'bg-ink-800/60 border-ink-600 hover:border-ink-500'
-            : canWatch
-            ? 'bg-gradient-to-br from-azure-500/10 to-azure-700/10 border-azure-500/40 hover:border-azure-400 hover:from-azure-500/20 hover:to-azure-700/20 cursor-pointer'
-            : 'bg-ink-800/30 border-ink-700/50 cursor-not-allowed'
+        className={`svp-ep min-h-11 md:min-h-0 ${
+          episode.watched ? 'svp-ep-done' : canWatch ? 'svp-ep-ready' : 'svp-ep-lock'
         }`}
       >
         {episode.watched ? (
-          <Check size={14} className="text-green-400" />
+          <Check size={14} />
         ) : canWatch ? (
-          <span className="text-xs font-bold text-azure-300">{episode.episode}</span>
+          <span>{episode.episode}</span>
         ) : (
-          <Lock size={12} className="text-ink-600" />
+          <Lock size={12} />
         )}
       </button>
-      <div className={`text-[10px] text-center mt-0.5 ${episode.watched ? 'text-ink-500' : canWatch ? 'text-ink-400' : 'text-ink-700'}`}>
+      <div className={`text-[10px] text-center mt-0.5 ${episode.watched ? 'opacity-60' : ''}`} style={{ color: 'var(--muted, #9a9a96)' }}>
         {episode.episode}
       </div>
       {showActions && (
