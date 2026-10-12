@@ -27,8 +27,10 @@ interface LayoutProps {
 // üzerinden çalışır; 12 mevcut tema + premium-dark/plain-dark bozulmaz.
 // Burada SADECE stil tanımlanır — nav yapısı ve işlevsellik aynıdır.
 // ---------------------------------------------------------------------------
+// Premium-dark teması var(--glass) token'ı tanımlar; plain-dark ve eski
+// temalarda TANIMLI OLMADIĞI için mutlaka fallback verilir.
 const GLASS_SHEEN =
-  'linear-gradient(155deg, rgba(255,255,255,.055), rgba(255,255,255,.018) 55%, rgba(255,255,255,.03))';
+  'var(--glass, linear-gradient(155deg, rgba(255,255,255,.055), rgba(255,255,255,.018) 55%, rgba(255,255,255,.03)))';
 
 /** Cam yüzey: tema zemin rengi + premium ışık süpürmesi. */
 const glassSurface: React.CSSProperties = { backgroundImage: GLASS_SHEEN };
