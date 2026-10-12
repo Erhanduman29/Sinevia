@@ -156,8 +156,8 @@ export default function WeeklyPlanPage() {
     return (
       <div
         draggable onDragStart={(e) => handleDragStart(e, item)} onDragEnd={handleDragEnd} key={item.id}
-        className={`group relative flex-shrink-0 flex gap-2.5 sm:gap-3 transition-all duration-300 animate-fade-in border rounded-2xl overflow-hidden cursor-grab active:cursor-grabbing backdrop-blur-sm w-[250px] sm:w-[280px] p-2.5 ${
-          movie.watched ? 'bg-emerald-950/20 border-emerald-500/20 opacity-80 hover:opacity-100' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.1)] hover:shadow-[0_0_20px_rgba(239,68,68,0.2)] hover:border-red-500/60' : 'bg-ink-900/40 border-ink-700/50 hover:border-violet-500/40 hover:bg-ink-900/70 hover:shadow-md hover:-translate-y-0.5'
+        className={`group relative flex-shrink-0 flex gap-2.5 sm:gap-3 transition-all duration-300 animate-fade-in border rounded-2xl overflow-hidden cursor-grab active:cursor-grabbing backdrop-blur-xl w-[250px] sm:w-[280px] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ${
+          movie.watched ? 'bg-emerald-950/20 border-emerald-500/20 opacity-80 hover:opacity-100' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_18px_-8px_rgba(239,68,68,0.6)] hover:shadow-[0_0_24px_-8px_rgba(239,68,68,0.8)] hover:border-red-500/60' : 'bg-ink-900/40 border-ink-800/50 hover:border-gold-500/50 hover:bg-ink-900/70 hover:shadow-[0_18px_40px_-24px_var(--color-1)] hover:-translate-y-0.5'
         }`}
       >
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -171,12 +171,12 @@ export default function WeeklyPlanPage() {
 
         <div className="min-w-0 flex-1 flex flex-col justify-between pt-0.5">
           <div>
-            <div className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black mb-1 ${isMissed ? 'text-red-400' : 'text-violet-300'}`}>
+            <div className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black font-mono tracking-wider mb-1 ${isMissed ? 'text-red-400' : 'text-gold-400'}`}>
               <Clock size={10} /> {item.time} <ArrowRight size={10} className="text-ink-600 mx-0.5" /> {endTime}
             </div>
-            <div className={`text-[11px] sm:text-xs font-black truncate leading-tight ${movie.watched ? 'text-ink-400 line-through' : 'text-white'}`}>{movie.title}</div>
+            <div className={`text-[11px] sm:text-xs font-black truncate leading-tight uppercase tracking-tight ${movie.watched ? 'text-ink-400 line-through' : 'text-white'}`}>{movie.title}</div>
             <div className="flex items-center gap-2 mt-1">
-              {movie.year && <span className="text-[9px] font-medium text-ink-400 bg-ink-950 px-1.5 py-0.5 rounded-md">{movie.year}</span>}
+              {movie.year && <span className="font-mono text-[9px] font-bold text-ink-400 bg-ink-950 px-1.5 py-0.5 rounded-md border border-ink-800/60">{movie.year}</span>}
             </div>
           </div>
 
@@ -195,19 +195,19 @@ export default function WeeklyPlanPage() {
             ) : isMissed ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-black text-red-400 bg-red-500/10 px-2 py-1 rounded-lg"><AlertCircle size={10} /> Kaçırıldı</div>
-                <button onClick={() => handleSnooze(item)} className="flex items-center gap-1 text-[9px] sm:text-[10px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2 py-1 min-h-11 md:min-h-0 rounded-lg transition-colors"><CalendarPlus size={10} /> Ertele / Taşı</button>
+                <button onClick={() => handleSnooze(item)} className="flex items-center gap-1 text-[9px] sm:text-[10px] font-black text-ink-950 bg-gold-500 hover:brightness-110 hover:shadow-[0_0_16px_-6px_var(--color-1)] px-2 py-1 min-h-11 md:min-h-0 rounded-lg transition-all"><CalendarPlus size={10} /> Ertele / Taşı</button>
               </div>
             ) : timerInfo ? (
               <div className="flex items-center gap-1 flex-wrap">
                 <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-1.5 py-1 rounded-md text-[9px] sm:text-[10px] font-bold"><Timer size={10} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} /><span className="font-mono">{timerInfo.formattedRemaining}</span></div>
                 <button onClick={() => togglePauseWatchingMovie(movie.id)} className="text-amber-300 hover:text-white p-1 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center bg-ink-800 hover:bg-ink-700 rounded-md">{timerInfo.isPaused ? <Play size={10} className="fill-current" /> : <Pause size={10} />}</button>
                 <button onClick={() => cancelWatchingMovie(movie.id)} className="text-red-400 hover:text-white p-1 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 rounded-md"><X size={10} /></button>
-                <button onClick={() => handleRequestRate(item, movie)} disabled={!timerInfo.canRateWithTimer} className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black px-2 py-1 min-h-11 md:min-h-0 rounded-md transition-all ${timerInfo.canRateWithTimer ? 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 text-ink-950' : 'bg-ink-800/60 text-ink-600 cursor-not-allowed'}`}>{timerInfo.canRateWithTimer ? <><Star size={10} className="fill-current" /> Puanla</> : <Lock size={10} />}</button>
+                <button onClick={() => handleRequestRate(item, movie)} disabled={!timerInfo.canRateWithTimer} className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black px-2 py-1 min-h-11 md:min-h-0 rounded-md transition-all ${timerInfo.canRateWithTimer ? 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:brightness-110 hover:shadow-[0_8px_20px_-10px_var(--color-1)] text-ink-950' : 'bg-ink-800/60 text-ink-600 cursor-not-allowed'}`}>{timerInfo.canRateWithTimer ? <><Star size={10} className="fill-current" /> Puanla</> : <Lock size={10} />}</button>
               </div>
             ) : (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <button onClick={() => startWatchingMovie(movie.id)} disabled={anotherTimerActive} title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'Geri Sayımı Başlat'} className={`flex items-center justify-center gap-1 text-[9px] sm:text-[10px] font-black px-2 py-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 rounded-lg border transition-all ${anotherTimerActive ? 'bg-ink-900/50 text-ink-600 border-ink-800 cursor-not-allowed' : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'}`}>{anotherTimerActive ? <Lock size={10} /> : <Play size={10} className="fill-current" />}</button>
-                <button onClick={() => handleRequestRate(item, movie)} className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 text-ink-950 text-[9px] sm:text-[10px] font-black px-2 py-1.5 min-h-11 md:min-h-0 rounded-lg transition-all shadow-sm"><Star size={10} className="fill-current" /> Puanla</button>
+                <button onClick={() => handleRequestRate(item, movie)} className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:brightness-110 hover:shadow-[0_8px_20px_-10px_var(--color-1)] text-ink-950 text-[9px] sm:text-[10px] font-black px-2 py-1.5 min-h-11 md:min-h-0 rounded-lg transition-all shadow-sm"><Star size={10} className="fill-current" /> Puanla</button>
                 <button onClick={() => setEditPlanTarget({ item })} className="p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg bg-ink-800 hover:bg-ink-700 text-ink-300 transition-colors shadow-sm"><Edit2 size={12} /></button>
                 <button onClick={() => setDeleteTarget(item)} className="p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"><Trash2 size={12} /></button>
               </div>
@@ -229,8 +229,8 @@ export default function WeeklyPlanPage() {
     const isMissed = !movie.watched && (isPastDate || isPastTimeToday);
 
     return (
-      <div className={`relative w-full max-w-2xl rounded-xl sm:rounded-2xl overflow-hidden border transition-all animate-fade-in flex flex-row shadow-lg ${
-        movie.watched ? 'bg-emerald-950/10 border-emerald-500/30 opacity-80' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-ink-900/60 border-ink-700/60 hover:border-violet-500/40 hover:bg-ink-900/80 backdrop-blur-md'
+      <div className={`relative w-full max-w-2xl rounded-xl sm:rounded-2xl overflow-hidden border transition-all animate-fade-in flex flex-row shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_20px_46px_-28px_rgba(0,0,0,0.9)] ${
+        movie.watched ? 'bg-emerald-950/10 border-emerald-500/30 opacity-80' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_18px_-8px_rgba(239,68,68,0.6)]' : 'bg-ink-900/60 border-ink-700/60 hover:border-gold-500/50 hover:bg-ink-900/80 backdrop-blur-xl hover:shadow-[0_24px_50px_-26px_var(--color-1)]'
       }`}>
         <div className="w-20 sm:w-24 h-auto flex-shrink-0 bg-ink-950 relative">
           {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover opacity-90" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={20} className="text-ink-600" /></div>}
@@ -241,10 +241,10 @@ export default function WeeklyPlanPage() {
         <div className="p-3 sm:p-4 flex-1 flex flex-col justify-center min-w-0">
           <div className="flex items-start justify-between gap-2 sm:gap-3 mb-1.5">
             <div className="min-w-0">
-              <h4 className={`text-xs sm:text-base font-black leading-tight truncate ${movie.watched ? 'text-ink-400 line-through' : 'text-white'}`}>{movie.title}</h4>
-              <div className="flex items-center gap-2 mt-1 text-[9px] sm:text-[11px]">
+              <h4 className={`text-xs sm:text-base font-black leading-tight truncate uppercase tracking-tight ${movie.watched ? 'text-ink-400 line-through' : 'text-white'}`}>{movie.title}</h4>
+              <div className="flex items-center gap-2 mt-1 text-[9px] sm:text-[11px] font-mono">
                 {movie.year && <span className="font-bold text-ink-300 bg-ink-950 px-1.5 py-0.5 rounded border border-ink-800">{movie.year}</span>}
-                <span className="font-medium text-ink-400 flex items-center gap-1"><Clock size={10} className="text-violet-400" /> {endTime}</span>
+                <span className="font-medium text-ink-400 flex items-center gap-1"><Clock size={10} className="text-gold-400" /> {endTime}</span>
               </div>
             </div>
           </div>
@@ -264,7 +264,7 @@ export default function WeeklyPlanPage() {
             ) : isMissed ? (
               <>
                 <span className="text-[10px] sm:text-[11px] font-black text-red-400 bg-red-500/10 px-2 py-1 sm:px-2.5 sm:py-1.5 min-h-9 md:min-h-0 flex items-center w-fit rounded-lg border border-red-500/20 gap-1.5"><AlertCircle size={10} sm-size={12} /> Kaçırıldı</span>
-                <button onClick={() => handleSnooze(item)} className="text-[10px] sm:text-[11px] font-black text-ink-950 bg-gold-500 hover:bg-gold-400 px-2.5 py-1 sm:px-3 sm:py-1.5 min-h-11 md:min-h-0 rounded-lg transition-colors shadow-sm flex items-center">Ertele / Taşı</button>
+                <button onClick={() => handleSnooze(item)} className="text-[10px] sm:text-[11px] font-black text-ink-950 bg-gold-500 hover:brightness-110 hover:shadow-[0_0_16px_-6px_var(--color-1)] px-2.5 py-1 sm:px-3 sm:py-1.5 min-h-11 md:min-h-0 rounded-lg transition-all shadow-sm flex items-center">Ertele / Taşı</button>
               </>
             ) : timerInfo ? (
               <>
@@ -278,7 +278,7 @@ export default function WeeklyPlanPage() {
                 <button onClick={() => cancelWatchingMovie(movie.id)} className="text-red-400 hover:text-white p-1 sm:p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">
                   <X size={10} sm-size={12} />
                 </button>
-                <button onClick={() => handleRequestRate(item, movie)} disabled={!timerInfo.canRateWithTimer} className={`flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-black px-2 py-1 sm:px-3 sm:py-1.5 min-h-11 md:min-h-0 rounded-lg transition-all shadow-md ${timerInfo.canRateWithTimer ? 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950' : 'bg-ink-800/60 text-ink-600 cursor-not-allowed'}`}>
+                <button onClick={() => handleRequestRate(item, movie)} disabled={!timerInfo.canRateWithTimer} className={`flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-black px-2 py-1 sm:px-3 sm:py-1.5 min-h-11 md:min-h-0 rounded-lg transition-all shadow-md ${timerInfo.canRateWithTimer ? 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 hover:brightness-110 hover:shadow-[0_8px_20px_-10px_var(--color-1)] text-ink-950' : 'bg-ink-800/60 text-ink-600 cursor-not-allowed'}`}>
                   {timerInfo.canRateWithTimer ? <><Star size={10} sm-size={11} className="fill-current" /> Puanla</> : <Lock size={10} sm-size={11} />}
                 </button>
               </>
@@ -287,7 +287,7 @@ export default function WeeklyPlanPage() {
                 <button onClick={() => startWatchingMovie(movie.id)} disabled={anotherTimerActive} className={`flex items-center gap-1 sm:gap-1.5 text-[9px] sm:text-[11px] font-black px-2.5 py-1.5 sm:px-3 min-h-11 md:min-h-0 rounded-lg transition-all border shadow-sm ${anotherTimerActive ? 'bg-ink-900/50 text-ink-600 border-ink-800 cursor-not-allowed' : 'bg-ink-800 hover:bg-emerald-900/40 text-emerald-400 border-emerald-500/40'}`}>
                   {anotherTimerActive ? <Lock size={10} sm-size={12} /> : <Play size={10} sm-size={12} className="fill-current" />} Başlat
                 </button>
-                <button onClick={() => handleRequestRate(item, movie)} className="flex items-center gap-1 sm:gap-1.5 bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 text-[9px] sm:text-[11px] font-black px-2.5 py-1.5 sm:px-3 min-h-11 md:min-h-0 rounded-lg transition-all shadow-sm">
+                <button onClick={() => handleRequestRate(item, movie)} className="flex items-center gap-1 sm:gap-1.5 bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 hover:brightness-110 hover:shadow-[0_8px_20px_-10px_var(--color-1)] text-ink-950 text-[9px] sm:text-[11px] font-black px-2.5 py-1.5 sm:px-3 min-h-11 md:min-h-0 rounded-lg transition-all shadow-sm">
                   <Star size={10} sm-size={12} className="fill-current" /> Puanla
                 </button>
                 <button onClick={() => setEditPlanTarget({ item })} className="p-1.5 sm:p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg bg-ink-800 hover:bg-ink-700 text-ink-300 transition-colors ml-auto">
@@ -308,63 +308,64 @@ export default function WeeklyPlanPage() {
     <div className="space-y-4 sm:space-y-6 pb-8 animate-fade-in">
       
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <h1 className="text-lg sm:text-2xl font-black text-white flex items-center gap-2.5 drop-shadow-md">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-azure-500/20 border border-violet-500/40 flex items-center justify-center shadow-[0_0_15px_rgba(139,92,246,0.2)]">
-            <CalendarClock size={18} sm-size={20} className="text-violet-400" />
+        <h1 className="text-lg sm:text-2xl font-black text-white flex items-center gap-3 drop-shadow-md">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-gold-600 to-gold-700 border border-white/20 flex items-center justify-center shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.35)]">
+            <CalendarClock size={18} sm-size={20} className="text-white" />
           </div>
           <div>
             <div className="leading-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-ink-200">Haftalık Planlayıcı</div>
+            <div className="font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.26em] text-ink-500 mt-1">maraton · haftalık ızgara</div>
           </div>
         </h1>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
-          <div data-tutorial="plan-view" className="flex bg-ink-950/80 p-1 rounded-xl border border-ink-800/80 shadow-inner w-full sm:w-auto">
-            <button onClick={() => setViewMode('list')} className={`flex-1 sm:w-28 flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] font-black tracking-wider transition-all ${viewMode === 'list' ? 'bg-ink-800 text-white shadow-sm' : 'text-ink-500 hover:text-ink-200'}`}>
+          <div data-tutorial="plan-view" className="flex bg-ink-950/80 p-1 rounded-xl border border-ink-800/80 shadow-inner w-full sm:w-auto backdrop-blur-xl">
+            <button onClick={() => setViewMode('list')} className={`flex-1 sm:w-28 flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] font-black uppercase tracking-[0.14em] font-mono transition-all ${viewMode === 'list' ? 'bg-gradient-to-r from-gold-600 to-gold-700 text-white shadow-[0_8px_20px_-8px_var(--color-1)]' : 'text-ink-500 hover:text-ink-200'}`}>
               <LayoutList size={13} /> PANO
             </button>
-            <button onClick={() => setViewMode('timeline')} className={`flex-1 sm:w-28 flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] font-black tracking-wider transition-all ${viewMode === 'timeline' ? 'bg-ink-800 text-violet-300 shadow-sm ring-1 ring-violet-500/20' : 'text-ink-500 hover:text-ink-200'}`}>
+            <button onClick={() => setViewMode('timeline')} className={`flex-1 sm:w-28 flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] font-black uppercase tracking-[0.14em] font-mono transition-all ${viewMode === 'timeline' ? 'bg-gradient-to-r from-gold-600 to-gold-700 text-white shadow-[0_8px_20px_-8px_var(--color-1)]' : 'text-ink-500 hover:text-ink-200'}`}>
               <Activity size={13} /> ÇİZELGE
             </button>
           </div>
-          <button onClick={() => setShowAdd({})} data-tutorial="plan-add" className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-azure-600 text-white px-4 py-2.5 sm:py-2 min-h-11 sm:min-h-0 rounded-xl font-black text-xs shadow-md shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 transition-all">
+          <button onClick={() => setShowAdd({})} data-tutorial="plan-add" className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-gradient-to-r from-gold-600 to-gold-700 text-white px-5 py-2.5 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl font-black text-xs uppercase tracking-[0.1em] shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.3)] hover:shadow-[0_16px_36px_-10px_var(--color-1)] hover:-translate-y-0.5 transition-all">
             <Plus size={16} strokeWidth={3} /> Maraton Planla
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex items-center gap-3 sm:gap-4 shadow-lg backdrop-blur-sm relative overflow-hidden">
-          <div className="absolute -right-4 -bottom-4 text-ink-800/20"><Target size={80} /></div>
+        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex items-center gap-3 sm:gap-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_24px_60px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl relative overflow-hidden group transition-all duration-300 hover:border-gold-500/30">
+          <div className="absolute -right-4 -bottom-4 text-ink-800/20 transition-opacity group-hover:opacity-60"><Target size={80} /></div>
           <div className="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 flex items-center justify-center">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
               <circle cx="18" cy="18" r="16" fill="none" className="stroke-ink-800" strokeWidth="3" />
-              <circle cx="18" cy="18" r="16" fill="none" className="stroke-violet-500 transition-all duration-1000" strokeWidth="3" strokeDasharray="100" strokeDashoffset={100 - stats.completionPct} strokeLinecap="round" />
+              <circle cx="18" cy="18" r="16" fill="none" className="stroke-[var(--color-1)] transition-all duration-1000 drop-shadow-[0_0_6px_var(--color-1)]" strokeWidth="3" strokeDasharray="100" strokeDashoffset={100 - stats.completionPct} strokeLinecap="round" />
             </svg>
-            <div className="absolute text-sm sm:text-lg font-black text-white">{stats.completionPct}<span className="text-[9px] sm:text-[10px] text-ink-500">%</span></div>
+            <div className="absolute text-sm sm:text-lg font-black text-white font-mono">{stats.completionPct}<span className="text-[9px] sm:text-[10px] text-ink-500">%</span></div>
           </div>
           <div className="relative z-10">
-            <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-violet-400 flex items-center gap-1 mb-0.5"><Target size={12} /> Maraton İlerlemesi</div>
+            <div className="text-[9px] sm:text-[10px] font-black uppercase font-mono tracking-[0.18em] text-gold-400 flex items-center gap-1 mb-0.5"><Target size={12} /> Maraton İlerlemesi</div>
             <div className="text-[11px] sm:text-xs font-medium text-ink-300">Bu haftaki planın <strong className="text-white">{stats.watchedCount}</strong> / {stats.total} görevini tamamladın.</div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-center shadow-lg backdrop-blur-sm relative overflow-hidden">
-          <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-azure-400 flex items-center gap-1 mb-1.5"><Zap size={12} /> Toplam Maraton Hacmi</div>
-          <div className="text-xl sm:text-2xl font-black text-white leading-none tracking-tight mb-2">
+        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_24px_60px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl relative overflow-hidden transition-all duration-300 hover:border-azure-500/30">
+          <div className="text-[9px] sm:text-[10px] font-black uppercase font-mono tracking-[0.18em] text-azure-400 flex items-center gap-1 mb-1.5"><Zap size={12} /> Toplam Maraton Hacmi</div>
+          <div className="text-xl sm:text-2xl font-black font-mono text-white leading-none tracking-tight mb-2">
             {formatDuration(stats.totalMinutes)}
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] font-bold mt-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] font-bold font-mono uppercase tracking-wider mt-auto">
             <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 size={10} /> {formatDuration(stats.watchedMinutes)} izlendi</span>
             <span className="text-ink-600">•</span>
             <span className="text-gold-400 flex items-center gap-1"><Hourglass size={10} /> {formatDuration(stats.pendingMinutes)} kaldı</span>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex items-center justify-between shadow-lg backdrop-blur-sm relative overflow-hidden">
+        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex items-center justify-between shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_24px_60px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl relative overflow-hidden transition-all duration-300 hover:border-gold-500/30">
            <div>
-            <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gold-400 flex items-center gap-1 mb-1"><Flame size={12} /> Kalan Seyir Yükü</div>
-            <div className="text-lg sm:text-xl font-black text-white">
-              {stats.pendingCount} <span className="text-[11px] sm:text-xs text-ink-500 font-medium">Film</span>
+            <div className="text-[9px] sm:text-[10px] font-black uppercase font-mono tracking-[0.18em] text-gold-400 flex items-center gap-1 mb-1"><Flame size={12} /> Kalan Seyir Yükü</div>
+            <div className="text-lg sm:text-xl font-black font-mono text-white">
+              {stats.pendingCount} <span className="text-[11px] sm:text-xs text-ink-500 font-medium font-sans">Film</span>
             </div>
             {stats.pendingCount === 0 && stats.total > 0 ? (
               <div className="text-[9px] sm:text-[10px] text-emerald-400 mt-1 font-bold">🎉 Tüm plan tamamlandı!</div>
@@ -372,7 +373,7 @@ export default function WeeklyPlanPage() {
               <div className="text-[9px] sm:text-[10px] text-ink-400 mt-1">Vaktini iyi değerlendir.</div>
             )}
            </div>
-           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gold-500/10 rounded-full flex items-center justify-center border border-gold-500/20 shadow-[0_0_15px_rgba(245,158,11,0.15)] flex-shrink-0">
+           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gold-500/10 rounded-full flex items-center justify-center border border-gold-500/30 shadow-[0_0_18px_-6px_var(--color-1)] flex-shrink-0">
              <Film size={18} className="text-gold-400" />
            </div>
         </div>
@@ -382,7 +383,8 @@ export default function WeeklyPlanPage() {
         const info = getMovieTimerInfo(activeTimerMovie, nowMs);
         const planItem = plan.find((p) => p.movieId === activeTimerMovie.id)!;
         return (
-          <div className="bg-gradient-to-r from-emerald-950/90 via-ink-900 to-ink-950 border-2 border-emerald-500/40 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[0_0_20px_rgba(16,185,129,0.1)] animate-fade-in-up">
+          <div className="bg-gradient-to-r from-emerald-950/70 via-ink-900 to-ink-950 border border-emerald-500/40 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_30px_-14px_rgba(16,185,129,0.8)] backdrop-blur-xl animate-fade-in-up relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-400 to-emerald-600 shadow-[0_0_14px_rgba(16,185,129,0.8)]"></div>
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 w-full sm:w-auto">
               <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0 shadow-inner">
                 <Timer size={16} sm-size={20} className={info.isPaused ? 'text-amber-400' : 'text-emerald-400 animate-pulse'} />
@@ -403,7 +405,7 @@ export default function WeeklyPlanPage() {
               <button onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)} className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:px-4 sm:py-2 min-h-11 md:min-h-0 rounded-xl bg-ink-950 hover:bg-ink-800 text-amber-400 border border-amber-500/30 text-[10px] sm:text-[11px] font-black transition-colors shadow-sm whitespace-nowrap">
                 {info.isPaused ? <><Play size={10} sm-size={12} className="fill-current" /> Devam</> : <><Pause size={10} sm-size={12} /> Duraklat</>}
               </button>
-              <button onClick={() => handleRequestRate(planItem, activeTimerMovie)} className={`flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:px-4 sm:py-2 min-h-11 md:min-h-0 rounded-xl text-[10px] sm:text-[11px] font-black transition-all shadow-md whitespace-nowrap ${info.canRateWithTimer ? 'bg-gold-500 hover:bg-gold-400 text-ink-950' : 'bg-ink-900/60 text-ink-500 border border-ink-800 cursor-not-allowed'}`}>
+              <button onClick={() => handleRequestRate(planItem, activeTimerMovie)} className={`flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:px-4 sm:py-2 min-h-11 md:min-h-0 rounded-xl text-[10px] sm:text-[11px] font-black transition-all shadow-md whitespace-nowrap ${info.canRateWithTimer ? 'bg-gold-500 hover:brightness-110 hover:shadow-[0_0_18px_-6px_var(--color-1)] text-ink-950' : 'bg-ink-900/60 text-ink-500 border border-ink-800 cursor-not-allowed'}`}>
                 {info.canRateWithTimer ? <><Star size={10} sm-size={12} className="fill-current" /> Bitir & Puanla</> : <><Lock size={10} /> {info.minRequiredMins - info.elapsedMins} dk</>}
               </button>
               <button onClick={() => cancelWatchingMovie(activeTimerMovie.id)} title="Sayacı İptal Et" className="p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 flex-shrink-0 transition-colors">
@@ -428,32 +430,39 @@ export default function WeeklyPlanPage() {
                 onDragOver={(e) => handleDragOver(e, dateStr)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, dateStr)}
-                className={`rounded-2xl sm:rounded-3xl border transition-all duration-300 relative overflow-hidden backdrop-blur-sm ${
-                  isDragOver ? 'border-violet-500 ring-2 ring-violet-500/20 bg-violet-500/5 scale-[1.01]' : isToday ? 'border-gold-500/30 bg-gradient-to-r from-gold-500/10 via-ink-900/60 to-ink-950/80 shadow-md' : 'border-ink-800/50 bg-ink-900/30'
+                className={`group/day relative rounded-2xl sm:rounded-3xl border transition-all duration-300 overflow-hidden backdrop-blur-xl before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:content-[''] before:transition-colors ${
+                  isDragOver
+                    ? 'border-[var(--color-1)] bg-gold-500/10 shadow-[0_0_0_3px_var(--blob-1),0_24px_54px_-24px_var(--color-1)] scale-[1.01]'
+                    : isToday
+                      ? 'border-[var(--color-1)] bg-ink-900/60 before:bg-[var(--color-1)] shadow-[0_0_0_1px_var(--color-1),0_22px_50px_-26px_var(--color-1)]'
+                      : 'border-ink-800/50 bg-ink-900/30 before:bg-transparent hover:border-gold-500/30 hover:bg-ink-900/50 hover:shadow-[0_0_36px_-18px_var(--color-1)]'
                 }`}
               >
                 {isDragOver && (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-ink-950/60 backdrop-blur-sm rounded-2xl pointer-events-none">
-                    <div className="bg-violet-500 text-white font-black px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-[0_0_20px_rgba(139,92,246,0.4)] border border-violet-400">
+                    <div className="bg-gold-500 text-white font-black px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-[0_0_24px_var(--color-1)] border border-white/20 font-mono text-[11px] uppercase tracking-[0.14em]">
                       <CalendarPlus size={16} /> Buraya Planla
                     </div>
                   </div>
                 )}
 
-                <div className={`flex items-center justify-between px-4 sm:px-5 py-2.5 sm:py-3 border-b gap-3 ${isToday ? 'border-gold-500/20 bg-gold-500/5' : 'border-ink-800/40 bg-ink-950/30'}`}>
+                <div className={`flex items-center justify-between px-4 sm:px-5 py-2.5 sm:py-3 border-b gap-3 ${isToday ? 'border-[var(--color-1)] bg-gold-500/10' : 'border-ink-800/50 bg-ink-950/30'}`}>
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`text-sm sm:text-base font-black truncate ${isToday ? 'text-gold-400' : 'text-white'}`}>{DAY_NAMES[dayDate.getDay()]}</span>
-                    <span className="text-[10px] sm:text-xs font-bold text-ink-500 flex-shrink-0">{formatDayDate(dayDate)}</span>
-                    {isToday && <span className="text-[9px] font-black bg-gold-500 text-ink-950 px-1.5 py-0.5 rounded flex-shrink-0 shadow-sm">BUGÜN</span>}
+                    <span className={`font-mono text-[9px] font-black uppercase tracking-[0.14em] px-1.5 py-0.5 rounded flex-shrink-0 leading-none ${isToday ? 'text-white bg-gradient-to-br from-gold-500 to-gold-700 shadow-[0_4px_14px_-4px_var(--color-1)]' : 'text-ink-500 bg-ink-800/60 border border-ink-800'}`}>
+                      {String(dayDate.getDate()).padStart(2, '0')}
+                    </span>
+                    <span className={`font-mono text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] truncate ${isToday ? 'text-gold-400' : 'text-white'}`}>{DAY_NAMES[dayDate.getDay()]}</span>
+                    <span className="font-mono text-[10px] sm:text-xs font-bold text-ink-500 flex-shrink-0">{formatDayDate(dayDate)}</span>
+                    {isToday && <span className="font-mono text-[9px] font-black uppercase tracking-[0.16em] bg-gold-500 text-white px-2 py-0.5 rounded flex-shrink-0 shadow-[0_4px_14px_-4px_var(--color-1)]">BUGÜN</span>}
                   </div>
-                  <button onClick={() => setShowAdd({ presetDate: dateStr })} title="Bu güne film ekle" className="w-11 h-11 md:w-7 md:h-7 flex items-center justify-center rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 border border-violet-500/20 transition-all shadow-sm">
+                  <button onClick={() => setShowAdd({ presetDate: dateStr })} title="Bu güne film ekle" className="w-11 h-11 md:w-7 md:h-7 flex items-center justify-center rounded-lg bg-gold-500/10 hover:!bg-[var(--blob-2)] text-gold-400 border border-gold-500/30 hover:!border-[var(--color-2)] hover:shadow-[0_0_16px_-4px_var(--color-1)] transition-all">
                     <Plus size={14} strokeWidth={2.5} />
                   </button>
                 </div>
 
                 <div className="p-3 sm:p-4">
                   {items.length === 0 ? (
-                    <div className="text-[11px] font-medium text-ink-600 text-center py-4">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-600 text-center py-4 border border-dashed border-ink-800/60 rounded-xl">
                       Bu gün için planlanmış film yok.
                     </div>
                   ) : (
@@ -473,7 +482,7 @@ export default function WeeklyPlanPage() {
 
       {viewMode === 'timeline' && (
         <div data-tutorial="plan-timeline" className="relative pl-6 sm:pl-16 mt-4 sm:mt-6 pb-8 animate-fade-in">
-          <div className="absolute top-2 bottom-0 left-[19px] sm:left-[31px] w-0.5 bg-gradient-to-b from-transparent via-violet-500/40 to-transparent shadow-[0_0_10px_rgba(139,92,246,0.2)]"></div>
+          <div className="absolute top-2 bottom-0 left-[19px] sm:left-[31px] w-0.5 opacity-50 rounded-full" style={{ background: 'linear-gradient(to bottom, transparent, var(--color-1) 18%, var(--color-1) 82%, transparent)' }}></div>
 
           <div className="space-y-8 sm:space-y-10">
             {windowDays.map((dayDate) => {
@@ -487,13 +496,14 @@ export default function WeeklyPlanPage() {
                 <div key={dateStr} className="relative">
                   <div className="flex items-center gap-3 sm:gap-5 mb-4 sm:mb-5">
                     <div className="w-14 sm:w-20 text-right flex-shrink-0">
-                      <div className={`text-xs sm:text-sm font-black ${isToday ? 'text-gold-400' : 'text-white'}`}>{DAY_NAMES[dayDate.getDay()]}</div>
-                      <div className="text-[9px] sm:text-[10px] font-bold text-ink-500">{formatDayDate(dayDate)}</div>
+                      <div className={`font-mono text-[11px] sm:text-xs font-black uppercase tracking-[0.16em] ${isToday ? 'text-gold-400' : 'text-white'}`}>{DAY_NAMES[dayDate.getDay()]}</div>
+                      <div className="font-mono text-[9px] sm:text-[10px] font-bold text-ink-500">{formatDayDate(dayDate)}</div>
                     </div>
                     <div className="relative flex items-center justify-center w-5">
-                      <div className={`w-2.5 h-2.5 rounded-full relative z-10 ${isToday ? 'bg-gold-400 ring-4 ring-gold-500/10 shadow-[0_0_10px_rgba(250,204,21,0.4)]' : 'bg-violet-500 ring-4 ring-violet-500/10'}`}></div>
+                      <div className={`w-2.5 h-2.5 rounded-full relative z-10 transition-all ${isToday ? 'bg-gold-500 ring-4 ring-[var(--blob-1)] shadow-[0_0_14px_var(--color-1)]' : 'bg-gold-500/10 border border-gold-500/30 ring-4 ring-[var(--blob-1)]'}`}></div>
                     </div>
                     <div className="flex-1 h-px bg-gradient-to-r from-ink-800 to-transparent"></div>
+                    {isToday && <span className="font-mono text-[9px] font-black uppercase tracking-[0.16em] bg-gold-500 text-white px-2 py-0.5 rounded shadow-[0_4px_14px_-4px_var(--color-1)] flex-shrink-0">BUGÜN</span>}
                   </div>
 
                   <div className="space-y-3 sm:space-y-4">
@@ -506,17 +516,17 @@ export default function WeeklyPlanPage() {
                       return (
                         <div key={item.id} className="flex gap-3 sm:gap-5 group">
                           <div className="w-14 sm:w-20 text-right flex-shrink-0 pt-3">
-                            <div className={`text-base sm:text-lg font-black ${!movie.watched && (item.date < todayStrVal || (item.date === todayStrVal && item.time < currentTimeStr)) ? 'text-red-400' : movie.watched ? 'text-emerald-500/50' : 'text-violet-400'}`}>{item.time}</div>
+                            <div className={`font-mono text-base sm:text-lg font-black ${!movie.watched && (item.date < todayStrVal || (item.date === todayStrVal && item.time < currentTimeStr)) ? 'text-red-400' : movie.watched ? 'text-emerald-500/50' : 'text-gold-400'}`}>{item.time}</div>
                             {/* TYPESCRIPT DÜZELTMESİ: runtime tanımsızsa varsayılan 115 kullan */}
-                            <div className="text-[9px] sm:text-[10px] font-bold text-ink-600 mt-0.5">{computeEndTime(item.time, movie.runtime || item.runtime || 115)}</div>
+                            <div className="font-mono text-[9px] sm:text-[10px] font-bold text-ink-600 mt-0.5">{computeEndTime(item.time, movie.runtime || item.runtime || 115)}</div>
                           </div>
 
                           <div className="relative flex justify-center w-5">
-                            <div className={`absolute top-0 w-px -z-10 ${isLast ? 'bottom-0' : '-bottom-3 sm:-bottom-4'} ${movie.watched ? 'bg-emerald-900/30' : 'bg-ink-800 group-hover:bg-violet-500/40'} transition-colors`}></div>
+                            <div className={`absolute top-0 w-px -z-10 ${isLast ? 'bottom-0' : '-bottom-3 sm:-bottom-4'} ${movie.watched ? 'bg-emerald-900/30' : 'bg-ink-800 group-hover:bg-[var(--color-1)]'} transition-colors`}></div>
                             <div className={`w-1.5 h-1.5 rounded-full mt-4.5 relative z-10 transition-all duration-300 ${
                               movie.watched ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' :
                               !movie.watched && (item.date < todayStrVal || (item.date === todayStrVal && item.time < currentTimeStr)) ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]' :
-                              'bg-ink-900 border-2 border-violet-500 group-hover:bg-violet-400 group-hover:shadow-[0_0_10px_rgba(139,92,246,0.5)]'
+                              'bg-ink-900 border-2 border-gold-500 group-hover:bg-gold-500 group-hover:shadow-[0_0_12px_var(--color-1)]'
                             }`}></div>
                           </div>
 
@@ -532,8 +542,8 @@ export default function WeeklyPlanPage() {
             })}
             
             {plan.length === 0 && (
-              <div className="text-center py-10 text-ink-500 text-xs font-bold bg-ink-900/20 rounded-2xl border border-ink-800/40 mr-4 backdrop-blur-sm">
-                <TimelineIcon size={32} className="mx-auto mb-3 opacity-20 text-violet-500" />
+              <div className="text-center py-10 text-ink-500 font-mono text-[11px] uppercase tracking-[0.2em] font-bold bg-ink-900/20 rounded-2xl border border-ink-800/40 mr-4 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                <TimelineIcon size={32} className="mx-auto mb-3 opacity-20 text-gold-400" />
                 Zaman çizelgen bomboş.
               </div>
             )}
@@ -651,10 +661,11 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-[0_0_30px_rgba(139,92,246,0.1)] flex flex-col max-h-[90svh] animate-fade-in-up">
-        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-violet-500/10 to-transparent">
-          <h3 className="text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md">
-            <div className="w-6 h-6 rounded border border-violet-500/30 bg-violet-500/20 text-violet-400 flex items-center justify-center"><Sparkles size={12} /></div>
+      <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-[0_28px_70px_-28px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.07)] flex flex-col max-h-[90svh] animate-fade-in-up backdrop-blur-2xl">
+        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-gold-500/10 to-transparent relative">
+          <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-gold-500 via-gold-500/40 to-transparent"></div>
+          <h3 className="text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
+            <div className="w-6 h-6 rounded border border-gold-500/30 bg-gold-500/10 text-gold-400 flex items-center justify-center"><Sparkles size={12} /></div>
             Maraton Kurulumu
           </h3>
           <button onClick={onClose} className="text-ink-400 hover:text-white p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-full hover:bg-ink-800 transition-colors"><X size={16} /></button>
@@ -664,16 +675,16 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
           {!selectedMovie ? (
             <>
               <div className="relative group">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500 group-focus-within:text-violet-400 transition-colors" />
-                <input type="text" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="İzlenecek filmlerinde ara..." className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 text-xs sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/50 transition-all shadow-inner" />
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500 group-focus-within:text-gold-400 transition-colors" />
+                <input type="text" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="İzlenecek filmlerinde ara..." className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 text-xs sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] transition-all shadow-inner" />
               </div>
 
               <div className="flex gap-2">
-                <select value={collectionFilter} onChange={(e) => setCollectionFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold text-ink-300 focus:outline-none focus:border-violet-500 transition-colors">
+                <select value={collectionFilter} onChange={(e) => setCollectionFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold font-mono uppercase tracking-wider text-ink-300 focus:outline-none focus:border-gold-500/50 transition-colors">
                   <option value="">Koleksiyon: Tümü</option>
                   {data.collections.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
                 </select>
-                <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold text-ink-300 focus:outline-none focus:border-violet-500 transition-colors">
+                <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold font-mono uppercase tracking-wider text-ink-300 focus:outline-none focus:border-gold-500/50 transition-colors">
                   <option value="">Tür: Tümü</option>
                   {data.genres.map((g) => (<option key={g} value={g}>{g}</option>))}
                 </select>
@@ -681,21 +692,21 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
 
               <div className="space-y-1.5 max-h-[35dvh] overflow-y-auto custom-scrollbar pr-1.5">
                 {candidates.length === 0 ? (
-                  <div className="text-center py-6 sm:py-8 text-[11px] sm:text-xs text-ink-500 bg-ink-950/40 rounded-xl border border-ink-800/50 border-dashed mt-2">
-                    <Film size={20} sm-size={24} className="mx-auto mb-2 opacity-30 text-violet-400" />
+                  <div className="text-center py-6 sm:py-8 text-[11px] sm:text-xs font-mono uppercase tracking-[0.16em] text-ink-500 bg-ink-950/40 rounded-xl border border-dashed border-ink-800/60 mt-2">
+                    <Film size={20} sm-size={24} className="mx-auto mb-2 opacity-30 text-gold-400" />
                     Kriterlerine uygun izlenmemiş film bulunamadı.
                   </div>
                 ) : (
                   candidates.map((m) => (
-                    <button key={m.id} onClick={() => setSelectedMovie(m)} className="w-full flex items-center gap-2.5 sm:gap-3 p-2 rounded-xl bg-ink-950/40 hover:bg-ink-800 border border-ink-800/80 hover:border-violet-500/50 transition-all text-left group shadow-sm">
-                      <div className="w-8 h-11 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow-violet-500/20 border border-ink-800/50">
+                    <button key={m.id} onClick={() => setSelectedMovie(m)} className="w-full flex items-center gap-2.5 sm:gap-3 p-2 rounded-xl bg-ink-950/40 hover:bg-ink-800 border border-ink-800/80 hover:border-gold-500/50 transition-all text-left group shadow-sm hover:shadow-[0_10px_26px_-16px_var(--color-1)]">
+                      <div className="w-8 h-11 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow-[0_0_16px_-6px_var(--color-1)] border border-ink-800/50">
                         {m.posterUrl ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] sm:text-xs font-black text-ink-100 truncate group-hover:text-white transition-colors">{m.title}</div>
-                        <div className="text-[9px] font-bold text-ink-500 mt-0.5">{m.year || 'Yıl yok'}{m.runtime ? ` • ${m.runtime} dk` : ''}</div>
+                        <div className="font-mono text-[9px] font-bold text-ink-500 mt-0.5">{m.year || 'Yıl yok'}{m.runtime ? ` • ${m.runtime} dk` : ''}</div>
                       </div>
-                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:scale-105">
+                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-gold-500/10 border border-gold-500/30 text-gold-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:scale-105">
                         <Plus size={10} sm-size={12} strokeWidth={3} />
                       </div>
                     </button>
@@ -705,33 +716,33 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
             </>
           ) : (
             <div className="animate-fade-in">
-              <div className="flex items-center gap-3 bg-gradient-to-r from-violet-500/10 to-transparent border border-violet-500/30 rounded-xl p-2.5 sm:p-3 shadow-inner mb-4">
+              <div className="flex items-center gap-3 bg-gradient-to-r from-gold-500/10 to-transparent border border-gold-500/30 rounded-xl p-2.5 sm:p-3 shadow-inner mb-4">
                 <div className="w-10 h-14 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm border border-ink-700/50">
                   {selectedMovie.posterUrl ? <img src={selectedMovie.posterUrl} alt={selectedMovie.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] sm:text-sm font-black text-white truncate drop-shadow-sm mb-1">{selectedMovie.title}</div>
-                  <div className="text-[9px] sm:text-[10px] font-bold text-violet-300 bg-violet-500/10 w-fit px-1.5 py-0.5 rounded border border-violet-500/20">{selectedMovie.year}{selectedMovie.runtime ? ` • ${selectedMovie.runtime} dk` : ''}</div>
+                  <div className="font-mono text-[9px] sm:text-[10px] font-bold text-gold-400 bg-gold-500/10 w-fit px-1.5 py-0.5 rounded border border-gold-500/30">{selectedMovie.year}{selectedMovie.runtime ? ` • ${selectedMovie.runtime} dk` : ''}</div>
                 </div>
-                <button onClick={() => setSelectedMovie(null)} className="text-[9px] sm:text-[10px] font-black text-ink-950 bg-violet-400 hover:bg-violet-300 px-2 sm:px-2.5 py-1.5 rounded-lg flex-shrink-0 transition-colors shadow-sm">
+                <button onClick={() => setSelectedMovie(null)} className="font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white bg-gold-500 hover:brightness-110 px-2 sm:px-2.5 py-1.5 rounded-lg flex-shrink-0 transition-all shadow-sm">
                   Değiştir
                 </button>
               </div>
 
               <div className="flex gap-2.5 sm:gap-3 mb-4">
                 <div className="space-y-1.5 flex-1">
-                  <label className="h-4 flex items-center text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-ink-400 ml-1">Tarih</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 shadow-inner transition-all" />
+                  <label className="h-4 flex items-center font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1">Tarih</label>
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
                 </div>
                 <div className="space-y-1.5 flex-1">
-                  <label className="h-4 flex items-center text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
-                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 shadow-inner transition-all" />
+                  <label className="h-4 flex items-center font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
+                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
                 </div>
               </div>
 
               <div className="bg-ink-950/60 border border-ink-800 rounded-xl p-2.5 sm:p-3 shadow-inner">
-                <div className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-ink-400 mb-2 flex items-center gap-1.5">
-                  <CalendarDays size={10} sm-size={12} className="text-violet-400" /> 
+                <div className="font-mono text-[8px] sm:text-[9px] font-black uppercase tracking-[0.18em] text-ink-400 mb-2 flex items-center gap-1.5">
+                  <CalendarDays size={10} sm-size={12} className="text-gold-400" /> 
                   {date === toDateStr(startOfToday()) ? 'Bugünün Dolu Saatleri' : 'Seçili Günün Dolu Saatleri'}
                 </div>
                 
@@ -753,7 +764,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
                              {isOverlapping ? <AlertCircle size={10} sm-size={12} className="text-red-400 flex-shrink-0 animate-pulse"/> : <Film size={10} sm-size={12} className="text-ink-500 flex-shrink-0"/>}
                              <span className={`text-[10px] sm:text-[11px] font-bold truncate ${isOverlapping ? 'text-red-300' : 'text-ink-200'}`}>{p.title}</span>
                            </div>
-                           <span className={`text-[8px] sm:text-[9px] font-black flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-violet-500/10 text-violet-400 border-violet-500/20'}`}>
+                           <span className={`text-[8px] sm:text-[9px] font-black font-mono flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-gold-500/10 text-gold-400 border-gold-500/30'}`}>
                              {p.time} - {pEnd}
                            </span>
                         </div>
@@ -776,15 +787,15 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
         </div>
 
         <div className="p-3 border-t border-ink-800/80 bg-ink-950/90 flex flex-col sm:flex-row items-center gap-2 backdrop-blur-md">
-          <button onClick={onClose} className="w-full sm:w-auto px-4 py-2.5 sm:py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold text-[11px] transition-colors">
+          <button onClick={onClose} className="w-full sm:w-auto px-4 py-2.5 sm:py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold font-mono text-[11px] uppercase tracking-wider transition-colors">
             Vazgeç
           </button>
           
           <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:flex-1">
-            <button disabled={!selectedMovie || !date || !time} onClick={() => handleConfirm(false)} className="w-full sm:flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-900 hover:bg-ink-800 text-violet-400 border border-violet-500/30 font-black text-[10px] sm:text-[11px] transition-all disabled:opacity-40 flex items-center justify-center shadow-sm">
+            <button disabled={!selectedMovie || !date || !time} onClick={() => handleConfirm(false)} className="w-full sm:flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-900 hover:bg-ink-800 text-gold-400 border border-gold-500/30 font-black font-mono text-[10px] sm:text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 flex items-center justify-center shadow-sm hover:shadow-[0_0_18px_-8px_var(--color-1)]">
               <Plus size={10} className="mr-1" /> Ekle & Devam
             </button>
-            <button disabled={!selectedMovie || !date || !time} onClick={() => handleConfirm(true)} className="w-full sm:flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-gradient-to-r from-violet-600 to-azure-600 hover:from-violet-500 hover:to-azure-500 text-white font-black text-[10px] sm:text-[11px] transition-all disabled:opacity-40 shadow-[0_0_15px_rgba(139,92,246,0.2)] hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] border border-violet-400/50">
+            <button disabled={!selectedMovie || !date || !time} onClick={() => handleConfirm(true)} className="w-full sm:flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-gradient-to-r from-gold-600 to-gold-700 text-white font-black font-mono text-[10px] sm:text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.3)] hover:shadow-[0_16px_36px_-10px_var(--color-1)] hover:-translate-y-0.5">
               Kaydet & Kapat
             </button>
           </div>
@@ -829,40 +840,41 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-[0_0_30px_rgba(139,92,246,0.1)] flex flex-col max-h-[90svh] animate-fade-in-up">
-        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-violet-500/10 to-transparent">
-          <h3 className="text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md">
-            <div className="w-6 h-6 rounded border border-violet-500/30 bg-violet-500/20 text-violet-400 flex items-center justify-center"><Edit2 size={12} /></div>
+      <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-[0_28px_70px_-28px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.07)] flex flex-col max-h-[90svh] animate-fade-in-up backdrop-blur-2xl">
+        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-gold-500/10 to-transparent relative">
+          <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-gold-500 via-gold-500/40 to-transparent"></div>
+          <h3 className="text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
+            <div className="w-6 h-6 rounded border border-gold-500/30 bg-gold-500/10 text-gold-400 flex items-center justify-center"><Edit2 size={12} /></div>
             Maratonu Düzenle / Taşı
           </h3>
           <button onClick={onClose} className="text-ink-400 hover:text-white p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-full hover:bg-ink-800 transition-colors"><X size={16} /></button>
         </div>
 
         <div className="p-3.5 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar flex-1">
-          <div className="flex items-center gap-3 bg-gradient-to-r from-violet-500/10 to-transparent border border-violet-500/30 rounded-xl p-2.5 sm:p-3 shadow-inner mb-4">
+          <div className="flex items-center gap-3 bg-gradient-to-r from-gold-500/10 to-transparent border border-gold-500/30 rounded-xl p-2.5 sm:p-3 shadow-inner mb-4">
             <div className="w-10 h-14 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm border border-ink-700/50">
               {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] sm:text-sm font-black text-white truncate drop-shadow-sm mb-1">{movie.title}</div>
-              <div className="text-[9px] sm:text-[10px] font-bold text-violet-300 bg-violet-500/10 w-fit px-1.5 py-0.5 rounded border border-violet-500/20">{movie.year}{movie.runtime ? ` • ${movie.runtime} dk` : ''}</div>
+              <div className="font-mono text-[9px] sm:text-[10px] font-bold text-gold-400 bg-gold-500/10 w-fit px-1.5 py-0.5 rounded border border-gold-500/30">{movie.year}{movie.runtime ? ` • ${movie.runtime} dk` : ''}</div>
             </div>
           </div>
 
           <div className="flex gap-2.5 sm:gap-3 mb-4">
             <div className="space-y-1.5 flex-1">
-              <label className="h-4 flex items-center text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-ink-400 ml-1">Tarih</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 shadow-inner transition-all" />
+              <label className="h-4 flex items-center font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1">Tarih</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
             </div>
             <div className="space-y-1.5 flex-1">
-              <label className="h-4 flex items-center text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 shadow-inner transition-all" />
+              <label className="h-4 flex items-center font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
             </div>
           </div>
 
           <div className="bg-ink-950/60 border border-ink-800 rounded-xl p-2.5 sm:p-3 shadow-inner">
-            <div className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-ink-400 mb-2 flex items-center gap-1.5">
-              <CalendarDays size={10} className="text-violet-400" /> 
+            <div className="font-mono text-[8px] sm:text-[9px] font-black uppercase tracking-[0.18em] text-ink-400 mb-2 flex items-center gap-1.5">
+              <CalendarDays size={10} className="text-gold-400" /> 
               Seçili Günün Dolu Saatleri
             </div>
             
@@ -884,7 +896,7 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
                          {isOverlapping ? <AlertCircle size={10} className="text-red-400 flex-shrink-0 animate-pulse"/> : <Film size={10} className="text-ink-500 flex-shrink-0"/>}
                          <span className={`text-[10px] sm:text-[11px] font-bold truncate ${isOverlapping ? 'text-red-300' : 'text-ink-200'}`}>{p.title}</span>
                        </div>
-                       <span className={`text-[8px] sm:text-[9px] font-black flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-violet-500/10 text-violet-400 border-violet-500/20'}`}>
+                       <span className={`text-[8px] sm:text-[9px] font-black font-mono flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-gold-500/10 text-gold-400 border-gold-500/30'}`}>
                          {p.time} - {pEnd}
                        </span>
                     </div>
@@ -905,10 +917,10 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
         </div>
 
         <div className="p-3 border-t border-ink-800/80 bg-ink-950/90 flex items-center gap-2 backdrop-blur-md">
-          <button onClick={onClose} className="px-4 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold text-[11px] transition-colors">
+          <button onClick={onClose} className="px-4 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold font-mono text-[11px] uppercase tracking-wider transition-colors">
             İptal
           </button>
-          <button disabled={!date || !time} onClick={handleConfirm} className="flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-gradient-to-r from-violet-600 to-azure-600 hover:from-violet-500 hover:to-azure-500 text-white font-black text-[11px] transition-all disabled:opacity-40 shadow-[0_0_15px_rgba(139,92,246,0.2)]">
+          <button disabled={!date || !time} onClick={handleConfirm} className="flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-gradient-to-r from-gold-600 to-gold-700 text-white font-black font-mono text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.3)] hover:shadow-[0_16px_36px_-10px_var(--color-1)] hover:-translate-y-0.5">
             Değişiklikleri Kaydet
           </button>
         </div>
