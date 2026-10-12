@@ -1,0 +1,430 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { rootReducer, resolveTMDBGenres, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { ACHIEVEMENT_DEFS } from '../lib/achievements';
+import { levelFromXp } from '../lib/xp';
+import { todayStr } from '../lib/utils';
+import type { ExtendedAppData } from '../context/AppContext';
+
+// ============================================================================
+// CONTEXT REDUCER — Dizi, koleksiyon, kriter, toast, kimlik ve senkron aksiyonları
+// ============================================================================
+
+const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
+const storageMap = new Map<string, string>();
+const fakeStorage = {
+  getItem: (k: string) => storageMap.get(k) ?? null,
+  setItem: (k: string, v: string) => void storageMap.set(k, v),
+  removeItem: (k: string) => void storageMap.delete(k),
+  clear: () => storageMap.clear(),
+  key: (i: number) => Array.from(storageMap.keys())[i] ?? null,
+  get length() {
+    return storageMap.size;
+  },
+};
+
+function getInitialState(): ExtendedAppData {
+  return {
+    movies: [], series: [], removedSeriesTitles: [], collections: [],
+    genres: ['Aksiyon', 'Komedi', 'Dram'], reviewTags: [], history: [], achievements: [],
+    criteria: [], xp: 0, level: 1, totalXp: 0, lastWatchDate: null, tagSentiments: {},
+    dailyStreak: 0, dailyStreakDate: null, showLockedNames: false,
+    theme: 'default', altWatchTemplate: '', weeklyPlan: [], notificationsEnabled: false,
+  };
+}
+
+// Test boyunca senkron/XP aksiyonları localStorage'a dokunabiliyor (quest XP hesabı):
+// node ortamında localStorage olmadığı için sahte bir depo takıyoruz.
+beforeEach(() => {
+  storageMap.clear();
+  vi.stubGlobal('localStorage', fakeStorage);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('REDUCER — DİZİ (SERIES) EYLEMLERİ', () => {
+  test('ADD_SERIES: bilinmeyen türleri kütüphaneye ekler, mevcut türü kopyalamaz', () => {
+    let state = getInitialState();
+    state = rootReducer(state, {
+      type: 'ADD_SERIES',
+      series: { id: 's1', title: 'Deneme Dizi', genres: ['Aksiyon', 'Bilim Kurgu'], episodes: [] } as any,
+    } as any);
+
+    expect(state.series).toHaveLength(1);
+    expect(state.genres).toContain('Bilim Kurgu');
+    expect(state.genres.filter((g) => g === 'Aksiyon')).toHaveLength(1); // kopya yok
+    expect(state.genres.filter((g) => g === 'Bilim Kurgu')).toHaveLength(1);
+  });
+
+  test('ADD_EPISODES + DELETE_EPISODE: bölüm ekleme ve silme', () => {
+    let state = getInitialState();
+    state = rootReducer(state, {
+      type: 'ADD_SERIES',
+      series: { id: 's1', title: 'Dizi', genres: ['Dram'], episodes: [] } as any,
+    } as any);
+
+    state = rootReducer(state, {
+      type: 'ADD_EPISODES',
+      seriesId: 's1',
+      episodes: [
+        { id: 'e1', season: 1, episode: 1, watched: false } as any,
+        { id: 'e2', season: 1, episode: 2, watched: false } as any,
+      ],
+    } as any);
+    expect(state.series[0].episodes).toHaveLength(2);
+
+    state = rootReducer(state, { type: 'DELETE_EPISODE', seriesId: 's1', episodeId: 'e1' } as any);
+    expect(state.series[0].episodes).toHaveLength(1);
+    expect(state.series[0].episodes[0].id).toBe('e2');
+  });
+
+  test('WATCH_EPISODE: bölüm izlenir, geçmişe kaydedilir ve tarih damgaları bugüne çekilir', () => {
+    let state = getInitialState();
+    state = rootReducer(state, {
+      type: 'ADD_SERIES',
+      series: { id: 's1', title: 'Dizi', genres: ['Dram'], episodes: [{ id: 'e1', season: 1, episode: 1, watched: false }] } as any,
+    } as any);
+
+    state = rootReducer(state, {
+      type: 'WATCH_EPISODE',
+      seriesId: 's1',
+      episodeId: 'e1',
+      rating: 9,
+      note: 'Harikaydi',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItem: { id: 'h1', itemId: 'e1', kind: 'series', rating: 9 } as any,
+    } as any);
+
+    expect(state.series[0].episodes[0].watched).toBe(true);
+    expect(state.series[0].episodes[0].rating).toBe(9);
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0].id).toBe('h1');
+    expect(state.dailyStreakDate).toBe(todayStr());
+    expect(state.lastWatchDate).toBe(todayStr());
+  });
+
+  test('UNWATCH_EPISODE: izleme geri alınca bölüm sıfırlanır ve geçmişteki kaydı silinir', () => {
+    let state = getInitialState();
+    state = rootReducer(state, {
+      type: 'ADD_SERIES',
+      series: { id: 's1', title: 'Dizi', genres: ['Dram'], episodes: [{ id: 'e1', season: 1, episode: 1, watched: true, rating: 9, note: 'x' }] } as any,
+    } as any);
+    state.history = [{ id: 'h1', itemId: 'e1', kind: 'series' } as any];
+
+    state = rootReducer(state, { type: 'UNWATCH_EPISODE', seriesId: 's1', episodeId: 'e1' } as any);
+
+    const ep = state.series[0].episodes[0];
+    expect(ep.watched).toBe(false);
+    expect(ep.rating).toBeNull();
+    expect(ep.note).toBe('');
+    expect(ep.watchedAt).toBeNull();
+    expect(state.history).toHaveLength(0);
+  });
+
+  test('DELETE_SERIES: dizi tamamen listeden kalkmalı', () => {
+    let state = getInitialState();
+    state.series = [{ id: 's1', title: 'Dizi', genres: [], episodes: [] } as any];
+
+    state = rootReducer(state, { type: 'DELETE_SERIES', id: 's1' } as any);
+    expect(state.series).toHaveLength(0);
+  });
+});
+
+describe('REDUCER — KOLEKSİYON EYLEMLERİ', () => {
+  test('ADD_COLLECTION + RENAME_COLLECTION', () => {
+    let state = getInitialState();
+    state = rootReducer(state, { type: 'ADD_COLLECTION', collection: { id: 'c1', name: 'Bilim Kurgu' } as any } as any);
+    expect(state.collections).toHaveLength(1);
+
+    state = rootReducer(state, { type: 'RENAME_COLLECTION', id: 'c1', name: 'Klasikler' } as any);
+    expect(state.collections[0].name).toBe('Klasikler');
+    expect(state.collections.map((c) => c.name)).not.toContain('Bilim Kurgu');
+  });
+
+  test('DELETE_COLLECTION: koleksiyon silinince içindeki filmlerin bağı kopmalı', () => {
+    let state = getInitialState();
+    state.collections = [{ id: 'c1', name: 'Koleksiyon' } as any];
+    state.movies = [
+      { id: 'm1', title: 'Film 1', collectionId: 'c1' } as any,
+      { id: 'm2', title: 'Film 2', collectionId: null } as any,
+    ];
+
+    state = rootReducer(state, { type: 'DELETE_COLLECTION', id: 'c1' } as any);
+    expect(state.collections).toHaveLength(0);
+    expect(state.movies[0].collectionId).toBeNull();
+    expect(state.movies[1].collectionId).toBeNull();
+  });
+
+  test('SET_MOVIE_COLLECTION: filmi koleksiyona atamak ve çıkarmak', () => {
+    let state = getInitialState();
+    state.collections = [{ id: 'c1', name: 'Koleksiyon' } as any];
+    state.movies = [{ id: 'm1', title: 'Film', collectionId: null } as any];
+
+    state = rootReducer(state, { type: 'SET_MOVIE_COLLECTION', id: 'm1', collectionId: 'c1' } as any);
+    expect(state.movies[0].collectionId).toBe('c1');
+
+    state = rootReducer(state, { type: 'SET_MOVIE_COLLECTION', id: 'm1', collectionId: null } as any);
+    expect(state.movies[0].collectionId).toBeNull();
+  });
+
+  test('SET_MOVIE_PAST_QUEUE: film "eski izleme sırası" kuyruğuna alınabilmeli', () => {
+    let state = getInitialState();
+    state.movies = [{ id: 'm1', title: 'Film', inPastQueue: false } as any];
+
+    state = rootReducer(state, { type: 'SET_MOVIE_PAST_QUEUE', id: 'm1', inPastQueue: true } as any);
+    expect(state.movies[0].inPastQueue).toBe(true);
+
+    state = rootReducer(state, { type: 'SET_MOVIE_PAST_QUEUE', id: 'm1', inPastQueue: false } as any);
+    expect(state.movies[0].inPastQueue).toBe(false);
+  });
+});
+
+describe('REDUCER — KRİTER & İNCELEME ETİKETİ EYLEMLERİ', () => {
+  test('EDIT_CRITERION: kriter adı ve ağırlığı güncellenmeli', () => {
+    let state = getInitialState();
+    state.criteria = [{ id: 'c1', name: 'Oyunculuk', weight: 8, appliesTo: 'both', genres: [] } as any];
+
+    state = rootReducer(state, {
+      type: 'EDIT_CRITERION',
+      id: 'c1',
+      criterion: { id: 'c1', name: 'Müzik', weight: 5, appliesTo: 'both', genres: [] } as any,
+    } as any);
+
+    expect(state.criteria![0].name).toBe('Müzik');
+    expect(state.criteria![0].weight).toBe(5);
+    expect(state.criteria).toHaveLength(1);
+  });
+
+  test('ADD_REVIEW_TAG: aynı etiket farklı harfle tekrar eklenemez, duygu atanır', () => {
+    let state = getInitialState();
+
+    state = rootReducer(state, { type: 'ADD_REVIEW_TAG', tag: 'Efsane', sentiment: 'positive' } as any);
+    expect(state.reviewTags).toContain('Efsane');
+    expect(state.tagSentiments!['Efsane']).toBe('positive');
+
+    // Büyük/küçük harf farkı ile tekrar eklenmeye çalışılıyor
+    state = rootReducer(state, { type: 'ADD_REVIEW_TAG', tag: 'EFSA' + 'ANE' } as any);
+    expect(state.reviewTags!.filter((t) => t.toLowerCase() === 'efsane')).toHaveLength(1);
+
+    state = rootReducer(state, { type: 'DELETE_REVIEW_TAG', tag: 'Efsane' } as any);
+    expect(state.reviewTags).not.toContain('Efsane');
+  });
+});
+
+describe('REDUCER — FİLM DÜZENLEME & TÜR ÇÖZÜMLEME', () => {
+  test('EDIT_MOVIE: başlık/yıl/süre güncellenir, yeni tür kütüphaneye eklenir', () => {
+    let state = getInitialState();
+    state.movies = [{ id: 'm1', title: 'Eski Ad', year: '1999', genres: ['Aksiyon'], runtime: 100 } as any];
+
+    state = rootReducer(state, {
+      type: 'EDIT_MOVIE',
+      id: 'm1',
+      title: 'Yeni Ad',
+      year: '2024',
+      genres: ['aksiyon', 'Bilim Kurgu'], // 'aksiyon' → mevcut 'Aksiyon' ile eşleşmeli
+      runtime: 130,
+    } as any);
+
+    const movie = state.movies[0];
+    expect(movie.title).toBe('Yeni Ad');
+    expect(movie.year).toBe('2024');
+    expect(movie.runtime).toBe(130);
+    expect(movie.genres).toContain('Aksiyon');
+    expect(movie.genres).toContain('Bilim Kurgu');
+    expect(state.genres.filter((g) => g === 'Aksiyon')).toHaveLength(1);
+    expect(state.genres).toContain('Bilim Kurgu');
+  });
+
+  test('resolveTMDBGenres: tam eşleşme, prefix eşleşme, bilinmeyen tür ve tekilleştirme', () => {
+    const existing = ['Aksiyon', 'Bilim Kurgu'];
+
+    expect(resolveTMDBGenres(['aksiyon'], existing)).toEqual(['Aksiyon']);
+    expect(resolveTMDBGenres(['Bilim'], existing)).toEqual(['Bilim Kurgu']); // prefix
+    expect(resolveTMDBGenres(['Korku'], existing)).toEqual(['Korku']); // bilinmeyen korunur
+    expect(resolveTMDBGenres(['Aksiyon', 'aksiyon'], existing)).toEqual(['Aksiyon']); // tekilleştirme
+  });
+});
+
+describe('REDUCER — PAYLAŞIM LİSTESİ BİRLEŞTİRME (MERGE_SHARED_LIST)', () => {
+  test('yeni türler eklenir, mevcut türler kopyalanmaz, içerikler birleşir', () => {
+    let state = getInitialState(); // genres: Aksiyon, Komedi, Dram
+
+    state = rootReducer(state, {
+      type: 'MERGE_SHARED_LIST',
+      genres: ['Aksiyon', 'Komedi', 'Bilim Kurgu'],
+      collections: [{ id: 'c1', name: 'Paylaşım' } as any],
+      movies: [{ id: 'm1', title: 'Paylaşılan Film' } as any],
+      series: [{ id: 's1', title: 'Paylaşılan Dizi' } as any],
+    } as any);
+
+    expect(state.genres).toEqual(['Aksiyon', 'Komedi', 'Dram', 'Bilim Kurgu']);
+    expect(state.collections).toHaveLength(1);
+    expect(state.movies).toHaveLength(1);
+    expect(state.series).toHaveLength(1);
+  });
+});
+
+describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
+  test('CONSUME_NEXT_TOAST: kuyruğun ilkini tüketir ve XP kazancını pendingXpGain’e yazar', () => {
+    const state = getInitialState();
+    state.totalXp = 300;
+    state.pendingToasts = [
+      { achievementId: 'a1', tier: 'bronze', xp: 100, name: 'X', icon: 'Y', description: 'Z' } as any,
+      { achievementId: 'a2', tier: 'silver', xp: 50, name: 'X', icon: 'Y', description: 'Z' } as any,
+    ];
+
+    const next = rootReducer(state, { type: 'CONSUME_NEXT_TOAST' } as any);
+    expect(next.pendingToasts).toHaveLength(1);
+    expect(next.pendingToasts![0].achievementId).toBe('a2');
+    expect(next.pendingXpGain).toEqual({ gained: 100, oldTotal: 200, newTotal: 300 });
+  });
+
+  test('CONSUME_NEXT_TOAST: kuyruk boşsa state AYNEN geri dönmeli (yeni obje yok)', () => {
+    const state = getInitialState();
+    state.pendingToasts = [];
+    expect(rootReducer(state, { type: 'CONSUME_NEXT_TOAST' } as any)).toBe(state);
+  });
+
+  test('CLEAR_LEVELUP + CLEAR_XP_GAIN: bekleyen bildirimler temizlenmeli', () => {
+    const state = getInitialState();
+    state.pendingLevelUp = { newLevel: 5 };
+    state.pendingXpGain = { gained: 10, oldTotal: 0, newTotal: 10 };
+
+    const noLevelUp = rootReducer(state, { type: 'CLEAR_LEVELUP' } as any);
+    expect(noLevelUp.pendingLevelUp).toBeUndefined();
+    expect(noLevelUp.pendingXpGain).toEqual({ gained: 10, oldTotal: 0, newTotal: 10 });
+
+    const noXpGain = rootReducer(noLevelUp, { type: 'CLEAR_XP_GAIN' } as any);
+    expect(noXpGain.pendingXpGain).toBeUndefined();
+  });
+
+  test('GRANT_XP: küçük XP toplamı artırır, seviye atlarsa pendingLevelUp dolar', () => {
+    let state = getInitialState();
+
+    const small = rootReducer(state, { type: 'GRANT_XP', xp: 100 } as any);
+    expect(small.totalXp).toBe(100);
+    expect(small.level).toBe(1);
+    expect(small.pendingLevelUp).toBeUndefined();
+    expect(small.pendingXpGain).toEqual({ gained: 100, oldTotal: 0, newTotal: 100 });
+
+    const big = rootReducer(small, { type: 'GRANT_XP', xp: 100000 } as any);
+    expect(big.totalXp).toBe(100100);
+    expect(big.level).toBe(levelFromXp(100100).level);
+    expect(big.level).toBeGreaterThan(1);
+    expect(big.pendingLevelUp?.newLevel).toBe(big.level);
+  });
+
+  test('FORCE_XP_SYNC: XP yalnızca başarım kademeleri + tamamlanan görevlerden yeniden hesaplanmalı', () => {
+    const state = getInitialState();
+    state.totalXp = 999999; // bozuk/şişirilmiş değer
+
+    // movie_add: bronze (5 XP) + silver (15 XP) = 20 XP
+    state.achievements = [
+      { achievementId: 'movie_add', current: 0, unlockedTiers: ['bronze', 'silver'], tierDates: {}, lastNotifiedTier: 'silver' } as any,
+    ];
+    // Tamamlanan görev: c_short_movie = 50 XP
+    storageMap.set(QUEST_STORAGE_KEY, JSON.stringify({ completedQuests: ['c_short_movie'] }));
+
+    const next = rootReducer(state, { type: 'FORCE_XP_SYNC' } as any);
+    expect(next.totalXp).toBe(20 + 50);
+    expect(next.level).toBe(levelFromXp(70).level);
+    expect(next.xp).toBe(levelFromXp(70).currentLevelXp);
+  });
+
+  test('RECOVER_IDENTITY: kimlik alanları aynen yazılmalı', () => {
+    const state = getInitialState();
+    const next = rootReducer(state, {
+      type: 'RECOVER_IDENTITY', agentId: 'AGT-1', recoveryKey: 'KEY-1', nickname: 'GeriDonen',
+    } as any);
+    expect(next.agentId).toBe('AGT-1');
+    expect(next.recoveryKey).toBe('KEY-1');
+    expect(next.nickname).toBe('GeriDonen');
+  });
+
+  test('SET_SHOWCASE: vitrin en fazla 4 öğe içermeli', () => {
+    const state = getInitialState();
+    const items = Array.from({ length: 6 }, (_, i) => ({ id: `v${i}` }));
+    const next = rootReducer(state, { type: 'SET_SHOWCASE', showcase: items } as any);
+    expect(next.showcase).toHaveLength(4);
+    expect(next.showcase![0].id).toBe('v0');
+  });
+
+  test('UPDATE_ALT_TEMPLATE / SET_NICKNAME / TOGGLE_SPECIFIC_NOTIFICATION', () => {
+    let state = getInitialState();
+
+    state = rootReducer(state, { type: 'UPDATE_ALT_TEMPLATE', template: 'https://ornek.com/{title}' } as any);
+    expect(state.altWatchTemplate).toBe('https://ornek.com/{title}');
+
+    state = rootReducer(state, { type: 'SET_NICKNAME', nickname: 'Sinemasever' } as any);
+    expect(state.nickname).toBe('Sinemasever');
+
+    state = rootReducer(state, { type: 'TOGGLE_SPECIFIC_NOTIFICATION', key: 'notifyMessages', enabled: false } as any);
+    expect(state.notifyMessages).toBe(false);
+  });
+
+  test('SET_ACHIEVEMENT_PROGRESS: başarımlar tamamen değiştirilmeli', () => {
+    const state = getInitialState();
+    const progress = [{ achievementId: 'movie_add', current: 12, unlockedTiers: ['bronze'], tierDates: {}, lastNotifiedTier: 'bronze' } as any];
+    const next = rootReducer(state, { type: 'SET_ACHIEVEMENT_PROGRESS', progress } as any);
+    expect(next.achievements).toHaveLength(1);
+    expect(next.achievements[0].current).toBe(12);
+  });
+});
+
+describe('REDUCER — BULUT SENKRONU & İÇE AKTARMA', () => {
+  test('SYNC_FROM_CLOUD_STORAGE: bulut verisi uygulanır, quest verisi depoya yazılır', () => {
+    const state = getInitialState();
+    const cloudData = {
+      movies: [{ id: 'cloud1', title: 'Bulut Film', watched: true } as any],
+      agentId: 'CLOUD-AGENT',
+      theme: 'matrix',
+    } as any;
+
+    const next = rootReducer(state, {
+      type: 'SYNC_FROM_CLOUD_STORAGE',
+      data: cloudData,
+      questData: { completedQuests: ['c_short_movie'] },
+    } as any);
+
+    expect(next.movies).toHaveLength(1);
+    expect(next.movies[0].id).toBe('cloud1');
+    expect(next.agentId).toBe('CLOUD-AGENT');
+    expect(next.theme).toBe('matrix');
+
+    // Quest verisi yerel depoya yazılmış olmalı
+    const stored = storageMap.get(QUEST_STORAGE_KEY);
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored!).completedQuests).toEqual(['c_short_movie']);
+
+    // Tüm başarım kayıtları (yeni cihaz) oluşturulmuş olmalı
+    expect(next.achievements).toHaveLength(ACHIEVEMENT_DEFS.length);
+  });
+
+  test('IMPORT_DATA: yerel kimlik korunur, "Eskiden İzlenenler" koleksiyonu göç ettirilir', () => {
+    let state = getInitialState();
+    state = rootReducer(state, {
+      type: 'RECOVER_IDENTITY', agentId: 'LOCAL-1', recoveryKey: 'LOCAL-KEY', nickname: 'YerelKullanici',
+    } as any);
+
+    const imported = {
+      movies: [{ id: 'm1', title: 'Eski Film', watched: true, collectionId: 'past_col', inPastQueue: false } as any],
+      collections: [{ id: 'past_col', name: PAST_WATCH_COLLECTION_NAME } as any],
+      genres: ['Korku'],
+    } as any;
+
+    const next = rootReducer(state, { type: 'IMPORT_DATA', data: imported } as any);
+
+    // Kimlik dışarıdan gelen veriyle BOZULMAMALI
+    expect(next.agentId).toBe('LOCAL-1');
+    expect(next.recoveryKey).toBe('LOCAL-KEY');
+    expect(next.nickname).toBe('YerelKullanici');
+
+    // Eski "koleksiyon" yapısı temizlenmeli, filmler geçmiş izlemeye taşınmalı
+    expect(next.collections).toHaveLength(0);
+    expect(next.movies[0].collectionId).toBeNull();
+    expect(next.movies[0].isPastWatch).toBe(true);
+    expect(next.genres).toContain('Korku');
+    expect(next.achievements).toHaveLength(ACHIEVEMENT_DEFS.length);
+  });
+});

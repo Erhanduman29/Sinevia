@@ -1,0 +1,156 @@
+export interface WatchProvider {
+  logoUrl: string;
+  providerName: string;
+  link?: string;
+}
+
+export interface RatingCriterion {
+  id: string;
+  name: string;
+  weight: number;
+  appliesTo: 'movie' | 'series' | 'both';
+  genres: string[];
+}
+
+export interface Movie {
+  id: string;
+  title: string;
+  year: string;
+  genres: string[];
+  collectionId: string | null;
+  inPastQueue?: boolean;
+  runtime?: number;
+  startedAt?: string | null;
+  actualRuntime?: number | null;
+  posterUrl?: string;
+  overview?: string;
+  tmdbId?: number;
+  customUrl?: string;
+  imdbId?: string;
+  watchProviders?: WatchProvider[];
+  keywords?: string[];
+  directors?: string[];
+  cast?: string[];
+  studios?: string[];
+  originalLanguage?: string;
+  watched: boolean;
+  isPastWatch?: boolean;
+  rating: number | null;
+  detailedRating?: Record<string, number>;
+  reviewTags?: string[];
+  note: string;
+  watchedAt: string | null;
+  addedAt: string;
+}
+
+export interface Episode {
+  id: string;
+  season: number;
+  episode: number;
+  watched: boolean;
+  rating: number | null;
+  detailedRating?: Record<string, number>;
+  reviewTags?: string[];
+  note: string;
+  watchedAt: string | null;
+}
+
+export interface Series {
+  id: string;
+  title: string;
+  year?: string;
+  genres: string[];
+  episodes: Episode[];
+  posterUrl?: string;
+  overview?: string;
+  tmdbId?: number;
+  customUrl?: string;
+  imdbId?: string;
+  watchProviders?: WatchProvider[];
+  keywords?: string[];
+  creators?: string[];
+  cast?: string[];
+  studios?: string[];
+  originalLanguage?: string;
+  addedAt: string;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+}
+
+export interface WatchHistoryItem {
+  id: string;
+  itemId?: string;
+  seriesId?: string;
+  kind: 'movie' | 'series';
+  type?: 'movie' | 'series';
+  title: string;
+  rating: number | null;
+  detailedRating?: Record<string, number>;
+  reviewTags?: string[];
+  note: string;
+  watchedAt: string;
+  isPastWatch?: boolean;
+  startedAt?: string | null;
+  actualRuntime?: number | null;
+  originalRuntime?: number | null;
+  genres: string[];
+  year?: string;
+  season?: number;
+  episode?: number;
+}
+
+export interface AchievementProgress {
+  achievementId: string;
+  current: number;
+  unlockedTiers: string[];
+  lastNotifiedTier: string | null;
+  unlockedAt?: string;
+  tierDates?: Record<string, string>;
+}
+
+export interface WeeklyPlanItem {
+  id: string;
+  movieId: string;
+  title: string;
+  year?: string;
+  posterUrl?: string;
+  genres: string[];
+  runtime?: number;
+  date: string; // "YYYY-MM-DD"
+  time: string; // "HH:mm"
+  createdAt: string;
+}
+
+export interface AppData {
+  movies: Movie[];
+  series: Series[];
+  removedSeriesTitles: string[];
+  collections: Collection[];
+  genres: string[];
+  reviewTags?: string[];
+  history: WatchHistoryItem[];
+  achievements: AchievementProgress[];
+  criteria?: RatingCriterion[];
+  xp: number;
+  level: number;
+  totalXp: number;
+  lastWatchDate: string | null;
+  dailyStreak: number;
+  dailyStreakDate: string | null;
+  showLockedNames?: boolean;
+  altWatchTemplate?: string;
+  weeklyPlan?: WeeklyPlanItem[];
+  pendingToasts?: {
+    achievementId: string;
+    tier: string;
+    xp: number;
+    name: string;
+    icon: string;
+    description: string;
+  }[];
+  pendingLevelUp?: { newLevel: number };
+  pendingXpGain?: { gained: number; oldTotal: number; newTotal: number };
+}

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 130">
+  <!-- Sini — durağan (animasyonsuz) favicon / dokunma ikonu -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fcd34d"/>
+      <stop offset="45%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#26262e"/>
+      <stop offset="100%" stop-color="#0f0f14"/>
+    </linearGradient>
+    <radialGradient id="eye" cx="0.4" cy="0.35" r="0.75">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="55%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </radialGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Koyu yuvarlatılmış zemin: açık sekme çubuğunda da net görünsün -->
+  <rect width="120" height="130" rx="26" fill="#0b0b10"/>
+
+  <g transform="translate(-4.8 -6) scale(1.08)">
+    <!-- Klaket kolu (hafif açık, -14°) -->
+    <g transform="rotate(-14 26 42)">
+      <rect x="22" y="30" width="82" height="15" rx="4" fill="url(#gold)"/>
+      <g opacity="0.55">
+        <line x1="30" y1="45" x2="39" y2="30" stroke="#0a0a0e" stroke-width="4" stroke-linecap="round"/>
+        <line x1="44" y1="45" x2="53" y2="30" stroke="#0a0a0e" stroke-width="4" stroke-linecap="round"/>
+        <line x1="58" y1="45" x2="67" y2="30" stroke="#0a0a0e" stroke-width="4" stroke-linecap="round"/>
+        <line x1="72" y1="45" x2="81" y2="30" stroke="#0a0a0e" stroke-width="4" stroke-linecap="round"/>
+        <line x1="86" y1="45" x2="95" y2="30" stroke="#0a0a0e" stroke-width="4" stroke-linecap="round"/>
+      </g>
+      <rect x="22" y="30" width="82" height="15" rx="4" fill="url(#shine)"/>
+    </g>
+
+    <!-- Gövde (klaket kartı) -->
+    <rect x="18" y="42" width="84" height="76" rx="14" fill="url(#body)"/>
+    <rect x="18.5" y="42.5" width="83" height="75" rx="13.5" fill="none" stroke="rgba(245,158,11,0.35)" stroke-width="1.5"/>
+    <rect x="18" y="42" width="84" height="76" rx="14" fill="url(#shine)"/>
+    <rect x="30" y="108" width="60" height="3" rx="1.5" fill="url(#gold)" opacity="0.7"/>
+
+    <!-- Yüz -->
+    <ellipse cx="45" cy="76" rx="9" ry="10" fill="url(#eye)"/>
+    <ellipse cx="75" cy="76" rx="9" ry="10" fill="url(#eye)"/>
+    <circle cx="42" cy="72" r="3" fill="#ffffff" opacity="0.9"/>
+    <circle cx="72" cy="72" r="3" fill="#ffffff" opacity="0.9"/>
+    <circle cx="47.5" cy="80" r="1.4" fill="#ffffff" opacity="0.6"/>
+    <circle cx="77.5" cy="80" r="1.4" fill="#ffffff" opacity="0.6"/>
+    <path d="M50 91 q10 8 20 0" stroke="#e4e4e7" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+    <ellipse cx="33" cy="86" rx="6" ry="3.5" fill="#f472b6" opacity="0.32"/>
+    <ellipse cx="87" cy="86" rx="6" ry="3.5" fill="#f472b6" opacity="0.32"/>
+
+    <!-- Papyon -->
+    <g transform="translate(60 115)">
+      <path d="M0 0 L-11 -5 L-11 5 Z" fill="url(#gold)"/>
+      <path d="M0 0 L11 -5 L11 5 Z" fill="url(#gold)"/>
+      <circle cx="0" cy="0" r="2.6" fill="#b45309"/>
+    </g>
+  </g>
+</svg>
