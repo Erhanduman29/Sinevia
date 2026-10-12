@@ -397,12 +397,12 @@ export default function AgentProfileModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-4 sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/85 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-4xl h-[92vh] bg-ink-950 border border-ink-700/70 rounded-[28px] overflow-hidden shadow-[0_0_70px_rgba(0,0,0,0.9)] flex flex-col relative"
+        className="w-full max-w-4xl h-[92dvh] max-h-full bg-ink-950 border border-ink-700/70 rounded-[28px] overflow-hidden shadow-[0_0_70px_rgba(0,0,0,0.9)] flex flex-col relative"
       >
         {/* KAPATMA BUTONU */}
         <button

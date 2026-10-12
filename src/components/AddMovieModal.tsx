@@ -122,9 +122,9 @@ export default function AddMovieModal({ onClose }: Props) {
   const displayedGenres = Array.from(new Set([...data.genres, ...selectedGenres])).sort();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]" onClick={onClose}>
       <div
-        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-2xl max-h-[min(90dvh,100%)] overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-5 border-b border-ink-700 sticky top-0 bg-ink-900 z-20">

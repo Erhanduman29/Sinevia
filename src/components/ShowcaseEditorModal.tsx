@@ -127,12 +127,12 @@ export default function ShowcaseEditorModal({
 
   return (
     <div
-      className="fixed inset-0 z-[170] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[170] flex items-center justify-center p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5 sm:pt-[max(1.25rem,env(safe-area-inset-top))] sm:pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-black/85 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-4xl h-[88vh] bg-ink-950 border border-gold-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+        className="w-full max-w-4xl h-[88dvh] max-h-full bg-ink-950 border border-gold-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
       >
         {/* ÜST BAŞLIK */}
         <div className="p-4 sm:p-5 border-b border-ink-800 bg-gradient-to-r from-gold-500/10 via-ink-900 to-ink-950 flex items-center justify-between shrink-0">

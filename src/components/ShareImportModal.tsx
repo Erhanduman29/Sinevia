@@ -200,10 +200,10 @@ export default function ShareImportModal({ rawJson, onClose }: ShareImportModalP
   const totalUnselected = totalMissing - totalSelected;
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6 sm:pt-[max(1.5rem,env(safe-area-inset-top))] sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] animate-fade-in" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl bg-ink-900 border border-ink-700 rounded-[2rem] overflow-hidden shadow-2xl flex flex-col max-h-[85svh] sm:max-h-[88vh] animate-fade-in-up"
+        className="relative w-full max-w-4xl bg-ink-900 border border-ink-700 rounded-[2rem] overflow-hidden shadow-2xl flex flex-col max-h-[min(85svh,100%)] sm:max-h-[min(88dvh,100%)] animate-fade-in-up"
       >
         {/* ÜST BAŞLIK */}
         <div className="flex items-center justify-between p-3 sm:p-5 border-b border-ink-800 bg-ink-950/60 shrink-0">

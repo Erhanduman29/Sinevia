@@ -221,12 +221,12 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:p-6 sm:pt-[max(1.5rem,env(safe-area-inset-top))] sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl bg-ink-900/95 border border-ink-700/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90svh] sm:max-h-[90vh] animate-fade-in-up"
+        className="relative w-full max-w-4xl bg-ink-900/95 border border-ink-700/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[min(90svh,100%)] sm:max-h-[min(90dvh,100%)] animate-fade-in-up"
       >
         {posterUrl && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">

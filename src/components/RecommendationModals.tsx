@@ -291,12 +291,12 @@ export default function RecommendationModals({
       {/* ========================================================= */}
       {showSendModal && (
         <div
-          className="fixed inset-0 z-[130] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[130] flex items-center justify-center p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5 sm:pt-[max(1.25rem,env(safe-area-inset-top))] sm:pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-black/85 backdrop-blur-md animate-fade-in"
           onClick={() => setShowSendModal(false)}
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="w-full max-w-5xl h-[88vh] bg-ink-950 border border-violet-500/35 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            className="w-full max-w-5xl h-[88dvh] max-h-full bg-ink-950 border border-violet-500/35 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
           >
             <div className="p-4 sm:p-5 border-b border-ink-800 bg-gradient-to-r from-violet-950/40 via-ink-900 to-ink-950 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
@@ -320,7 +320,7 @@ export default function RecommendationModals({
 
             <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
               {/* SOL AYAR PANELİ */}
-              <div className="w-full md:w-80 p-5 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/25 flex flex-col gap-4 overflow-y-auto custom-scrollbar shrink-0">
+              <div className="w-full md:w-80 p-5 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/25 flex flex-col gap-4 overflow-y-auto custom-scrollbar shrink-0 max-h-[45%] md:max-h-none">
                 <div>
                   <label className="block text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1.5">
                     1. Kime Gidecek?
@@ -523,12 +523,12 @@ export default function RecommendationModals({
 
         return (
           <div
-            className="fixed inset-0 z-[130] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fade-in"
+            className="fixed inset-0 z-[130] flex items-center justify-center p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5 sm:pt-[max(1.25rem,env(safe-area-inset-top))] sm:pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-black/85 backdrop-blur-md animate-fade-in"
             onClick={() => setViewingList(null)}
           >
             <div
               onClick={e => e.stopPropagation()}
-              className="w-full max-w-5xl bg-ink-950 border border-violet-500/35 rounded-3xl overflow-hidden flex flex-col max-h-[90vh] shadow-2xl"
+              className="w-full max-w-5xl bg-ink-950 border border-violet-500/35 rounded-3xl overflow-hidden flex flex-col max-h-[min(90dvh,100%)] shadow-2xl"
             >
               {/* ÜST BİLGİ VE TOPLU AKSİYON BARI */}
               <div className="p-5 sm:p-6 border-b border-ink-800 bg-gradient-to-r from-violet-950/35 via-ink-900/60 to-ink-950 relative shrink-0">
