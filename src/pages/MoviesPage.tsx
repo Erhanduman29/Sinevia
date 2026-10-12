@@ -18,6 +18,7 @@ import PickModal from '../components/PickModal';
 import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import type { Movie } from '../types';
+import '../components/movies-premium.css';
 
 type SortMode = 'az' | 'year' | 'rating' | 'added';
 type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past';
@@ -486,12 +487,12 @@ export default function MoviesPage() {
   const plannedMovieIds = useMemo(() => { const ids = new Set<string>(); (data.weeklyPlan || []).forEach(p => ids.add(p.movieId)); return ids; }, [data.weeklyPlan]);
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-4 sm:space-y-5 mpx-root">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-center justify-between">
           <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-700/20 border border-gold-500/30 flex items-center justify-center">
-              <Projector size={20} className="text-gold-300" />
+            <div className="mpx-tile">
+              <Projector size={20} />
             </div>
             Filmler
           </h1>
@@ -499,7 +500,7 @@ export default function MoviesPage() {
           <button
             onClick={() => setShowAdd(true)}
             data-tutorial="movies-add"
-            className="sm:hidden flex items-center gap-1.5 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-3.5 py-2 min-h-11 rounded-xl text-xs font-black shadow-lg shadow-gold-500/20 whitespace-nowrap"
+            className="mpx-btn mpx-btn-p mpx-btn-xs mpx-only-sm"
           >
             <Plus size={16} strokeWidth={2.5} /> Film Ekle
           </button>
@@ -508,7 +509,7 @@ export default function MoviesPage() {
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => openSendModal()}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-violet-950/40 hover:bg-violet-900/60 text-violet-300 border border-violet-500/40 px-2.5 sm:px-3.5 py-2 min-h-11 sm:min-h-0 sm:py-2.5 rounded-xl sm:rounded-lg text-xs sm:text-sm font-bold transition-all shadow-sm"
+            className="mpx-btn mpx-btn-s mpx-btn-xs flex-1 sm:flex-none"
             title="Arkadaşına tekli veya çoklu film listesi öner"
           >
             <Send size={15} className="flex-shrink-0 text-violet-400" />
@@ -517,15 +518,15 @@ export default function MoviesPage() {
 
           <button
             onClick={() => setShowDna(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-emerald-900/30 hover:bg-emerald-800/40 text-emerald-400 border border-emerald-500/30 px-2.5 sm:px-3.5 py-2 min-h-11 sm:min-h-0 sm:py-2.5 rounded-xl sm:rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm"
+            className="mpx-btn mpx-btn-s mpx-btn-xs flex-1 sm:flex-none"
           >
-            <Dna size={15} className="flex-shrink-0" />
+            <Dna size={15} className="flex-shrink-0 text-emerald-400" />
             <span className="truncate">DNA</span>
           </button>
           <button
             onClick={handleSyncTMDB}
             disabled={isSyncing}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-2.5 sm:px-3.5 py-2 min-h-11 sm:min-h-0 sm:py-2.5 rounded-xl sm:rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
+            className="mpx-btn mpx-btn-s mpx-btn-xs flex-1 sm:flex-none"
           >
             <RefreshCw size={15} className={`flex-shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
             <span className="truncate">{isSyncing ? 'Taranıyor' : 'Eksik Bul'}</span>
@@ -533,7 +534,7 @@ export default function MoviesPage() {
           <button
             onClick={() => setShowPick(true)}
             data-tutorial="movies-pick"
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-ink-800/80 hover:bg-ink-700 text-gold-300 border border-gold-500/30 px-2.5 sm:px-3.5 py-2 min-h-11 sm:min-h-0 sm:py-2.5 rounded-xl sm:rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-sm"
+            className="mpx-btn mpx-btn-s mpx-btn-xs flex-1 sm:flex-none"
           >
             <Shuffle size={15} className="flex-shrink-0" />
             <span className="truncate">Ne İzlesem</span>
@@ -541,7 +542,7 @@ export default function MoviesPage() {
           <button
             onClick={() => setShowAdd(true)}
             data-tutorial="movies-add"
-            className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-2.5 rounded-lg font-semibold hover:from-gold-400 hover:to-gold-500 transition-all shadow-lg shadow-gold-500/20 whitespace-nowrap"
+            className="mpx-btn mpx-btn-p mpx-hide-sm"
           >
             <Plus size={18} /> Film Ekle
           </button>
@@ -551,7 +552,7 @@ export default function MoviesPage() {
       {activeTimerMovie && (() => {
         const info = getMovieTimerInfo(activeTimerMovie, nowMs);
         return (
-          <div className="bg-gradient-to-r from-emerald-950/80 via-ink-900 to-ink-950 border border-emerald-500/40 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+          <div className="mpx-timerbar p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
                 <Timer size={18} className={info.isPaused ? 'text-amber-400' : 'text-emerald-400 animate-pulse'} />
@@ -562,8 +563,8 @@ export default function MoviesPage() {
                   <span className="text-white truncate">• {activeTimerMovie.title}</span>
                 </div>
                 <div className="text-[11px] text-ink-300 mt-0.5 flex flex-wrap items-center gap-x-2">
-                  <span>Kalan: <strong className="text-emerald-300 font-mono">{info.formattedRemaining}</strong></span>
-                  <span>• Geçen: <strong>{info.elapsedMins}/{info.maxMins} dk</strong></span>
+                  <span className="mpx-mono">Kalan: <strong className="text-emerald-300 font-mono">{info.formattedRemaining}</strong></span>
+                  <span className="mpx-mono">• Geçen: <strong>{info.elapsedMins}/{info.maxMins} dk</strong></span>
                 </div>
               </div>
             </div>
@@ -572,17 +573,17 @@ export default function MoviesPage() {
               <button
                 type="button"
                 onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-1.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-amber-300 border border-amber-500/30 text-xs font-bold whitespace-nowrap"
+                className="mpx-btn mpx-btn-s mpx-btn-xs flex-1 sm:flex-none text-amber-300"
               >
                 {info.isPaused ? <><Play size={12} className="fill-current" /> Devam</> : <><Pause size={12} /> Duraklat</>}
               </button>
               <button
                 type="button"
                 onClick={() => handleRequestRate(activeTimerMovie)}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-1.5 min-h-11 md:min-h-0 rounded-xl text-xs font-black transition-all whitespace-nowrap ${
+                className={`mpx-btn mpx-btn-xs flex-1 sm:flex-none ${
                   info.canRateWithTimer
-                    ? 'bg-gold-500 hover:bg-gold-400 text-ink-950 shadow-md'
-                    : 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'
+                    ? 'mpx-btn-p'
+                    : 'mpx-btn-g mpx-off'
                 }`}
               >
                 {info.canRateWithTimer ? <><Star size={12} className="fill-current" /> Bitir & Puanla</> : <><Lock size={11} /> {info.minRequiredMins - info.elapsedMins} dk</>}
@@ -591,7 +592,7 @@ export default function MoviesPage() {
                 type="button"
                 onClick={() => cancelWatchingMovie(activeTimerMovie.id)}
                 title="Sayacı İptal Et"
-                className="p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 flex-shrink-0"
+                className="mpx-ibtn text-red-400"
               >
                 <X size={15} />
               </button>
@@ -602,36 +603,28 @@ export default function MoviesPage() {
 
       <div className="space-y-2.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div data-tutorial="movies-filter" className="flex overflow-x-auto hide-scrollbar bg-ink-900/80 rounded-xl p-1 border border-ink-700/60 gap-1 w-full sm:w-auto">
+          <div data-tutorial="movies-filter" className="mpx-chipbar w-full sm:w-auto hide-scrollbar">
             <button
               onClick={() => setWatchedFilter('all')}
-              className={`whitespace-nowrap px-3 sm:px-4 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs font-bold rounded-lg transition-all flex-shrink-0 flex items-center ${
-                watchedFilter === 'all' ? 'bg-ink-700 text-ink-100 shadow-sm' : 'text-ink-400 hover:text-ink-300'
-              }`}
+              className={`mpx-chip ${watchedFilter === 'all' ? 'on' : ''}`}
             >
               Tümü ({data.movies.length})
             </button>
             <button
               onClick={() => setWatchedFilter('unwatched')}
-              className={`whitespace-nowrap px-3 sm:px-4 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs font-bold rounded-lg transition-all flex-shrink-0 flex items-center ${
-                watchedFilter === 'unwatched' ? 'bg-gold-500/20 text-gold-400 border border-gold-500/30' : 'text-ink-400 hover:text-ink-300'
-              }`}
+              className={`mpx-chip ${watchedFilter === 'unwatched' ? 'on' : ''}`}
             >
               İzlenecek ({totalUnwatched})
             </button>
             <button
               onClick={() => setWatchedFilter('watched')}
-              className={`whitespace-nowrap px-3 sm:px-4 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs font-bold rounded-lg transition-all flex-shrink-0 flex items-center ${
-                watchedFilter === 'watched' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-ink-400 hover:text-ink-300'
-              }`}
+              className={`mpx-chip ${watchedFilter === 'watched' ? 'on' : ''}`}
             >
               İzlenen ({totalWatched})
             </button>
             <button
               onClick={() => setWatchedFilter('past')}
-              className={`whitespace-nowrap flex items-center justify-center gap-1 px-3 sm:px-4 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs font-bold rounded-lg transition-all flex-shrink-0 flex items-center ${
-                watchedFilter === 'past' ? 'bg-violet-500/25 text-violet-300 border border-violet-500/35' : 'text-ink-400 hover:text-violet-300'
-              }`}
+              className={`mpx-chip ${watchedFilter === 'past' ? 'on' : ''}`}
             >
               <History size={12} className="flex-shrink-0 hidden xs:inline" />
               <span>Önceden ({totalPastWatched})</span>
@@ -642,16 +635,14 @@ export default function MoviesPage() {
             <button
               type="button"
               onClick={() => setIsFilterPanelOpen((prev) => !prev)}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold border transition-all ${
-                isFilterPanelOpen || activeFilterCount > 0
-                  ? 'bg-gold-500/15 text-gold-300 border-gold-500/40 shadow-sm'
-                  : 'bg-ink-900/70 hover:bg-ink-800 text-ink-300 border-ink-700/60'
+              className={`mpx-btn mpx-btn-xs flex-1 sm:flex-none ${
+                isFilterPanelOpen || activeFilterCount > 0 ? 'mpx-btn-s on' : 'mpx-btn-s'
               }`}
             >
-              <SlidersHorizontal size={14} className="text-gold-400" />
+              <SlidersHorizontal size={14} />
               <span>Ara & Filtrele</span>
               {activeFilterCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-gold-500 text-ink-950 text-[10px] font-black">
+                <span className="mpx-idx ml-0.5">
                   {activeFilterCount}
                 </span>
               )}
@@ -663,7 +654,7 @@ export default function MoviesPage() {
                 type="button"
                 onClick={resetAllFilters}
                 title="Arama ve filtreleri sıfırla"
-                className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 p-2 flex items-center justify-center rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-bold transition-colors"
+                className="mpx-ibtn text-red-400"
               >
                 <X size={14} />
               </button>
@@ -672,15 +663,15 @@ export default function MoviesPage() {
         </div>
 
         {isFilterPanelOpen && (
-          <div className="bg-ink-900/75 backdrop-blur-md border border-ink-700/70 rounded-2xl p-3 sm:p-4 space-y-3 shadow-xl animate-fade-in">
+          <div className="mpx-card mpx-hair p-3 sm:p-4 space-y-3 animate-fade-in">
             <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Film veya koleksiyon adı ara..."
-                className="w-full bg-ink-950/90 border border-ink-700 rounded-xl pl-9 pr-8 py-2 text-base sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+                className="mpx-input has-icon"
               />
               {search && (
                 <button
@@ -694,19 +685,19 @@ export default function MoviesPage() {
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
-              <div className="flex items-center gap-1 text-[11px] font-bold text-ink-400 mr-1 flex-shrink-0">
+              <div className="mpx-mono flex items-center gap-1 text-[11px] font-bold text-ink-400 mr-1 flex-shrink-0">
                 <Filter size={12} /> Sırala:
               </div>
-              <button onClick={() => setSortMode('added')} className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 min-h-9 sm:min-h-0 rounded-lg text-xs font-bold transition-all ${sortMode === 'added' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'}`}>
+              <button onClick={() => setSortMode('added')} className={`mpx-chip ${sortMode === 'added' ? 'on' : ''}`}>
                 <CalendarPlus size={13} /> Eklenme
               </button>
-              <button onClick={() => setSortMode('az')} className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 min-h-9 sm:min-h-0 rounded-lg text-xs font-bold transition-all ${sortMode === 'az' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'}`}>
+              <button onClick={() => setSortMode('az')} className={`mpx-chip ${sortMode === 'az' ? 'on' : ''}`}>
                 <ArrowDownAZ size={13} /> A-Z
               </button>
-              <button onClick={() => setSortMode('year')} className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 min-h-9 sm:min-h-0 rounded-lg text-xs font-bold transition-all ${sortMode === 'year' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'}`}>
+              <button onClick={() => setSortMode('year')} className={`mpx-chip ${sortMode === 'year' ? 'on' : ''}`}>
                 <CalendarDays size={13} /> Yıl
               </button>
-              <button onClick={() => setSortMode('rating')} className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 min-h-9 sm:min-h-0 rounded-lg text-xs font-bold transition-all ${sortMode === 'rating' ? 'bg-gold-500/20 border border-gold-500/30 text-gold-300' : 'bg-ink-950/60 border border-ink-800 text-ink-400 hover:text-ink-200'}`}>
+              <button onClick={() => setSortMode('rating')} className={`mpx-chip ${sortMode === 'rating' ? 'on' : ''}`}>
                 <StarIcon size={13} /> Puan
               </button>
             </div>
@@ -715,9 +706,7 @@ export default function MoviesPage() {
               <div className="flex sm:flex-wrap gap-1.5 items-center overflow-x-auto hide-scrollbar pt-1 border-t border-ink-800/70">
                 <button
                   onClick={clearGenres}
-                  className={`flex-shrink-0 px-2.5 py-1 min-h-9 sm:min-h-0 rounded-full text-xs font-bold transition-all ${
-                    selectedGenres.size === 0 ? 'bg-gold-500 text-ink-950' : 'bg-ink-950 text-ink-400 hover:bg-ink-800 hover:text-ink-200 border border-ink-800'
-                  }`}
+                  className={`mpx-chip ${selectedGenres.size === 0 ? 'on' : ''}`}
                 >
                   Tüm Türler
                 </button>
@@ -727,9 +716,7 @@ export default function MoviesPage() {
                     <button
                       key={g}
                       onClick={() => toggleGenre(g)}
-                      className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1 min-h-9 sm:min-h-0 rounded-full text-xs font-bold transition-all ${
-                        active ? 'bg-gold-500 text-ink-950' : 'bg-ink-950 text-ink-400 hover:bg-ink-800 hover:text-ink-200 border border-ink-800'
-                      }`}
+                      className={`mpx-chip ${active ? 'on' : ''}`}
                     >
                       {active && <Check size={11} />}
                       {g}
@@ -744,8 +731,8 @@ export default function MoviesPage() {
 
       {/* ESKİDEN İZLENENLER */}
       {watchedFilter !== 'watched' && watchedFilter !== 'past' && (
-        <div className="bg-ink-900/60 backdrop-blur-sm border border-violet-500/35 rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all">
-          <div className="w-full flex items-center justify-between px-3.5 py-2.5 sm:px-4 sm:py-3 hover:bg-ink-800/40 transition-colors gap-2 flex-wrap">
+        <div className="mpx-card mpx-card-hover is-past overflow-hidden transition-all">
+          <div className="mpx-headrow">
             <button
               type="button"
               onClick={() => setIsPastCollectionOpen((prev) => !prev)}
@@ -760,7 +747,7 @@ export default function MoviesPage() {
               <span className="font-bold text-xs sm:text-sm text-ink-100 truncate">
                 Eskiden İzlenenler
               </span>
-              <span className="text-[10px] sm:text-[11px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full flex-shrink-0">
+              <span className="mpx-idx flex-shrink-0" style={{ background: 'linear-gradient(135deg,#a78bfa,#6d28d9)' }}>
                 {pastCollectionUnratedMovies.length}
               </span>
             </button>
@@ -770,7 +757,7 @@ export default function MoviesPage() {
                 <button
                   type="button"
                   onClick={openMoveFromPastModal}
-                  className="flex items-center gap-1 text-[11px] font-bold text-amber-300 hover:text-white bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-2 sm:px-2.5 py-1 rounded-lg transition-colors"
+                  className="mpx-btn mpx-btn-s mpx-btn-xs text-amber-300"
                   title="Buradaki filmleri seçerek sıradan çıkar veya başka bir koleksiyona topluca taşı"
                 >
                   <ArrowRightLeft size={11} />
@@ -781,7 +768,7 @@ export default function MoviesPage() {
               <button
                 type="button"
                 onClick={() => openBulkCollectionModal(PAST_QUEUE_MODAL_ID)}
-                className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2 sm:px-2.5 py-1 rounded-lg transition-colors"
+                className="mpx-btn mpx-btn-s mpx-btn-xs text-violet-300"
                 title="Listeden çoklu film veya koleksiyon seçerek buraya ekle"
               >
                 <Plus size={12} />
@@ -791,7 +778,7 @@ export default function MoviesPage() {
               <button
                 type="button"
                 onClick={() => setIsPastCollectionOpen((prev) => !prev)}
-                className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2.5 py-1 rounded-lg transition-all"
+                className="mpx-btn mpx-btn-s mpx-btn-xs text-violet-300"
               >
                 {isPastCollectionOpen ? (
                   <><EyeOff size={12} /> <span className="hidden xs:inline">Kapat</span></>
@@ -806,8 +793,10 @@ export default function MoviesPage() {
             <div className="border-t border-violet-500/25 animate-fade-in">
               <div className="p-3 sm:p-4 custom-scrollbar">
                 {pastCollectionUnratedMovies.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-ink-500">
-                    Bu koleksiyonda puanlanmayı bekleyen film yok. Sağ üstteki <strong>"+ Film Seç"</strong> butonundan birden fazla filmi veya koleksiyonu buraya ekleyebilirsin.
+                  <div className="mpx-empty">
+                    <p className="text-xs">
+                      Bu koleksiyonda puanlanmayı bekleyen film yok. Sağ üstteki <strong>"+ Film Seç"</strong> butonundan birden fazla filmi veya koleksiyonu buraya ekleyebilirsin.
+                    </p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
@@ -816,7 +805,7 @@ export default function MoviesPage() {
                         ? data.collections.find((c) => c.id === m.collectionId)?.name
                         : undefined;
                       return (
-                        <div key={m.id} className="relative aspect-[2/3] rounded-xl overflow-hidden group border border-ink-800 bg-ink-900 shadow-sm">
+                        <div key={m.id} className="mpx-poster aspect-[2/3] group">
                           {m.posterUrl ? (
                             <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
                           ) : (
@@ -824,19 +813,20 @@ export default function MoviesPage() {
                               <Film size={24} />
                             </div>
                           )}
-                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
+                          <i className="mpx-corner" />
+                          <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
                             <h3 className="text-[9px] font-bold text-white line-clamp-2 leading-tight">{m.title}</h3>
                             <div className="text-[8px] text-ink-400 mt-0.5 truncate">{m.year || 'Yıl yok'} {origColName ? `· ${origColName}` : ''}</div>
                           </div>
-                          <div className="absolute inset-0 bg-ink-950/80 flex flex-col justify-center items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-2">
-                            <button onClick={() => handleRequestRate(m)} className="w-full min-h-9 md:min-h-0 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded text-[10px] font-bold flex items-center justify-center gap-1">
+                          <div className="absolute inset-0 bg-ink-950/80 flex flex-col justify-center items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-2 z-[2]">
+                            <button onClick={() => handleRequestRate(m)} className="mpx-btn mpx-btn-p mpx-btn-xs w-full">
                               <Star size={10} /> Puanla
                             </button>
                             <div className="flex w-full gap-1">
-                              <button onClick={() => setCollectionTargetMovie(m)} className="flex-1 min-h-9 md:min-h-0 py-1.5 bg-ink-800 hover:bg-gold-500/20 text-gold-400 rounded flex items-center justify-center" title="Koleksiyona Ata">
+                              <button onClick={() => setCollectionTargetMovie(m)} className="mpx-btn mpx-btn-s mpx-btn-xs flex-1" title="Koleksiyona Ata">
                                 <Boxes size={12} />
                               </button>
-                              <button onClick={() => setDetailMovieId(m.id)} className="flex-1 min-h-9 md:min-h-0 py-1.5 bg-ink-800 hover:bg-ink-700 text-white rounded flex items-center justify-center" title="Detaylar">
+                              <button onClick={() => setDetailMovieId(m.id)} className="mpx-btn mpx-btn-s mpx-btn-xs flex-1" title="Detaylar">
                                 <Eye size={12} />
                               </button>
                             </div>
@@ -855,7 +845,7 @@ export default function MoviesPage() {
       {/* KOLEKSİYONLAR */}
       {filteredCollections.length > 0 && (
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between gap-2 bg-ink-900/50 border border-ink-800/80 px-3.5 py-2.5 rounded-xl">
+          <div className="mpx-secbar">
             <button
               type="button"
               onClick={() => setIsCollectionsSectionOpen((prev) => !prev)}
@@ -864,7 +854,7 @@ export default function MoviesPage() {
               {isCollectionsSectionOpen ? <ChevronDown size={16} className="text-gold-400 flex-shrink-0" /> : <ChevronRight size={16} className="text-gold-400 flex-shrink-0" />}
               <Boxes size={15} className="text-gold-400 flex-shrink-0" />
               <span className="truncate">Koleksiyonlar</span>
-              <span className="text-[10px] sm:text-[11px] font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-2 py-0.5 rounded-full flex-shrink-0">
+              <span className="mpx-idx flex-shrink-0">
                 {filteredCollections.length}
               </span>
             </button>
@@ -874,7 +864,7 @@ export default function MoviesPage() {
                 <button
                   type="button"
                   onClick={handleToggleAllCollectionsExpand}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-ink-300 hover:text-gold-300 bg-ink-800/80 hover:bg-ink-700 border border-ink-700/70 px-2 sm:px-2.5 py-1 rounded-lg transition-all"
+                  className="mpx-btn mpx-btn-s mpx-btn-xs"
                 >
                   <ChevronsUpDown size={12} className="text-gold-400" />
                   <span>{allFilteredExpanded ? 'Daralt' : 'Genişlet'}</span>
@@ -884,7 +874,7 @@ export default function MoviesPage() {
               <button
                 type="button"
                 onClick={() => setIsCollectionsSectionOpen((prev) => !prev)}
-                className="flex items-center gap-1 text-[11px] font-bold text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 px-2.5 py-1 rounded-lg transition-all"
+                className="mpx-btn mpx-btn-s mpx-btn-xs"
               >
                 {isCollectionsSectionOpen ? (
                   <><EyeOff size={12} /> <span>Gizle</span></>
@@ -909,17 +899,17 @@ export default function MoviesPage() {
                 return (
                   <div
                     key={coll.id}
-                    className={`bg-ink-900/60 backdrop-blur-sm border rounded-2xl overflow-hidden shadow-lg shadow-ink-950/30 transition-all ${
-                      isCompletelyWatched ? 'border-green-500/30 hover:border-green-500/50' : 'border-ink-700/50 hover:border-ink-600/50'
+                    className={`mpx-card overflow-hidden transition-all ${
+                      isCompletelyWatched ? 'is-done' : 'mpx-card-hover'
                     }`}
                   >
-                    <div className="w-full flex items-center justify-between p-3 sm:p-4 hover:bg-ink-800/40 transition-colors gap-2 flex-wrap">
+                    <div className="mpx-headrow">
                       <button type="button" onClick={() => toggleCollection(coll.id)} className="flex items-center gap-2.5 flex-1 text-left min-w-0">
                         {isExpanded ? <ChevronDown size={18} className="text-ink-500 flex-shrink-0" /> : <ChevronRight size={18} className="text-ink-500 flex-shrink-0" />}
                         <Boxes size={16} className={isCompletelyWatched ? 'text-green-400 flex-shrink-0' : 'text-gold-400 flex-shrink-0'} />
                         <span className="font-semibold text-xs sm:text-sm text-ink-100 truncate">{coll.name}</span>
                         {isCompletelyWatched && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                          <span className="mpx-tag is-done flex-shrink-0">
                             <Check size={10} /> <span className="hidden sm:inline">Tamamlandı</span>
                           </span>
                         )}
@@ -930,7 +920,7 @@ export default function MoviesPage() {
                           <button
                             type="button"
                             onClick={() => requestMoveEntireCollectionToPast(coll.id, coll.name, false)}
-                            className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2 py-1 rounded-lg transition-colors"
+                            className="mpx-btn mpx-btn-s mpx-btn-xs text-violet-300"
                             title="Bu koleksiyondaki izlenmemiş filmleri kendi koleksiyonundan silmeden Eskiden İzlenenler sırasına ekle"
                           >
                             <History size={12} /> <span className="hidden md:inline">Eskiden İzlenenlere Aktar</span>
@@ -939,12 +929,12 @@ export default function MoviesPage() {
                         <button
                           type="button"
                           onClick={() => openBulkCollectionModal(coll.id)}
-                          className="flex items-center gap-1 text-[11px] font-bold text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 px-2 py-1 rounded-lg transition-colors"
+                          className="mpx-btn mpx-btn-s mpx-btn-xs"
                           title="Listeden bu koleksiyona çoklu film ekle"
                         >
-                          <Plus size={12} /> <span className="hidden sm:inline">Film Ekle</span>
+                          <Plus size={12} className="text-gold-400" /> <span className="hidden sm:inline">Film Ekle</span>
                         </button>
-                        <span className="text-[11px] font-bold text-ink-400 bg-ink-800/60 px-2 py-1 rounded-full">
+                        <span className="mpx-count">
                           {watchedInCol}/{movies.length}
                         </span>
                       </div>
@@ -958,7 +948,7 @@ export default function MoviesPage() {
                         {visibleMovies.map((m) => (
                           <div
                             key={m.id}
-                            className="relative w-9 sm:w-11 aspect-[2/3] flex-shrink-0 rounded-md overflow-hidden border border-ink-700/60 bg-ink-900"
+                            className="mpx-poster w-9 sm:w-11 aspect-[2/3] flex-shrink-0"
                             title={m.title}
                           >
                             {m.posterUrl ? (
@@ -1019,22 +1009,22 @@ export default function MoviesPage() {
       {/* BAĞIMSIZ FİLMLER */}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h2 className="text-xs sm:text-sm font-semibold text-ink-400 uppercase tracking-wide">
+          <h2 className="mpx-sec-title">
             {watchedFilter === 'past' ? 'Daha Önce İzlenen Filmler' : 'Bağımsız Filmler'}
           </h2>
           {watchedFilter === 'unwatched' && sortedBottomMovies.length > 0 && (
             <button
               type="button"
               onClick={() => openBulkCollectionModal(PAST_QUEUE_MODAL_ID)}
-              className="flex items-center gap-1 text-[11px] font-bold text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 px-2.5 py-1 rounded-lg transition-colors"
+              className="mpx-btn mpx-btn-s mpx-btn-xs text-violet-300"
             >
               <CheckSquare size={12} /> <span>Toplu Seç & Eskiden İzlenenlere Ekle</span>
             </button>
           )}
         </div>
         {sortedBottomMovies.length === 0 ? (
-          <div className="text-center py-12 text-ink-500">
-            <Projector size={40} className="mx-auto mb-3 opacity-40" />
+          <div className="mpx-empty">
+            <Projector size={40} className="opacity-40" />
             <p className="text-sm">
               {watchedFilter === 'past'
                 ? 'Daha önce izlenen bağımsız film yok.'
@@ -1081,27 +1071,23 @@ export default function MoviesPage() {
       {/* TEKİL FİLM KOLEKSİYON ATAMA MODALI */}
       {collectionTargetMovie && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCollectionTargetMovie(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-md shadow-2xl p-4 sm:p-5 space-y-4 overflow-y-auto max-h-[85dvh]">
+          <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-md shadow-2xl p-4 sm:p-5 space-y-4 overflow-y-auto max-h-[85dvh]">
             <div className="flex items-center justify-between border-b border-ink-800 pb-3">
               <div className="min-w-0 pr-2">
                 <h3 className="text-sm font-black text-white flex items-center gap-2">
                   <FolderPlus size={16} className="text-gold-400 flex-shrink-0" />
                   <span className="truncate">Koleksiyona Ata</span>
                 </h3>
-                <p className="text-xs text-ink-400 truncate mt-0.5">{collectionTargetMovie.title}</p>
+                <p className="mpx-mono text-[11px] text-ink-400 truncate mt-0.5">{collectionTargetMovie.title}</p>
               </div>
-              <button onClick={() => setCollectionTargetMovie(null)} className="text-ink-400 hover:text-white p-1 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg"><X size={17} /></button>
+              <button onClick={() => setCollectionTargetMovie(null)} className="mpx-ibtn"><X size={17} /></button>
             </div>
 
             <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
               <button
                 type="button"
                 onClick={() => handleAssignCollection(collectionTargetMovie, null)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-between ${
-                  !collectionTargetMovie.collectionId
-                    ? 'bg-gold-500/20 text-gold-300 border-gold-500/40'
-                    : 'bg-ink-950 hover:bg-ink-800 text-ink-300 border-ink-800'
-                }`}
+                className={`mpx-chip w-full !justify-between ${!collectionTargetMovie.collectionId ? 'on' : ''}`}
               >
                 <span>Bağımsız (Koleksiyon Yok)</span>
                 {!collectionTargetMovie.collectionId && <Check size={14} />}
@@ -1113,11 +1099,7 @@ export default function MoviesPage() {
                     key={col.id}
                     type="button"
                     onClick={() => handleAssignCollection(collectionTargetMovie, col.id)}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-between ${
-                      isCurrent
-                        ? 'bg-gold-500/20 text-gold-300 border-gold-500/40'
-                        : 'bg-ink-950 hover:bg-ink-800 text-ink-200 border-ink-800'
-                    }`}
+                    className={`mpx-chip w-full !justify-between ${isCurrent ? 'on' : ''}`}
                   >
                     <span className="truncate">{col.name}</span>
                     {isCurrent && <Check size={14} />}
@@ -1127,20 +1109,20 @@ export default function MoviesPage() {
             </div>
 
             <div className="pt-3 border-t border-ink-800 space-y-2">
-              <label className="block text-[10px] font-bold text-ink-400 uppercase tracking-wider">Yeni Koleksiyon Oluştur & Ata</label>
+              <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-wider">Yeni Koleksiyon Oluştur & Ata</label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={newCollectionName}
                   onChange={(e) => setNewCollectionName(e.target.value)}
                   placeholder="Koleksiyon adı..."
-                  className="flex-1 bg-ink-950 border border-ink-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-gold-500"
+                  className="mpx-input flex-1"
                 />
                 <button
                   type="button"
                   disabled={!newCollectionName.trim()}
                   onClick={handleCreateAndAssignCollection}
-                  className="px-4 py-2 min-h-11 md:min-h-0 bg-gold-500 hover:bg-gold-400 disabled:opacity-40 text-ink-950 rounded-xl text-xs font-black transition-colors"
+                  className="mpx-btn mpx-btn-p mpx-btn-xs"
                 >
                   Ekle
                 </button>
@@ -1153,13 +1135,13 @@ export default function MoviesPage() {
       {/* ARKADAŞA TAVSİYE MODALI */}
       {showSendModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setShowSendModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-4xl h-[85dvh] bg-ink-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-4 border-b border-ink-800 bg-ink-900/50 flex items-center justify-between gap-2 shrink-0">
+          <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-4xl h-[85dvh] flex flex-col">
+            <div className="mpx-modal-bar p-4 flex items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-8 h-8 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0"><Send size={15} /></div>
                 <h2 className="text-sm font-black text-white truncate">Arkadaşına Film Tavsiyesi Gönder</h2>
               </div>
-              <button onClick={() => setShowSendModal(false)} className="text-ink-500 hover:text-white p-1 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg shrink-0"><X size={17} /></button>
+              <button onClick={() => setShowSendModal(false)} className="mpx-ibtn shrink-0"><X size={17} /></button>
             </div>
 
             <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
@@ -1167,17 +1149,17 @@ export default function MoviesPage() {
                 {loadingFriends ? (
                   <div className="text-center py-6 text-xs text-ink-500 animate-pulse">Arkadaşların yükleniyor...</div>
                 ) : friendsList.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-ink-500 bg-ink-900/40 rounded-2xl border border-ink-800">
+                  <div className="mpx-empty text-xs">
                     Ağında ekli arkadaşın bulunamadı.
                   </div>
                 ) : (
                   <>
                     <div>
-                      <label className="block text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">1. Kime Gidecek?</label>
+                      <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-widest mb-1.5">1. Kime Gidecek?</label>
                       <select
                         value={selectedFriendId}
                         onChange={(e) => setSelectedFriendId(e.target.value)}
-                        className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-xs text-white focus:border-violet-500 outline-none"
+                        className="mpx-input"
                       >
                         <option value="">-- Arkadaş Seç --</option>
                         {friendsList.map(f => (
@@ -1187,28 +1169,28 @@ export default function MoviesPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">2. Liste Başlığı</label>
+                      <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-widest mb-1.5">2. Liste Başlığı</label>
                       <input
                         type="text"
                         value={sendListTitle}
                         onChange={(e) => setSendListTitle(e.target.value)}
                         placeholder="Örn: Bu Haftanın Önerileri"
-                        className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-xs text-white focus:border-violet-500 outline-none"
+                        className="mpx-input"
                       />
                     </div>
                   </>
                 )}
 
                 <div className="pt-2 border-t border-ink-800">
-                  <label className="block text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-2">3. Listende Ara</label>
+                  <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-widest mb-2">3. Listende Ara</label>
                   <div className="relative flex-1">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
                     <input
                       type="text"
                       placeholder="Film adı yaz..."
                       value={sendMovieSearch}
                       onChange={(e) => setSendMovieSearch(e.target.value)}
-                      className="w-full bg-ink-950 border border-ink-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:border-violet-500 outline-none"
+                      className="mpx-input has-icon"
                     />
                   </div>
                 </div>
@@ -1216,8 +1198,8 @@ export default function MoviesPage() {
 
               <div className="flex-1 flex flex-col overflow-hidden bg-ink-950 relative">
                 <div className="p-3 border-b border-ink-800 flex items-center justify-between bg-ink-900/40">
-                  <span className="text-[10px] font-bold text-ink-400 uppercase tracking-widest">Kütüphanen</span>
-                  <span className="text-[10px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-lg whitespace-nowrap">
+                  <span className="mpx-mono text-[10px] font-bold text-ink-400 tracking-widest">Kütüphanen</span>
+                  <span className="mpx-idx whitespace-nowrap">
                     {selectedMovieIdsForSend.size} Film Seçildi
                   </span>
                 </div>
@@ -1233,20 +1215,20 @@ export default function MoviesPage() {
                           <div
                             key={m.id}
                             onClick={() => toggleSelectMovieForSend(m.id)}
-                            className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer group border-2 transition-all ${isChecked ? 'border-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.5)] scale-95' : 'border-transparent hover:border-ink-700 bg-ink-900'}`}
+                            className={`mpx-poster aspect-[2/3] cursor-pointer group ${isChecked ? 'is-sel' : ''}`}
                           >
                             {m.posterUrl ? (
                               <img src={m.posterUrl} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center text-ink-700 bg-ink-900">
+                              <div className="w-full h-full flex items-center justify-center text-ink-700">
                                 <Film size={24} />
                               </div>
                             )}
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
+                            <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
                               <h3 className="text-[9px] font-bold text-white line-clamp-2 leading-tight">{m.title}</h3>
                               <div className="text-[8px] text-ink-400 mt-0.5 truncate">{m.year || 'Yıl yok'}</div>
                             </div>
-                            <div className={`absolute inset-0 bg-violet-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isChecked ? 'opacity-100' : 'opacity-0'}`}>
+                            <div className={`absolute inset-0 z-[2] bg-violet-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isChecked ? 'opacity-100' : 'opacity-0'}`}>
                               <div className="w-8 h-8 rounded-full bg-violet-500 text-white flex items-center justify-center shadow-lg">
                                 <Check size={18} strokeWidth={4} />
                               </div>
@@ -1260,12 +1242,12 @@ export default function MoviesPage() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-ink-800 bg-ink-950 flex flex-wrap gap-2 shrink-0">
-              <button onClick={() => setShowSendModal(false)} className="px-5 py-3 min-h-11 md:min-h-0 bg-ink-900 text-ink-300 rounded-xl text-xs font-bold hover:bg-ink-800 transition-colors">Vazgeç</button>
+            <div className="mpx-modal-bar p-4 flex flex-wrap gap-2 shrink-0 border-t">
+              <button onClick={() => setShowSendModal(false)} className="mpx-btn mpx-btn-g mpx-btn-xs">Vazgeç</button>
               <button
                 onClick={handleSendRecommendations}
                 disabled={!selectedFriendId || selectedMovieIdsForSend.size === 0}
-                className="flex-1 min-w-[180px] py-3 min-h-11 md:min-h-0 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5 shadow-lg shadow-violet-500/20"
+                className="mpx-btn mpx-btn-p flex-1 min-w-[180px]"
               >
                 <Send size={14} /> <span className="truncate">Tavsiye Listesini Gönder ({selectedMovieIdsForSend.size})</span>
               </button>
@@ -1286,8 +1268,8 @@ export default function MoviesPage() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={() => setAddMoviesToCollectionId(null)}>
-            <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[88svh] animate-fade-in-up">
-              <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800 shrink-0">
+            <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-4xl flex flex-col max-h-[88svh] animate-fade-in-up">
+              <div className="mpx-modal-bar p-3.5 sm:p-4 flex items-center justify-between shrink-0">
                 <div className="min-w-0 pr-2">
                   <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
                     {isTargetPast ? <History size={16} className="text-violet-400 flex-shrink-0" /> : <Boxes size={16} className="text-gold-400 flex-shrink-0" />}
@@ -1299,12 +1281,12 @@ export default function MoviesPage() {
                       : 'Üstten koleksiyon veya alttan istediğin filmleri topluca seç'}
                   </p>
                 </div>
-                <button onClick={() => setAddMoviesToCollectionId(null)} className="text-ink-400 hover:text-white p-2.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1.5 rounded-full hover:bg-ink-800 flex items-center justify-center flex-shrink-0"><X size={18} /></button>
+                <button onClick={() => setAddMoviesToCollectionId(null)} className="mpx-ibtn shrink-0"><X size={18} /></button>
               </div>
 
               {modalOtherCollections.length > 0 && (
                 <div className="p-3 border-b border-ink-800 bg-ink-950/60 space-y-1.5 shrink-0">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-gold-400 flex items-center gap-1">
+                  <div className="mpx-mono text-[10px] font-black tracking-wider text-gold-400 flex items-center gap-1">
                     <Boxes size={12} /> Koleksiyon Olarak Toplu Seç ({modalOtherCollections.length})
                   </div>
                   <div className="flex gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
@@ -1316,15 +1298,11 @@ export default function MoviesPage() {
                           key={col.id}
                           type="button"
                           onClick={() => toggleSelectWholeCollectionInModal(col.id, col.name)}
-                          className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                            isAllColSelected
-                              ? isTargetPast ? 'bg-violet-500 text-white border-violet-400 shadow-sm' : 'bg-gold-500 text-ink-950 border-gold-400 shadow-sm'
-                              : 'bg-ink-900 hover:bg-ink-800 text-ink-200 border-ink-700'
-                          }`}
+                          className={`mpx-chip ${isAllColSelected ? 'on' : ''}`}
                         >
-                          {isAllColSelected ? <CheckSquare size={12} /> : <Square size={12} className="text-ink-400" />}
+                          {isAllColSelected ? <CheckSquare size={12} /> : <Square size={12} />}
                           <span>{col.name}</span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isAllColSelected ? 'bg-black/25' : 'bg-ink-800 text-ink-400'}`}>
+                          <span className="mpx-count !py-0">
                             {colMovies.length}
                           </span>
                         </button>
@@ -1336,13 +1314,13 @@ export default function MoviesPage() {
 
               <div className="p-3 border-b border-ink-800 bg-ink-950/40 flex items-center gap-2 shrink-0">
                 <div className="relative flex-1">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
                   <input
                     type="text"
                     value={collectionSearch}
                     onChange={(e) => setCollectionSearch(e.target.value)}
                     placeholder="Listendeki filmlerde ara..."
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl pl-8 pr-3 py-2 text-base sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-gold-500"
+                    className="mpx-input has-icon"
                   />
                 </div>
                 {modalSelectableMovies.length > 0 && (
@@ -1359,7 +1337,7 @@ export default function MoviesPage() {
                         return next;
                       });
                     }}
-                    className="flex items-center gap-1 px-2.5 py-2 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 text-xs font-bold whitespace-nowrap transition-colors"
+                    className="mpx-btn mpx-btn-s mpx-btn-xs"
                   >
                     {allVisibleSelected ? <CheckSquare size={13} className={isTargetPast ? 'text-violet-400' : 'text-gold-400'} /> : <Square size={13} />}
                     <span>{allVisibleSelected ? 'Kaldır' : 'Tümü'}</span>
@@ -1384,30 +1362,25 @@ export default function MoviesPage() {
                         <div
                           key={m.id}
                           onClick={() => toggleBulkMovieSelection(m.id)}
-                          className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer group border-2 transition-all ${
-                            isSelected
-                              ? isTargetPast
-                                ? 'border-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.5)] scale-95'
-                                : 'border-gold-500 shadow-[0_0_15px_rgba(234,179,8,0.5)] scale-95'
-                              : 'border-transparent hover:border-ink-700 bg-ink-900'
-                          }`}
+                          className={`mpx-poster aspect-[2/3] cursor-pointer group ${isSelected ? 'is-sel' : ''}`}
                         >
                           {m.posterUrl ? (
                             <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-ink-700 bg-ink-900">
+                            <div className="w-full h-full flex items-center justify-center text-ink-700">
                               <ImageIcon size={24} />
                             </div>
                           )}
+                          <i className="mpx-corner" />
 
-                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
+                          <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
                             <h3 className="text-[9px] font-bold text-white line-clamp-2 leading-tight">{m.title}</h3>
                             <div className="text-[8px] text-ink-400 mt-0.5 truncate">
                               {m.year || 'Yıl yok'} {otherColName ? `· ${otherColName}` : ''}
                             </div>
                           </div>
 
-                          <div className={`absolute inset-0 ${isTargetPast ? 'bg-violet-500/20' : 'bg-gold-500/20'} backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
+                          <div className={`absolute inset-0 z-[2] bg-violet-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
                             <div className={`w-8 h-8 rounded-full ${isTargetPast ? 'bg-violet-500 text-white' : 'bg-gold-500 text-ink-950'} flex items-center justify-center shadow-lg`}>
                               <Check size={18} strokeWidth={4} />
                             </div>
@@ -1423,18 +1396,14 @@ export default function MoviesPage() {
                 <button
                   type="button"
                   onClick={() => setAddMoviesToCollectionId(null)}
-                  className="px-5 py-3 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold text-xs transition-colors"
+                  className="mpx-btn mpx-btn-g mpx-btn-xs"
                 >
                   Vazgeç
                 </button>
                 <button
                   type="button"
                   onClick={handleApplyBulkCollectionSelection}
-                  className={`flex-1 min-w-[160px] py-3 min-h-11 md:min-h-0 rounded-xl font-black text-xs transition-colors shadow-lg ${
-                    isTargetPast
-                      ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-500/20'
-                      : 'bg-gold-500 hover:bg-gold-400 text-ink-950 shadow-gold-500/20'
-                  }`}
+                  className="mpx-btn mpx-btn-p flex-1 min-w-[160px]"
                 >
                   Kaydet ({bulkSelectedMovieIds.size} Film)
                 </button>
@@ -1452,8 +1421,8 @@ export default function MoviesPage() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={() => setShowMoveFromPastModal(false)}>
-            <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[88svh] animate-fade-in-up">
-              <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800 shrink-0">
+            <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-4xl flex flex-col max-h-[88svh] animate-fade-in-up">
+              <div className="mpx-modal-bar p-3.5 sm:p-4 flex items-center justify-between shrink-0">
                 <div className="min-w-0 pr-2">
                   <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
                     <ArrowRightLeft size={16} className="text-amber-400 flex-shrink-0" />
@@ -1463,18 +1432,18 @@ export default function MoviesPage() {
                     Seçtiğin filmleri sıradan çıkarabilir veya başka bir koleksiyona aktarabilirsin
                   </p>
                 </div>
-                <button onClick={() => setShowMoveFromPastModal(false)} className="text-ink-400 hover:text-white p-2.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1.5 rounded-full hover:bg-ink-800 flex items-center justify-center flex-shrink-0"><X size={18} /></button>
+                <button onClick={() => setShowMoveFromPastModal(false)} className="mpx-ibtn shrink-0"><X size={18} /></button>
               </div>
 
               <div className="p-3 border-b border-ink-800 bg-ink-950/40 flex items-center gap-2 shrink-0">
                 <div className="relative flex-1">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
                   <input
                     type="text"
                     value={pastMoveSearch}
                     onChange={(e) => setPastMoveSearch(e.target.value)}
                     placeholder="Filmlerde ara..."
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl pl-8 pr-3 py-2 text-base sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-amber-500"
+                    className="mpx-input has-icon"
                   />
                 </div>
                 {filteredPastMoviesForMove.length > 0 && (
@@ -1491,7 +1460,7 @@ export default function MoviesPage() {
                         return next;
                       });
                     }}
-                    className="flex items-center gap-1 px-2.5 py-2 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-200 border border-ink-700 text-xs font-bold whitespace-nowrap transition-colors"
+                    className="mpx-btn mpx-btn-s mpx-btn-xs"
                   >
                     {allVisiblePastSelected ? <CheckSquare size={13} className="text-amber-400" /> : <Square size={13} />}
                     <span>{allVisiblePastSelected ? 'Kaldır' : 'Tümü'}</span>
@@ -1515,28 +1484,25 @@ export default function MoviesPage() {
                         <div
                           key={m.id}
                           onClick={() => togglePastMoveMovie(m.id)}
-                          className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer group border-2 transition-all ${
-                            isSelected
-                              ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-95'
-                              : 'border-transparent hover:border-ink-700 bg-ink-900'
-                          }`}
+                          className={`mpx-poster aspect-[2/3] cursor-pointer group ${isSelected ? 'is-sel' : ''}`}
                         >
                           {m.posterUrl ? (
                             <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-ink-700 bg-ink-900">
+                            <div className="w-full h-full flex items-center justify-center text-ink-700">
                               <ImageIcon size={24} />
                             </div>
                           )}
+                          <i className="mpx-corner" />
 
-                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
+                          <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
                             <h3 className="text-[9px] font-bold text-white line-clamp-2 leading-tight">{m.title}</h3>
                             <div className="text-[8px] text-ink-400 mt-0.5 truncate">
                               {m.year || 'Yıl yok'} {origColName ? `· ${origColName}` : '· Bağımsız'}
                             </div>
                           </div>
 
-                          <div className={`absolute inset-0 bg-amber-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
+                          <div className={`absolute inset-0 z-[2] bg-amber-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
                             <div className="w-8 h-8 rounded-full bg-amber-500 text-ink-950 flex items-center justify-center shadow-lg">
                               <Check size={18} strokeWidth={4} />
                             </div>
@@ -1553,11 +1519,7 @@ export default function MoviesPage() {
                   <button
                     type="button"
                     onClick={() => setPastMoveDestinationMode('remove_queue')}
-                    className={`px-2 py-2 min-h-11 md:min-h-0 rounded-xl text-[11px] font-bold border text-center transition-all truncate ${
-                      pastMoveDestinationMode === 'remove_queue'
-                        ? 'bg-amber-500 text-ink-950 border-amber-400 shadow-sm'
-                        : 'bg-ink-900 text-ink-300 border-ink-800 hover:bg-ink-800'
-                    }`}
+                    className={`mpx-chip !px-2 truncate ${pastMoveDestinationMode === 'remove_queue' ? 'on' : ''}`}
                   >
                     Sıradan Çıkar
                   </button>
@@ -1565,22 +1527,14 @@ export default function MoviesPage() {
                     type="button"
                     onClick={() => setPastMoveDestinationMode('existing')}
                     disabled={regularCollectionsList.length === 0}
-                    className={`px-2 py-2 min-h-11 md:min-h-0 rounded-xl text-[11px] font-bold border text-center transition-all truncate disabled:opacity-40 ${
-                      pastMoveDestinationMode === 'existing'
-                        ? 'bg-amber-500 text-ink-950 border-amber-400 shadow-sm'
-                        : 'bg-ink-900 text-ink-300 border-ink-800 hover:bg-ink-800'
-                    }`}
+                    className={`mpx-chip !px-2 truncate disabled:opacity-40 ${pastMoveDestinationMode === 'existing' ? 'on' : ''}`}
                   >
                     Koleksiyona
                   </button>
                   <button
                     type="button"
                     onClick={() => setPastMoveDestinationMode('new')}
-                    className={`px-2 py-2 min-h-11 md:min-h-0 rounded-xl text-[11px] font-bold border text-center transition-all truncate ${
-                      pastMoveDestinationMode === 'new'
-                        ? 'bg-amber-500 text-ink-950 border-amber-400 shadow-sm'
-                        : 'bg-ink-900 text-ink-300 border-ink-800 hover:bg-ink-800'
-                    }`}
+                    className={`mpx-chip !px-2 truncate ${pastMoveDestinationMode === 'new' ? 'on' : ''}`}
                   >
                     Yeni Koleksiyon
                   </button>
@@ -1590,7 +1544,7 @@ export default function MoviesPage() {
                   <select
                     value={pastMoveTargetColId}
                     onChange={(e) => setPastMoveTargetColId(e.target.value)}
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white focus:outline-none focus:border-amber-500"
+                    className="mpx-input"
                   >
                     {regularCollectionsList.map((col) => (
                       <option key={col.id} value={col.id}>
@@ -1606,7 +1560,7 @@ export default function MoviesPage() {
                     value={pastMoveNewColName}
                     onChange={(e) => setPastMoveNewColName(e.target.value)}
                     placeholder="Yeni koleksiyon adı yazın..."
-                    className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white placeholder-ink-500 focus:outline-none focus:border-amber-500"
+                    className="mpx-input"
                   />
                 )}
 
@@ -1614,7 +1568,7 @@ export default function MoviesPage() {
                   <button
                     type="button"
                     onClick={() => setShowMoveFromPastModal(false)}
-                    className="px-5 py-3 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold text-xs transition-colors"
+                    className="mpx-btn mpx-btn-g mpx-btn-xs"
                   >
                     Vazgeç
                   </button>
@@ -1622,7 +1576,7 @@ export default function MoviesPage() {
                     type="button"
                     disabled={pastMoveSelectedIds.size === 0}
                     onClick={handleExecuteMoveFromPast}
-                    className="flex-1 min-w-[160px] py-3 min-h-11 md:min-h-0 rounded-xl bg-amber-500 hover:bg-amber-400 text-ink-950 font-black text-xs transition-colors disabled:opacity-40 shadow-lg shadow-amber-500/20"
+                    className="mpx-btn mpx-btn-p flex-1 min-w-[160px]"
                   >
                     Uygula ({pastMoveSelectedIds.size} Film)
                   </button>
@@ -1751,25 +1705,22 @@ function MovieRow({
   return (
     <div
       id={`movie-row-${movie.id}`}
-      className={`border rounded-xl sm:rounded-2xl p-2.5 sm:p-3 transition-all group flex flex-col md:flex-row gap-3 md:gap-4 mb-2 md:items-center ${
-        isHighlighted
-          ? 'bg-gold-500/10 border-gold-400 ring-2 ring-gold-400/50 shadow-[0_0_25px_rgba(250,204,21,0.25)]'
-          : 'bg-ink-900/40 border-ink-800/60 hover:border-gold-500/30'
-      }`}
+      className={`mpx-row group flex flex-col md:flex-row gap-3 md:gap-4 mb-2 md:items-center p-2.5 sm:p-3 ${isHighlighted ? 'is-hl' : ''}`}
     >
       <div className="flex gap-3 sm:gap-3.5 flex-1 min-w-0">
         <button
           type="button"
           onClick={() => onSelectDetail(movie)}
           title="Sinema Kartını & Detayları Gör"
-          className="w-14 sm:w-16 flex-shrink-0 aspect-[2/3] bg-ink-900 rounded-lg overflow-hidden flex items-center justify-center border border-ink-700/50 shadow-md relative group/poster cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-500 self-start md:self-center"
+          className="mpx-poster mpx-poster-sm w-14 sm:w-16 flex-shrink-0 aspect-[2/3] flex items-center justify-center group/poster cursor-pointer focus:outline-none self-start md:self-center"
         >
           {movie.posterUrl ? (
             <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
           ) : (
             <ImageIcon size={16} className="text-ink-600" />
           )}
-          <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
+          <i className="mpx-corner" />
+          <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1 z-[2]">
             <div className="w-6 h-6 rounded-full bg-gold-500/90 text-ink-950 flex items-center justify-center shadow-md">
               <Eye size={12} />
             </div>
@@ -1787,12 +1738,12 @@ function MovieRow({
               {movie.title}
             </button>
             {movie.watched && movie.isPastWatch && (
-              <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+              <span className="mpx-tag is-past">
                 <History size={9} /> Önceden
               </span>
             )}
             {!movie.watched && movie.inPastQueue && (
-              <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-violet-500/15 text-violet-300 border border-violet-500/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+              <span className="mpx-tag is-past">
                 <History size={9} /> Eskiden Sırada
               </span>
             )}
@@ -1801,14 +1752,14 @@ function MovieRow({
                 type="button"
                 onClick={() => onAssignCollection(movie)}
                 title="Koleksiyonu Değiştir"
-                className="text-[9px] text-gold-400 hover:text-gold-300 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/20 px-1.5 py-0.5 min-h-9 md:min-h-0 rounded flex items-center gap-1 max-w-[120px] sm:max-w-none truncate transition-colors"
+                className="mpx-tag is-accent max-w-[120px] sm:max-w-none"
               >
                 <Boxes size={9} className="flex-shrink-0" /> <span className="truncate">{collectionName}</span>
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap text-[10.5px] sm:text-[11px] text-ink-400 mb-1.5 md:mb-1">
+          <div className="mpx-mono flex items-center gap-2 flex-wrap text-[10.5px] sm:text-[11px] text-ink-400 mb-1.5 md:mb-1">
             {movie.year && <span className="flex items-center gap-1"><Calendar size={10} /> {movie.year}</span>}
             {movie.runtime && <span className="flex items-center gap-1"><Clock size={10} /> {movie.runtime} dk</span>}
             {movie.watched && !movie.isPastWatch && movie.actualRuntime && movie.runtime && movie.actualRuntime < movie.runtime && (
@@ -1823,9 +1774,9 @@ function MovieRow({
           <div className="flex items-center gap-1.5 flex-wrap mt-auto">
             {movie.watched && movie.rating !== null && (
               <div className="flex items-center gap-1 mr-1">
-                <span className={`text-[9.5px] sm:text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-sm ${ratingBgClass(movie.rating)}`}>{movie.rating}</span>
+                <span className={`mpx-rate ${ratingBgClass(movie.rating)}`}>{movie.rating}</span>
                 {!movie.isPastWatch && movie.watchedAt && (
-                  <span className="text-[9.5px] text-ink-500 hidden sm:inline">{formatDateShort(movie.watchedAt)}</span>
+                  <span className="mpx-mono text-[9.5px] text-ink-500 hidden sm:inline">{formatDateShort(movie.watchedAt)}</span>
                 )}
               </div>
             )}
@@ -1839,7 +1790,7 @@ function MovieRow({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 bg-ink-800/60 hover:bg-gold-900/40 text-gold-400/90 hover:text-gold-300 border border-gold-500/20 hover:border-gold-500/40 px-2 md:px-1.5 py-0.5 min-h-9 md:min-h-0 rounded text-[9.5px] font-semibold transition-all"
+                  className="mpx-link"
                 >
                   {link.logo ? <img src={link.logo} alt="Platform" className="w-2.5 h-2.5 rounded-[2px] object-cover" /> : <Icon size={10} />}
                   <span>{link.text}</span>
@@ -1854,34 +1805,34 @@ function MovieRow({
       <div className="flex flex-wrap items-center justify-between md:justify-end gap-2 sm:gap-2 w-full md:w-auto bg-ink-950/40 md:bg-transparent p-2 md:p-0 rounded-xl md:rounded-none border border-ink-800/40 md:border-0 flex-shrink-0">
         <div className="flex items-center gap-1.5 w-full md:w-auto md:flex-none">
           {movie.watched ? (
-            <button onClick={() => onUnwatch(movie.id)} className="text-[11px] text-ink-400 hover:text-ink-200 bg-ink-800/50 hover:bg-ink-700 px-3 py-1.5 min-h-11 md:min-h-0 rounded-lg transition-colors border border-ink-700/50 font-semibold w-full md:w-auto text-center whitespace-nowrap">
+            <button onClick={() => onUnwatch(movie.id)} className="mpx-btn mpx-btn-g mpx-btn-xs w-full md:w-auto">
               Geri Al
             </button>
           ) : movie.inPastQueue ? (
             <button
               type="button"
               onClick={() => onRate(movie)}
-              className="flex items-center justify-center gap-1 text-[11px] px-4 py-1.5 min-h-11 md:min-h-0 rounded-lg transition-all font-bold w-full md:w-auto whitespace-nowrap bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-500 hover:to-violet-600 text-white shadow-md shadow-violet-500/20 border border-violet-500/50"
+              className="mpx-btn mpx-btn-p mpx-btn-xs w-full md:w-auto"
             >
               <Star size={11} className="fill-current" /> Puanla
             </button>
           ) : isPlanned ? (
             <div
               title="Bu film haftalık planda. Puanlamak veya izlemek için Planlayıcı sekmesine gidin."
-              className="flex items-center justify-center gap-1 text-[11px] px-3 py-1.5 min-h-11 md:min-h-0 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold w-full md:w-auto whitespace-nowrap cursor-not-allowed"
+              className="mpx-btn mpx-btn-g mpx-btn-xs mpx-off w-full md:w-auto text-violet-400"
             >
               <Lock size={11} /> Takvime Planlandı
             </div>
           ) : (
             <>
               {timerInfo ? (
-                <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-2 py-1 min-h-11 md:min-h-0 rounded-lg text-[10px] sm:text-[11px] font-bold w-full md:w-auto justify-center whitespace-nowrap">
+                <div className="mpx-timerpill w-full md:w-auto text-emerald-300">
                   <Timer size={11} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
                   <span className="font-mono">{timerInfo.formattedRemaining}</span>
-                  <button type="button" onClick={() => onTogglePause(movie.id)} title={timerInfo.isPaused ? 'Devam Et' : 'Duraklat'} className="ml-0.5 text-amber-300 hover:text-white min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg">
+                  <button type="button" onClick={() => onTogglePause(movie.id)} title={timerInfo.isPaused ? 'Devam Et' : 'Duraklat'} className="mpx-ibtn text-amber-300 hover:text-white">
                     {timerInfo.isPaused ? <Play size={10} className="fill-current" /> : <Pause size={10} />}
                   </button>
-                  <button type="button" onClick={() => onCancelWatch(movie.id)} title="Sayacı İptal Et" className="ml-0.5 text-ink-400 hover:text-red-400 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg">
+                  <button type="button" onClick={() => onCancelWatch(movie.id)} title="Sayacı İptal Et" className="mpx-ibtn text-ink-400 hover:text-red-400">
                     <X size={10} />
                   </button>
                 </div>
@@ -1891,10 +1842,10 @@ function MovieRow({
                   onClick={() => onStartWatch(movie.id, false)}
                   title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'Geri Sayımı Başlat'}
                   disabled={anotherTimerActive}
-                  className={`flex items-center justify-center gap-1 text-[11px] px-2.5 py-1.5 min-h-11 md:min-h-0 rounded-lg transition-all font-bold border w-full md:w-auto whitespace-nowrap ${
+                  className={`mpx-btn mpx-btn-xs w-full md:w-auto ${
                     anotherTimerActive
-                      ? 'bg-ink-900/50 text-ink-600 border-ink-800 cursor-not-allowed'
-                      : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
+                      ? 'mpx-btn-g mpx-off'
+                      : 'mpx-btn-s text-emerald-400'
                   }`}
                 >
                   {anotherTimerActive ? <Lock size={10} /> : <Play size={10} className="fill-current" />} Başlat
@@ -1905,10 +1856,10 @@ function MovieRow({
                 onClick={() => onRate(movie)}
                 title={timerInfo && !timerInfo.canRateWithTimer ? `En az ${timerInfo.minRequiredMins} dk geçmeden puanlanamaz!` : 'Filmi Puanla'}
                 disabled={Boolean(timerInfo && !timerInfo.canRateWithTimer)}
-                className={`flex items-center justify-center gap-1 text-[11px] px-3 py-1.5 min-h-11 md:min-h-0 rounded-lg transition-all font-bold w-full md:w-auto whitespace-nowrap ${
+                className={`mpx-btn mpx-btn-xs w-full md:w-auto ${
                   timerInfo && !timerInfo.canRateWithTimer
-                    ? 'bg-ink-800/50 text-ink-600 border border-ink-800 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:to-gold-600 text-ink-950 shadow-md shadow-gold-500/10'
+                    ? 'mpx-btn-g mpx-off'
+                    : 'mpx-btn-p'
                 }`}
               >
                 {timerInfo && !timerInfo.canRateWithTimer ? <><Lock size={10} /> Puanla</> : <><Star size={11} /> Puanla</>}
@@ -1921,25 +1872,25 @@ function MovieRow({
           <button
             onClick={() => onSendToFriend(movie)}
             title="Arkadaşına Tavsiye Et"
-            className="p-2.5 min-h-11 min-w-11 md:p-1.5 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg transition-colors border text-violet-400 bg-transparent hover:bg-violet-500/10 border-transparent hover:border-violet-500/30"
+            className="mpx-ibtn text-violet-400"
           >
             <Send size={13} />
           </button>
           <button
             onClick={() => onAssignCollection(movie)}
             title="Koleksiyona Ekle / Değiştir"
-            className={`p-2.5 min-h-11 min-w-11 md:p-1.5 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg transition-colors border ${
+            className={`mpx-ibtn ${
               movie.collectionId || movie.inPastQueue
-                ? 'text-gold-400 bg-gold-500/10 border-gold-500/30 hover:bg-gold-500/20'
-                : 'text-ink-500 hover:text-gold-400 bg-transparent hover:bg-ink-800 border-transparent hover:border-ink-700'
+                ? 'is-on text-gold-400'
+                : 'text-ink-500 hover:text-gold-400'
             }`}
           >
             <Boxes size={13} />
           </button>
-          <button onClick={() => onEdit(movie)} title="Filmi Düzenle" className="text-ink-500 hover:text-gold-400 bg-transparent hover:bg-ink-800 p-2.5 min-h-11 min-w-11 md:p-1.5 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg transition-colors border border-transparent hover:border-ink-700">
+          <button onClick={() => onEdit(movie)} title="Filmi Düzenle" className="mpx-ibtn text-ink-500 hover:text-gold-400">
             <Edit2 size={13} />
           </button>
-          <button onClick={() => onDelete(movie)} title="Filmi Sil" className="text-ink-500 hover:text-red-400 bg-transparent hover:bg-ink-800 p-2.5 min-h-11 min-w-11 md:p-1.5 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg transition-colors border border-transparent hover:border-ink-700">
+          <button onClick={() => onDelete(movie)} title="Filmi Sil" className="mpx-ibtn text-ink-500 hover:text-red-400">
             <Trash2 size={13} />
           </button>
         </div>
