@@ -11,8 +11,9 @@ import QuestBoard from '../components/QuestBoard';
 // ============================================================
 // PREMIUM CAM ROZET STİLLERİ (sinevia-premium.html kriteri)
 // Tüm renkler tema CSS değişkenlerine bağlıdır:
-// --color-1/2/3 (premium-dark'da kırmızı / açık kırmızı / bordo),
-// --glass, --surface, --line-2, --r-lg, --shadow, --blob-1...
+// premium tokenlar önce gelir (--red/--red-hi/--red-deep, --glass, --surface,
+// --line-2, --r-lg, --shadow, --blob-1), plain-dark gibi token tanımsız
+// temalar için zincirleme fallback: --color-1/2/3 → sabit değer.
 // ============================================================
 const ACHV_PREMIUM_CSS = `
 .achv-card{
@@ -26,12 +27,12 @@ const ACHV_PREMIUM_CSS = `
 .achv-card.is-locked{ background:var(--bg-surface, rgba(255,255,255,.04)); }
 .achv-card:hover{
   transform:translateY(-6px);
-  border-color:var(--color-1, #e8384f);
-  box-shadow:0 0 0 1px var(--color-1, #e8384f), 0 30px 60px -24px rgba(0,0,0,.95), 0 0 46px -12px var(--color-1, #e8384f);
+  border-color:var(--red, var(--color-1, #e8384f));
+  box-shadow:0 0 0 1px var(--red, var(--color-1, #e8384f)), 0 30px 60px -24px rgba(0,0,0,.95), 0 0 46px -12px var(--red, var(--color-1, #e8384f));
 }
 .achv-topline{
   position:absolute; top:0; left:0; right:0; height:3px; z-index:3;
-  background:linear-gradient(90deg, var(--color-3, #8e1220), var(--color-1, #e8384f) 55%, var(--color-2, #ff6b7a));
+  background:linear-gradient(90deg, var(--red-deep, var(--color-3, #8e1220)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-hi, var(--color-2, #ff6b7a)));
 }
 .achv-card.is-locked .achv-topline{
   height:1px;
@@ -46,7 +47,7 @@ const ACHV_PREMIUM_CSS = `
 }
 .achv-card:not(.is-locked) .achv-medal{
   border-color:rgba(255,255,255,.28);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.38), 0 12px 26px -12px rgba(0,0,0,.9), 0 0 26px -8px var(--color-1, #e8384f);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.38), 0 12px 26px -12px rgba(0,0,0,.9), 0 0 26px -8px var(--red, var(--color-1, #e8384f));
 }
 .achv-state{
   position:absolute; right:-7px; bottom:-7px; z-index:2;
@@ -64,10 +65,10 @@ const ACHV_PREMIUM_CSS = `
   display:inline-flex; align-items:center; gap:5px;
   padding:5px 12px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
   color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.4);
-  background:linear-gradient(135deg, var(--color-2, #ff6b7a), var(--color-1, #e8384f) 55%, var(--color-3, #8e1220) 130%);
+  background:linear-gradient(135deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-deep, var(--color-3, #8e1220)) 130%);
   border-top-left-radius:14px;
   border-bottom-right-radius:var(--r-lg, 22px);
-  box-shadow:-6px -6px 22px -8px var(--color-1, #e8384f), inset 0 1px 0 rgba(255,255,255,.35);
+  box-shadow:-6px -6px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35);
 }
 .achv-track{
   position:relative; overflow:hidden;
@@ -78,8 +79,8 @@ const ACHV_PREMIUM_CSS = `
 }
 .achv-fill{
   position:absolute; top:0; bottom:0; left:0; border-radius:99px;
-  background:linear-gradient(90deg, var(--color-3, #8e1220), var(--color-1, #e8384f) 55%, var(--color-2, #ff6b7a));
-  box-shadow:0 0 12px var(--color-1, #e8384f);
+  background:linear-gradient(90deg, var(--red-deep, var(--color-3, #8e1220)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-hi, var(--color-2, #ff6b7a)));
+  box-shadow:0 0 12px var(--red, var(--color-1, #e8384f));
   transition:width 1s ease;
 }
 .achv-fill::after{
@@ -97,7 +98,7 @@ const ACHV_PREMIUM_CSS = `
   transition:border-color .25s, box-shadow .25s, background .25s;
 }
 .achv-search:focus{
-  border-color:var(--color-1, #e8384f);
+  border-color:var(--red, var(--color-1, #e8384f));
   background:var(--bg-card, rgba(255,255,255,.07));
   box-shadow:0 0 0 4px var(--blob-1, rgba(232,56,79,.16)), inset 0 1px 0 rgba(255,255,255,.08);
 }
@@ -110,9 +111,9 @@ const ACHV_PREMIUM_CSS = `
 }
 .achv-chip:hover{ transform:translateY(-2px); box-shadow:0 6px 16px -8px rgba(0,0,0,.55); }
 .achv-chip.on{
-  background:linear-gradient(140deg, var(--color-2, #ff6b7a), var(--color-3, #8e1220));
+  background:linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)));
   border-color:transparent; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35);
-  box-shadow:0 8px 22px -8px var(--color-1, #e8384f), inset 0 1px 0 rgba(255,255,255,.35);
+  box-shadow:0 8px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35);
 }
 .achv-panel{
   background:var(--glass, var(--bg-card, rgba(255,255,255,.05)));
@@ -268,8 +269,8 @@ export default function AchievementsPage() {
           <div
             className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center"
             style={{
-              background: 'linear-gradient(135deg, var(--color-2, #ff6b7a), var(--color-3, #8e1220))',
-              boxShadow: '0 6px 18px -6px var(--color-1, #e8384f), inset 0 1px 0 rgba(255,255,255,.35)',
+              background: 'linear-gradient(135deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)))',
+              boxShadow: '0 6px 18px -6px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35)',
             }}
           >
             <Icons.Trophy size={20} style={{ color: '#fff' }} />
@@ -284,7 +285,7 @@ export default function AchievementsPage() {
           className="flex p-1 rounded-2xl w-full sm:w-auto"
           style={{
             background: 'var(--surface, rgba(255,255,255,.04))',
-            border: '1px solid var(--line-2, var(--border-dim))',
+            border: '1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)))',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,.06)',
           }}
         >
@@ -296,10 +297,10 @@ export default function AchievementsPage() {
             style={
               activeTab === 'trophies'
                 ? {
-                    background: 'linear-gradient(140deg, var(--color-2, #ff6b7a), var(--color-3, #8e1220))',
+                    background: 'linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)))',
                     color: '#fff',
                     textShadow: '0 1px 2px rgba(0,0,0,.35)',
-                    boxShadow: '0 8px 22px -8px var(--color-1, #e8384f), inset 0 1px 0 rgba(255,255,255,.35)',
+                    boxShadow: '0 8px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35)',
                   }
                 : undefined
             }
