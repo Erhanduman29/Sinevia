@@ -58,10 +58,15 @@ describe('LAYOUT SMOKE TESTLERİ', () => {
     expect(html).toContain('text-ink-400 hover:bg-ink-800');
   });
 
-  test('AI sekmesi aktifken azure gradyan vurgusu almalı', () => {
+  test('AI sekmesi aktifken premium vurgu pill\'ini almalı (tüm sekmelerde birleşik)', () => {
     const html = renderLayout('ai');
-    const aiHighlights = html.match(/bg-gradient-to-r from-azure-500 to-indigo-600/g) || [];
+
+    // Aktif nav artık tüm sekmelerde tek tip: vurgu rengi pill (tema değişkenli)
+    const aiHighlights = html.match(/bg-gold-500\/20 text-gold-400/g) || [];
     expect(aiHighlights).toHaveLength(1);
+
+    // Eski azure-özel aktif gradyan kaldırıldı (birleşik premium görünüm)
+    expect(html).not.toContain('bg-gradient-to-r from-azure-500 to-indigo-600');
   });
 
   test('eşitleme durumları (synced / syncing / error) doğru metni göstermeli', () => {

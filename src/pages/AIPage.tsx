@@ -13,6 +13,9 @@ interface TMDBActionItem {
   status: 'pending' | 'added';
 }
 
+const formatTime = (ts: number) =>
+  new Date(ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
 export default function AIPage() {
   const { data, addMovie, addSeries, updateAIHistory } = useApp();
   
@@ -35,6 +38,7 @@ export default function AIPage() {
   
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -261,32 +265,40 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
     updateAIHistory([]);
   };
 
+  const isWaveActive = isInputFocused || input.length > 0;
+
   return (
-    <div className="h-[calc(100dvh-11rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:h-[calc(100dvh-5rem)] flex flex-col bg-ink-950 border border-ink-800/50 rounded-[2rem] shadow-2xl overflow-hidden animate-fade-in relative">
-      
-      <div className="flex items-center justify-between p-4 md:p-5 border-b border-ink-800/50 bg-ink-900/80 backdrop-blur-md z-10">
+    <div className="h-[calc(100dvh-11rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] md:h-[calc(100dvh-5rem)] flex flex-col bg-[var(--bg-base)] border border-[var(--border-dim)] rounded-[2rem] shadow-2xl overflow-hidden animate-fade-in relative">
+
+      {/* ortam ışığı */}
+      <div className="absolute inset-x-0 top-0 h-56 pointer-events-none z-0" style={{ background: 'radial-gradient(600px 240px at 85% -10%, var(--blob-1), transparent 65%)' }} />
+
+      {/* Üst bar */}
+      <div className="relative flex items-center justify-between p-4 md:p-5 border-b border-[var(--border-dim)] bg-[var(--bg-surface)] backdrop-blur-md z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-azure-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-azure-500/20">
+          <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(140deg, var(--color-2), var(--color-3))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.35), 0 8px 22px -8px var(--blob-1)' }}>
             <Bot className="text-white w-5 h-5 md:w-6 md:h-6" />
           </div>
           <div>
-            <h1 className="text-base md:text-lg font-black text-white tracking-widest uppercase">Sinevia AI</h1>
-            <p className="text-[10px] md:text-xs text-ink-400 font-medium flex items-center gap-1"><Sparkles size={12} className="text-azure-400" /> Kişisel Sinema Asistanın</p>
+            <h1 className="text-base md:text-lg font-black tracking-widest uppercase" style={{ background: 'linear-gradient(100deg, var(--text-main) 20%, var(--text-main) 60%, var(--color-2))', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>Sinevia AI</h1>
+            <p className="text-[10px] md:text-xs font-bold tracking-[.18em] uppercase flex items-center gap-1" style={{ color: 'var(--color-2)' }}><Sparkles size={12} /> Kişisel Sinema Asistanın</p>
           </div>
         </div>
         
         {messages.length > 1 && (
           <button 
             onClick={handleClearHistory}
-            className="text-[10px] md:text-xs font-bold text-red-400/80 hover:text-red-400 bg-red-500/10 hover:bg-red-500/20 px-3 py-2.5 md:py-1.5 min-h-11 md:min-h-0 rounded-lg transition-colors whitespace-nowrap"
+            className="text-[10px] md:text-xs font-extrabold tracking-[.12em] uppercase px-3 py-2.5 md:py-1.5 min-h-11 md:min-h-0 rounded-lg transition-colors whitespace-nowrap"
+            style={{ color: 'var(--color-2)', background: 'var(--blob-1)', border: '1px solid var(--border-dim)' }}
           >
             Sohbeti Temizle
           </button>
         )}
+        <div className="absolute left-0 right-0 -bottom-px h-px pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--color-1) 40%, var(--color-2) 65%, transparent)', opacity: .6 }} />
       </div>
 
+      {/* Mesaj akışı */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 hide-scrollbar relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-azure-500/5 to-transparent pointer-events-none" />
         
         {messages.map((msg) => (
           <div key={msg.id} className={`flex w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} relative z-10`}>
@@ -295,24 +307,33 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
               
               <div className="flex-shrink-0 mt-1">
                 {msg.sender === 'user' ? (
-                  <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-ink-800 flex items-center justify-center border border-ink-700">
-                    <User size={14} className="text-ink-400 md:w-4 md:h-4" />
+                  <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-[var(--bg-card)] flex items-center justify-center" style={{ border: '1px solid var(--border-dim)' }}>
+                    <User size={14} style={{ color: 'var(--color-2)' }} className="md:w-4 md:h-4" />
                   </div>
                 ) : (
-                  <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-azure-500 to-indigo-500 flex items-center justify-center shadow-md">
+                  <div className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(140deg, var(--color-2), var(--color-3))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.35), 0 6px 18px -6px var(--blob-1)' }}>
                     <Bot size={14} className="text-white md:w-4 md:h-4" />
                   </div>
                 )}
               </div>
 
               <div className="flex flex-col gap-2 md:gap-3">
-                <div className={`p-3 md:p-4 rounded-xl md:rounded-2xl text-xs md:text-sm leading-relaxed shadow-md break-words ${
+                <div className={`p-3 md:p-4 rounded-xl md:rounded-2xl text-xs md:text-sm leading-relaxed break-words ${
                   msg.sender === 'user' 
-                    ? 'bg-ink-800 text-white rounded-tr-none border border-ink-700/50' 
-                    : 'bg-ink-900/80 text-ink-200 rounded-tl-none border border-ink-800/50 backdrop-blur-sm'
-                }`}>
+                    ? 'rounded-tr-none text-white' 
+                    : 'rounded-tl-none'
+                }`}
+                  style={ msg.sender === 'user' 
+                    ? { background: 'linear-gradient(150deg, var(--color-2) 0%, var(--color-1) 55%, var(--color-3) 130%)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.3), inset 0 -2px 6px rgba(0,0,0,.2), 0 10px 28px -12px var(--blob-1)' }
+                    : { background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', borderLeft: '2px solid var(--color-1)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.06), 0 14px 34px -18px rgba(0,0,0,.8)', backdropFilter: 'blur(10px)', color: 'var(--text-main)' }
+                  }
+                >
                   {msg.text}
                 </div>
+
+                <span className={`font-mono text-[9px] md:text-[10px] tracking-[.14em] uppercase ${msg.sender === 'user' ? 'text-right self-end' : 'self-start'}`} style={{ color: 'var(--color-2)', opacity: 0.75 }}>
+                  {formatTime(msg.timestamp)}
+                </span>
 
                 {msg.actionItems && msg.actionItems.length > 0 && (
                   <div className="flex flex-wrap gap-2 md:gap-3 mt-1">
@@ -323,29 +344,31 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
                       const poster = item.tmdbData.poster_path ? `https://image.tmdb.org/t/p/w200${item.tmdbData.poster_path}` : null;
 
                       return (
-                        <div key={idx} className="w-32 md:w-40 bg-ink-950 border border-ink-800 rounded-xl overflow-hidden shadow-lg group">
-                          <div className="relative h-44 md:h-56 bg-ink-900">
+                        <div key={idx} className="w-32 md:w-40 bg-[var(--bg-card)] rounded-xl overflow-hidden shadow-lg group" style={{ border: '1px solid var(--border-dim)' }}>
+                          <div className="relative h-44 md:h-56 bg-[var(--bg-surface)]">
                             {poster ? (
                               <img src={poster} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center text-ink-700"><Film size={28} className="md:w-8 md:h-8"/></div>
+                              <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--color-3)' }}><Film size={28} className="md:w-8 md:h-8"/></div>
                             )}
-                            <div className="absolute top-1.5 left-1.5 md:top-2 md:left-2 bg-black/60 backdrop-blur-md px-1.5 md:px-2 py-0.5 md:py-1 rounded text-[8px] md:text-[10px] font-bold text-white border border-white/10 uppercase">
+                            <div className="absolute top-1.5 left-1.5 md:top-2 md:left-2 backdrop-blur-md px-1.5 md:px-2 py-0.5 md:py-1 rounded text-[8px] md:text-[10px] font-bold text-white uppercase" style={{ background: 'linear-gradient(135deg, var(--color-2), var(--color-3))', boxShadow: '0 4px 12px -4px var(--blob-1)' }}>
                               {item.type === 'movie' ? 'Film' : 'Dizi'}
                             </div>
                           </div>
-                          <div className="p-2 md:p-3 bg-ink-900 border-t border-ink-800">
-                            <h4 className="text-[11px] md:text-xs font-bold text-white truncate mb-0.5 md:mb-1" title={title}>{title}</h4>
-                            <p className="text-[9px] md:text-[10px] text-gold-400 mb-2 md:mb-3">{date?.substring(0, 4)}</p>
+                          <div className="p-2 md:p-3 border-t border-[var(--border-dim)]">
+                            <h4 className="text-[11px] md:text-xs font-bold truncate mb-0.5 md:mb-1" style={{ color: 'var(--text-main)' }} title={title}>{title}</h4>
+                            <p className="text-[9px] md:text-[10px] mb-2 md:mb-3" style={{ color: 'var(--color-2)' }}>{date?.substring(0, 4)}</p>
                             
                             <button 
                               onClick={() => !isAdded && handleManualAdd(item, msg.id)}
                               disabled={isAdded}
                               className={`w-full py-1.5 md:py-2 min-h-11 md:min-h-0 rounded-lg text-[10px] md:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                                isAdded 
-                                  ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-                                  : 'bg-gold-500 hover:bg-gold-400 text-ink-950 shadow-md shadow-gold-500/20'
+                                isAdded ? '' : 'hover:brightness-110'
                               }`}
+                              style={ isAdded
+                                ? { background: 'var(--blob-1)', color: 'var(--color-2)', border: '1px solid var(--border-dim)' }
+                                : { background: 'linear-gradient(150deg, var(--color-2), var(--color-3))', color: '#fff', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.35), 0 8px 20px -8px var(--blob-1)' }
+                              }
                             >
                               {isAdded ? <><Check size={12} className="md:w-3.5 md:h-3.5"/> Ekli</> : <><Plus size={12} className="md:w-3.5 md:h-3.5"/> Ekle</>}
                             </button>
@@ -365,13 +388,13 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
           <div className="flex w-full justify-start relative z-10">
             <div className="max-w-[90%] md:max-w-[70%] flex gap-2 md:gap-3 flex-row">
               <div className="flex-shrink-0 mt-1">
-                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-azure-500 to-indigo-500 flex items-center justify-center shadow-md animate-pulse">
+                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center animate-pulse" style={{ background: 'linear-gradient(140deg, var(--color-2), var(--color-3))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.35)' }}>
                   <Bot size={14} className="text-white md:w-4 md:h-4" />
                 </div>
               </div>
-              <div className="p-3 md:p-4 rounded-xl md:rounded-2xl bg-ink-900/80 rounded-tl-none border border-ink-800/50 flex items-center gap-2">
-                <Loader2 size={14} className="text-azure-400 animate-spin md:w-4 md:h-4" />
-                <span className="text-xs md:text-sm font-medium text-ink-400">Düşünüyor...</span>
+              <div className="p-3 md:p-4 rounded-xl md:rounded-2xl rounded-tl-none flex items-center gap-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', borderLeft: '2px solid var(--color-1)', backdropFilter: 'blur(10px)' }}>
+                <Loader2 size={14} style={{ color: 'var(--color-2)' }} className="animate-spin md:w-4 md:h-4" />
+                <span className="text-xs md:text-sm font-medium" style={{ color: 'var(--color-2)' }}>Düşünüyor...</span>
               </div>
             </div>
           </div>
@@ -379,32 +402,57 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-3 md:p-4 border-t border-ink-800/50 bg-ink-900/50 backdrop-blur-md z-10">
+      {/* Giriş alanı — uv-wave floating label */}
+      <div className="p-3 md:p-5 border-t border-[var(--border-dim)] bg-[var(--bg-surface)] backdrop-blur-md z-10 relative">
+        <div className="absolute left-0 right-0 -top-px h-px pointer-events-none" style={{ background: 'linear-gradient(90deg, transparent, var(--color-1) 45%, transparent)' , opacity: .5 }} />
         {!GEMINI_API_KEY && (
-          <div className="mb-3 p-2.5 md:p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2">
-            <Info size={14} className="text-red-400 mt-0.5 flex-shrink-0 md:w-4 md:h-4" />
-            <p className="text-[10px] md:text-xs text-red-300">
-              API Anahtarı bulunamadı! Lütfen <code className="bg-black/30 px-1 rounded">.env</code> dosyanıza <code className="bg-black/30 px-1 rounded text-white">VITE_GEMINI_API_KEY=senin_anahtarin</code> şeklinde Google Gemini API anahtarınızı ekleyin.
+          <div className="mb-3 p-2.5 md:p-3 rounded-xl flex items-start gap-2" style={{ background: 'var(--blob-1)', border: '1px solid var(--border-dim)' }}>
+            <Info size={14} style={{ color: 'var(--color-2)' }} className="mt-0.5 flex-shrink-0 md:w-4 md:h-4" />
+            <p className="text-[10px] md:text-xs" style={{ color: 'var(--text-main)' }}>
+              API Anahtarı bulunamadı! Lütfen <code className="bg-black/30 px-1 rounded">.env</code> dosyanıza <code className="bg-black/30 px-1 rounded" style={{ color: 'var(--color-2)' }}>VITE_GEMINI_API_KEY=senin_anahtarin</code> şeklinde Google Gemini API anahtarınızı ekleyin.
             </p>
           </div>
         )}
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-          className="flex items-center gap-2 md:gap-3 relative"
+          className="flex items-end gap-2 md:gap-3 relative"
         >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={isLoading || !GEMINI_API_KEY}
-            placeholder="Ne izlesem? Veya 'The Matrix'i ekle'..."
-            className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-4 py-3 md:px-5 md:py-4 text-xs md:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-azure-500/50 focus:ring-1 focus:ring-azure-500/30 transition-all shadow-inner disabled:opacity-50"
-          />
+          <div className="relative flex-1">
+            <input
+              type="text"
+              id="ai-chat-input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
+              disabled={isLoading || !GEMINI_API_KEY}
+              placeholder=" "
+              className="peer w-full bg-transparent border-0 border-b-2 px-1 pt-5 pb-2 text-xs md:text-sm text-[var(--text-main)] placeholder-transparent focus:outline-none disabled:opacity-50 transition-colors"
+              style={{ borderBottomColor: isWaveActive ? 'var(--color-1)' : 'var(--border-dim)', boxShadow: isWaveActive ? '0 6px 18px -12px var(--color-1)' : 'none' }}
+            />
+            <label 
+              htmlFor="ai-chat-input"
+              className="pointer-events-none absolute left-1 font-bold tracking-[.14em] uppercase transition-all duration-200"
+              style={ isWaveActive
+                ? { top: '2px', fontSize: '9px', color: 'var(--color-2)' }
+                : { top: '1.15rem', fontSize: '11px', color: 'var(--text-main)', opacity: 0.55 }
+              }
+            >
+              Ne izlesem? Veya 'The Matrix'i ekle'...
+            </label>
+            {/* odak dalgası */}
+            <span className="absolute left-0 right-0 -bottom-0.5 h-0.5 pointer-events-none overflow-hidden">
+              <span className={`block h-full mx-auto transition-all duration-300 ${isWaveActive ? 'w-full' : 'w-0'}`} style={{ background: 'linear-gradient(90deg, var(--color-1), var(--color-2))', boxShadow: '0 0 10px var(--blob-1)' }} />
+            </span>
+          </div>
           <button
             type="submit"
             disabled={!input.trim() || isLoading || !GEMINI_API_KEY}
-            className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-azure-600 to-indigo-600 text-white rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-azure-500/20 disabled:opacity-50 disabled:hover:scale-100 flex-shrink-0"
+            aria-label="Gönder"
+            className="group relative overflow-hidden w-12 h-12 md:w-14 md:h-14 text-white rounded-xl flex items-center justify-center hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-lg disabled:opacity-40 disabled:hover:translate-y-0 flex-shrink-0"
+            style={{ background: 'linear-gradient(150deg, var(--color-2) 0%, var(--color-1) 45%, var(--color-3) 130%)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 6px rgba(0,0,0,.25), 0 10px 28px -10px var(--blob-1)' }}
           >
+            <span className="absolute top-0 -left-[80%] w-[55%] h-full pointer-events-none group-hover:left-[130%] transition-all duration-500" style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent)', transform: 'skewX(-20deg)' }} />
             {isLoading ? <Loader2 size={18} className="animate-spin md:w-5 md:h-5" /> : <Send size={18} className="ml-1 md:w-5 md:h-5" />}
           </button>
         </form>
