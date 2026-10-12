@@ -22,11 +22,11 @@ import { calculateStats, StatsScopeMode } from '../lib/statsLogic';
    Grafik dolguları ise doğrudan kırmızı paletle uyumludur.
    ══════════════════════════════════════════════════════════════ */
 const PREMIUM_PANEL =
-  'bg-ink-900/60 backdrop-blur-xl border border-ink-700/50 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.85)] transition-colors duration-300';
+  'bg-ink-900/60 bg-[image:var(--glass)] backdrop-blur-xl border border-ink-700/50 rounded-[var(--r-lg,22px)] p-4 sm:p-5 shadow-[var(--shadow,0_24px_60px_-24px_rgba(0,0,0,0.85))] transition-colors duration-300';
 const PREMIUM_CELL =
-  'bg-white/[0.03] border border-ink-800/70 rounded-xl transition-all duration-300 hover:bg-white/[0.06] hover:shadow-[0_0_0_1px_rgba(232,56,79,0.35),0_10px_30px_-12px_rgba(232,56,79,0.5)]';
+  'bg-white/[0.03] border border-ink-800/70 rounded-[var(--r,16px)] transition-all duration-300 hover:bg-white/[0.06] hover:shadow-[var(--glow,0_0_0_1px_rgba(232,56,79,0.35),0_10px_30px_-10px_rgba(232,56,79,0.5))]';
 const PREMIUM_GLOW =
-  'transition-all duration-300 hover:shadow-[0_0_0_1px_rgba(232,56,79,0.35),0_14px_38px_-14px_rgba(232,56,79,0.6)]';
+  'transition-all duration-300 hover:shadow-[var(--glow,0_0_0_1px_rgba(232,56,79,0.35),0_14px_38px_-14px_rgba(232,56,79,0.6))]';
 /* Büyük sayılar: mono, sıkı, tabular tipografi */
 const PREMIUM_NUM = 'font-mono font-black tracking-tight tabular-nums';
 /* İkon karo — premium cam + kırmızı ışık */
