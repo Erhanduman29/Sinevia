@@ -100,6 +100,11 @@ const SERIES_PREMIUM_CSS = `
   font-size: 9.5px; font-weight: 700;
   box-shadow: 0 6px 16px -8px rgba(0, 0, 0, .9), var(--svp-inset);
 }
+/* izleme geri alınınca korunan puan — kesikli çerçeve ile "saklı skor" */
+.svp-rate-kept {
+  outline: 1px dashed color-mix(in srgb, var(--svp-ink) 55%, transparent);
+  outline-offset: 1.5px;
+}
 
 /* ---------- MODAL PERDE ---------- */
 .svp-overlay {
@@ -282,26 +287,73 @@ const SERIES_PREMIUM_CSS = `
   background: color-mix(in srgb, var(--svp-ink) 7%, transparent);
 }
 
-/* ---------- BÖLÜM İLERLEME BARI (gradyan + shine) ---------- */
+/* ---------- BÖLÜM İLERLEME ALANI (etiket + ince bar + kademe + hover detay) ---------- */
 .svp-prog {
-  position: relative; height: 8px; border-radius: 99px; overflow: hidden;
-  background: rgba(0, 0, 0, .5);
+  position: relative;
+  display: flex; flex-direction: column; gap: .32rem;
+  min-width: 90px;
+}
+.svp-prog-top {
+  display: flex; align-items: baseline; justify-content: space-between; gap: .5rem;
+}
+.svp-prog-cap {
+  font-family: var(--svp-mono);
+  font-size: 8.5px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--svp-muted);
+}
+.svp-prog .svp-pct { font-size: 12.5px; line-height: 1; }
+.svp-prog-track {
+  position: relative; height: 6px; width: 100%;
+  border-radius: 99px; overflow: hidden;
+  background: color-mix(in srgb, var(--svp-ink) 9%, transparent);
   border: 1px solid var(--svp-line2);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .7);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--bg-base, #0a0a0e) 70%, transparent);
+  transition: border-color .24s, box-shadow .24s;
+}
+.svp-prog:hover .svp-prog-track,
+.svp-prog:focus-within .svp-prog-track {
+  border-color: var(--svp-t45);
+  box-shadow: 0 0 0 3px var(--svp-t14), inset 0 1px 2px color-mix(in srgb, var(--bg-base, #0a0a0e) 70%, transparent);
 }
 .svp-prog-fill {
-  position: absolute; inset: 0 auto 0 0; border-radius: 99px; overflow: hidden;
+  position: absolute; inset: 0 auto 0 0; height: 100%;
   background: linear-gradient(90deg, var(--svp-a3), var(--svp-a1) 55%, var(--svp-a2));
-  box-shadow: 0 0 12px var(--svp-t70);
+  box-shadow: 0 0 10px var(--svp-t70);
   transition: width .5s cubic-bezier(.2, .7, .3, 1);
 }
 .svp-prog-fill::before {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .5), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--svp-ink) 55%, transparent), transparent);
   transform: translateX(-100%);
   animation: svp-shine 2.6s cubic-bezier(.4, 0, .2, 1) infinite;
 }
 @keyframes svp-shine { 60%, 100% { transform: translateX(100%); } }
+/* kademe (çeyrek) göstergeleri — aşılan kademeler koyu ışıkla ayrışır */
+.svp-prog-ms {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  transform: translateX(-1px);
+  background: var(--svp-line2);
+  z-index: 2; pointer-events: none;
+}
+.svp-prog-ms-on { background: color-mix(in srgb, var(--bg-base, #0a0a0e) 70%, transparent); }
+/* hover'da detay balonu */
+.svp-prog-tip {
+  position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 40;
+  pointer-events: none; white-space: nowrap;
+  font-family: var(--svp-mono);
+  font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--svp-ink);
+  background: var(--svp-glass);
+  border: 1px solid var(--svp-line2);
+  border-radius: 9px;
+  padding: .35rem .6rem;
+  box-shadow: 0 12px 26px -14px rgba(0, 0, 0, .95), var(--svp-inset);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0; transform: translateY(4px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.svp-prog:hover .svp-prog-tip { opacity: 1; transform: translateY(0); }
 
 /* ---------- KART İÇİ İZLEME LİNKLERİ ---------- */
 .svp-link {
@@ -591,6 +643,27 @@ export default function SeriesPage() {
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  /* PUANLAMA KORUMA
+     'Bölümü tamamla/geri al' tıklaması UNWATCH_EPISODE tetikler ve reducer
+     bölümün puanını sıfırlar + geçmiş kaydını siler (reducer testleriyle
+     sabitlenmiş davranış). Tıklama tamamla/geri alma görevini korurken PUANLAMA
+     görünümünün (sv-rate çipi) kaybolmaması için, geri alma anındaki puanı
+     yerel olarak saklarız; çip store puanı yoksa korunan puanı gösterir. */
+  const [keptRatings, setKeptRatings] = useState<Record<string, number>>({});
+
+  const keepRating = (ep: Episode) => {
+    if (ep.rating === null || ep.rating === undefined) return;
+    setKeptRatings((prev) => (prev[ep.id] === ep.rating ? prev : { ...prev, [ep.id]: ep.rating as number }));
+  };
+
+  const releaseRating = (episodeId: string) =>
+    setKeptRatings((prev) => {
+      if (!(episodeId in prev)) return prev;
+      const next = { ...prev };
+      delete next[episodeId];
+      return next;
+    });
+
   const detailSeries = useMemo(
     () => (detailSeriesId ? data.series.find((s) => s.id === detailSeriesId) || null : null),
     [data.series, detailSeriesId]
@@ -779,13 +852,6 @@ export default function SeriesPage() {
             </div>
             <span className="svp-grad-text">Diziler</span>
           </h1>
-
-          <button
-            onClick={() => setShowAdd(true)}
-            className="svp-btn-p sm:hidden px-3.5 py-2 min-h-11 text-xs"
-          >
-            <Plus size={16} strokeWidth={2.5} /> Dizi Ekle
-          </button>
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
@@ -1102,15 +1168,47 @@ export default function SeriesPage() {
                     <span className="svp-mono">
                       <span className="svp-ic-a2">{watchedCount}</span>/{s.episodes.length} bölüm
                     </span>
-                    <span className="svp-pct">%{progressPct}</span>
                     {allWatched && (
                       <span className="svp-done-tag"><Check size={10} /> Tamam</span>
                     )}
                   </div>
 
-                  {/* BÖLÜM İLERLEME BARI (gradyan + shine) */}
-                  <div className="svp-prog flex-1 min-w-[90px]" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label={`${s.title} ilerleme`}>
-                    <div className="svp-prog-fill" style={{ width: `${progressPct}%` }} />
+                  {/* BÖLÜM İLERLEME ALANI — yüzde etiketi + ince bar + kademe + hover detay */}
+                  <div
+                    className="svp-prog flex-1 min-w-[90px]"
+                    role="progressbar"
+                    aria-valuenow={progressPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuetext={`${watchedCount} / ${s.episodes.length} bölüm, yüzde ${progressPct}`}
+                    aria-label={`${s.title} ilerleme`}
+                  >
+                    <div className="svp-prog-top">
+                      <span className="svp-prog-cap">İlerleme</span>
+                      <span className="svp-pct">%{progressPct}</span>
+                    </div>
+
+                    <div className="svp-prog-track">
+                      <div className="svp-prog-fill" style={{ width: `${progressPct}%` }} />
+                      {[25, 50, 75].map((m) => (
+                        <span
+                          key={m}
+                          className={`svp-prog-ms ${progressPct >= m ? 'svp-prog-ms-on' : ''}`}
+                          style={{ left: `${m}%` }}
+                          aria-hidden="true"
+                        />
+                      ))}
+                    </div>
+
+                    <div className="svp-prog-tip">
+                      {allWatched
+                        ? 'Tüm bölümler tamamlandı'
+                        : nextEp
+                          ? `Sıradaki · S${nextEp.season}B${nextEp.episode}`
+                          : 'Bölüm yok'}
+                      {' · '}
+                      {watchedCount}/{s.episodes.length} · %{progressPct}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -1175,8 +1273,15 @@ export default function SeriesPage() {
                                       if (canWatch) setRatingTarget({ series: s, episode: ep });
                                       else showToast('Önce önceki bölümleri izlemelisin!', 'warning');
                                     }}
-                                    onUnwatch={() => unwatchEpisode(s.id, ep.id)}
-                                    onDelete={() => setDeleteEpisodeTarget({ series: s, episode: ep })}
+                                    onUnwatch={() => {
+                                      keepRating(ep);
+                                      unwatchEpisode(s.id, ep.id);
+                                    }}
+                                    onDelete={() => {
+                                      releaseRating(ep.id);
+                                      setDeleteEpisodeTarget({ series: s, episode: ep });
+                                    }}
+                                    displayRating={ep.rating ?? keptRatings[ep.id] ?? null}
                                   />
                                 );
                               })}
@@ -1335,6 +1440,7 @@ export default function SeriesPage() {
           subtitle={`${pickedSeriesItem.episode.season}. Sezon ${pickedSeriesItem.episode.episode}. Bölüm`}
           allowPastWatch={false}
           onRate={(rating, note, detailedRating, reviewTags) => {
+            releaseRating(pickedSeriesItem.episode.id);
             watchEpisode(pickedSeriesItem.series.id, pickedSeriesItem.episode.id, rating, note, detailedRating, reviewTags);
             setPickedSeriesItem(null);
           }}
@@ -1349,9 +1455,10 @@ export default function SeriesPage() {
           title={ratingTarget.series.title}
           subtitle={`${ratingTarget.episode.season}. Sezon ${ratingTarget.episode.episode}. Bölüm`}
           allowPastWatch={false}
-          onRate={(rating, note, detailedRating, reviewTags) =>
-            watchEpisode(ratingTarget.series.id, ratingTarget.episode.id, rating, note, detailedRating, reviewTags)
-          }
+          onRate={(rating, note, detailedRating, reviewTags) => {
+            releaseRating(ratingTarget.episode.id);
+            watchEpisode(ratingTarget.series.id, ratingTarget.episode.id, rating, note, detailedRating, reviewTags);
+          }}
           onClose={() => setRatingTarget(null)}
         />
       )}
@@ -1395,12 +1502,15 @@ export default function SeriesPage() {
 function EpisodeBox({
   episode,
   canWatch,
+  displayRating,
   onRate,
   onUnwatch,
   onDelete,
 }: {
   episode: Episode;
   canWatch: boolean;
+  /** Store puanı; yoksa korunan (kept) puan — çip asla kaybolmaz */
+  displayRating: number | null;
   onRate: () => void;
   onUnwatch: () => void;
   onDelete: () => void;
@@ -1413,15 +1523,23 @@ function EpisodeBox({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {episode.watched && episode.rating !== null && (
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
-          <span className={`svp-rate font-bold px-1.5 py-0.5 rounded-full ${ratingBgClass(episode.rating)}`}>
-            {episode.rating}
+      {displayRating !== null && (
+        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <span
+            className={`svp-rate font-bold px-1.5 py-0.5 rounded-full ${ratingBgClass(displayRating)} ${
+              episode.watched ? '' : 'svp-rate-kept'
+            }`}
+          >
+            {displayRating}
           </span>
         </div>
       )}
       <button
-        onClick={episode.watched ? onUnwatch : onRate}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (episode.watched) onUnwatch();
+          else onRate();
+        }}
         disabled={episode.watched ? false : !canWatch}
         className={`svp-ep min-h-11 md:min-h-0 ${
           episode.watched ? 'svp-ep-done' : canWatch ? 'svp-ep-ready' : 'svp-ep-lock'
@@ -1440,7 +1558,10 @@ function EpisodeBox({
       </div>
       {showActions && (
         <button
-          onClick={onDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
           title="Bölümü sil"
           className="svp-ep-del"
         >
