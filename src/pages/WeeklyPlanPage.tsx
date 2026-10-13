@@ -748,19 +748,19 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
 
               <div className="space-y-1.5 max-h-[35dvh] overflow-y-auto custom-scrollbar pr-1.5">
                 {candidates.length === 0 ? (
-                  <div className="text-center py-6 sm:py-8 text-[11px] sm:text-xs font-mono uppercase tracking-[0.16em] text-ink-500 bg-ink-950/40 rounded-xl border border-dashed border-ink-800/60 mt-2">
+                  <div className="wp-mono text-center py-6 sm:py-8 text-[11px] sm:text-xs uppercase tracking-[0.16em] text-ink-500 bg-ink-950/40 rounded-xl border border-dashed border-ink-800/60 mt-2">
                     <Film size={20} sm-size={24} className="mx-auto mb-2 opacity-30 text-gold-400" />
                     Kriterlerine uygun izlenmemiş film bulunamadı.
                   </div>
                 ) : (
                   candidates.map((m) => (
-                    <button key={m.id} onClick={() => setSelectedMovie(m)} className="w-full flex items-center gap-2.5 sm:gap-3 p-2 rounded-xl bg-ink-950/40 hover:bg-ink-800 border border-ink-800/80 hover:border-gold-500/50 transition-all text-left group shadow-sm hover:shadow-[0_10px_26px_-16px_var(--color-1)]">
+                    <button key={m.id} onClick={() => setSelectedMovie(m)} className="wp-card w-full flex items-center gap-2.5 sm:gap-3 p-2 hover:border-gold-500/50 transition-all text-left group">
                       <div className="w-8 h-11 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow-[0_0_16px_-6px_var(--color-1)] border border-ink-800/50">
                         {m.posterUrl ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] sm:text-xs font-black text-ink-100 truncate group-hover:text-white transition-colors">{m.title}</div>
-                        <div className="font-mono text-[9px] font-bold text-ink-500 mt-0.5">{m.year || 'Yıl yok'}{m.runtime ? ` • ${m.runtime} dk` : ''}</div>
+                        <div className="wp-mono text-[9px] font-bold text-ink-500 mt-0.5">{m.year || 'Yıl yok'}{m.runtime ? ` • ${m.runtime} dk` : ''}</div>
                       </div>
                       <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-gold-500/10 border border-gold-500/30 text-gold-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:scale-105">
                         <Plus size={10} sm-size={12} strokeWidth={3} />
@@ -778,26 +778,26 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] sm:text-sm font-black text-white truncate drop-shadow-sm mb-1">{selectedMovie.title}</div>
-                  <div className="font-mono text-[9px] sm:text-[10px] font-bold text-gold-400 bg-gold-500/10 w-fit px-1.5 py-0.5 rounded border border-gold-500/30">{selectedMovie.year}{selectedMovie.runtime ? ` • ${selectedMovie.runtime} dk` : ''}</div>
+                  <div className="wp-mono text-[9px] sm:text-[10px] font-bold text-gold-400 bg-gold-500/10 w-fit px-1.5 py-0.5 rounded border border-gold-500/30">{selectedMovie.year}{selectedMovie.runtime ? ` • ${selectedMovie.runtime} dk` : ''}</div>
                 </div>
-                <button onClick={() => setSelectedMovie(null)} className="font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white bg-gold-500 hover:brightness-110 px-2 sm:px-2.5 py-1.5 rounded-lg flex-shrink-0 transition-all shadow-sm">
+                <button onClick={() => setSelectedMovie(null)} className="wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white bg-gold-500 hover:brightness-110 px-2 sm:px-2.5 py-1.5 rounded-lg flex-shrink-0 transition-all shadow-sm">
                   Değiştir
                 </button>
               </div>
 
               <div className="flex gap-2.5 sm:gap-3 mb-4">
                 <div className="space-y-1.5 flex-1">
-                  <label className="h-4 flex items-center font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1">Tarih</label>
+                  <label className="h-4 flex items-center wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1">Tarih</label>
                   <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
                 </div>
                 <div className="space-y-1.5 flex-1">
-                  <label className="h-4 flex items-center font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
+                  <label className="h-4 flex items-center wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
                   <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
                 </div>
               </div>
 
               <div className="bg-ink-950/60 border border-ink-800 rounded-xl p-2.5 sm:p-3 shadow-inner">
-                <div className="font-mono text-[8px] sm:text-[9px] font-black uppercase tracking-[0.18em] text-ink-400 mb-2 flex items-center gap-1.5">
+                <div className="wp-mono text-[8px] sm:text-[9px] font-black uppercase tracking-[0.18em] text-ink-400 mb-2 flex items-center gap-1.5">
                   <CalendarDays size={10} sm-size={12} className="text-gold-400" /> 
                   {date === toDateStr(startOfToday()) ? 'Bugünün Dolu Saatleri' : 'Seçili Günün Dolu Saatleri'}
                 </div>
@@ -913,23 +913,23 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] sm:text-sm font-black text-white truncate drop-shadow-sm mb-1">{movie.title}</div>
-              <div className="font-mono text-[9px] sm:text-[10px] font-bold text-gold-400 bg-gold-500/10 w-fit px-1.5 py-0.5 rounded border border-gold-500/30">{movie.year}{movie.runtime ? ` • ${movie.runtime} dk` : ''}</div>
+              <div className="wp-mono text-[9px] sm:text-[10px] font-bold text-gold-400 bg-gold-500/10 w-fit px-1.5 py-0.5 rounded border border-gold-500/30">{movie.year}{movie.runtime ? ` • ${movie.runtime} dk` : ''}</div>
             </div>
           </div>
 
           <div className="flex gap-2.5 sm:gap-3 mb-4">
             <div className="space-y-1.5 flex-1">
-              <label className="h-4 flex items-center font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1">Tarih</label>
+              <label className="h-4 flex items-center wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1">Tarih</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
             </div>
             <div className="space-y-1.5 flex-1">
-              <label className="h-4 flex items-center font-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
+              <label className="h-4 flex items-center wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
               <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
             </div>
           </div>
 
           <div className="bg-ink-950/60 border border-ink-800 rounded-xl p-2.5 sm:p-3 shadow-inner">
-            <div className="font-mono text-[8px] sm:text-[9px] font-black uppercase tracking-[0.18em] text-ink-400 mb-2 flex items-center gap-1.5">
+            <div className="wp-mono text-[8px] sm:text-[9px] font-black uppercase tracking-[0.18em] text-ink-400 mb-2 flex items-center gap-1.5">
               <CalendarDays size={10} className="text-gold-400" /> 
               Seçili Günün Dolu Saatleri
             </div>
