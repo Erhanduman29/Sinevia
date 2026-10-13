@@ -60,19 +60,6 @@ const ACHV_PREMIUM_CSS = `
   border-color:rgba(255,255,255,.28);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.38), 0 12px 26px -12px rgba(0,0,0,.9), 0 0 26px -8px var(--red, var(--color-1, #e8384f));
 }
-.achv-state{
-  position:absolute; right:-7px; bottom:-7px; z-index:2;
-  width:28px; height:28px; border-radius:50%;
-  background:var(--bg-base, #0a0a0d);
-  border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  color:var(--muted, #9a9a96);
-  display:grid; place-items:center;
-  box-shadow:0 4px 12px -4px rgba(0,0,0,.9);
-}
-.achv-state.is-done{
-  color:#34d399; border-color:rgba(52,211,153,.45); background:rgba(52,211,153,.1);
-  box-shadow:0 0 14px -5px rgba(52,211,153,.8), 0 4px 12px -4px rgba(0,0,0,.9);
-}
 .achv-xp{
   position:absolute; right:0; bottom:0; z-index:4;
   display:inline-flex; align-items:center; gap:5px;
@@ -679,11 +666,6 @@ export default function AchievementsPage() {
                         >
                           <Icon size={26} className="md:w-7 md:h-7" />
                         </div>
-                        <span
-                          className={`achv-state trophy-lock ${!isLocked ? 'is-done' : ''}`}
-                        >
-                          {isLocked ? <Icons.Lock size={11} /> : <Icons.CheckCircle2 size={13} />}
-                        </span>
                       </div>
 
                       <div className="flex-1 min-w-0">
