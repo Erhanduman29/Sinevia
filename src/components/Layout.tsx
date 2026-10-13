@@ -35,6 +35,24 @@ const GLASS_SHEEN =
 /** Cam yüzey: tema zemin rengi + premium ışık süpürmesi. */
 const glassSurface: React.CSSProperties = { backgroundImage: GLASS_SHEEN };
 
+/** Önizlemedeki mono etiketler (kbd, nav sayaç rozeti) için JetBrains Mono. */
+const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+/**
+ * Yan bar zemini: önizlemedeki koyu cam (linear-gradient 180deg, %92→%96).
+ * Tema zemininden türetilir; plain-dark dahil tüm temalarda koyu panel verir.
+ */
+const SIDEBAR_BG =
+  'linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 94%, #ffffff 6%), color-mix(in srgb, var(--bg-base) 96%, transparent))';
+
+/** Başlıklarda beyaz→gri gradyan metin (önizlemedeki .hello h1). */
+const gradTitleStyle: React.CSSProperties = {
+  backgroundImage: 'linear-gradient(100deg, #FFFFFF 20%, #B9B9BC)',
+  WebkitBackgroundClip: 'text',
+  backgroundClip: 'text',
+  color: 'transparent',
+};
+
 /** Aktif nav pill: vurgu renginin yumuşak gradyanı + kenar + ışıklı gölge. */
 const activePillStyle: React.CSSProperties = {
   backgroundImage:
@@ -67,9 +85,11 @@ const btnSecondaryStyle: React.CSSProperties = {
   boxShadow: '0 8px 22px -12px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.16)',
 };
 
-/** Topbar: blur(20px) yarı saydam zemin. */
+/** Topbar: blur(20px) + saturate(140%) yarı saydam zemin. */
 const topbarStyle: React.CSSProperties = {
   backgroundColor: 'color-mix(in srgb, var(--bg-base) 72%, transparent)',
+  backdropFilter: 'blur(20px) saturate(140%)',
+  WebkitBackdropFilter: 'blur(20px) saturate(140%)',
   boxShadow: '0 18px 44px -26px rgba(0,0,0,.9)',
 };
 
@@ -112,6 +132,19 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   const totalXp: number = Number(profileData.totalXp) || 0;
   const streak: number = Number(profileData.dailyStreak) || 0;
   const levelInfo = levelFromXp(totalXp);
+
+  // Yan bardaki mono sayaç rozetleri (önizlemedeki .nav a .n) — gerçek verilerden.
+  const navCounts: Partial<Record<TabId, number>> = {
+    movies: profileData.movies?.length || 0,
+    series: profileData.series?.length || 0,
+    plan: profileData.weeklyPlan?.length || 0,
+    history: profileData.history?.length || 0,
+    achievements: profileData.achievements?.length || 0,
+  };
+
+  // Karşılama (önizlemedeki .hello h1) — saate göre, gerçek takma adla.
+  const hour = new Date().getHours();
+  const greeting = hour < 6 ? 'İyi geceler' : hour < 12 ? 'Günaydın' : hour < 18 ? 'İyi günler' : 'İyi akşamlar';
 
   // Tutorial sürerken alt nav'ı kaydırma ile gizleme: hedef adımlar (örn.
   // karşılama turundaki nav-movies) menü görünürken tamamlanmalı.
@@ -366,23 +399,24 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
       {/* MASAÜSTÜ SOL SIDEBAR — premium cam yüzey */}
       <aside
-        className="hidden md:flex flex-col w-[248px] shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r border-ink-800/60 transition-colors duration-500"
+        className="hidden md:flex flex-col w-[248px] shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
         style={{
-          ...glassSurface,
-          boxShadow: '12px 0 44px -20px color-mix(in srgb, var(--bg-base) 55%, transparent)',
+          backgroundImage: SIDEBAR_BG,
+          borderColor: 'var(--line, var(--border-dim))',
+          boxShadow: '12px 0 44px -20px rgba(0,0,0,.7)',
         }}
       >
         {/* Marka bloğu + alt kırmızı saç teli */}
         <button
           onClick={() => onTabChange('home')}
-          className="relative px-5 py-5 border-b border-ink-800/50 hover:bg-ink-800/40 transition-colors text-left cursor-pointer"
+          className="relative px-[22px] pt-6 pb-5 border-b border-ink-800/50 hover:bg-ink-800/40 transition-colors text-left cursor-pointer"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
               <Sini size={40} mood="idle" showGlow={false} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-black tracking-[0.12em] uppercase leading-none text-white whitespace-nowrap">
+              <h1 className="text-[23px] font-black tracking-[-0.03em] uppercase leading-none text-white whitespace-nowrap">
                 SINE<span style={accentTextStyle}>VIA</span>
               </h1>
               <span className="block mt-1.5 text-[9px] font-bold tracking-[0.28em] uppercase text-ink-500 whitespace-nowrap">
@@ -408,7 +442,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                 key={item.id}
                 onClick={() => onTabChange(item.id as TabId)}
                 data-tutorial={`nav-${item.id}`}
-                className={`relative w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
+                className={`relative w-full flex items-center gap-3 px-3.5 py-[11px] rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
                   isActive
                     ? 'bg-gold-500/20 text-gold-400 border'
                     : 'text-ink-400 hover:bg-ink-800/50 hover:text-white hover:translate-x-[3px] border border-transparent'
@@ -417,6 +451,14 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
               >
                 <item.icon size={17} className={`transition-transform duration-300 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
                 <span>{item.label}</span>
+                {(navCounts[item.id as TabId] ?? 0) > 0 && (
+                  <span
+                    className={`ml-auto text-[10px] font-bold ${isActive ? '' : 'text-ink-500'}`}
+                    style={{ fontFamily: MONO, color: isActive ? 'var(--color-2)' : undefined }}
+                  >
+                    {navCounts[item.id as TabId]}
+                  </span>
+                )}
                 {isActive && <ActiveRail />}
               </button>
             );
@@ -459,7 +501,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           {/* Ayarlar (nav ile aynı aktif pill mantığı) */}
           <button
             onClick={() => onTabChange('settings')}
-            className={`relative w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
+            className={`relative w-full flex items-center gap-3 px-3.5 py-[11px] rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
               activeTab === 'settings'
                 ? 'bg-gold-500/20 text-gold-400 border'
                 : 'text-ink-400 hover:bg-ink-800/50 hover:text-white hover:translate-x-[3px] border border-transparent'
@@ -489,7 +531,10 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
               </div>
               <div className="min-w-0">
                 <b className="block text-[13px] font-black uppercase tracking-tight text-white truncate">{nickname}</b>
-                <span className="block text-[9.5px] font-bold uppercase tracking-[0.14em] text-gold-400 truncate">
+                <span
+                  className="block text-[9.5px] font-bold uppercase tracking-[0.14em] truncate"
+                  style={{ color: 'var(--color-2)' }}
+                >
                   {agentCode ? agentCode : `Seviye ${level}`}
                 </span>
               </div>
@@ -526,9 +571,11 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           style={topbarStyle}
         >
           <div className="min-w-0">
-            <h1 className="text-lg font-black uppercase tracking-tight text-ink-50 leading-none whitespace-nowrap">{topbarTitle}</h1>
+            <h1 className="text-2xl font-black uppercase tracking-[-0.03em] leading-none whitespace-nowrap" style={gradTitleStyle}>
+              {greeting}, {nickname}
+            </h1>
             <p className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink-500 whitespace-nowrap">
-              {streak} günlük seri · Seviye {level}
+              {topbarTitle} · {streak} günlük seri · Seviye {level}
             </p>
           </div>
 
@@ -540,7 +587,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           >
             <Search size={15} className="text-ink-400 group-hover:text-gold-400 transition-colors shrink-0" />
             <span className="flex-1 text-[13px] text-ink-400 whitespace-nowrap overflow-hidden text-ellipsis">Film, dizi, oyuncu ara…</span>
-            <kbd className="font-mono text-[10px] px-1.5 py-0.5 rounded-md border border-ink-800/60 bg-ink-800/40 text-ink-400 shrink-0">{searchCombo}</kbd>
+            <kbd className="text-[10px] px-1.5 py-0.5 rounded-md border border-ink-800/60 bg-ink-800/40 text-ink-400 shrink-0" style={{ fontFamily: MONO }}>{searchCombo}</kbd>
             {/* Hover'da vurgu halkası */}
             <span
               aria-hidden
