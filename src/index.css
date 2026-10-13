@@ -22,6 +22,12 @@
   --blob-3: rgba(139, 92, 246, 0.15);
   
   --text-main: #f8fafc;
+
+  /* Vurgu rengi üzerindeki yazı rengi — en yüksek WCAG kontrastı seçili.
+     (L > 0.18 ise koyu yazı, değilse beyaz yazı — bkz. tema blokları) */
+  --on-color-1: #0a0a0e;
+  --on-color-2: #0a0a0e;
+  --on-color-3: #0a0a0e;
 }
 
 /* 2. AYDINLIK (Ferah ve Modern) */
@@ -40,6 +46,10 @@ body[data-theme="light"] {
   --blob-3: rgba(236, 72, 153, 0.15);
 
   --text-main: #000000;
+
+  --on-color-1: #0a0a0e; /* amber/mavi/pembe → koyu yazı (kontrast 5-12:1) */
+  --on-color-2: #0a0a0e;
+  --on-color-3: #0a0a0e;
 }
 
 /* 3. CYBERPUNK (Neon) */
@@ -58,6 +68,10 @@ body[data-theme="cyberpunk"] {
   --blob-3: rgba(234, 179, 8, 0.2);
   
   --text-main: #fdf2f8;
+
+  --on-color-1: #0a0a0e; /* neon pembe → koyu yazı */
+  --on-color-2: #0a0a0e; /* neon camgöbeği → koyu yazı */
+  --on-color-3: #0a0a0e; /* neon sarı → koyu yazı */
 }
 
 /* 4. DRACULA (Kan Kırmızı & Gotik) */
@@ -76,6 +90,10 @@ body[data-theme="blood"] {
   --blob-3: rgba(249, 115, 22, 0.2);
   
   --text-main: #fff1f2;
+
+  --on-color-1: #ffffff; /* kızıl → beyaz yazı (kontrast 4.6:1) */
+  --on-color-2: #0a0a0e; /* mor → koyu yazı */
+  --on-color-3: #0a0a0e; /* turuncu → koyu yazı */
 }
 
 /* 5. MATRIX (Terminal Yeşili) */
@@ -94,6 +112,10 @@ body[data-theme="matrix"] {
   --blob-3: rgba(20, 184, 166, 0.2);
   
   --text-main: #ecfdf5;
+
+  --on-color-1: #0a0a0e; /* zümrüt → koyu yazı */
+  --on-color-2: #0a0a0e; /* limon → koyu yazı */
+  --on-color-3: #0a0a0e; /* turkuaz → koyu yazı */
 }
 
 /* 6. AURORA (Kuzey Işıkları) */
@@ -112,6 +134,10 @@ body[data-theme="ocean"] {
   --blob-3: rgba(45, 212, 191, 0.2);
   
   --text-main: #f0f9ff;
+
+  --on-color-1: #0a0a0e; /* buz mavisi → koyu yazı */
+  --on-color-2: #0a0a0e; /* indigo → koyu yazı */
+  --on-color-3: #0a0a0e; /* turkuaz → koyu yazı */
 }
 
 /* 7. DRACULA (Klasik Mor-Pembe, sıcak koyu) */
@@ -130,6 +156,10 @@ body[data-theme="dracula"] {
   --blob-3: rgba(139, 233, 253, 0.2);
 
   --text-main: #f8f8f2;
+
+  --on-color-1: #0a0a0e; /* dracula mor → koyu yazı */
+  --on-color-2: #0a0a0e; /* pembe → koyu yazı */
+  --on-color-3: #0a0a0e; /* camgöbeği → koyu yazı */
 }
 
 /* 8. NORD (Buzul Grisi & Auroral) */
@@ -148,6 +178,10 @@ body[data-theme="nord"] {
   --blob-3: rgba(191, 97, 106, 0.2);
 
   --text-main: #eceff4;
+
+  --on-color-1: #0a0a0e; /* buzul camgöbeği → koyu yazı */
+  --on-color-2: #0a0a0e; /* auroral mor → koyu yazı */
+  --on-color-3: #0a0a0e; /* auroral kırmızı → koyu yazı */
 }
 
 /* 9. SOLARIZED KOYU (Hardal, Mazı & Turuncu) */
@@ -166,6 +200,10 @@ body[data-theme="solarized-dark"] {
   --blob-3: rgba(203, 75, 22, 0.2);
 
   --text-main: #eee8d5;
+
+  --on-color-1: #0a0a0e; /* hardal sarı → koyu yazı */
+  --on-color-2: #0a0a0e; /* mazı mavi → koyu yazı */
+  --on-color-3: #ffffff; /* turuncu → beyaz yazı (kontrast 4.6:1) */
 }
 
 /* 10. MONOKAI (Sıcak Neon) */
@@ -184,6 +222,10 @@ body[data-theme="monokai"] {
   --blob-3: rgba(102, 217, 239, 0.18);
 
   --text-main: #f8f8f2;
+
+  --on-color-1: #0a0a0e; /* monokai pembe → koyu yazı */
+  --on-color-2: #0a0a0e; /* monokai yeşil → koyu yazı */
+  --on-color-3: #0a0a0e; /* monokai mavi → koyu yazı */
 }
 
 /* 11. KÂĞIT (Sepya, Açık & Sıcak) */
@@ -202,6 +244,10 @@ body[data-theme="paper-light"] {
   --blob-3: rgba(190, 18, 60, 0.14);
 
   --text-main: #292524;
+
+  --on-color-1: #ffffff; /* sepya kehribar → beyaz yazı (kontrast 5:1) */
+  --on-color-2: #ffffff; /* mürekkep mavi → beyaz yazı */
+  --on-color-3: #ffffff; /* bordo → beyaz yazı */
 }
 
 /* 12. RETRO AMBER (Tek Renkli CRT Amber) */
@@ -220,6 +266,10 @@ body[data-theme="retro-amber"] {
   --blob-3: rgba(255, 224, 130, 0.15);
 
   --text-main: #ffdf9e;
+
+  --on-color-1: #0a0a0e; /* amber fosfor → koyu yazı (CRT kontrastı) */
+  --on-color-2: #0a0a0e; /* kızıl turuncu → koyu yazı */
+  --on-color-3: #0a0a0e; /* soluk amber → koyu yazı */
 }
 
 /* 13. PREMIUM KOYU (Cam yüzeyler · İnce saydam çizgiler · Kırmızı vurgu) */
@@ -238,6 +288,11 @@ body[data-theme="premium-dark"] {
   --blob-3: rgba(142, 18, 32, 0.2);
 
   --text-main: #f4f4f2;
+
+  /* Vurgu üstü yazı rengi: açık kırmızı yüzeylerde okunurluk garantili */
+  --on-color-1: #ffffff; /* premium kırmızı → beyaz (buton estetiği, 3.9:1 large-text) */
+  --on-color-2: #0a0a0e; /* açık kırmızı (hi) → koyu yazı (kontrast 7.7:1) */
+  --on-color-3: #ffffff; /* derin bordo → beyaz (kontrast 9.4:1) */
 
   /* Premium tokenları (sinevia-premium.html ile aynı isimler) */
   --ink: #f4f4f2;
@@ -273,6 +328,78 @@ body[data-theme="plain-dark"] {
   --blob-3: rgba(255, 255, 255, 0.025);
 
   --text-main: #ffffff;
+
+  --on-color-1: #0a0a0e; /* beyaz vurgu → siyah yazı */
+  --on-color-2: #0a0a0e;
+  --on-color-3: #0a0a0e;
+}
+
+/* 15. SOLO KIZIL (Tek Renk · sadece kızılın tonları — aile tek, ton 3) */
+body[data-theme="solo-crimson"] {
+  --bg-base: #12060a;
+  --bg-surface: rgba(36, 10, 16, 0.88);
+  --bg-card: rgba(52, 14, 22, 0.7);
+  --border-dim: rgba(239, 68, 68, 0.35);
+
+  --color-1: #ef4444; /* Parlak kızıl */
+  --color-2: #dc2626; /* Orta kızıl */
+  --color-3: #b91c1c; /* Koyu kızıl */
+
+  --blob-1: rgba(239, 68, 68, 0.22);
+  --blob-2: rgba(220, 38, 38, 0.2);
+  --blob-3: rgba(185, 28, 28, 0.2);
+
+  --text-main: #fde8e8;
+
+  --on-color-1: #0a0a0e; /* parlak kızıl → koyu yazı (5.5:1) */
+  --on-color-2: #ffffff; /* orta kızıl → beyaz (4.9:1) */
+  --on-color-3: #ffffff; /* koyu kızıl → beyaz (6.4:1) */
+}
+
+/* 16. DUO GÜN BATIMI (Çift Renk · turuncu & mor ailesi) */
+body[data-theme="duo-sunset"] {
+  --bg-base: #16101d;
+  --bg-surface: rgba(44, 28, 56, 0.85);
+  --bg-card: rgba(58, 38, 74, 0.7);
+  --border-dim: rgba(167, 139, 250, 0.35);
+
+  --color-1: #fb923c; /* Gün batımı turuncusu */
+  --color-2: #a78bfa; /* Alacakaranlık moru */
+  --color-3: #7c3aed; /* Gece moru (2. ailenin koyu tonu) */
+
+  --blob-1: rgba(251, 146, 60, 0.22);
+  --blob-2: rgba(167, 139, 250, 0.22);
+  --blob-3: rgba(124, 58, 237, 0.22);
+
+  --text-main: #f6f1fd;
+
+  --on-color-1: #0a0a0e; /* turuncu → koyu yazı (9.3:1) */
+  --on-color-2: #0a0a0e; /* açık mor → koyu yazı (7.7:1) */
+  --on-color-3: #ffffff; /* gece moru → beyaz (5.4:1) */
+}
+
+/* 17. QUAD FESTİVAL (4 Renk · pembe, sarı, mavi & yeşil) */
+body[data-theme="quad-festival"] {
+  --bg-base: #100a16;
+  --bg-surface: rgba(30, 18, 42, 0.85);
+  --bg-card: rgba(44, 26, 60, 0.7);
+  --border-dim: rgba(244, 114, 182, 0.32);
+
+  --color-1: #f472b6; /* Pembe */
+  --color-2: #fbbf24; /* Sarı */
+  --color-3: #38bdf8; /* Mavi */
+  --color-4: #a3e635; /* Yeşil (4. vurgu — focus/selection kanalı) */
+
+  --blob-1: rgba(244, 114, 182, 0.2);
+  --blob-2: rgba(251, 191, 36, 0.18);
+  --blob-3: rgba(56, 189, 248, 0.18);
+
+  --text-main: #fdf2f8;
+
+  --on-color-1: #0a0a0e; /* pembe → koyu yazı */
+  --on-color-2: #0a0a0e; /* sarı → koyu yazı */
+  --on-color-3: #0a0a0e; /* mavi → koyu yazı */
+  --on-color-4: #0a0a0e; /* yeşil → koyu yazı */
 }
 
 body {
@@ -367,32 +494,51 @@ body[data-theme] .border-ink-700\/50 {
   border-color: var(--border-dim) !important;
 }
 
-/* Color 1 (Gold/Primary) Dönüşümü */
-body[data-theme] .text-gold-300, body[data-theme] .text-gold-400, body[data-theme] .text-gold-500 { color: var(--color-1) !important; }
-body[data-theme] .bg-gold-500 { background-color: var(--color-1) !important; color: #fff !important; }
-body[data-theme] .bg-gold-500\/10, body[data-theme] .bg-gold-500\/20 { background-color: var(--blob-1) !important; }
-body[data-theme] .border-gold-500\/30, body[data-theme] .border-gold-500\/50 { border-color: var(--color-1) !important; }
+/* =========================================================
+   TEMA RENK MOTORU v2 — hover/focus/md: varyantları DAHİL.
+   [class*="..."] seçicileri "hover:from-gold-500" gibi TAILWIND
+   varyant sınıflarını da kapsar: eski motorda varyantlar
+   eşleşmediği için hover anında SABİT ALTIN rengi sızıyordu
+   ("temayı seçtim ama sarı hiç yok / her yerde eski renk" şikâyeti).
+   Yazı renkleri --on-color-* ile her temada WCAG kontrastına
+   göre seçilir (eski: her yerde sabit #fff — açık/parlak zeminli
+   temalarda buton üstü yazı okunmuyordu).
+   ========================================================= */
 
-/* Color 2 (Azure/Secondary) Dönüşümü */
-body[data-theme] .text-azure-300, body[data-theme] .text-azure-400, body[data-theme] .text-azure-500 { color: var(--color-2) !important; }
-body[data-theme] .bg-azure-500 { background-color: var(--color-2) !important; color: #fff !important;}
-body[data-theme] .bg-azure-500\/10, body[data-theme] .bg-azure-500\/20 { background-color: var(--blob-2) !important; }
-body[data-theme] .border-azure-500\/30, body[data-theme] .border-azure-500\/50 { border-color: var(--color-2) !important; }
+/* --- Color 1 (Gold/Primary) Dönüşümü --- */
+body[data-theme] [class*="text-gold"]:not([class*="/"]) { color: var(--color-1) !important; }
+body[data-theme] [class*="bg-gold"]:not([class*="/"]) { background-color: var(--color-1) !important; color: var(--on-color-1) !important; }
+body[data-theme] [class*="bg-gold"][class*="/"] { background-color: var(--blob-1) !important; }
+body[data-theme] [class*="border-gold"] { border-color: var(--color-1) !important; }
+body[data-theme] [class*="ring-gold"] { --tw-ring-color: var(--color-1) !important; }
 
-/* Dinamik Gradyanlar (3 Renk Üzerinden) */
-body[data-theme] .from-gold-500, body[data-theme] .from-gold-600 {
+/* --- Color 2 (Azure/Secondary) Dönüşümü --- */
+body[data-theme] [class*="text-azure"]:not([class*="/"]) { color: var(--color-2) !important; }
+body[data-theme] [class*="bg-azure"]:not([class*="/"]) { background-color: var(--color-2) !important; color: var(--on-color-2) !important; }
+body[data-theme] [class*="bg-azure"][class*="/"] { background-color: var(--blob-2) !important; }
+body[data-theme] [class*="border-azure"] { border-color: var(--color-2) !important; }
+body[data-theme] [class*="ring-azure"] { --tw-ring-color: var(--color-2) !important; }
+
+/* --- Dinamik Gradyanlar (3 Renk Üzerinden — kaynak sırası önemli:
+       to-gold, from-azure'dan ÖNCE gelmeli) --- */
+body[data-theme] [class*="from-gold"]:not([class*="/"]) {
   --tw-gradient-from: var(--color-1) var(--tw-gradient-from-position) !important;
   --tw-gradient-to: var(--color-2) var(--tw-gradient-to-position) !important;
-  color: #ffffff !important;
+  color: var(--on-color-1) !important;
 }
-body[data-theme] .to-gold-600, body[data-theme] .to-gold-700, body[data-theme] .to-gold-400 {
+body[data-theme] [class*="to-gold"]:not([class*="/"]) {
   --tw-gradient-to: var(--color-2) var(--tw-gradient-to-position) !important;
 }
-body[data-theme] .from-azure-500, body[data-theme] .from-azure-600 {
+body[data-theme] [class*="from-azure"]:not([class*="/"]) {
   --tw-gradient-from: var(--color-2) var(--tw-gradient-from-position) !important;
   --tw-gradient-to: var(--color-3) var(--tw-gradient-to-position) !important;
-  color: #ffffff !important;
+  color: var(--on-color-2) !important;
 }
+
+/* --- Tema-vurgusu kanalları: seçim + odak halkası (4 renkli
+       temada --color-4, diğerlerinde --color-1'e fallback) --- */
+body[data-theme] ::selection { background-color: var(--color-1) !important; color: var(--on-color-1) !important; }
+body[data-theme] *:focus-visible { outline-color: var(--color-4, var(--color-1)) !important; }
 
 /* Hareketli Arka Plan Işıkları (Blobs) */
 .ambient-glow-1 { background: radial-gradient(circle, var(--blob-1) 0%, transparent 70%); }

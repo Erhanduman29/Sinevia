@@ -4,7 +4,7 @@ import {
   AlertTriangle, Wrench, SlidersHorizontal, PlayCircle, Palette,
   Sparkles, Moon, Sun, Award, ChevronDown, ThumbsUp, ThumbsDown,
   BellRing, BellOff, UserCircle, Key, Copy, MessageSquare, Gift, UserPlus, ShieldCheck,
-  LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal, Flame
+  LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal, Flame, Droplet, Zap
 } from 'lucide-react';
 import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -253,13 +253,16 @@ export default function SettingsPage() {
     { id: 'matrix', name: 'Matrix Terminal', desc: 'Zümrüt & Camgöbeği', icon: Sparkles, previewBg: '#020804', textMode: 'dark', colors: ['#10b981', '#84cc16', '#14b8a6'] },
     { id: 'ocean', name: 'Aurora', desc: 'Buz Mavisi & İndigo', icon: Sparkles, previewBg: '#020617', textMode: 'dark', colors: ['#38bdf8', '#6366f1', '#2dd4bf'] },
     { id: 'dracula', name: 'Dracula Klasik', desc: 'Mor, Pembe & Camgöbeği', icon: Ghost, previewBg: '#1b1724', textMode: 'dark', colors: ['#bd93f9', '#ff79c6', '#8be9fd'] },
-    { id: 'nord', name: 'Nord Buzul', desc: 'Buz Mavisi, Mor & Auroral', icon: Snowflake, previewBg: '#2a303c', textMode: 'dark', colors: ['#88c0d0', '#b48ead', '#bf616a'] },
+    { id: 'nord', name: 'Nord Buzul', desc: 'Buz Mavisi, Mor & Auroral', icon: Snowflake, previewBg: '#232733', textMode: 'dark', colors: ['#88c0d0', '#b48ead', '#bf616a'] },
     { id: 'solarized-dark', name: 'Solarized Koyu', desc: 'Hardal, Mazı & Turuncu', icon: Coffee, previewBg: '#001f27', textMode: 'dark', colors: ['#b58900', '#268bd2', '#cb4b16'] },
     { id: 'monokai', name: 'Monokai Neon', desc: 'Sıcak Yeşil, Pembe & Mavi', icon: Code, previewBg: '#1c1c16', textMode: 'dark', colors: ['#f92672', '#a6e22e', '#66d9ef'] },
     { id: 'paper-light', name: 'Kâğıt Sepya', desc: 'Sepya, Mürekkep Mavi & Bordo', icon: FileText, previewBg: '#efe9dc', textMode: 'light', colors: ['#b45309', '#1d4ed8', '#be123c'] },
     { id: 'retro-amber', name: 'Retro Amber CRT', desc: 'Amber, Turuncu & Soluk Sarı', icon: Terminal, previewBg: '#0d0801', textMode: 'dark', colors: ['#ffab00', '#ff7a00', '#ffe082'] },
     { id: 'premium-dark', name: 'Premium Koyu', desc: 'Cam Yüzeyler & Kırmızı Vurgu', icon: Flame, previewBg: '#0a0a0d', textMode: 'dark', colors: ['#e8384f', '#ff6b7a', '#8e1220'] },
     { id: 'plain-dark', name: 'Sade Koyu', desc: 'Simsiyah Zemin & Beyaz Vurgu', icon: Moon, previewBg: '#000000', textMode: 'dark', colors: ['#ffffff', '#fbfbfb', '#f3f3f4'] },
+    { id: 'solo-crimson', name: 'Tek Renk Kızıl', desc: 'Tek Renk · Sadece Kızılın Tonları', icon: Droplet, previewBg: '#12060a', textMode: 'dark', colors: ['#ef4444', '#dc2626', '#b91c1c'] },
+    { id: 'duo-sunset', name: 'Çift Renk Gün Batımı', desc: 'Çift Renk · Turuncu & Mor', icon: Palette, previewBg: '#16101d', textMode: 'dark', colors: ['#fb923c', '#a78bfa', '#7c3aed'] },
+    { id: 'quad-festival', name: 'Dört Renk Festival', desc: '4 Renk · Pembe, Sarı, Mavi & Yeşil', icon: Zap, previewBg: '#100a16', textMode: 'dark', colors: ['#f472b6', '#fbbf24', '#38bdf8', '#a3e635'] },
   ];
 
   const handleSaveNickname = async () => {

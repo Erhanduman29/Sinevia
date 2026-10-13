@@ -34,14 +34,14 @@ function getInitialState(): ExtendedAppData {
 }
 
 describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
-  test('tam 14 tema sunulmalı ve id’leri benzersiz olmalı', () => {
+  test('tam 17 tema sunulmalı ve id’leri benzersiz olmalı', () => {
     const ids = getThemeIds();
     expect(ids).toEqual([
       'default', 'light', 'cyberpunk', 'blood', 'matrix', 'ocean',
       'dracula', 'nord', 'solarized-dark', 'monokai', 'paper-light', 'retro-amber',
-      'premium-dark', 'plain-dark',
+      'premium-dark', 'plain-dark', 'solo-crimson', 'duo-sunset', 'quad-festival',
     ]);
-    expect(new Set(ids).size).toBe(14);
+    expect(new Set(ids).size).toBe(17);
   });
 
   test('her tema kartının adı, açıklaması, önizleme rengi ve 1-4 arası renk paleti tanımlı olmalı', () => {
@@ -50,7 +50,7 @@ describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
       .map((l) => l.trim())
       .filter((l) => l.startsWith("{ id: '"));
 
-    expect(lines).toHaveLength(14);
+    expect(lines).toHaveLength(17);
 
     lines.forEach((line) => {
       expect(line).toMatch(/name: '[^']+'/);
@@ -77,7 +77,7 @@ describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
 describe('TEMA SEÇİMİ — CSS KARŞILIKLARI', () => {
   test('varsayılan tema HARİÇ her tema için body[data-theme] kuralı index.css’te olmalı', () => {
     const ids = getThemeIds().filter((id) => id !== 'default');
-    expect(ids.length).toBe(13);
+    expect(ids.length).toBe(16);
 
     ids.forEach((id) => {
       expect(cssSource.includes(`body[data-theme="${id}"]`), `CSS'te ${id} teması tanımsız`).toBe(true);
