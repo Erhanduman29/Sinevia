@@ -53,94 +53,85 @@ const HOME_PREMIUM_CSS = `
   box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8)),inset 0 1px 0 rgba(255,255,255,.07);
 }
 
-/* ---------- 01 · AJAN KARTI (profil + seri/kademe birleşik · kompakt stabil) ---------- */
+/* ---------- 01 · AJAN KARTI (sakin · şık · stabil) ---------- */
 .hp-hero{overflow:hidden;display:flex;flex-direction:column;min-height:0}
-.hp-id{display:flex;align-items:center;gap:16px;padding:14px 20px;min-height:88px;flex-wrap:wrap}
-.hp-ava{position:relative;width:64px;height:64px;flex-shrink:0}
-.hp-ava svg{position:absolute;inset:0;width:64px;height:64px;transform:rotate(-90deg)}
-.hp-core{position:absolute;inset:8px;border-radius:50%;background:linear-gradient(155deg,var(--bg-card,#1a1a24),var(--bg-surface,#12121a));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));box-shadow:inset 0 2px 8px rgba(0,0,0,.5);display:grid;place-items:center;font-size:23px;font-weight:900;color:var(--text-main,#f4f4f2)}
+.hp-id{display:flex;align-items:center;gap:18px;padding:16px 22px;min-height:86px;flex-wrap:wrap}
+.hp-ava{position:relative;width:58px;height:58px;flex-shrink:0}
+.hp-ava svg{position:absolute;inset:0;width:58px;height:58px;transform:rotate(-90deg)}
+.hp-core{position:absolute;inset:6px;border-radius:50%;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));display:grid;place-items:center;font-size:21px;font-weight:800;color:var(--text-main,#f4f4f2)}
 .hp-core span{position:relative;z-index:1}
-.hp-core-ic{position:absolute;inset:0;margin:auto;width:30px;height:30px;opacity:.14;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hp-lv{position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);font-size:8px;font-weight:900;letter-spacing:.08em;padding:2px 8px;text-transform:uppercase;white-space:nowrap;border-radius:99px;border:3px solid var(--bg-base,#0a0a0d);box-shadow:0 6px 16px -6px var(--red,var(--color-1,#e8384f))}
+.hp-core-ic{position:absolute;inset:0;margin:auto;width:28px;height:28px;opacity:.12;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-lv{position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);background:var(--bg-card,#1a1a24);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--text-main,#f4f4f2);font-size:8px;font-weight:800;letter-spacing:.1em;padding:2px 8px;text-transform:uppercase;white-space:nowrap;border-radius:99px}
 .hp-pid{flex:1;min-width:0}
-.hp-ptag{display:flex;align-items:center;gap:5px;font-size:8.5px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.hp-pid h3{font-family:inherit;font-size:22px;font-weight:900;letter-spacing:-.03em;text-transform:uppercase;line-height:1.1;margin:4px 0 7px;color:var(--text-main,#f4f4f2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hp-prow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.hp-code{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.04em;color:var(--muted,#9a9a96);background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:4px 9px;border-radius:8px;min-height:26px}
-.hp-code b{color:var(--text-main,#f4f4f2);font-weight:700}
-.hp-copy{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);cursor:pointer;transition:border-color .2s,color .2s}
-.hp-copy:hover{color:var(--red-hi,var(--color-2,#ff6b7a));border-color:var(--red,var(--color-1,#e8384f))}
-.hp-badge{display:inline-flex;align-items:center;gap:8px;cursor:pointer;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);padding:4px 11px 4px 4px;border-radius:10px;min-height:34px;transition:border-color .2s,background-color .2s;font-family:inherit;color:inherit;text-align:left}
+.hp-ptag{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.hp-pid h3{font-family:inherit;font-size:24px;font-weight:800;letter-spacing:-.02em;text-transform:uppercase;line-height:1.15;margin:5px 0 8px;color:var(--text-main,#f4f4f2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hp-prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hp-code{display:inline-flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.04em;color:var(--muted,#9a9a96)}
+.hp-code b{color:var(--text-main,#f4f4f2);font-weight:600}
+.hp-copy{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:none;border:0;color:var(--muted,#9a9a96);cursor:pointer;transition:color .2s}
+.hp-copy:hover{color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-copy:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:2px}
+.hp-badge{display:inline-flex;align-items:center;gap:8px;cursor:pointer;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:none;padding:4px 12px 4px 5px;border-radius:10px;min-height:32px;transition:border-color .2s;font-family:inherit;color:inherit;text-align:left}
 .hp-badge:hover{border-color:var(--red,var(--color-1,#e8384f))}
-.hp-badge-ic{width:25px;height:25px;border-radius:8px;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);display:grid;place-items:center;font-size:12px;flex-shrink:0}
-.hp-badge-ic.empty{background:var(--bg-card,#1a1a24);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96)}
-.hp-badge-tx s{display:block;text-decoration:none;font-size:7px;font-weight:900;letter-spacing:.14em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
-.hp-badge-tx b{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--text-main,#f4f4f2);margin-top:1px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hp-xpool{text-align:right;flex-shrink:0;padding-left:6px}
-.hp-xpool s{display:block;text-decoration:none;font-size:7.5px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-xpool b{display:block;font-family:inherit;font-size:22px;font-weight:900;letter-spacing:-.025em;margin-top:2px;background:linear-gradient(100deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--text-main,#f4f4f2) 85%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.hp-xpool span{display:block;font-size:10px;font-weight:700;color:var(--muted,#9a9a96);margin-top:2px;white-space:nowrap}
-.hp-xpool span i{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a));font-weight:900}
+.hp-badge:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:2px}
+.hp-badge-ic{width:22px;height:22px;border-radius:7px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--red-hi,var(--color-2,#ff6b7a));display:grid;place-items:center;font-size:11px;flex-shrink:0}
+.hp-badge-ic.empty{color:var(--muted,#9a9a96)}
+.hp-badge-tx s{display:block;text-decoration:none;font-size:7px;font-weight:800;letter-spacing:.14em;color:var(--muted,#9a9a96);text-transform:uppercase}
+.hp-badge-tx b{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text-main,#f4f4f2);margin-top:1px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hp-xpool{text-align:right;flex-shrink:0;padding-left:8px}
+.hp-xpool s{display:block;text-decoration:none;font-size:8px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-xpool b{display:block;font-family:inherit;font-size:21px;font-weight:800;letter-spacing:-.02em;margin-top:3px;color:var(--text-main,#f4f4f2)}
+.hp-xpool span{display:block;font-size:10px;font-weight:500;color:var(--muted,#9a9a96);margin-top:3px;white-space:nowrap}
+.hp-xpool span i{font-style:normal;color:var(--text-main,#f4f4f2);font-weight:800}
 /* ---------- SERİ ŞERİDİ (ajan kartından bağımsız üst bant) ---------- */
-.hp-streakbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:11px 20px;background:var(--glass,var(--bg-card,#1a1a24));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:var(--r-lg,22px);box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8));position:relative;overflow:hidden;min-height:56px}
-.hp-streakbar::before{content:'';position:absolute;inset:0;background:linear-gradient(100deg,var(--blob-1,rgba(232,56,79,.16)),transparent 62%);pointer-events:none}
-.hp-streakbar>*{position:relative;z-index:1}
-.hp-fire-ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;color:var(--on-color-1,#0a0a0e);background:linear-gradient(145deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 8px 22px -10px var(--red,var(--color-1,#e8384f))}
+.hp-streakbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 20px;background:var(--glass,var(--bg-card,#1a1a24));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:var(--r-lg,22px);min-height:52px}
+.hp-fire-ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex-shrink:0;color:var(--red,var(--color-1,#e8384f));background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
 .hp-streak-num{display:flex;align-items:baseline;gap:6px;font-family:inherit;white-space:nowrap}
-.hp-streak-num b{font-size:22px;font-weight:900;letter-spacing:-.03em;line-height:1;color:var(--text-main,#f4f4f2)}
-.hp-streak-num em{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-streak-num b{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--text-main,#f4f4f2)}
+.hp-streak-num em{font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a))}
 .hp-streak-sub{font-size:11px;line-height:1.5;color:var(--muted,#9a9a96);min-width:0}
-.hp-streak-sub b{color:var(--text-main,#f4f4f2);font-weight:800}
+.hp-streak-sub b{color:var(--text-main,#f4f4f2);font-weight:700}
 
-/* ---------- XP HATTI (büyük sv + belirgin dolu bar) ---------- */
-.hp-xpline{display:flex;align-items:center;gap:16px;padding:2px 20px 14px}
-.hp-lvbox{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;min-width:60px;padding:5px 12px;border-radius:14px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a)}
-.hp-lvbox s{display:block;text-decoration:none;font-size:7.5px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-lvbox b{display:block;font-size:27px;font-weight:900;letter-spacing:-.03em;line-height:1.1;background:linear-gradient(120deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--text-main,#f4f4f2) 85%);-webkit-background-clip:text;background-clip:text;color:transparent}
+/* ---------- XP HATTI (sv rakamı + net dolu bar) ---------- */
+.hp-xpline{display:flex;align-items:center;gap:18px;padding:0 22px 16px}
+.hp-lvbox{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;min-width:46px}
+.hp-lvbox s{display:block;text-decoration:none;font-size:7.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-lvbox b{display:block;font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1.1;color:var(--text-main,#f4f4f2)}
 .hp-xpmain{flex:1;min-width:0}
-.hp-xp-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px}
-.hp-xp-lab{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hp-xp-lab i{font-style:normal;font-weight:900;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hp-xp-pct{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--red-hi,var(--color-2,#ff6b7a));white-space:nowrap;flex-shrink:0}
-.hp-xp-track{height:14px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.45)}
-.hp-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red,var(--color-1,#e8384f)) 60%,var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 16px var(--red,var(--color-1,#e8384f));transition:width 1s ease}
+.hp-xp-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}
+.hp-xp-lab{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp-xp-lab i{font-style:normal;font-weight:800;color:var(--text-main,#f4f4f2)}
+.hp-xp-pct{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:var(--muted,#9a9a96);white-space:nowrap;flex-shrink:0}
+.hp-xp-track{height:10px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden}
+.hp-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:var(--red,var(--color-1,#e8384f));transition:width 1s ease}
 
-/* ---------- UNVAN YOLU (öne çıkan rütbe ilerlemesi) ---------- */
-.hp-path{display:flex;align-items:center;gap:14px;padding:11px 20px;border-top:1px solid var(--line,rgba(244,244,242,.07));background:linear-gradient(180deg,var(--blob-3,rgba(244,244,242,.025)),transparent)}
-.hp-path-lab{display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:8.5px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-path-track{display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:1;min-width:0}
-.hp-path-arrow{color:var(--muted,#9a9a96);opacity:.7;flex-shrink:0}
-.hp-node{display:flex;align-items:center;gap:9px;min-height:44px;padding:6px 14px;border-radius:12px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);transition:border-color .2s,background-color .2s;min-width:0;max-width:100%}
-.hp-node-ic{flex-shrink:0;color:var(--muted,#9a9a96)}
-.hp-node-tx{min-width:0}
-.hp-node-tx b{display:block;font-size:11.5px;font-weight:900;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hp-node-tx span{display:block;font-size:8px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:1px;white-space:nowrap}
-.hp-node.done{background:var(--bg-card,#1a1a24)}
-.hp-node.done .hp-node-ic{color:var(--text-main,#f4f4f2)}
+/* ---------- UNVAN YOLU (sade rütbe ilerlemesi) ---------- */
+.hp-path{display:flex;align-items:center;gap:14px;padding:12px 22px;border-top:1px solid var(--line,rgba(244,244,242,.07))}
+.hp-path-lab{display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:8.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-path-track{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:1;min-width:0}
+.hp-path-arrow{color:var(--line-2,var(--border-dim,rgba(244,244,242,.13)));flex-shrink:0}
+.hp-node{display:flex;align-items:baseline;gap:7px;min-height:26px;min-width:0;max-width:100%}
+.hp-node-tx{display:flex;align-items:baseline;gap:7px;min-width:0}
+.hp-node-tx b{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp-node-tx span{font-size:8.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;flex-shrink:0}
 .hp-node.done .hp-node-tx b{color:var(--text-main,#f4f4f2)}
-.hp-node.next{border-color:var(--red,var(--color-1,#e8384f));background:var(--blob-1,rgba(232,56,79,.14))}
-.hp-node.next .hp-node-ic{color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-node.now .hp-node-tx b{color:var(--red-hi,var(--color-2,#ff6b7a));font-size:12.5px;font-weight:800;letter-spacing:.04em}
+.hp-node.now .hp-node-tx span{color:var(--red-hi,var(--color-2,#ff6b7a));font-weight:800}
 .hp-node.next .hp-node-tx b{color:var(--text-main,#f4f4f2)}
-.hp-node.next .hp-node-tx span{color:var(--red-hi,var(--color-2,#ff6b7a));font-weight:900}
-.hp-node.now{background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;box-shadow:0 10px 26px -10px var(--red,var(--color-1,#e8384f));padding:6px 16px}
-.hp-node.now .hp-node-ic{color:var(--on-color-1,#0a0a0e)}
-.hp-node.now .hp-node-tx b{color:var(--on-color-1,#0a0a0e);font-size:12.5px}
-.hp-node.now .hp-node-tx span{color:var(--on-color-1,#0a0a0e);opacity:.78;font-weight:900}
 
-.hp-tiers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 20px;border-top:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-tiers-lab{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;margin-right:6px;font-size:8.5px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-tier{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:5px 11px;border-radius:10px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);font-family:inherit;color:inherit;cursor:pointer;transition:border-color .2s,background-color .2s}
-.hp-tier:hover{border-color:var(--red,var(--color-1,#e8384f))}
-.hp-tier i{width:7px;height:7px;border-radius:3px;box-shadow:0 0 8px currentColor;flex-shrink:0}
-.hp-tier b{font-size:13px;font-weight:900;line-height:1;color:var(--text-main,#f4f4f2)}
-.hp-tier span{font-size:7.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-tiers{display:flex;align-items:center;gap:2px;flex-wrap:wrap;padding:10px 22px;border-top:1px solid var(--line,rgba(244,244,242,.07))}
+.hp-tiers-lab{flex-shrink:0;margin-right:10px;font-size:8.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-tier{display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:4px 10px;border-radius:8px;border:0;background:none;font-family:inherit;color:inherit;cursor:pointer;transition:background-color .2s}
+.hp-tier:hover{background:var(--blob-3,rgba(244,244,242,.03))}
+.hp-tier:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:2px}
+.hp-tier i{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.hp-tier b{font-size:13px;font-weight:800;line-height:1;color:var(--text-main,#f4f4f2)}
+.hp-tier span{font-size:8px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96)}
 .hp-stats{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-stat{padding:11px 8px;min-height:54px;text-align:center;border-left:1px solid var(--line,rgba(244,244,242,.07));transition:background-color .2s}
+.hp-stat{padding:11px 8px;min-height:52px;text-align:center;border-left:1px solid var(--line,rgba(244,244,242,.07))}
 .hp-stat:first-child{border-left:0}
-.hp-stat:hover{background:var(--blob-3,rgba(244,244,242,.025))}
-.hp-stat b{display:block;font-size:18px;font-weight:900;letter-spacing:-.02em;color:var(--text-main,#f4f4f2)}
+.hp-stat b{display:block;font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--text-main,#f4f4f2)}
 .hp-stat span{display:block;font-size:7.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:3px}
-.hp-stat.accent b{color:var(--red-hi,var(--color-2,#ff6b7a))}
 
 /* ---------- HIZLI ERİŞİM + ZAMANLAYICI ---------- */
 .hn-action{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%}
@@ -311,14 +302,13 @@ const HOME_PREMIUM_CSS = `
   .hp-id{padding:12px 14px;gap:12px;min-height:0}
   .hp-pid h3{font-size:19px}
   .hp-xpool b{font-size:19px}
-  .hp-xpline{padding:2px 14px 12px;gap:10px}
+  .hp-xpline{padding:0 14px 12px;gap:12px}
   .hp-xp-lab{font-size:8.5px}
-  .hp-lvbox{min-width:52px;padding:4px 10px}
+  .hp-lvbox{min-width:40px}
   .hp-lvbox b{font-size:22px}
-  .hp-path{padding:10px 14px;gap:10px}
+  .hp-path{padding:10px 14px;gap:8px}
   .hp-path-lab{width:100%}
-  .hp-node{min-height:40px;padding:5px 11px}
-  .hp-node.now{padding:5px 13px}
+  .hp-node{min-height:24px}
   .hp-streakbar{padding:10px 14px;min-height:0}
   .hp-tiers{padding:10px 14px}
   .hn-sp-body h2{font-size:28px}
@@ -744,30 +734,26 @@ export default function HomePage() {
           <div className="hp-path">
             <span className="hp-path-lab"><Crown size={13} /> Unvan Yolu</span>
             <div className="hp-path-track">
-              {rankPath.map((node, i) => {
-                const TierIcon = node.tier.icon;
-                return (
-                  <Fragment key={node.tier.title}>
-                    {i > 0 && <ChevronRight size={14} className="hp-path-arrow" />}
-                    <div
-                      className={`hp-node${node.isUnlocked ? ' done' : ''}${node.isCurrent ? ' now' : ''}${node.isNext ? ' next' : ''}`}
-                      title={`Sv. ${node.tier.minLevel} — ${node.tier.title}`}
-                    >
-                      <TierIcon size={15} className="hp-node-ic" />
-                      <div className="hp-node-tx">
-                        <b>{node.tier.title}</b>
-                        <span>
-                          {node.isCurrent
-                            ? 'Şimdi'
-                            : node.isNext && nextRank
-                              ? `+${nextRank.minLevel - lvl.level} Sv.`
-                              : `Sv. ${node.tier.minLevel}`}
-                        </span>
-                      </div>
+              {rankPath.map((node, i) => (
+                <Fragment key={node.tier.title}>
+                  {i > 0 && <ChevronRight size={13} className="hp-path-arrow" />}
+                  <div
+                    className={`hp-node${node.isUnlocked ? ' done' : ''}${node.isCurrent ? ' now' : ''}${node.isNext ? ' next' : ''}`}
+                    title={`Sv. ${node.tier.minLevel} — ${node.tier.title}`}
+                  >
+                    <div className="hp-node-tx">
+                      <b>{node.tier.title}</b>
+                      <span>
+                        {node.isCurrent
+                          ? 'Şimdi'
+                          : node.isNext && nextRank
+                            ? `+${nextRank.minLevel - lvl.level} Sv.`
+                            : `Sv. ${node.tier.minLevel}`}
+                      </span>
                     </div>
-                  </Fragment>
-                );
-              })}
+                  </div>
+                </Fragment>
+              ))}
             </div>
           </div>
 
@@ -795,8 +781,8 @@ export default function HomePage() {
             <div className="hp-stat"><b>{quickMetrics.watchedMoviesCount}</b><span>Film İzledi</span></div>
             <div className="hp-stat"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span>Dizi Bitirdi</span></div>
             <div className="hp-stat"><b>{quickMetrics.watchedEpsCount}</b><span>Bölüm İzledi</span></div>
-            <div className="hp-stat accent"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Rozet Açtı</span></div>
-            <div className="hp-stat accent"><b>{quickMetrics.questsCompleted}</b><span>Görev Bitti</span></div>
+            <div className="hp-stat"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Rozet Açtı</span></div>
+            <div className="hp-stat"><b>{quickMetrics.questsCompleted}</b><span>Görev Bitti</span></div>
           </div>
         </div>
       </section>
