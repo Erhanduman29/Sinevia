@@ -23,244 +23,542 @@ type SortMode = 'az' | 'recent' | 'rating';
    Kaynak: sinevia-premium.html — cam yüzeyler · kırmızı vurgu · shine
    ============================================================ */
 const SERIES_PREMIUM_CSS = `
-.svp-card {
-  border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius: var(--r-lg, 22px);
-  background: var(--glass, var(--bg-surface, rgba(255,255,255,.05)));
-  box-shadow: var(--shadow, 0 20px 48px -24px rgba(0,0,0,.75)), inset 0 1px 0 rgba(255,255,255,.07);
+.svp-root {
+  /* Vurgu zinciri: premium-dark kırmızı → diğer temalar kendi vurgusu */
+  --svp-a1: var(--red, var(--color-1, #e8384f));
+  --svp-a2: var(--red-hi, var(--color-2, #ff6b7a));
+  --svp-a3: var(--red-deep, var(--color-3, #8e1220));
+  --svp-on: #fff;
+  --svp-ink: var(--ink, var(--text-main, #f4f4f2));
+  --svp-muted: var(--muted, color-mix(in srgb, var(--text-main, #f4f4f2) 62%, transparent));
+  --svp-glass: var(--glass, var(--bg-card, rgba(255, 255, 255, .05)));
+  --svp-surf: var(--surface, var(--bg-surface, rgba(255, 255, 255, .04)));
+  --svp-surf2: var(--surface2, rgba(255, 255, 255, .07));
+  --svp-line: var(--line, var(--border-dim, rgba(244, 244, 242, .07)));
+  --svp-line2: var(--line-2, var(--border-dim, rgba(244, 244, 242, .13)));
+  --svp-r: var(--r, 16px);
+  --svp-r-lg: var(--r-lg, 22px);
+  --svp-r-sm: var(--r-sm, 10px);
+  --svp-shadow: var(--shadow, 0 24px 60px -24px rgba(0, 0, 0, .8));
+  --svp-glow: var(--glow, 0 0 0 1px rgba(232, 56, 79, .35), 0 12px 34px -12px rgba(232, 56, 79, .55));
+  --svp-inset: inset 0 1px 0 rgba(255, 255, 255, .07);
+  --svp-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* vurgu tonları (tekrar yerine geçmesin) */
+  --svp-t08: color-mix(in srgb, var(--svp-a1) 8%, transparent);
+  --svp-t14: color-mix(in srgb, var(--svp-a1) 14%, transparent);
+  --svp-t30: color-mix(in srgb, var(--svp-a1) 30%, transparent);
+  --svp-t40: color-mix(in srgb, var(--svp-a1) 40%, transparent);
+  --svp-t45: color-mix(in srgb, var(--svp-a1) 45%, transparent);
+  --svp-t55: color-mix(in srgb, var(--svp-a1) 55%, transparent);
+  --svp-t70: color-mix(in srgb, var(--svp-a1) 70%, transparent);
+  --svp-t85: color-mix(in srgb, var(--svp-a1) 85%, transparent);
+}
+
+/* ---------- CAM YÜZEYLER ---------- */
+.svp-card, .svp-panel {
+  position: relative;
+  background: var(--svp-glass);
+  border: 1px solid var(--svp-line2);
+  border-radius: var(--svp-r-lg);
+  box-shadow: var(--svp-shadow), var(--svp-inset);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  transition: transform .28s cubic-bezier(.2,.7,.3,1), border-color .28s, box-shadow .28s;
+}
+.svp-card {
+  transition: transform .28s cubic-bezier(.2, .7, .3, 1), border-color .28s, box-shadow .28s;
 }
 .svp-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(232,56,79,.45);
-  box-shadow: 0 30px 56px -22px rgba(0,0,0,.9), 0 0 36px -14px rgba(232,56,79,.45), inset 0 1px 0 rgba(255,255,255,.1);
+  border-color: var(--svp-t45);
+  box-shadow: 0 30px 56px -22px rgba(0, 0, 0, .9), 0 0 36px -14px var(--svp-t45), var(--svp-inset);
 }
-.svp-panel {
-  border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius: var(--r-lg, 22px);
-  background: var(--glass, var(--bg-surface, rgba(255,255,255,.05)));
-  box-shadow: var(--shadow, 0 20px 48px -24px rgba(0,0,0,.75)), inset 0 1px 0 rgba(255,255,255,.07);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+/* kart üstünde ince kırmızı saç teli */
+.svp-card::before {
+  content: '';
+  position: absolute; inset: 0 0 auto 0; height: 1px; z-index: 3; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--svp-t55) 28%, color-mix(in srgb, var(--svp-a2) 32%, transparent) 62%, transparent);
+}
+.svp-card-main { transition: background-color .24s ease; }
+.svp-card-main:hover { background: var(--svp-surf); }
+.svp-side { border-color: var(--svp-line); }
+.svp-divider { border-color: var(--svp-line); }
+.svp-seasons { border-color: var(--svp-line); background: color-mix(in srgb, var(--bg-base, #000) 18%, transparent); }
+.svp-season-block { border-color: var(--svp-line); }
+
+/* ---------- İKON / METİN RENKLERİ ---------- */
+.svp-ic-muted { color: var(--svp-muted); }
+.svp-ic-a2 { color: var(--svp-a2); }
+.svp-title {
+  font-family: 'Archivo', system-ui, -apple-system, sans-serif;
+  font-weight: 900; letter-spacing: -.015em; text-transform: uppercase;
+  color: var(--svp-ink);
+}
+.svp-cap-ink { color: var(--svp-ink); }
+.svp-rate {
+  font-family: var(--svp-mono);
+  font-size: 9.5px; font-weight: 700;
+  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, .9), var(--svp-inset);
+}
+
+/* ---------- MODAL PERDE ---------- */
+.svp-overlay {
+  background:
+    radial-gradient(1000px 600px at 50% 30%, color-mix(in srgb, var(--svp-a1) 16%, transparent), transparent 65%),
+    rgba(4, 4, 6, .72);
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+}
+.svp-modal-ov {
+  position: absolute; inset: auto 0 0 0;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg-base, #000) 82%, transparent) 55%, var(--bg-base, #000));
+}
+
+/* ---------- BAŞLIK ---------- */
+.svp-h1 {
+  font-family: 'Archivo', system-ui, -apple-system, sans-serif;
+  font-weight: 900;
+  letter-spacing: -.03em;
+  text-transform: uppercase;
+  line-height: 1;
 }
 .svp-grad-text {
-  background: linear-gradient(100deg, var(--ink, var(--text-main, #f4f4f2)) 25%, var(--muted, #9a9a96));
+  background: linear-gradient(100deg, #fff 22%, var(--svp-a2) 140%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
+.svp-tile {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 14px;
+  display: grid; place-items: center;
+  color: var(--svp-on);
+  background: linear-gradient(140deg, var(--svp-a2), var(--svp-a3));
+  box-shadow: 0 8px 22px -8px var(--svp-t85), var(--svp-inset);
+}
+@media (max-width: 639px) {
+  .svp-tile { width: 36px; height: 36px; }
+}
 
-/* --- premium buton sistemi (btn-p / btn-s ruhu) --- */
+/* ---------- PREMIUM BUTON SİSTEMİ ---------- */
 .svp-btn-p, .svp-btn-s {
   position: relative; overflow: hidden; isolation: isolate;
   display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  font-weight: 800; letter-spacing: .04em;
+  font-weight: 800; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase;
   border-radius: 13px; border: 1px solid transparent;
-  transition: .25s cubic-bezier(.2,.7,.3,1);
+  transition: .25s cubic-bezier(.2, .7, .3, 1);
   white-space: nowrap;
 }
 .svp-btn-p::after, .svp-btn-s::after {
   content: ''; position: absolute; top: 0; left: -80%; width: 55%; height: 100%; z-index: -1;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent);
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .35), transparent);
   transform: skewX(-20deg); transition: left .5s ease;
 }
 .svp-btn-p:hover::after, .svp-btn-s:hover::after { left: 130%; }
 .svp-btn-p:active, .svp-btn-s:active { transform: translateY(1px) scale(.985); }
 .svp-btn-p {
   color: #fff;
-  background: linear-gradient(150deg, var(--red-hi, var(--color-2, #ff6b7a)) 0%, var(--red, var(--color-1, #e8384f)) 45%, var(--red-deep, var(--color-3, #8e1220)) 130%);
-  box-shadow: 0 10px 28px -10px rgba(232,56,79,.75), inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 6px rgba(0,0,0,.25);
+  background: linear-gradient(150deg, var(--svp-a2) 0%, var(--svp-a1) 45%, var(--svp-a3) 130%);
+  box-shadow: 0 10px 28px -10px var(--svp-t70), inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 6px rgba(0, 0, 0, .25);
 }
 .svp-btn-p:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 36px -10px rgba(232,56,79,.9), inset 0 1px 0 rgba(255,255,255,.4);
+  box-shadow: 0 16px 36px -10px var(--svp-t85), inset 0 1px 0 rgba(255, 255, 255, .4);
 }
 .svp-btn-s {
-  color: var(--ink, var(--text-main, #f4f4f2));
-  background: linear-gradient(150deg, rgba(255,255,255,.14), rgba(255,255,255,.05));
-  border-color: rgba(255,255,255,.16);
-  box-shadow: 0 8px 22px -12px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.16);
+  color: var(--svp-ink);
+  background: linear-gradient(150deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05));
+  border-color: rgba(255, 255, 255, .16);
+  box-shadow: 0 8px 22px -12px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .16);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 .svp-btn-s:hover {
   transform: translateY(-2px);
-  background: linear-gradient(150deg, rgba(255,255,255,.2), rgba(255,255,255,.08));
-  border-color: rgba(255,255,255,.3);
+  background: linear-gradient(150deg, rgba(255, 255, 255, .2), rgba(255, 255, 255, .08));
+  border-color: rgba(255, 255, 255, .3);
 }
 .svp-btn-p:disabled, .svp-btn-s:disabled { opacity: .4; pointer-events: none; }
 .svp-btn-ghost {
   display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
-  border-radius: 12px; border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  background: var(--surface, rgba(255,255,255,.04));
-  color: var(--muted, #9a9a96);
-  transition: .24s cubic-bezier(.2,.7,.3,1);
+  border-radius: 12px; border: 1px solid var(--svp-line2);
+  background: var(--svp-surf);
+  color: var(--svp-muted);
+  font-weight: 800; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  transition: .24s cubic-bezier(.2, .7, .3, 1);
 }
 .svp-btn-ghost:hover {
   transform: translateY(-2px);
-  color: var(--ink, var(--text-main, #f4f4f2));
-  border-color: rgba(232,56,79,.55);
-  box-shadow: 0 10px 26px -12px rgba(232,56,79,.7);
+  color: var(--svp-ink);
+  border-color: var(--svp-t45);
+  box-shadow: 0 10px 26px -12px var(--svp-t70);
 }
 
-/* --- tab + chip sistemi (aktif = kırmızı) --- */
+/* ---------- SEKME + ÇİP (aktif = kırmızı gradyan) ---------- */
+.svp-chipbar { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 .svp-tab {
-  border-radius: 12px; border: 1px solid transparent;
-  font-weight: 800; letter-spacing: .03em;
-  transition: .22s cubic-bezier(.2,.7,.3,1);
-  color: var(--muted, #9a9a96);
-  background: transparent;
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .5rem .85rem; border-radius: 99px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--svp-muted);
+  border: 1px solid var(--svp-line2);
+  background: var(--svp-surf);
+  transition: .22s cubic-bezier(.2, .7, .3, 1);
 }
-.svp-tab:hover:not(.svp-tab-on) { color: var(--ink, var(--text-main, #f4f4f2)); background: var(--surface, rgba(255,255,255,.05)); }
+.svp-tab:hover:not(.svp-tab-on) {
+  color: var(--svp-ink);
+  border-color: rgba(255, 255, 255, .3);
+  transform: translateY(-2px);
+}
 .svp-tab-on {
   color: #fff;
-  background: linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)));
+  background: linear-gradient(140deg, var(--svp-a2), var(--svp-a3));
   border-color: transparent;
-  box-shadow: 0 8px 22px -8px rgba(232,56,79,.8), inset 0 1px 0 rgba(255,255,255,.35);
+  box-shadow: 0 8px 22px -8px var(--svp-t85), inset 0 1px 0 rgba(255, 255, 255, .35);
 }
-.svp-tab-on .svp-tab-n { color: #fff; }
-.svp-tab-n { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; opacity: .85; }
+.svp-tab-n { font-family: var(--svp-mono); font-size: 9.5px; opacity: .85; }
+.svp-tab-on .svp-tab-n { color: #fff; opacity: 1; }
+
 .svp-chip {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: .3rem;
-  padding: .34rem .7rem; border-radius: 99px;
-  font-size: 11px; font-weight: 800; letter-spacing: .05em;
-  border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  background: var(--surface, rgba(255,255,255,.04));
-  color: var(--muted, #9a9a96);
-  transition: .22s cubic-bezier(.2,.7,.3,1);
+  padding: .45rem .85rem; border-radius: 99px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  border: 1px solid var(--svp-line2);
+  background: var(--svp-surf);
+  color: var(--svp-muted);
+  transition: .22s cubic-bezier(.2, .7, .3, 1);
 }
-.svp-chip:hover:not(.svp-chip-on) { color: var(--ink, var(--text-main, #f4f4f2)); border-color: rgba(255,255,255,.3); transform: translateY(-2px); }
+.svp-chip:hover:not(.svp-chip-on) {
+  color: var(--svp-ink);
+  border-color: rgba(255, 255, 255, .3);
+  transform: translateY(-2px);
+}
 .svp-chip-on {
   color: #fff;
-  background: linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)));
+  background: linear-gradient(140deg, var(--svp-a2), var(--svp-a3));
   border-color: transparent;
-  box-shadow: 0 8px 22px -8px rgba(232,56,79,.8), inset 0 1px 0 rgba(255,255,255,.35);
+  box-shadow: 0 8px 22px -8px var(--svp-t85), inset 0 1px 0 rgba(255, 255, 255, .35);
 }
 .svp-chip-on:hover { color: #fff; }
 .svp-count-pill {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--red-hi, var(--color-2, #ff6b7a));
-  background: rgba(232,56,79,.14); border: 1px solid rgba(232,56,79,.4);
-  padding: .3rem .65rem; border-radius: 99px; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: .3rem; width: fit-content;
+  font-family: var(--svp-mono);
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--svp-a2);
+  background: var(--svp-t14); border: 1px solid var(--svp-t40);
+  padding: .3rem .6rem; border-radius: 99px; white-space: nowrap;
 }
 
-/* --- mono etiketler --- */
+/* ---------- MONO ETİKETLER ---------- */
 .svp-mono {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--svp-mono);
   font-size: 9.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--muted, #9a9a96);
+  color: var(--svp-muted);
+}
+.svp-pct {
+  font-family: var(--svp-mono);
+  font-size: 10px; font-weight: 800; letter-spacing: .06em;
+  color: var(--svp-a2);
+  text-shadow: 0 0 18px var(--svp-t55);
 }
 
-/* --- bölüm ilerleme barı (gradyan + shine) --- */
+/* ---------- ARAMA ALANI ---------- */
+.svp-search {
+  width: 100%;
+  border: 1px solid var(--svp-line2);
+  background: var(--svp-surf);
+  color: var(--svp-ink);
+  border-radius: 13px;
+  padding: .7rem 2.2rem .7rem 2.4rem;
+  font-size: 13px;
+  outline: 0;
+  transition: .22s;
+  box-shadow: var(--svp-inset);
+}
+.svp-search::placeholder { color: var(--svp-muted); }
+.svp-search:focus {
+  border-color: var(--svp-t55);
+  box-shadow: 0 0 0 4px var(--svp-t14), var(--svp-inset);
+  background: color-mix(in srgb, var(--svp-ink) 7%, transparent);
+}
+
+/* ---------- BÖLÜM İLERLEME BARI (gradyan + shine) ---------- */
 .svp-prog {
   position: relative; height: 8px; border-radius: 99px; overflow: hidden;
-  background: rgba(0,0,0,.45);
-  box-shadow: inset 0 1px 3px rgba(0,0,0,.7);
+  background: rgba(0, 0, 0, .5);
+  border: 1px solid var(--svp-line2);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .7);
 }
 .svp-prog-fill {
   position: absolute; inset: 0 auto 0 0; border-radius: 99px; overflow: hidden;
-  background: linear-gradient(90deg, var(--red-deep, var(--color-3, #8e1220)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-hi, var(--color-2, #ff6b7a)));
-  box-shadow: 0 0 12px rgba(232,56,79,.7);
-  transition: width .5s cubic-bezier(.2,.7,.3,1);
+  background: linear-gradient(90deg, var(--svp-a3), var(--svp-a1) 55%, var(--svp-a2));
+  box-shadow: 0 0 12px var(--svp-t70);
+  transition: width .5s cubic-bezier(.2, .7, .3, 1);
 }
 .svp-prog-fill::before {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .5), transparent);
   transform: translateX(-100%);
-  animation: svp-shine 2.6s cubic-bezier(.4,0,.2,1) infinite;
+  animation: svp-shine 2.6s cubic-bezier(.4, 0, .2, 1) infinite;
 }
 @keyframes svp-shine { 60%, 100% { transform: translateX(100%); } }
 
-/* --- kart içi izleme linkleri --- */
+/* ---------- KART İÇİ İZLEME LİNKLERİ ---------- */
 .svp-link {
   display: inline-flex; align-items: center; gap: .3rem;
-  padding: .22rem .55rem; border-radius: 8px;
-  font-size: 10px; font-weight: 700; letter-spacing: .03em;
-  border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  background: var(--surface, rgba(255,255,255,.05));
-  color: var(--muted, #9a9a96);
-  transition: .22s cubic-bezier(.2,.7,.3,1);
+  padding: .25rem .55rem; border-radius: 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  border: 1px solid var(--svp-line2);
+  background: var(--svp-surf);
+  color: var(--svp-muted);
+  transition: .22s cubic-bezier(.2, .7, .3, 1);
 }
 .svp-link:hover {
-  color: var(--ink, var(--text-main, #f4f4f2));
-  border-color: rgba(232,56,79,.5);
-  background: rgba(232,56,79,.12);
+  color: var(--svp-ink);
+  border-color: var(--svp-t40);
+  background: var(--svp-t14);
+  box-shadow: 0 0 16px -8px var(--svp-t70);
   transform: translateY(-1px);
 }
 
-/* --- poster çerçevesi --- */
+/* ---------- POSTER ÇERÇEVESİ ---------- */
 .svp-poster {
-  position: relative; overflow: hidden; border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.12);
+  position: relative; overflow: hidden; border-radius: var(--svp-r-sm);
+  border: 1px solid rgba(255, 255, 255, .12);
   background: linear-gradient(160deg, #221D2A, #0D0D11);
-  box-shadow: 0 10px 26px -12px rgba(0,0,0,.9);
-  transition: .26s cubic-bezier(.2,.7,.3,1);
+  box-shadow: 0 10px 26px -12px rgba(0, 0, 0, .9);
+  transition: .26s cubic-bezier(.2, .7, .3, 1);
 }
 .svp-poster:hover {
-  border-color: rgba(232,56,79,.6);
-  box-shadow: 0 0 0 3px rgba(232,56,79,.16), 0 14px 30px -12px rgba(0,0,0,.95);
+  border-color: var(--svp-t40);
+  box-shadow: var(--svp-glow), 0 14px 30px -12px rgba(0, 0, 0, .95);
+}
+.svp-poster::after {
+  content: attr(data-ep);
+  position: absolute; left: 6px; bottom: 6px; z-index: 2;
+  font-family: var(--svp-mono);
+  font-size: 8px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: #fff; padding: 3px 7px; border-radius: 7px;
+  background: linear-gradient(135deg, var(--svp-a2), var(--svp-a3));
+  box-shadow: 0 4px 12px -4px var(--svp-t85);
 }
 
-/* --- bölüm kutucukları --- */
+/* ---------- BÖLÜM KUTUCUKLARI ---------- */
 .svp-ep {
-  position: relative; width: 100%; height: 2.5rem;
+  position: relative; width: 100%; height: 2.4rem;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 10px; border: 1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  background: var(--surface, rgba(255,255,255,.04));
-  color: var(--muted, #9a9a96);
-  font-size: 11px; font-weight: 800;
-  transition: .22s cubic-bezier(.2,.7,.3,1);
+  border-radius: var(--svp-r-sm);
+  border: 1px solid var(--svp-line2);
+  background: var(--svp-surf);
+  color: var(--svp-muted);
+  font-family: var(--svp-mono);
+  font-size: 11px; font-weight: 700;
+  transition: .22s cubic-bezier(.2, .7, .3, 1);
 }
 .svp-ep-done {
   color: #fff; border-color: transparent;
-  background: linear-gradient(150deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 16px -8px rgba(232,56,79,.8);
+  background: linear-gradient(150deg, var(--svp-a2), var(--svp-a3));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 16px -8px var(--svp-t85);
 }
-.svp-ep-ready { color: var(--red-hi, var(--color-2, #ff6b7a)); cursor: pointer; }
+.svp-ep-ready { color: var(--svp-a2); cursor: pointer; }
 .svp-ep-ready:hover {
   transform: translateY(-2px);
-  border-color: rgba(232,56,79,.65);
-  background: rgba(232,56,79,.12);
-  box-shadow: 0 0 0 3px rgba(232,56,79,.16), 0 8px 20px -10px rgba(232,56,79,.8);
+  border-color: var(--svp-t45);
+  background: var(--svp-t14);
+  box-shadow: 0 0 0 3px var(--svp-t14), 0 8px 20px -10px var(--svp-t85);
   color: #fff;
 }
 .svp-ep-lock {
-  border-style: dashed; cursor: not-allowed; opacity: .55;
-  color: var(--muted, #9a9a96);
+  border-style: dashed; cursor: not-allowed; opacity: .5;
+  color: var(--svp-muted);
+}
+.svp-ep-num {
+  display: block; text-align: center; margin-top: .2rem;
+  font-family: var(--svp-mono);
+  font-size: 9px; letter-spacing: .08em; color: var(--svp-muted);
+}
+.svp-ep-del {
+  position: absolute; top: -6px; right: -6px; z-index: 20;
+  width: 18px; height: 18px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--svp-muted);
+  border: 1px solid var(--svp-line2);
+  background: linear-gradient(150deg, #23232A, #131317);
+  transition: .2s;
+}
+.svp-ep-del:hover {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(150deg, var(--svp-a2), var(--svp-a3));
+  box-shadow: 0 6px 16px -6px var(--svp-t85);
 }
 
-/* --- sezon başlıkları --- */
+/* ---------- SEZON BAŞLIKLARI ---------- */
 .svp-season {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--svp-mono);
   font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--ink, var(--text-main, #f4f4f2));
+  color: var(--svp-ink);
 }
 .svp-done-tag {
   display: inline-flex; align-items: center; gap: .25rem;
-  font-size: 9.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
-  color: #4ade80; background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.4);
-  padding: .18rem .55rem; border-radius: 99px;
+  font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  color: #67e39b; background: rgba(78, 203, 142, .1); border: 1px solid rgba(78, 203, 142, .45);
+  padding: .2rem .55rem; border-radius: 99px;
+  box-shadow: 0 0 14px -6px rgba(78, 203, 142, .7);
 }
 
-/* --- aksiyon ikon butonları --- */
+/* ---------- AKSİYON İKON BUTONLARI ---------- */
 .svp-act {
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 11px; border: 1px solid transparent;
-  color: var(--muted, #9a9a96);
-  transition: .22s cubic-bezier(.2,.7,.3,1);
+  color: var(--svp-muted);
+  transition: .22s cubic-bezier(.2, .7, .3, 1);
 }
-.svp-act:hover { transform: translateY(-2px); color: var(--ink, var(--text-main, #f4f4f2)); border-color: var(--line-2, var(--border-dim, rgba(244,244,242,.13))); background: var(--surface, rgba(255,255,255,.05)); }
-.svp-act-send:hover { color: var(--red-hi, var(--color-2, #ff6b7a)); border-color: rgba(232,56,79,.5); box-shadow: 0 8px 20px -10px rgba(232,56,79,.7); }
-.svp-act-del:hover { color: #f87171; border-color: rgba(248,113,113,.45); box-shadow: 0 8px 20px -10px rgba(248,113,113,.6); }
+.svp-act:hover {
+  transform: translateY(-2px);
+  color: var(--svp-ink);
+  border-color: var(--svp-line2);
+  background: var(--svp-surf);
+}
+.svp-act-send:hover {
+  color: var(--svp-a2);
+  border-color: var(--svp-t40);
+  background: var(--svp-t14);
+  box-shadow: 0 8px 20px -10px var(--svp-t70);
+}
+.svp-act-del:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, .45);
+  box-shadow: 0 8px 20px -10px rgba(248, 113, 113, .6);
+}
+.svp-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 11px; border: 1px solid var(--svp-line2);
+  color: var(--svp-muted);
+  background: var(--svp-surf);
+  transition: .22s cubic-bezier(.2, .7, .3, 1);
+}
+.svp-x:hover {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(150deg, var(--svp-a2), var(--svp-a3));
+  box-shadow: 0 8px 20px -10px var(--svp-t85);
+  transform: translateY(-1px) rotate(90deg);
+}
 
-/* --- boş durum kartı --- */
+/* ---------- BOŞ DURUM ---------- */
 .svp-empty {
-  border: 1px dashed var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius: var(--r-lg, 22px);
-  background: var(--glass, var(--bg-surface, rgba(255,255,255,.04)));
+  border: 1px dashed var(--svp-line2);
+  border-radius: var(--svp-r-lg);
+  background: var(--svp-glass);
+  color: var(--svp-muted);
+  box-shadow: var(--svp-inset);
+}
+.svp-empty-tile {
+  width: 64px; height: 64px; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  background: linear-gradient(140deg, var(--svp-a2), var(--svp-a3));
+  box-shadow: 0 10px 26px -10px var(--svp-t85), var(--svp-inset);
+}
+
+/* ---------- TAVSİYE MODALI (premium cam) ---------- */
+.svp-modal {
+  background: var(--svp-glass);
+  border: 1px solid var(--svp-line2);
+  box-shadow: var(--svp-shadow), var(--svp-inset);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.svp-modal-bar {
+  background: linear-gradient(120deg, var(--svp-t30), var(--svp-t08) 70%);
+  border-bottom: 1px solid var(--svp-line2);
+}
+.svp-modal-tile {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  color: #fff;
+  border: 1px solid var(--svp-t45);
+  background: linear-gradient(140deg, var(--svp-a2), var(--svp-a3));
+  box-shadow: 0 6px 16px -6px var(--svp-t85), var(--svp-inset);
+}
+.svp-modal-tag {
+  font-family: var(--svp-mono);
+  font-size: 10px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--svp-a2) 62%, #fff);
+}
+.svp-modal-side {
+  background: color-mix(in srgb, var(--svp-ink) 3%, transparent);
+  border-color: var(--svp-line);
+}
+.svp-modal-label {
+  display: block;
+  font-family: var(--svp-mono);
+  font-size: 9.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--svp-muted);
+}
+.svp-modal-input, .svp-modal-select {
+  width: 100%;
+  background: var(--svp-surf);
+  border: 1px solid var(--svp-line2);
+  color: var(--svp-ink);
+  border-radius: 12px;
+  padding: .6rem .75rem;
+  font-size: 12px;
+  outline: 0;
+  transition: .22s;
+  box-shadow: var(--svp-inset);
+}
+.svp-modal-input::placeholder { color: var(--svp-muted); }
+.svp-modal-input:focus, .svp-modal-select:focus {
+  border-color: var(--svp-t55);
+  box-shadow: 0 0 0 4px var(--svp-t14), var(--svp-inset);
+}
+.svp-modal-select option { background: var(--bg-base, #141419); color: var(--ink, var(--text-main, #f4f4f2)); }
+.svp-modal-cap {
+  font-family: var(--svp-mono);
+  font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--svp-muted);
+}
+.svp-modal-count {
+  font-family: var(--svp-mono);
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--svp-a2);
+  background: var(--svp-t14); border: 1px solid var(--svp-t40);
+  padding: .3rem .6rem; border-radius: 9px; white-space: nowrap;
+}
+.svp-modal-card {
+  position: relative; aspect-ratio: 2 / 3;
+  border-radius: 12px; overflow: hidden; cursor: pointer;
+  border: 2px solid transparent;
+  background: var(--svp-surf);
+  transition: transform .24s cubic-bezier(.2, .7, .3, 1), border-color .24s, box-shadow .24s;
+}
+.svp-modal-card:hover {
+  border-color: var(--svp-t30);
+  transform: translateY(-3px);
+}
+.svp-modal-card-on {
+  border-color: var(--svp-a1);
+  transform: scale(.95);
+  box-shadow: 0 0 18px -4px var(--svp-t70);
+}
+.svp-modal-veil {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--svp-t14);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+}
+.svp-modal-check {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: #fff;
+  background: linear-gradient(140deg, var(--svp-a2), var(--svp-a3));
+  box-shadow: 0 6px 16px -6px var(--svp-t85), var(--svp-inset);
+}
+.svp-modal-foot {
+  border-top: 1px solid var(--svp-line2);
+  background: color-mix(in srgb, var(--svp-ink) 2%, transparent);
 }
 `;
 
@@ -469,20 +767,14 @@ export default function SeriesPage() {
   const totalOngoing = data.series.length - totalCompleted;
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="svp-root space-y-4 sm:space-y-5">
       <style>{SERIES_PREMIUM_CSS}</style>
 
       {/* ÜST BAŞLIK & MOBİL UYUMLU AKSİYON BARI */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight uppercase flex items-center gap-2.5">
-            <div
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-[14px] flex items-center justify-center text-white flex-shrink-0"
-              style={{
-                background: 'linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)))',
-                boxShadow: '0 8px 22px -8px rgba(232,56,79,.85), inset 0 1px 0 rgba(255,255,255,.4)'
-              }}
-            >
+          <h1 className="svp-h1 text-xl sm:text-2xl flex items-center gap-2.5">
+            <div className="svp-tile">
               <Tv size={20} />
             </div>
             <span className="svp-grad-text">Diziler</span>
@@ -503,7 +795,7 @@ export default function SeriesPage() {
             className="svp-btn-s flex-1 sm:flex-none px-2.5 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
             title="Arkadaşına tekli veya çoklu dizi listesi öner"
           >
-            <Send size={15} className="flex-shrink-0 text-[var(--red-hi,#ff6b7a)]" />
+            <Send size={15} className="flex-shrink-0 svp-ic-a2" />
             <span className="truncate">Tavsiye Et</span>
           </button>
 
@@ -538,29 +830,22 @@ export default function SeriesPage() {
       {data.series.length > 0 && (
         <div className="space-y-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div
-              className="grid grid-cols-3 sm:flex rounded-[14px] p-1 gap-1"
-              style={{
-                background: 'var(--surface, rgba(255,255,255,.04))',
-                border: '1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)))',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,.06)'
-              }}
-            >
+            <div className="svp-chipbar">
               <button
                 onClick={() => setWatchedFilter(null)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs truncate ${watchedFilter === null ? 'svp-tab-on' : ''}`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 truncate ${watchedFilter === null ? 'svp-tab-on' : ''}`}
               >
                 Tümü <span className="svp-tab-n">({data.series.length})</span>
               </button>
               <button
                 onClick={() => setWatchedFilter(false)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs truncate ${watchedFilter === false ? 'svp-tab-on' : ''}`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 truncate ${watchedFilter === false ? 'svp-tab-on' : ''}`}
               >
                 İzlenecek <span className="svp-tab-n">({totalOngoing})</span>
               </button>
               <button
                 onClick={() => setWatchedFilter(true)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs truncate ${watchedFilter === true ? 'svp-tab-on' : ''}`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 truncate ${watchedFilter === true ? 'svp-tab-on' : ''}`}
               >
                 Bitenler <span className="svp-tab-n">({totalCompleted})</span>
               </button>
@@ -570,14 +855,14 @@ export default function SeriesPage() {
               <button
                 type="button"
                 onClick={() => setIsFilterPanelOpen((prev) => !prev)}
-                className={`svp-btn-ghost flex-1 sm:flex-none px-3.5 py-2 min-h-11 sm:min-h-0 text-xs font-bold ${
+                className={`svp-btn-ghost flex-1 sm:flex-none px-3.5 py-2 min-h-11 sm:min-h-0 ${
                   isFilterPanelOpen || activeFilterCount > 0 ? 'svp-chip-on' : ''
                 }`}
               >
                 <SlidersHorizontal size={14} />
                 <span>Ara &amp; Filtrele</span>
                 {activeFilterCount > 0 && (
-                  <span className="svp-tab-n px-1.5 py-0.2 rounded-full bg-white/25 text-white text-[10px] font-black">
+                  <span className="svp-tab-n">
                     {activeFilterCount}
                   </span>
                 )}
@@ -589,7 +874,7 @@ export default function SeriesPage() {
                   type="button"
                   onClick={resetAllFilters}
                   title="Filtreleri sıfırla"
-                  className="p-2 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-xl text-red-300 border border-red-500/30 bg-red-500/15 hover:bg-red-500/25 text-xs font-bold transition-colors"
+                  className="svp-x p-2 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                 >
                   <X size={14} />
                 </button>
@@ -600,25 +885,20 @@ export default function SeriesPage() {
           {isFilterPanelOpen && (
             <div className="svp-panel p-3 sm:p-4 space-y-3 animate-fade-in-up">
               <div className="relative">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted,#9a9a96)]" />
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 svp-ic-muted" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Dizi ara..."
-                  className="w-full rounded-xl pl-9 pr-8 py-2.5 text-xs sm:text-sm outline-none transition-all"
-                  style={{
-                    background: 'var(--surface, rgba(255,255,255,.05))',
-                    border: '1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)))',
-                    color: 'var(--ink, var(--text-main, #f4f4f2))',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,.06)'
-                  }}
+                  placeholder="Dizi, tür, yıl ara..."
+                  className="svp-search"
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => setSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted,#9a9a96)] hover:text-[var(--ink,#f4f4f2)] p-1 min-h-9 min-w-9 sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    title="Aramayı temizle"
+                    className="svp-x absolute right-2 top-1/2 -translate-y-1/2 p-1.5 min-h-9 min-w-9 sm:min-h-0 sm:min-w-0"
                   >
                     <X size={14} />
                   </button>
@@ -650,7 +930,7 @@ export default function SeriesPage() {
               </div>
 
               {allGenres.length > 0 && (
-                <div className="flex sm:flex-wrap gap-1.5 items-center overflow-x-auto hide-scrollbar pt-2 border-t" style={{ borderColor: 'var(--line, rgba(244,244,242,.07))' }}>
+                <div className="svp-divider flex sm:flex-wrap gap-1.5 items-center overflow-x-auto hide-scrollbar pt-2 border-t">
                   <button
                     onClick={clearGenres}
                     className={`svp-chip ${selectedGenres.size === 0 ? 'svp-chip-on' : ''}`}
@@ -678,23 +958,17 @@ export default function SeriesPage() {
       )}
 
       {data.series.length === 0 ? (
-        <div className="svp-empty text-center py-16 px-6 text-[var(--muted,#9a9a96)]">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-            style={{
-              background: 'linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)))',
-              boxShadow: '0 10px 26px -10px rgba(232,56,79,.8), inset 0 1px 0 rgba(255,255,255,.4)'
-            }}
-          >
-            <Tv size={32} className="text-white" />
+        <div className="svp-empty text-center py-16 px-6">
+          <div className="svp-empty-tile mx-auto mb-4">
+            <Tv size={32} />
           </div>
-          <p className="text-lg font-bold uppercase tracking-wide">Henüz dizi yok.</p>
+          <p className="svp-h1 text-lg mb-1" style={{ color: 'var(--svp-ink)' }}>Henüz dizi yok.</p>
           <p className="text-sm mt-1">Dizi ekleyerek başla!</p>
         </div>
       ) : sortedSeries.length === 0 ? (
-        <div className="svp-empty text-center py-12 px-6 text-[var(--muted,#9a9a96)]">
+        <div className="svp-empty text-center py-12 px-6">
           <Tv size={40} className="mx-auto mb-3 opacity-40" />
-          <p>{watchedFilter === true ? 'Tamamen bitirdiğin bir dizi yok.' : watchedFilter === false ? 'Bölümleri kalan (izlenecek) dizi yok.' : 'Aramaya uygun dizi bulunamadı.'}</p>
+          <p className="svp-mono">{watchedFilter === true ? 'Tamamen bitirdiğin bir dizi yok.' : watchedFilter === false ? 'Bölümleri kalan (izlenecek) dizi yok.' : 'Aramaya uygun dizi bulunamadı.'}</p>
         </div>
       ) : (
         <div className="space-y-3 sm:space-y-4">
@@ -757,10 +1031,10 @@ export default function SeriesPage() {
               <div key={s.id} className="svp-card overflow-hidden flex flex-col sm:flex-row flex-wrap">
                 <div
                   onClick={() => toggleSeries(s.id)}
-                  className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 w-full cursor-pointer transition-colors hover:bg-[rgba(255,255,255,.03)]"
+                  className="svp-card-main flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 w-full cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5 sm:gap-3 w-full min-w-0">
-                    {isExpanded ? <ChevronDown size={17} className="text-[var(--red-hi,#ff6b7a)] flex-shrink-0" /> : <ChevronRight size={17} className="text-[var(--muted,#9a9a96)] flex-shrink-0" />}
+                    {isExpanded ? <ChevronDown size={17} className="svp-ic-a2 flex-shrink-0" /> : <ChevronRight size={17} className="svp-ic-muted flex-shrink-0" />}
 
                     <button
                       type="button"
@@ -769,25 +1043,23 @@ export default function SeriesPage() {
                         setDetailSeriesId(s.id);
                       }}
                       title="Dizi Sinema Kartını Gör"
+                      data-ep={nextEp ? `S${nextEp.season}B${nextEp.episode}` : ''}
                       className="svp-poster w-14 sm:w-16 aspect-[2/3] flex-shrink-0 flex items-center justify-center group/poster cursor-pointer focus:outline-none"
                     >
                       {s.posterUrl ? (
                         <img src={s.posterUrl} alt={s.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
                       ) : (
-                        <Tv size={16} className="text-[var(--muted,#9a9a96)]" />
+                        <Tv size={16} className="svp-ic-muted" />
                       )}
                       <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 p-1">
-                        <div
-                          className="w-6 h-6 rounded-full text-white flex items-center justify-center shadow-md"
-                          style={{ background: 'linear-gradient(140deg, var(--red-hi, #ff6b7a), var(--red-deep, #8e1220))' }}
-                        >
+                        <div className="svp-modal-check w-6 h-6">
                           <Eye size={13} />
                         </div>
                       </div>
                     </button>
 
                     <div className="text-left min-w-0 flex-1 flex flex-col justify-center">
-                      <div className={`font-black text-[13px] sm:text-[15px] uppercase tracking-tight truncate mb-0.5 ${allWatched ? 'opacity-55' : ''}`} style={{ color: 'var(--ink, var(--text-main, #f4f4f2))' }}>
+                      <div className={`svp-title text-[13px] sm:text-[15px] truncate mb-0.5 ${allWatched ? 'opacity-55' : ''}`}>
                         {s.title}
                       </div>
 
@@ -825,11 +1097,12 @@ export default function SeriesPage() {
                   </div>
                 </div>
 
-                <div className="flex sm:flex-col items-center sm:items-stretch justify-between sm:justify-center gap-2 px-3 py-3 sm:p-4 border-t sm:border-t-0 sm:border-l w-full sm:w-auto sm:min-w-[210px] shrink-0" style={{ borderColor: 'var(--line, rgba(244,244,242,.07))' }}>
+                <div className="svp-side flex sm:flex-col items-center sm:items-stretch justify-between sm:justify-center gap-2 px-3 py-3 sm:p-4 border-t sm:border-t-0 sm:border-l w-full sm:w-auto sm:min-w-[210px] shrink-0">
                   <div className="flex items-center justify-between sm:justify-start gap-2">
                     <span className="svp-mono">
-                      <span style={{ color: 'var(--red-hi, var(--color-2, #ff6b7a))' }}>{watchedCount}</span>/{s.episodes.length} bölüm
+                      <span className="svp-ic-a2">{watchedCount}</span>/{s.episodes.length} bölüm
                     </span>
+                    <span className="svp-pct">%{progressPct}</span>
                     {allWatched && (
                       <span className="svp-done-tag"><Check size={10} /> Tamam</span>
                     )}
@@ -875,15 +1148,15 @@ export default function SeriesPage() {
                 </div>
 
                 {isExpanded && (
-                  <div className="w-full basis-full border-t" style={{ borderColor: 'var(--line, rgba(244,244,242,.07))', background: 'rgba(0,0,0,.18)' }}>
+                  <div className="svp-seasons w-full basis-full border-t">
                     {seasons.length === 0 ? (
-                      <div className="p-4 text-sm text-center" style={{ color: 'var(--muted, #9a9a96)' }}>Henüz bölüm eklenmedi.</div>
+                      <div className="p-4 text-center svp-mono">Henüz bölüm eklenmedi.</div>
                     ) : (
                       seasons.map((season) => {
                         const eps = s.episodes.filter((e) => e.season === season).sort((a, b) => a.episode - b.episode);
                         const seasonAllWatched = eps.length > 0 && eps.every((e) => e.watched);
                         return (
-                          <div key={season} className="p-3 sm:p-4 border-b last:border-0" style={{ borderColor: 'var(--line, rgba(244,244,242,.07))' }}>
+                          <div key={season} className="svp-season-block p-3 sm:p-4 border-b last:border-0">
                             <div className="svp-season mb-2.5 flex items-center gap-2">
                               {season}. Sezon
                               {seasonAllWatched && (
@@ -922,32 +1195,32 @@ export default function SeriesPage() {
 
       {/* ARKADAŞA TAVSİYE MODALI (TEKLİ & ÇOKLU DİZİ DESTEKLİ, GRID TASARIMLI) */}
       {showSendModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in-up" onClick={() => setShowSendModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-4xl h-[85dvh] bg-ink-950 border border-violet-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-4 border-b border-ink-800 bg-ink-900/50 flex items-center justify-between gap-2 shrink-0">
+        <div className="svp-overlay fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 animate-fade-in-up" onClick={() => setShowSendModal(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="svp-modal w-full max-w-4xl h-[85dvh] rounded-3xl overflow-hidden flex flex-col">
+            <div className="svp-modal-bar p-4 flex items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 shrink-0 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30"><Send size={15} /></div>
-                <h2 className="text-sm font-black text-white truncate">Arkadaşına Dizi Tavsiyesi Gönder</h2>
+                <div className="svp-modal-tile"><Send size={15} /></div>
+                <h2 className="svp-modal-tag truncate">Arkadaşına Dizi Tavsiyesi Gönder</h2>
               </div>
-              <button onClick={() => setShowSendModal(false)} className="text-ink-500 hover:text-white p-2.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1 flex items-center justify-center rounded-lg shrink-0"><X size={17} /></button>
+              <button onClick={() => setShowSendModal(false)} title="Kapat" className="svp-x p-2.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1 shrink-0"><X size={17} /></button>
             </div>
             
             <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-              <div className="w-full md:w-64 p-4 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/20 flex flex-col gap-4 overflow-y-auto custom-scrollbar flex-shrink-0">
+              <div className="svp-modal-side w-full md:w-64 p-4 border-b md:border-b-0 md:border-r flex flex-col gap-4 overflow-y-auto custom-scrollbar flex-shrink-0">
                 {loadingFriends ? (
-                  <div className="text-center py-6 text-xs text-ink-500 animate-pulse">Arkadaşlar yükleniyor...</div>
+                  <div className="svp-mono text-center py-6 animate-pulse">Arkadaşlar yükleniyor...</div>
                 ) : friendsList.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-ink-500 bg-ink-900/40 rounded-2xl border border-ink-800">
+                  <div className="svp-empty svp-mono text-center py-8 px-3">
                     Ağında ekli arkadaşın bulunamadı.
                   </div>
                 ) : (
                   <>
                     <div>
-                      <label className="block text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">1. Kime Gidecek?</label>
+                      <label className="svp-modal-label mb-1.5">1. Kime Gidecek?</label>
                       <select 
                         value={selectedFriendId} 
                         onChange={(e) => setSelectedFriendId(e.target.value)}
-                        className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-xs text-white focus:border-violet-500 outline-none"
+                        className="svp-modal-select"
                       >
                         <option value="">-- Arkadaş Seç --</option>
                         {friendsList.map(f => (
@@ -957,44 +1230,44 @@ export default function SeriesPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1.5">2. Liste Başlığı</label>
+                      <label className="svp-modal-label mb-1.5">2. Liste Başlığı</label>
                       <input 
                         type="text" 
                         value={sendListTitle}
                         onChange={(e) => setSendListTitle(e.target.value)}
                         placeholder="Örn: Bu Sezon Kaçırılmayacaklar"
-                        className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-xs text-white focus:border-violet-500 outline-none"
+                        className="svp-modal-input"
                       />
                     </div>
                   </>
                 )}
 
-                <div className="pt-2 border-t border-ink-800">
-                  <label className="block text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-2">3. Listende Ara</label>
+                <div className="svp-modal-side pt-3 border-t">
+                  <label className="svp-modal-label mb-2">3. Listende Ara</label>
                   <div className="relative flex-1">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 svp-ic-muted" />
                     <input 
                       type="text" 
                       placeholder="Dizi adı yaz..."
                       value={sendSeriesSearch}
                       onChange={(e) => setSendSeriesSearch(e.target.value)}
-                      className="w-full bg-ink-950 border border-ink-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:border-violet-500 outline-none"
+                      className="svp-modal-input pl-8"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="flex-1 flex flex-col overflow-hidden bg-ink-950 relative">
-                <div className="p-3 border-b border-ink-800 flex items-center justify-between bg-ink-900/40">
-                  <span className="text-[10px] font-bold text-ink-400 uppercase tracking-widest">Kütüphanen</span>
-                  <span className="text-[10px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-lg whitespace-nowrap">
+              <div className="flex-1 flex flex-col overflow-hidden relative">
+                <div className="svp-modal-bar p-3 flex items-center justify-between">
+                  <span className="svp-modal-cap">Kütüphanen</span>
+                  <span className="svp-modal-count">
                     {selectedSeriesIdsForSend.size} Dizi Seçildi
                   </span>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 sm:p-4 custom-scrollbar">
                   {filteredSeriesForModal.length === 0 ? (
-                    <div className="text-center py-6 text-xs text-ink-500">Dizi bulunamadı.</div>
+                    <div className="svp-mono text-center py-6">Dizi bulunamadı.</div>
                   ) : (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 p-1">
                       {filteredSeriesForModal.map(s => {
@@ -1003,21 +1276,21 @@ export default function SeriesPage() {
                           <div 
                             key={s.id}
                             onClick={() => toggleSelectSeriesForSend(s.id)}
-                            className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer group border-2 transition-all ${isChecked ? 'border-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.5)] scale-95' : 'border-transparent hover:border-ink-700 bg-ink-900'}`}
+                            className={`svp-modal-card ${isChecked ? 'svp-modal-card-on' : ''}`}
                           >
                             {s.posterUrl ? (
                               <img src={s.posterUrl} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center text-ink-700 bg-ink-900">
+                              <div className="w-full h-full flex items-center justify-center svp-ic-muted">
                                 <Tv size={24} />
                               </div>
                             )}
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
-                              <h3 className="text-[9px] font-bold text-white line-clamp-2 leading-tight">{s.title}</h3>
-                              <div className="text-[8px] text-ink-400 mt-0.5 truncate">{s.year || 'Yıl yok'} · {s.episodes.length} bölüm</div>
+                            <div className="svp-modal-ov p-2 pt-6">
+                              <h3 className="text-[9px] font-bold svp-cap-ink line-clamp-2 leading-tight">{s.title}</h3>
+                              <div className="svp-mono mt-0.5 truncate">{s.year || 'Yıl yok'} · {s.episodes.length} bölüm</div>
                             </div>
-                            <div className={`absolute inset-0 bg-violet-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isChecked ? 'opacity-100' : 'opacity-0'}`}>
-                              <div className="w-8 h-8 rounded-full bg-violet-500 text-white flex items-center justify-center shadow-lg">
+                            <div className={`svp-modal-veil transition-opacity ${isChecked ? 'opacity-100' : 'opacity-0'}`}>
+                              <div className="svp-modal-check">
                                 <Check size={18} strokeWidth={4} />
                               </div>
                             </div>
@@ -1030,12 +1303,12 @@ export default function SeriesPage() {
               </div>
             </div>
 
-            <div className="p-3.5 border-t border-ink-800 bg-ink-950 flex flex-wrap gap-2 shrink-0">
-              <button onClick={() => setShowSendModal(false)} className="px-4 py-2.5 min-h-11 md:min-h-0 bg-ink-900 text-ink-300 rounded-xl text-xs font-bold hover:bg-ink-800 transition-colors">Vazgeç</button>
+            <div className="svp-modal-foot p-3.5 flex flex-wrap gap-2 shrink-0">
+              <button onClick={() => setShowSendModal(false)} className="svp-btn-s px-4 py-2.5 min-h-11 md:min-h-0">Vazgeç</button>
               <button 
                 onClick={handleSendRecommendations} 
                 disabled={!selectedFriendId || selectedSeriesIdsForSend.size === 0} 
-                className="flex-1 min-w-[200px] py-2.5 min-h-11 md:min-h-0 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5 px-2 shadow-lg shadow-violet-500/20"
+                className="svp-btn-p flex-1 min-w-[200px] py-2.5 min-h-11 md:min-h-0"
               >
                 <Send size={14} /> Tavsiye Listesini Gönder ({selectedSeriesIdsForSend.size})
               </button>
@@ -1142,7 +1415,7 @@ function EpisodeBox({
     >
       {episode.watched && episode.rating !== null && (
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg ${ratingBgClass(episode.rating)}`}>
+          <span className={`svp-rate font-bold px-1.5 py-0.5 rounded-full ${ratingBgClass(episode.rating)}`}>
             {episode.rating}
           </span>
         </div>
@@ -1162,13 +1435,14 @@ function EpisodeBox({
           <Lock size={12} />
         )}
       </button>
-      <div className={`text-[10px] text-center mt-0.5 ${episode.watched ? 'opacity-60' : ''}`} style={{ color: 'var(--muted, #9a9a96)' }}>
+      <div className={`svp-ep-num ${episode.watched ? 'opacity-60' : ''}`}>
         {episode.episode}
       </div>
       {showActions && (
         <button
           onClick={onDelete}
-          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ink-800 border border-ink-600 flex items-center justify-center text-ink-500 hover:text-red-400 transition-colors z-20"
+          title="Bölümü sil"
+          className="svp-ep-del"
         >
           <Trash2 size={8} />
         </button>
