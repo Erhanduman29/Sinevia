@@ -885,7 +885,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
       {/* MASAÜSTÜ SOL SIDEBAR — premium cam yüzey */}
       <aside
-        className="hidden md:flex flex-col w-56 shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
+        className="hidden md:flex flex-col w-48 shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
         style={{
           backgroundImage: SIDEBAR_BG,
           borderColor: 'var(--line, var(--border-dim))',
