@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Film, Tv, History, Trophy, Settings, BarChart3, Bot,
@@ -6,7 +6,11 @@ import {
   Cloud, CloudOff, RefreshCw, Search, Dices, ArrowRight, CornerDownLeft
 } from 'lucide-react';
 import WrappedModal from './WrappedModal';
-import { useApp } from '../context/AppContext';
+import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import PickModal from './PickModal';
+import BulkAddModal from './BulkAddModal';
+import RatingModal from './RatingModal';
+import { getNextUnwatchedEpisode, normalize } from '../lib/utils';
 import { useTutorial } from '../context/TutorialContext';
 import Sini from '../tutorial/Sini';
 import { describeCombo, loadBindings } from '../lib/shortcuts';
@@ -178,18 +182,41 @@ function trLower(value: string): string {
   return value.toLocaleLowerCase('tr-TR');
 }
 
-/** Sorguya göre gruplu arama sonuçlarını üretir (film, dizi, geçmiş, kişi, sayfa). */
+/** Sorgudaki HER kelimenin (boşluğa göre bölünmüş, AND) metinde geçmesini sağlar. */
+function matchesAllTokens(query: string, haystack: string): boolean {
+  const hay = trLower(haystack);
+  const tokens = trLower(query).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return false;
+  return tokens.every((t) => hay.includes(t));
+}
+
+/** Sorguya göre gruplu arama sonuçlarını üretir.
+ *  Her kelime ayrı ayrı aranır ("her kelimeyi alabilmeliyiz") ve
+ *  sayfalardaki HER alan taranır: başlık, yıl, tür, kadro, yönetmen/yaratıcı,
+ *  özet, not, süre, koleksiyon, etiketler, bölüm adları, açıklama vb. */
 function buildSearchGroups(query: string, data: any): SearchGroup[] {
-  const q = trLower(query.trim());
+  const q = query.trim();
   const groups: SearchGroup[] = [];
   if (!q) return groups;
 
   const movies: any[] = Array.isArray(data?.movies) ? data.movies : [];
   const series: any[] = Array.isArray(data?.series) ? data.series : [];
   const history: any[] = Array.isArray(data?.history) ? data.history : [];
+  const collections: any[] = Array.isArray(data?.collections) ? data.collections : [];
+  const colName = (id?: string | null) =>
+    (id && collections.find((c) => c.id === id)?.name) || '';
+  const join = (arr: unknown) => (Array.isArray(arr) ? arr.join(' ') : '');
 
   const movieHits: SearchEntry[] = movies
-    .filter((m) => trLower(`${m.title || ''} ${m.year || ''}`).includes(q))
+    .filter((m) =>
+      matchesAllTokens(
+        q,
+        [m.title, m.year, m.genres, m.cast, m.directors, m.overview, m.note,
+          m.runtime, colName(m.collectionId), m.reviewTags].map(join).concat(
+          [m.title, m.year, m.overview, m.note, m.runtime, colName(m.collectionId)]
+        ).join(' ')
+      )
+    )
     .slice(0, 6)
     .map((m) => ({
       key: `movie-${m.id}`,
@@ -201,7 +228,15 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
   if (movieHits.length) groups.push({ id: 'movies', label: 'Filmler', icon: Film, entries: movieHits });
 
   const seriesHits: SearchEntry[] = series
-    .filter((s) => trLower(`${s.title || ''} ${s.year || ''}`).includes(q))
+    .filter((s) =>
+      matchesAllTokens(
+        q,
+        [s.title, s.year, s.genres, s.cast, s.creators, s.overview, s.note,
+          join((s.episodes || []).map((e: any) => e?.name || ''))].map(join).concat(
+          [s.title, s.year, s.overview, s.note]
+        ).join(' ')
+      )
+    )
     .slice(0, 6)
     .map((s) => ({
       key: `series-${s.id}`,
@@ -212,10 +247,32 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     }));
   if (seriesHits.length) groups.push({ id: 'series', label: 'Diziler', icon: Tv, entries: seriesHits });
 
-  // Geçmiş: aynı başlık tekrar etmesin (son izleme kayıtları).
+  // Koleksiyonlar: liste adı ile eşleşen filmlerin evi.
+  const collectionHits: SearchEntry[] = collections
+    .filter((c) => matchesAllTokens(q, `${c.name || ''} ${c.description || ''}`))
+    .slice(0, 4)
+    .map((c) => ({
+      key: `collection-${c.id}`,
+      label: c.name || 'Adsız Koleksiyon',
+      sub: 'Koleksiyon',
+      icon: Film,
+      tab: 'movies' as TabId,
+    }));
+  if (collectionHits.length) {
+    groups.push({ id: 'collections', label: 'Koleksiyonlar', icon: Film, entries: collectionHits });
+  }
+
+  // Geçmiş: aynı başlık tekrar etmesin (son izleme kayıtları); not + etiketler de aranır.
   const seenHistory = new Set<string>();
   const historyHits: SearchEntry[] = history
-    .filter((h) => trLower(`${h.title || ''}`).includes(q))
+    .filter((h) =>
+      matchesAllTokens(
+        q,
+        [h.title, h.year, h.note, h.reviewTags, h.season, h.episode].map(join).concat(
+          [h.title, h.year, h.note]
+        ).join(' ')
+      )
+    )
     .filter((h) => {
       const key = trLower(`${h.title || ''}`);
       if (seenHistory.has(key)) return false;
@@ -247,7 +304,7 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     });
   });
   const peopleHits: SearchEntry[] = Array.from(peopleMap.entries())
-    .filter(([name]) => trLower(name).includes(q))
+    .filter(([name]) => matchesAllTokens(q, name))
     .slice(0, 6)
     .map(([name, tab]) => ({
       key: `person-${name}`,
@@ -260,10 +317,10 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     groups.push({ id: 'people', label: 'Kişiler & Oyuncular', icon: Users, entries: peopleHits });
   }
 
-  // Başarımlar: rozet adı/kategorisi ile eşleşme (kazanılan kademe sayısı alt bilgi).
+  // Başarımlar: rozet adı/kategorisi/açıklaması ile eşleşme (kazanılan kademe sayısı alt bilgi).
   const achievementProgress: any[] = Array.isArray(data?.achievements) ? data.achievements : [];
   const achHits: SearchEntry[] = ACHIEVEMENT_DEFS
-    .filter((def) => trLower(`${def.name} ${def.category || ''}`).includes(q))
+    .filter((def) => matchesAllTokens(q, `${def.name} ${def.category || ''} ${def.description || ''}`))
     .slice(0, 6)
     .map((def) => {
       const prog = achievementProgress.find((a) => a?.achievementId === def.id);
@@ -281,7 +338,7 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
   }
 
   // Sayfa/bölüm eşleşmeleri (ör. "ağ", "başarımlar").
-  const pageHits = pageEntries().filter((p) => trLower(p.label).includes(q));
+  const pageHits = pageEntries().filter((p) => matchesAllTokens(q, p.label));
   if (pageHits.length) groups.push({ id: 'pages', label: 'Bölümler', icon: LayoutDashboard, entries: pageHits });
 
   return groups;
@@ -488,6 +545,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   // Sen Context'e ekleyene kadar hata vermemesi için fallback atadık.
   const appCtx = useApp() as any;
   const syncStatus: 'syncing' | 'synced' | 'error' = appCtx.syncStatus || 'synced';
+  const { watchMovie, watchEpisode } = appCtx;
 
   // Topbar karşılama satırı + global arama verisi.
   const profileData = appCtx?.data || {};
@@ -518,9 +576,16 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showWrapped, setShowWrapped] = useState(false);
-  // Global arama katmanı + "Ne İzlesem" öneri açılışı.
+  // Global arama katmanı.
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [suggestion, setSuggestion] = useState<any | null>(null);
+  // Üst bardaki Katalog / Ne İzlesem butonları ana sayfadakiyle AYNI pencereleri açar.
+  const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
+  const [showPick, setShowPick] = useState(false);
+  const [pickedItem, setPickedItem] = useState<
+    | { kind: 'movie'; movie: any }
+    | { kind: 'series'; series: any; episode: any }
+    | null
+  >(null);
 
   // Topbar'daki arama kutusunun kısayol rozeti ("/" varsayılan, ayarlardan değişir).
   const [searchCombo, setSearchCombo] = useState('/');
@@ -627,26 +692,48 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // "Ne İzlesem": izlenmemiş bir film seç; hiç yoksa AI sayfasına götür.
-  const handleWhatToWatch = () => {
-    const movies: any[] = Array.isArray(profileData.movies) ? profileData.movies : [];
-    const unwatched = movies.filter((m) => !m.watched);
-    if (unwatched.length === 0) {
-      onTabChange('ai');
-      return;
-    }
-    setSuggestion(unwatched[Math.floor(Math.random() * unwatched.length)]);
-  };
-
-  // ESC: açık öneri penceresini kapat (global arama ESC'sini kendi yönetir).
-  useEffect(() => {
-    if (!suggestion) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSuggestion(null);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [suggestion]);
+  // "Ne İzlesem" (PickModal) verileri — ana sayfadakiyle aynı havuz:
+  // izlenmemiş standalone + koleksiyonların ilk sırası, planlanmamış.
+  const pastColIds = useMemo(
+    () =>
+      new Set(
+        (profileData.collections || [])
+          .filter((c: any) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME))
+          .map((c: any) => c.id)
+      ),
+    [profileData.collections]
+  );
+  const plannedMovieIds = useMemo(() => {
+    const ids = new Set<string>();
+    (profileData.weeklyPlan || []).forEach((p: any) => ids.add(p.movieId));
+    return ids;
+  }, [profileData.weeklyPlan]);
+  const eligibleMovies = useMemo(() => {
+    const unwatched = (profileData.movies || []).filter(
+      (m: any) => !m.watched && (!m.collectionId || !pastColIds.has(m.collectionId)) && !plannedMovieIds.has(m.id)
+    );
+    const standalone = unwatched.filter((m: any) => !m.collectionId);
+    const collectionGroups = new Map<string, any[]>();
+    unwatched.filter((m: any) => m.collectionId).forEach((m: any) => {
+      const arr = collectionGroups.get(m.collectionId) || [];
+      arr.push(m);
+      collectionGroups.set(m.collectionId, arr);
+    });
+    const sequentialCollectionMovies: any[] = [];
+    collectionGroups.forEach((moviesInCol) => {
+      const sorted = [...moviesInCol].sort((a: any, b: any) => (a.year || '9999').localeCompare(b.year || '9999'));
+      if (sorted.length > 0) sequentialCollectionMovies.push(sorted[0]);
+    });
+    return [...standalone, ...sequentialCollectionMovies];
+  }, [profileData.movies, pastColIds, plannedMovieIds]);
+  const allNextEpisodes = useMemo(() => {
+    return (profileData.series || [])
+      .map((s: any) => {
+        const next = getNextUnwatchedEpisode(s.episodes);
+        return next ? { series: s, episode: next } : null;
+      })
+      .filter((x: any): x is { series: any; episode: any } => x !== null);
+  }, [profileData.series]);
 
   const topbarTitle = activeTab === 'settings'
     ? 'Ayarlar'
@@ -801,10 +888,10 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           boxShadow: '12px 0 44px -20px rgba(0,0,0,.7)',
         }}
       >
-        {/* Marka bloğu + alt kırmızı saç teli */}
+        {/* Marka bloğu + alt kırmızı saç teli — yükseklik masaüstü üst bar (header) ile EŞİT */}
         <button
           onClick={() => onTabChange('home')}
-          className="relative px-[22px] pt-6 pb-5 border-b border-ink-800/50 hover:bg-ink-800/40 transition-colors text-left cursor-pointer"
+          className="relative h-[72px] px-[22px] flex items-center border-b border-ink-800/50 hover:bg-ink-800/40 transition-colors text-left cursor-pointer"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
@@ -917,7 +1004,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent relative pt-[calc(3.5rem+env(safe-area-inset-top))] pb-0 md:pt-0 md:pb-0">
         {/* MASAÜSTÜ PREMIUM TOPBAR — blur(20px) + alt kırmızı gradyan saç teli */}
         <header
-          className="hidden md:flex items-center gap-4 px-6 py-3.5 shrink-0 relative z-30 border-b border-ink-800/60 backdrop-blur-[20px] transition-colors duration-500"
+          className="hidden md:flex items-center gap-4 h-[72px] px-6 shrink-0 relative z-30 border-b border-ink-800/60 backdrop-blur-[20px] transition-colors duration-500"
           style={topbarStyle}
         >
           <div className="min-w-0">
@@ -948,18 +1035,18 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           </button>
 
           {/* Aksiyon butonları (premium buton sistemi) */}
-          {/* Katalog: Filmler sayfasına kısayol */}
+          {/* Katalog: ana sayfadakiyle AYNI katalog ekleme penceresini doğrudan açar */}
           <button
-            onClick={() => onTabChange('movies')}
+            onClick={() => setShowBulkAdd('movie')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-ink-50 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap backdrop-blur-md transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px shrink-0"
             style={btnSecondaryStyle}
           >
             <Film size={15} /> Katalog
           </button>
 
-          {/* Ne İzlesem: izlenmemiş bir filmden rastgele öneri (yoksa AI sayfası) */}
+          {/* Ne İzlesem: ana sayfadakiyle AYNI seçici penceresini doğrudan açar */}
           <button
-            onClick={handleWhatToWatch}
+            onClick={() => setShowPick(true)}
             className="relative overflow-hidden group flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px shrink-0"
             style={btnPrimaryStyle}
           >
@@ -968,10 +1055,10 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           </button>
 
           <button
-            onClick={() => onTabChange('ai')}
+            onClick={() => onTabChange('network')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 text-ink-400 hover:text-ink-100 hover:border-ink-700 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px] shrink-0"
           >
-            <Bot size={15} /> Sinevia AI'a Sor
+            <Users size={15} /> Sinevia Ağı
           </button>
 
           {/* Premium alt saç teli */}
@@ -1024,59 +1111,39 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         data={profileData}
       />
 
-      {/* "NE İZLESEM" ÖNERİ PENCERESİ — cam yüzey + kırmızı (tema) vurgu */}
-      {suggestion && (
-        <div
-          className="fixed inset-0 z-[215] flex items-center justify-center px-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Ne izlesem önerisi"
-        >
-          <div
-            className="absolute inset-0"
-            style={{ background: 'rgba(0,0,0,.62)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
-            onClick={() => setSuggestion(null)}
-          />
-          <div className="relative w-full max-w-sm overflow-hidden border backdrop-blur-2xl" style={searchPanelStyle}>
-            <span
-              aria-hidden
-              className="absolute inset-x-0 top-0 h-px pointer-events-none"
-              style={{ background: `linear-gradient(90deg, transparent, ${SEARCH_ACCENT}, transparent)` }}
-            />
-            <div className="p-5">
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: SEARCH_ACCENT }}>
-                <Dices size={14} /> Ne İzlesem
-              </div>
-              <h3 className="mt-3 text-xl font-black uppercase tracking-[-0.02em] text-ink-50">{suggestion.title}</h3>
-              <p className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-ink-500">
-                {[suggestion.year, Array.isArray(suggestion.genres) ? suggestion.genres.join(', ') : '']
-                  .filter(Boolean)
-                  .join(' · ') || 'İzlenmemiş film önerisi'}
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  onClick={() => { setSuggestion(null); onTabChange('movies'); }}
-                  className="flex-1 min-w-[120px] px-4 py-2.5 rounded-xl text-white font-extrabold text-[11px] tracking-[0.1em] uppercase transition-all duration-300 hover:-translate-y-[1px]"
-                  style={btnPrimaryStyle}
-                >
-                  Filmlerde Aç
-                </button>
-                <button
-                  onClick={handleWhatToWatch}
-                  className="px-4 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 text-ink-200 hover:text-white font-extrabold text-[11px] tracking-[0.1em] uppercase transition-colors"
-                >
-                  Başka Öner
-                </button>
-                <button
-                  onClick={() => setSuggestion(null)}
-                  className="px-4 py-2.5 rounded-xl text-ink-400 hover:text-white font-extrabold text-[11px] tracking-[0.1em] uppercase transition-colors"
-                >
-                  Kapat
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* ÜST BAR MODALLARI — ana sayfaydın AYNI pencereler */}
+      {showBulkAdd && <BulkAddModal initialTab={showBulkAdd} onClose={() => setShowBulkAdd(false)} />}
+      {showPick && (
+        <PickModal
+          seriesCount={allNextEpisodes.length}
+          unwatchedMovies={eligibleMovies}
+          nextEpisodes={allNextEpisodes}
+          onPick={(item) => setPickedItem(item)}
+          onClose={() => setShowPick(false)}
+        />
+      )}
+      {pickedItem && (
+        <RatingModal
+          title={pickedItem.kind === 'movie' ? pickedItem.movie.title : pickedItem.series.title}
+          subtitle={
+            pickedItem.kind === 'movie'
+              ? pickedItem.movie.year
+                ? `Çıkış Yılı: ${pickedItem.movie.year}`
+                : 'Film'
+              : `${pickedItem.episode.season}. Sezon ${pickedItem.episode.episode}. Bölüm`
+          }
+          initialIsPastWatch={pickedItem.kind === 'movie' ? Boolean(pickedItem.movie.isPastWatch) : false}
+          allowPastWatch={pickedItem.kind === 'movie'}
+          onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
+            if (pickedItem.kind === 'movie') {
+              watchMovie(pickedItem.movie.id, rating, note, detailedRating, reviewTags, isPastWatch);
+            } else {
+              watchEpisode(pickedItem.series.id, pickedItem.episode.id, rating, note, detailedRating, reviewTags);
+            }
+            setPickedItem(null);
+          }}
+          onClose={() => setPickedItem(null)}
+        />
       )}
 
       {showWrapped && <WrappedModal onClose={() => setShowWrapped(false)} />}
