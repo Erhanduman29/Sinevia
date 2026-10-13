@@ -40,7 +40,7 @@ const HOME_PREMIUM_CSS = `
 .hn-idx{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.18em;color:#fff;background:linear-gradient(135deg,var(--red,var(--color-1,#e8384f)),var(--red-deep,var(--color-3,#8e1220)));padding:5px 10px;border-radius:8px;box-shadow:0 4px 14px -4px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.3)}
 .hn-more{font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);background:none;border:0;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:4px;padding:4px 0}
 .hn-more:hover{color:var(--red-hi,var(--color-2,#ff6b7a));transform:translateX(3px)}
-.hp-card,.hp-fire,.hp-tier,.hp-profile,.hp-rec{
+.hp-hero,.hp-rec{
   background:var(--glass,var(--bg-card,#1a1a24));
   border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));
   border-radius:var(--r-lg,22px);
@@ -53,75 +53,71 @@ const HOME_PREMIUM_CSS = `
   box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8)),inset 0 1px 0 rgba(255,255,255,.07);
 }
 
-/* ---------- 01 · SERİ + KADEMELER (yenileme v2) ---------- */
-.hp-streak{display:grid;grid-template-columns:minmax(300px,360px) 1fr;gap:16px}
-.hp-fire{padding:24px 26px;display:flex;flex-direction:column;gap:20px;justify-content:center}
-.hp-fire-head{display:flex;align-items:center;gap:15px}
-.hp-fire-ic{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;flex-shrink:0;color:var(--on-color-1,#0a0a0e);background:linear-gradient(145deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 10px 26px -10px var(--red,var(--color-1,#e8384f))}
-.hp-fire-num{display:block;font-family:inherit;font-size:30px;font-weight:900;letter-spacing:-.03em;line-height:1;color:var(--text-main,#f4f4f2)}
-.hp-fire-num em{font-style:normal;font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));margin-left:7px}
-.hp-fire-sub{display:block;font-family:inherit;font-size:11.5px;line-height:1.5;color:var(--muted,#9a9a96);margin-top:7px}
-.hp-week{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
-.hp-day{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px;border-radius:12px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);transition:.2s}
-.hp-day s{text-decoration:none;font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-day b{font-size:12.5px;font-weight:900;color:var(--text-main,#f4f4f2)}
-.hp-day.today{border-color:var(--red,var(--color-1,#e8384f))}
-.hp-day.on{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;box-shadow:0 8px 20px -10px var(--red,var(--color-1,#e8384f))}
-.hp-day.on s,.hp-day.on b{color:var(--on-color-1,#0a0a0e)}
-.hp-tiers{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
-.hp-tier{padding:20px 10px;display:flex;flex-direction:column;align-items:center;gap:7px;font-family:inherit;color:inherit;cursor:pointer;transition:.24s cubic-bezier(.2,.7,.3,1)}
-.hp-tier:hover{transform:translateY(-4px);border-color:var(--red,var(--color-1,#e8384f))}
-.hp-tier i{width:10px;height:10px;border-radius:4px;box-shadow:0 0 12px currentColor}
-.hp-tier b{display:block;font-size:23px;font-weight:900;letter-spacing:-.02em;line-height:1;color:var(--text-main,#f4f4f2)}
-.hp-tier span{font-size:8.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-
-/* ---------- 02 · PROFİL + XP (yenileme v2) ---------- */
-.hp-profile{overflow:hidden;display:flex;flex-direction:column}
-.hp-phead{display:flex;align-items:center;gap:26px;padding:28px 30px;flex-wrap:wrap}
-.hp-ava{position:relative;width:96px;height:96px;flex-shrink:0}
-.hp-ava svg{position:absolute;inset:0;width:96px;height:96px;transform:rotate(-90deg)}
-.hp-core{position:absolute;inset:12px;border-radius:50%;background:linear-gradient(155deg,var(--bg-card,#1a1a24),var(--bg-surface,#12121a));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));box-shadow:inset 0 2px 8px rgba(0,0,0,.5);display:grid;place-items:center;font-size:38px;font-weight:900;color:var(--text-main,#f4f4f2)}
+/* ---------- 01 · AJAN KARTI (profil + seri/kademe birleşik kompakt) ---------- */
+.hp-hero{overflow:hidden;display:flex;flex-direction:column}
+.hp-id{display:flex;align-items:center;gap:22px;padding:20px 26px;flex-wrap:wrap}
+.hp-ava{position:relative;width:80px;height:80px;flex-shrink:0}
+.hp-ava svg{position:absolute;inset:0;width:80px;height:80px;transform:rotate(-90deg)}
+.hp-core{position:absolute;inset:10px;border-radius:50%;background:linear-gradient(155deg,var(--bg-card,#1a1a24),var(--bg-surface,#12121a));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));box-shadow:inset 0 2px 8px rgba(0,0,0,.5);display:grid;place-items:center;font-size:30px;font-weight:900;color:var(--text-main,#f4f4f2)}
 .hp-core span{position:relative;z-index:1}
-.hp-core-ic{position:absolute;inset:0;margin:auto;width:46px;height:46px;opacity:.14;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hp-lv{position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);font-size:9.5px;font-weight:900;letter-spacing:.12em;padding:4px 12px;text-transform:uppercase;white-space:nowrap;border-radius:99px;border:3px solid var(--bg-base,#0a0a0d);box-shadow:0 6px 16px -6px var(--red,var(--color-1,#e8384f))}
-.hp-pid{flex:1;min-width:230px}
-.hp-ptag{display:inline-flex;align-items:center;gap:7px;font-size:9.5px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hp-pid h3{font-family:inherit;font-size:32px;font-weight:900;letter-spacing:-.035em;text-transform:uppercase;line-height:1.05;margin:8px 0 13px;color:var(--text-main,#f4f4f2)}
-.hp-prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.hp-code{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.04em;color:var(--muted,#9a9a96);background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:6px 11px;border-radius:10px}
+.hp-core-ic{position:absolute;inset:0;margin:auto;width:38px;height:38px;opacity:.14;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-lv{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);font-size:9px;font-weight:900;letter-spacing:.1em;padding:3px 10px;text-transform:uppercase;white-space:nowrap;border-radius:99px;border:3px solid var(--bg-base,#0a0a0d);box-shadow:0 6px 16px -6px var(--red,var(--color-1,#e8384f))}
+.hp-pid{flex:1;min-width:220px}
+.hp-ptag{display:inline-flex;align-items:center;gap:6px;font-size:9px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-pid h3{font-family:inherit;font-size:28px;font-weight:900;letter-spacing:-.03em;text-transform:uppercase;line-height:1.05;margin:6px 0 10px;color:var(--text-main,#f4f4f2)}
+.hp-prow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hp-code{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.04em;color:var(--muted,#9a9a96);background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:5px 10px;border-radius:9px}
 .hp-code b{color:var(--text-main,#f4f4f2);font-weight:700}
-.hp-copy{width:29px;height:29px;border-radius:10px;display:grid;place-items:center;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);cursor:pointer;transition:.2s}
+.hp-copy{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);cursor:pointer;transition:.2s}
 .hp-copy:hover{color:var(--red-hi,var(--color-2,#ff6b7a));border-color:var(--red,var(--color-1,#e8384f))}
-.hp-badge{display:inline-flex;align-items:center;gap:11px;cursor:pointer;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);padding:7px 14px 7px 7px;border-radius:13px;transition:.24s cubic-bezier(.2,.7,.3,1);font-family:inherit;color:inherit;text-align:left}
+.hp-badge{display:inline-flex;align-items:center;gap:9px;cursor:pointer;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);padding:5px 12px 5px 5px;border-radius:11px;transition:.24s cubic-bezier(.2,.7,.3,1);font-family:inherit;color:inherit;text-align:left}
 .hp-badge:hover{border-color:var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
-.hp-badge-ic{width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);display:grid;place-items:center;font-size:15px;flex-shrink:0}
+.hp-badge-ic{width:28px;height:28px;border-radius:9px;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);display:grid;place-items:center;font-size:13px;flex-shrink:0}
 .hp-badge-ic.empty{background:var(--bg-card,#1a1a24);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96)}
-.hp-badge-tx s{display:block;text-decoration:none;font-size:8px;font-weight:900;letter-spacing:.18em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
-.hp-badge-tx b{display:block;font-size:12px;font-weight:800;text-transform:uppercase;color:var(--text-main,#f4f4f2);margin-top:2px}
+.hp-badge-tx s{display:block;text-decoration:none;font-size:7.5px;font-weight:900;letter-spacing:.16em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
+.hp-badge-tx b{display:block;font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text-main,#f4f4f2);margin-top:1px}
 .hp-xpool{text-align:right;margin-left:auto}
-.hp-xpool s{display:block;text-decoration:none;font-size:8.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-xpool b{display:block;font-family:inherit;font-size:27px;font-weight:900;letter-spacing:-.025em;margin-top:4px;background:linear-gradient(100deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--text-main,#f4f4f2) 85%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.hp-xpool span{display:block;font-size:11px;font-weight:700;color:var(--muted,#9a9a96);margin-top:3px}
+.hp-xpool s{display:block;text-decoration:none;font-size:8px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-xpool b{display:block;font-family:inherit;font-size:25px;font-weight:900;letter-spacing:-.025em;margin-top:3px;background:linear-gradient(100deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--text-main,#f4f4f2) 85%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hp-xpool span{display:block;font-size:10.5px;font-weight:700;color:var(--muted,#9a9a96);margin-top:2px}
 .hp-xpool span i{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a));font-weight:900}
-.hp-xpbar{padding:0 30px 22px}
-.hp-xp-track{height:11px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.45)}
+.hp-xpline{padding:0 26px 15px}
+.hp-xp-track{height:9px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.45)}
 .hp-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red,var(--color-1,#e8384f)) 60%,var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 14px var(--red,var(--color-1,#e8384f));transition:width 1s ease}
-.hp-xp-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:11px}
-.hp-xp-meta .lab{font-size:9px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-next{font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));background:var(--blob-1,rgba(232,56,79,.14));border:1px solid var(--red,var(--color-1,#e8384f));padding:5px 12px;border-radius:99px}
+.hp-xp-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:9px}
+.hp-xp-meta .lab{font-size:8.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-ranks{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.hp-rank{border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:4px 10px;font-family:inherit;font-size:8.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);background:var(--bg-surface,#12121a);border-radius:8px;transition:.2s;line-height:1.5}
+.hp-rank:hover{border-color:var(--red,var(--color-1,#e8384f));color:var(--text-main,#f4f4f2)}
+.hp-rank.done{color:var(--text-main,#f4f4f2)}
+.hp-rank.now{background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);border-color:transparent;box-shadow:0 6px 16px -10px var(--red,var(--color-1,#e8384f))}
+.hp-mid{display:grid;grid-template-columns:minmax(340px,1.05fr) 1fr;border-top:1px solid var(--line,rgba(244,244,242,.07))}
+.hp-fire{display:flex;align-items:center;gap:15px;padding:16px 26px;flex-wrap:wrap;border-right:1px solid var(--line,rgba(244,244,242,.07))}
+.hp-fire-ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;color:var(--on-color-1,#0a0a0e);background:linear-gradient(145deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 8px 22px -10px var(--red,var(--color-1,#e8384f))}
+.hp-fire-tx{min-width:110px}
+.hp-fire-num{display:block;font-family:inherit;font-size:19px;font-weight:900;letter-spacing:-.03em;line-height:1;color:var(--text-main,#f4f4f2)}
+.hp-fire-num em{font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));margin-left:6px}
+.hp-fire-sub{display:block;font-family:inherit;font-size:10px;line-height:1.45;color:var(--muted,#9a9a96);margin-top:4px}
+.hp-week{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;flex:1;min-width:215px}
+.hp-day{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 1px;border-radius:9px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);transition:.2s}
+.hp-day s{text-decoration:none;font-size:7.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-day b{font-size:11.5px;font-weight:900;color:var(--text-main,#f4f4f2)}
+.hp-day.today{border-color:var(--red,var(--color-1,#e8384f))}
+.hp-day.on{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;box-shadow:0 6px 16px -10px var(--red,var(--color-1,#e8384f))}
+.hp-day.on s,.hp-day.on b{color:var(--on-color-1,#0a0a0e)}
+.hp-tiers{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:16px 26px}
+.hp-tier{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:11px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);font-family:inherit;color:inherit;cursor:pointer;transition:.22s cubic-bezier(.2,.7,.3,1)}
+.hp-tier:hover{transform:translateY(-2px);border-color:var(--red,var(--color-1,#e8384f))}
+.hp-tier i{width:8px;height:8px;border-radius:3px;box-shadow:0 0 10px currentColor;flex-shrink:0}
+.hp-tier b{font-size:14px;font-weight:900;letter-spacing:-.01em;line-height:1;color:var(--text-main,#f4f4f2)}
+.hp-tier span{font-size:8px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96)}
 .hp-stats{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-stat{padding:20px 12px;text-align:center;border-left:1px solid var(--line,rgba(244,244,242,.07));transition:.22s}
+.hp-stat{padding:14px 10px;text-align:center;border-left:1px solid var(--line,rgba(244,244,242,.07));transition:.2s}
 .hp-stat:first-child{border-left:0}
 .hp-stat:hover{background:var(--blob-3,rgba(244,244,242,.025))}
-.hp-stat b{display:block;font-size:25px;font-weight:900;letter-spacing:-.02em;color:var(--text-main,#f4f4f2)}
-.hp-stat span{display:block;font-size:8.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:5px}
+.hp-stat b{display:block;font-size:20px;font-weight:900;letter-spacing:-.02em;color:var(--text-main,#f4f4f2)}
+.hp-stat span{display:block;font-size:8px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:4px}
 .hp-stat.accent b{color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hp-ranks{display:flex;gap:9px;flex-wrap:wrap;padding:18px 30px;border-top:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-rank{border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:9px 15px;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);background:var(--bg-surface,#12121a);border-radius:12px;transition:.2s}
-.hp-rank:hover{border-color:var(--red,var(--color-1,#e8384f));color:var(--text-main,#f4f4f2)}
-.hp-rank.done{color:var(--text-main,#f4f4f2);border-color:var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
-.hp-rank.now{background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);border-color:transparent;box-shadow:0 8px 20px -10px var(--red,var(--color-1,#e8384f))}
-.hp-rank .t{display:block;font-size:8.5px;letter-spacing:.14em;opacity:.75;font-family:'JetBrains Mono',monospace}
 
 /* ---------- HIZLI ERİŞİM + ZAMANLAYICI ---------- */
 .hn-action{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%}
@@ -275,9 +271,9 @@ const HOME_PREMIUM_CSS = `
 
 /* ---------- RESPONSIVE ---------- */
 @media (max-width:1080px){
-  .hp-streak{grid-template-columns:1fr}
-  .hp-tiers{grid-template-columns:repeat(3,1fr)}
-  .hp-xpool{text-align:left;margin-left:0;width:100%}
+  .hp-mid{grid-template-columns:1fr}
+  .hp-fire{border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
+  .hp-xpool{text-align:left;margin-left:0;width:100%;order:3}
   .hp-recent{grid-template-columns:repeat(3,1fr)}
   .hn-spotlight{grid-template-columns:1fr}
   .hn-sp-poster{min-height:240px;border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
@@ -289,13 +285,14 @@ const HOME_PREMIUM_CSS = `
   .hn-sec-t h2{font-size:15px}
   .hp-stats{grid-template-columns:repeat(2,1fr)}
   .hp-stat{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
-  .hp-tiers{grid-template-columns:repeat(2,1fr)}
+  .hp-stat:nth-child(-n+2){border-top:0}
   .hp-recent{grid-template-columns:repeat(2,1fr)}
-  .hp-pid h3{font-size:25px}
+  .hp-id{padding:18px;gap:16px}
+  .hp-pid h3{font-size:23px}
   .hp-xpool b{font-size:22px}
-  .hp-phead{padding:22px 18px;gap:18px}
-  .hp-xpbar{padding:0 18px 18px}
-  .hp-ranks{padding:16px 18px}
+  .hp-xpline{padding:0 18px 14px}
+  .hp-fire{padding:14px 18px}
+  .hp-tiers{padding:14px 18px}
   .hn-sp-body h2{font-size:28px}
   .hn-bento-title{font-size:24px}
   .hn-big-letter{font-size:120px}
@@ -622,75 +619,20 @@ export default function HomePage() {
       <style>{HOME_PREMIUM_CSS}</style>
 
       {/* =========================================================
-          01 · SERİ + KADEMELER
+          01 · AJAN KARTI (profil + seri/kademe birleşik kompakt)
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
           <span className="hn-idx">01</span>
-          <h2>Seri &amp; Kademeler</h2>
+          <h2>Ajan Kartı</h2>
           <span className="ln" />
           <button type="button" className="hn-more" onClick={() => navigateTo('achievements')}>Başarımlar <ChevronRight size={13} /></button>
-        </div>
-        <div className="hp-streak">
-          <div className="hp-fire">
-            <div className="hp-fire-head">
-              <span className="hp-fire-ic"><Flame size={22} /></span>
-              <div>
-                <b className="hp-fire-num">{data.dailyStreak || 0}<em>Gün Seri</em></b>
-                <span className="hp-fire-sub">
-                  {data.dailyStreak > 0
-                    ? 'Alevin sönmedi — bugün de izleyerek seriyi taşı.'
-                    : 'Bugün bir yapım izleyerek seriyi başlat.'}
-                </span>
-              </div>
-            </div>
-            <div className="hp-week" aria-label="Son 7 gün izleme">
-              {weekStrip.map((d) => (
-                <span
-                  key={d.key}
-                  className={`hp-day${d.active ? ' on' : ''}${d.today && !d.active ? ' today' : ''}`}
-                  title={d.today ? 'Bugün' : `${d.dayNum}`}
-                >
-                  <s>{d.label}</s>
-                  <b>{d.dayNum}</b>
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="hp-tiers">
-            {(
-              [
-                ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
-                ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
-                ['gold', 'Altın', quickMetrics.tierCounts.gold],
-                ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
-                ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
-                ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
-              ] as const
-            ).map(([tier, label, count]) => (
-              <button key={tier} type="button" className="hp-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
-                <i style={{ background: TIER_INK[tier], color: TIER_INK[tier] }} />
-                <b>{count}</b>
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* =========================================================
-          02 · PROFİL KARTI + XP
-          ========================================================= */}
-      <section className="hn-sec">
-        <div className="hn-sec-t">
-          <span className="hn-idx">02</span>
-          <h2>Profil Kartı</h2>
-          <span className="ln" />
           <button type="button" className="hn-more" onClick={() => navigateTo('settings')}>Düzenle <ChevronRight size={13} /></button>
         </div>
 
-        <div className="hp-profile" data-tutorial="home-hero">
-          <div className="hp-phead">
+        <div className="hp-hero" data-tutorial="home-hero">
+          {/* KİMLİK + XP HAVUZU */}
+          <div className="hp-id">
             <div className="hp-ava">
               <svg viewBox="0 0 108 108" aria-hidden="true">
                 <circle cx="54" cy="54" r={circleRadius} fill="none" stroke="var(--line-2, rgba(244,244,242,.13))" strokeWidth="5" />
@@ -704,7 +646,7 @@ export default function HomePage() {
             </div>
 
             <div className="hp-pid">
-              <div className="hp-ptag"><PersonaIcon size={13} /> {userPersona.title}</div>
+              <div className="hp-ptag"><PersonaIcon size={12} /> {userPersona.title}</div>
               <h3>{data.nickname}</h3>
               <div className="hp-prow">
                 <span className="hp-code">AĞ KODU <b>{data.agentId}</b></span>
@@ -728,7 +670,7 @@ export default function HomePage() {
                   </button>
                 ) : (
                   <button type="button" className="hp-badge" onClick={() => navigateTo('achievements')}>
-                    <span className="hp-badge-ic empty"><ShieldAlert size={16} /></span>
+                    <span className="hp-badge-ic empty"><ShieldAlert size={14} /></span>
                     <span className="hp-badge-tx"><s>Rozet Yuvası Boş</s><b>Kuşanmak için tıkla</b></span>
                   </button>
                 )}
@@ -742,7 +684,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="hp-xpbar">
+          {/* XP HATTI + UNVAN EVRİMİ */}
+          <div className="hp-xpline">
             <div className="hp-xp-track">
               <div className="hp-xp-fill" style={{ width: `${Math.max(3, lvl.progress)}%` }} />
             </div>
@@ -750,34 +693,72 @@ export default function HomePage() {
               <span className="lab">
                 Seviye {lvl.level + 1} hedefine {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP kaldı
               </span>
-              {nextRank ? (
-                <span className="hp-next">Sonraki Unvan: {nextRank.title} · {nextRank.minLevel - lvl.level} Seviye</span>
-              ) : (
-                <span className="hp-next">Maksimum Unvana Ulaşıldı!</span>
-              )}
+              <div className="hp-ranks">
+                {RANK_TIERS.map((tier, idx) => {
+                  if (idx < currentRankIndex - 1 || idx > currentRankIndex + 2) return null;
+                  const isUnlocked = lvl.level >= tier.minLevel;
+                  const isCurrent = idx === currentRankIndex;
+                  const isNext = idx === currentRankIndex + 1;
+                  return (
+                    <div key={tier.title} className={`hp-rank ${isUnlocked ? 'done' : ''} ${isCurrent ? 'now' : ''}`}>
+                      {tier.title}{isNext && nextRank ? ` · +${nextRank.minLevel - lvl.level} Sv.` : isCurrent ? ' · Şimdi' : ''}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
+          {/* SERİ + KADEMELER */}
+          <div className="hp-mid">
+            <div className="hp-fire">
+              <span className="hp-fire-ic"><Flame size={19} /></span>
+              <div className="hp-fire-tx">
+                <b className="hp-fire-num">{data.dailyStreak || 0}<em>Gün Seri</em></b>
+                <span className="hp-fire-sub">
+                  {data.dailyStreak > 0 ? 'Alevin sönmedi — bozmadan devam et.' : 'Bugün izleyerek seriyi başlat.'}
+                </span>
+              </div>
+              <div className="hp-week" aria-label="Son 7 gün izleme">
+                {weekStrip.map((d) => (
+                  <span
+                    key={d.key}
+                    className={`hp-day${d.active ? ' on' : ''}${d.today && !d.active ? ' today' : ''}`}
+                    title={d.today ? 'Bugün' : `${d.dayNum}`}
+                  >
+                    <s>{d.label}</s>
+                    <b>{d.dayNum}</b>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="hp-tiers">
+              {(
+                [
+                  ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
+                  ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
+                  ['gold', 'Altın', quickMetrics.tierCounts.gold],
+                  ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
+                  ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
+                  ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
+                ] as const
+              ).map(([tier, label, count]) => (
+                <button key={tier} type="button" className="hp-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
+                  <i style={{ background: TIER_INK[tier], color: TIER_INK[tier] }} />
+                  <b>{count}</b>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* STAT'LAR */}
           <div className="hp-stats">
             <div className="hp-stat"><b>{quickMetrics.watchedMoviesCount}</b><span>Film İzledi</span></div>
             <div className="hp-stat"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span>Dizi Bitirdi</span></div>
             <div className="hp-stat"><b>{quickMetrics.watchedEpsCount}</b><span>Bölüm İzledi</span></div>
             <div className="hp-stat accent"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Rozet Açtı</span></div>
             <div className="hp-stat accent"><b>{quickMetrics.questsCompleted}</b><span>Görev Bitti</span></div>
-          </div>
-
-          <div className="hp-ranks">
-            {RANK_TIERS.map((tier, idx) => {
-              if (idx < currentRankIndex - 1 || idx > currentRankIndex + 2) return null;
-              const isUnlocked = lvl.level >= tier.minLevel;
-              const isCurrent = idx === currentRankIndex;
-              return (
-                <div key={tier.title} className={`hp-rank ${isUnlocked ? 'done' : ''} ${isCurrent ? 'now' : ''}`}>
-                  <span className="t">Sv. {tier.minLevel}{isCurrent ? ' · Şimdi' : ''}</span>
-                  {tier.title}
-                </div>
-              );
-            })}
           </div>
         </div>
       </section>
