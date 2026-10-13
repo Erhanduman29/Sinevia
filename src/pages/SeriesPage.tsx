@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter,
   ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, RefreshCw,
@@ -104,6 +104,30 @@ const SERIES_PREMIUM_CSS = `
 .svp-rate-kept {
   outline: 1px dashed color-mix(in srgb, var(--svp-ink) 55%, transparent);
   outline-offset: 1.5px;
+}
+/* çipteki düzenleme (kalem) butonu */
+.svp-rate-edit {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px; flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--svp-ink);
+  background: color-mix(in srgb, var(--svp-glass) 92%, transparent);
+  border: 1px solid var(--svp-line2);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 10px -6px rgba(0, 0, 0, .9);
+  transition: .2s cubic-bezier(.2, .7, .3, 1);
+}
+.svp-rate-edit:hover {
+  color: var(--svp-ink);
+  border-color: var(--svp-t55);
+  background: var(--svp-t14);
+  box-shadow: 0 0 0 3px var(--svp-t14), 0 6px 14px -8px var(--svp-t70);
+  transform: scale(1.12);
+}
+.svp-rate-edit:focus-visible {
+  outline: 2px solid var(--svp-a1);
+  outline-offset: 1px;
 }
 
 /* ---------- MODAL PERDE ---------- */
@@ -614,13 +638,47 @@ const SERIES_PREMIUM_CSS = `
 }
 `;
 
+/* ---------- PUANLAMA KORUMA DEPO'SU (localStorage aynası) ----------
+   UNWATCH_EPISODE reducer'ı puanı null'a çektiği için, puan görünümünün
+   (sv-rate çipi) sayfa yenilmesinde de kaybolmaması adına korunan son puanlar
+   burada tutulur. Bozuk/erişilemez veri sessizce yok sayılır. */
+const KEPT_RATINGS_KEY = 'sinevia.seriesKeptRatings.v1';
+
+function loadKeptRatings(): Record<string, number> {
+  try {
+    if (typeof localStorage === 'undefined') return {};
+    const raw = localStorage.getItem(KEPT_RATINGS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const out: Record<string, number> = {};
+    Object.entries(parsed as Record<string, unknown>).forEach(([id, v]) => {
+      if (typeof v === 'number' && Number.isFinite(v)) out[id] = v;
+    });
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveKeptRatings(map: Record<string, number>) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(KEPT_RATINGS_KEY, JSON.stringify(map));
+  } catch {
+    /* kota/erişim hatası korumayı bozmasın */
+  }
+}
+
 export default function SeriesPage() {
-  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, showToast } = useApp();
+  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
   const [pickedSeriesItem, setPickedSeriesItem] = useState<{ series: Series; episode: Episode } | null>(null);
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [ratingTarget, setRatingTarget] = useState<{ series: Series; episode: Episode } | null>(null);
+  // PUAN DÜZENLEME ONAY Uyarısı: çipteki kalem → 'Değiştirmek istiyor musun?'
+  const [ratingEditTarget, setRatingEditTarget] = useState<{ series: Series; episode: Episode } | null>(null);
   const [editTarget, setEditTarget] = useState<Series | null>(null);
   const [detailSeriesId, setDetailSeriesId] = useState<string | null>(null);
 
@@ -643,26 +701,55 @@ export default function SeriesPage() {
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  /* PUANLAMA KORUMA
+  /* PUANLAMA KORUMA (SAĞLAM)
      'Bölümü tamamla/geri al' tıklaması UNWATCH_EPISODE tetikler ve reducer
-     bölümün puanını sıfırlar + geçmiş kaydını siler (reducer testleriyle
-     sabitlenmiş davranış). Tıklama tamamla/geri alma görevini korurken PUANLAMA
-     görünümünün (sv-rate çipi) kaybolmaması için, geri alma anındaki puanı
-     yerel olarak saklarız; çip store puanı yoksa korunan puanı gösterir. */
-  const [keptRatings, setKeptRatings] = useState<Record<string, number>>({});
+     bölümün puanını null'a çeker + geçmiş kaydını siler (reducerActions.test.ts
+     ile sabitlenmiş davranış — AppContext'e dokunulmadı). Koruma katmanları:
+       1) keepRating(ep): buton onClick'inde unwatchEpisode'dan ÖNCE çağrılır
+          (stopPropagation + preventDefault ile), yani puan reducer'a girmeden
+          önce aynaya yazılır.
+       2) Aşağıdaki effect: store'daki TÜM puanları (hangi yoldan yazılırsa
+          yazılsın) aynalar → korunan kayıt her zaman güncel kalır ve unwatch
+          store'u silse bile çip tek kare bile kaybolmaz. Silinen bölümlerin
+          kayıtları aynadan düşer.
+       3) localStorage kalıcılığı: sayfa yenilense/HMR tetiklense bile puan
+          görünümü geri gelir (reducer zaten null'a düşürdüğü için). */
+  const [keptRatings, setKeptRatings] = useState<Record<string, number>>(() => loadKeptRatings());
 
   const keepRating = (ep: Episode) => {
     if (ep.rating === null || ep.rating === undefined) return;
     setKeptRatings((prev) => (prev[ep.id] === ep.rating ? prev : { ...prev, [ep.id]: ep.rating as number }));
   };
 
-  const releaseRating = (episodeId: string) =>
+  // 2) Store ↔ ayna senkronu (idempotent): puanları aynala, silinenleri temizle
+  useEffect(() => {
     setKeptRatings((prev) => {
-      if (!(episodeId in prev)) return prev;
+      const alive = new Set<string>();
+      let changed = false;
       const next = { ...prev };
-      delete next[episodeId];
-      return next;
+      data.series.forEach((s) =>
+        s.episodes.forEach((ep) => {
+          alive.add(ep.id);
+          if (ep.rating !== null && ep.rating !== undefined && next[ep.id] !== ep.rating) {
+            next[ep.id] = ep.rating;
+            changed = true;
+          }
+        })
+      );
+      Object.keys(next).forEach((id) => {
+        if (!alive.has(id)) {
+          delete next[id];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
     });
+  }, [data.series]);
+
+  // 3) Kalıcılık
+  useEffect(() => {
+    saveKeptRatings(keptRatings);
+  }, [keptRatings]);
 
   const detailSeries = useMemo(
     () => (detailSeriesId ? data.series.find((s) => s.id === detailSeriesId) || null : null),
@@ -1274,13 +1361,12 @@ export default function SeriesPage() {
                                       else showToast('Önce önceki bölümleri izlemelisin!', 'warning');
                                     }}
                                     onUnwatch={() => {
+                                      // 1) katman: puan reducer'a girmeden aynaya yazılır
                                       keepRating(ep);
                                       unwatchEpisode(s.id, ep.id);
                                     }}
-                                    onDelete={() => {
-                                      releaseRating(ep.id);
-                                      setDeleteEpisodeTarget({ series: s, episode: ep });
-                                    }}
+                                    onEditRating={() => setRatingEditTarget({ series: s, episode: ep })}
+                                    onDelete={() => setDeleteEpisodeTarget({ series: s, episode: ep })}
                                     displayRating={ep.rating ?? keptRatings[ep.id] ?? null}
                                   />
                                 );
@@ -1440,7 +1526,6 @@ export default function SeriesPage() {
           subtitle={`${pickedSeriesItem.episode.season}. Sezon ${pickedSeriesItem.episode.episode}. Bölüm`}
           allowPastWatch={false}
           onRate={(rating, note, detailedRating, reviewTags) => {
-            releaseRating(pickedSeriesItem.episode.id);
             watchEpisode(pickedSeriesItem.series.id, pickedSeriesItem.episode.id, rating, note, detailedRating, reviewTags);
             setPickedSeriesItem(null);
           }}
@@ -1453,13 +1538,37 @@ export default function SeriesPage() {
       {ratingTarget && (
         <RatingModal
           title={ratingTarget.series.title}
-          subtitle={`${ratingTarget.episode.season}. Sezon ${ratingTarget.episode.episode}. Bölüm`}
+          subtitle={`${ratingTarget.episode.season}. Sezon ${ratingTarget.episode.episode}. Bölüm${
+            ratingTarget.episode.watched ? ' · Puanı Düzenle' : ''
+          }`}
+          initialRating={ratingTarget.episode.rating}
+          initialNote={ratingTarget.episode.note}
+          initialDetailedRating={ratingTarget.episode.detailedRating}
+          initialReviewTags={ratingTarget.episode.reviewTags}
           allowPastWatch={false}
           onRate={(rating, note, detailedRating, reviewTags) => {
-            releaseRating(ratingTarget.episode.id);
-            watchEpisode(ratingTarget.series.id, ratingTarget.episode.id, rating, note, detailedRating, reviewTags);
+            const targetEp = ratingTarget.episode;
+            // Puanlı bölümde duplicate geçmiş kaydı OLMAMALI: var olan kaydı güncelle
+            const hist = data.history.find((h) => h.itemId === targetEp.id || h.id === targetEp.id);
+            if (hist) updateHistoryRating(hist.id, rating, note, detailedRating, reviewTags);
+            else watchEpisode(ratingTarget.series.id, targetEp.id, rating, note, detailedRating, reviewTags);
           }}
           onClose={() => setRatingTarget(null)}
+        />
+      )}
+
+      {/* PUAN DÜZENLEME ONAY Uyarısı (çipteki kalem butonu) */}
+      {ratingEditTarget && (
+        <ConfirmDialog
+          title="Puanı Düzenle"
+          message="Bu bölümün puanını değiştirmek istiyor musun?"
+          confirmLabel="Evet"
+          cancelLabel="Hayır"
+          onConfirm={() => {
+            setRatingTarget({ series: ratingEditTarget.series, episode: ratingEditTarget.episode });
+            setRatingEditTarget(null);
+          }}
+          onCancel={() => setRatingEditTarget(null)}
         />
       )}
 
@@ -1505,6 +1614,7 @@ function EpisodeBox({
   displayRating,
   onRate,
   onUnwatch,
+  onEditRating,
   onDelete,
 }: {
   episode: Episode;
@@ -1513,6 +1623,8 @@ function EpisodeBox({
   displayRating: number | null;
   onRate: () => void;
   onUnwatch: () => void;
+  /** Çipteki kalem → onay uyarısı → RatingModal */
+  onEditRating: () => void;
   onDelete: () => void;
 }) {
   const [showActions, setShowActions] = useState(false);
@@ -1524,7 +1636,7 @@ function EpisodeBox({
       onMouseLeave={() => setShowActions(false)}
     >
       {displayRating !== null && (
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 pointer-events-none">
           <span
             className={`svp-rate font-bold px-1.5 py-0.5 rounded-full ${ratingBgClass(displayRating)} ${
               episode.watched ? '' : 'svp-rate-kept'
@@ -1532,11 +1644,26 @@ function EpisodeBox({
           >
             {displayRating}
           </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onEditRating();
+            }}
+            title="Puanı düzenle"
+            aria-label="Bölüm puanını düzenle"
+            className="svp-rate-edit pointer-events-auto"
+          >
+            <Edit2 size={9} strokeWidth={3} />
+          </button>
         </div>
       )}
       <button
         onClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
+          // PUANLAMA KORUMA: unwatch reducer'a girmeden önce puan aynaya yazılır
           if (episode.watched) onUnwatch();
           else onRate();
         }}
