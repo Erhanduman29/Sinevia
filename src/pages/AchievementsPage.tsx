@@ -9,26 +9,31 @@ import { RANK_TIERS } from '../lib/rankTiers';
 import QuestBoard from '../components/QuestBoard';
 
 // ============================================================
-// PREMIUM CAM ROZET STİLLERİ (sinevia-premium.html kriteri)
+// PREMIUM CAM ROZET STİLLERİ (sinevia-premium.html §06 kriteri)
 // Tüm renkler tema CSS değişkenlerine bağlıdır:
 // premium tokenlar önce gelir (--red/--red-hi/--red-deep, --glass, --surface,
-// --line-2, --r-lg, --shadow, --blob-1), plain-dark gibi token tanımsız
+// --line-2, --r, --r-lg, --shadow), plain-dark gibi token tanımsız
 // temalar için zincirleme fallback: --color-1/2/3 → sabit değer.
 // ============================================================
 const ACHV_PREMIUM_CSS = `
 .achv-card{
   position:relative; overflow:hidden;
-  background:var(--glass, var(--bg-card, rgba(255,255,255,.05)));
+  background:rgba(255,255,255,.035);
   border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius:var(--r-lg, 22px);
-  box-shadow:var(--shadow, 0 24px 60px -24px rgba(0,0,0,.8)), inset 0 1px 0 rgba(255,255,255,.07);
-  transition:transform .3s cubic-bezier(.2,.7,.3,1), box-shadow .3s, border-color .3s;
+  border-radius:var(--r, 16px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  transition:transform .24s cubic-bezier(.2,.7,.3,1), box-shadow .24s, border-color .24s;
 }
-.achv-card.is-locked{ background:var(--bg-surface, rgba(255,255,255,.04)); }
+.achv-card.is-locked{
+  background:rgba(255,255,255,.04);
+}
 .achv-card:hover{
-  transform:translateY(-6px);
-  border-color:var(--red, var(--color-1, #e8384f));
-  box-shadow:0 0 0 1px var(--red, var(--color-1, #e8384f)), 0 30px 60px -24px rgba(0,0,0,.95), 0 0 46px -12px var(--red, var(--color-1, #e8384f));
+  transform:translateX(4px);
+  border-color:rgba(232,56,79,.45);
+  box-shadow:0 10px 28px -14px rgba(0,0,0,.9), -4px 0 24px -14px rgba(232,56,79,.7);
+}
+.achv-card.is-locked:hover{
+  transform:none;
 }
 .achv-topline{
   position:absolute; top:0; left:0; right:0; height:3px; z-index:3;
@@ -42,22 +47,30 @@ const ACHV_PREMIUM_CSS = `
 .achv-card.is-locked .achv-body{ filter:grayscale(1); opacity:.6; }
 .achv-card.is-locked:hover .achv-body{ filter:grayscale(.35); opacity:.86; }
 .achv-medal{
+  width:44px; height:44px; flex-shrink:0;
   border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  border-radius:13px;
+  background:rgba(255,255,255,.05);
+  display:grid; place-items:center;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 10px 24px -12px rgba(0,0,0,.9);
 }
-.achv-card:not(.is-locked) .achv-medal{
+.achv-medal.gold{ border-color:rgba(229,193,59,.55); color:#EFC94C; background:rgba(229,193,59,.1); box-shadow:0 0 20px -6px rgba(229,193,59,.6), inset 0 1px 0 rgba(255,255,255,.10), 0 10px 24px -12px rgba(0,0,0,.9); }
+.achv-medal.silver{ border-color:rgba(201,205,212,.45); color:#D3D7DE; background:rgba(201,205,212,.08); box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 10px 24px -12px rgba(0,0,0,.9); }
+.achv-card:not(.is-locked) .achv-medal:not(.gold):not(.silver){
   border-color:rgba(255,255,255,.28);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.38), 0 12px 26px -12px rgba(0,0,0,.9), 0 0 26px -8px var(--red, var(--color-1, #e8384f));
 }
 .achv-state{
   position:absolute; right:-7px; bottom:-7px; z-index:2;
+  width:28px; height:28px; border-radius:50%;
   background:var(--bg-base, #0a0a0d);
   border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
   color:var(--muted, #9a9a96);
+  display:grid; place-items:center;
   box-shadow:0 4px 12px -4px rgba(0,0,0,.9);
 }
 .achv-state.is-done{
-  color:#34d399; border-color:rgba(52,211,153,.45);
+  color:#34d399; border-color:rgba(52,211,153,.45); background:rgba(52,211,153,.1);
   box-shadow:0 0 14px -5px rgba(52,211,153,.8), 0 4px 12px -4px rgba(0,0,0,.9);
 }
 .achv-xp{
@@ -67,12 +80,13 @@ const ACHV_PREMIUM_CSS = `
   color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.4);
   background:linear-gradient(135deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-deep, var(--color-3, #8e1220)) 130%);
   border-top-left-radius:14px;
-  border-bottom-right-radius:var(--r-lg, 22px);
+  border-bottom-right-radius:var(--r, 16px);
   box-shadow:-6px -6px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35);
 }
 .achv-track{
   position:relative; overflow:hidden;
-  background:rgba(0,0,0,.42);
+  height:8px;
+  background:rgba(0,0,0,.5);
   border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
   border-radius:99px;
   box-shadow:inset 0 1px 3px rgba(0,0,0,.7);
@@ -80,7 +94,7 @@ const ACHV_PREMIUM_CSS = `
 .achv-fill{
   position:absolute; top:0; bottom:0; left:0; border-radius:99px;
   background:linear-gradient(90deg, var(--red-deep, var(--color-3, #8e1220)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-hi, var(--color-2, #ff6b7a)));
-  box-shadow:0 0 12px var(--red, var(--color-1, #e8384f));
+  box-shadow:0 0 12px rgba(232,56,79,.7);
   transition:width 1s ease;
 }
 .achv-fill::after{
@@ -636,6 +650,8 @@ export default function AchievementsPage() {
               const parsedDesc = a.def.description.replace('{threshold}', String(a.tier.threshold));
               const isLocked = !a.isUnlocked;
               const isSecret = !!a.def.secret;
+              const isGoldTier = a.tier.tier === 'gold';
+              const isSilverTier = a.tier.tier === 'silver';
 
               const current = Math.min(a.current, a.tier.threshold);
               const target = a.tier.threshold;
@@ -656,17 +672,13 @@ export default function AchievementsPage() {
                       {/* Cam rozet madalyonu */}
                       <div className="relative shrink-0">
                         <div
-                          className={`achv-medal w-14 h-14 md:w-16 md:h-16 rounded-2xl grid place-items-center transition-all duration-300 ${
-                            isLocked ? 'text-ink-600' : `${tierInfo?.bg} ${tierInfo?.text}`
-                          }`}
-                          style={isLocked ? { background: 'var(--bg-card, rgba(255,255,255,.05))' } : undefined}
+                          className={`achv-medal ${isGoldTier ? 'gold' : isSilverTier ? 'silver' : ''} ${!isLocked && !isGoldTier && !isSilverTier ? tierInfo?.bg + ' ' + tierInfo?.text : ''}`}
+                          style={isLocked && !isGoldTier && !isSilverTier ? { background: 'var(--bg-card, rgba(255,255,255,.05))' } : undefined}
                         >
                           <Icon size={26} className="md:w-7 md:h-7" />
                         </div>
                         <span
-                          className={`achv-state trophy-lock w-5 h-5 rounded-full grid place-items-center ${
-                            !isLocked ? 'is-done' : ''
-                          }`}
+                          className={`achv-state trophy-lock ${!isLocked ? 'is-done' : ''}`}
                         >
                           {isLocked ? <Icons.Lock size={11} /> : <Icons.CheckCircle2 size={13} />}
                         </span>
@@ -712,7 +724,7 @@ export default function AchievementsPage() {
                               </span>
                               <span className="text-sm md:text-base font-black text-ink-200 tracking-tight">%{percentage}</span>
                             </div>
-                            <div className="achv-track h-2">
+                            <div className="achv-track">
                               <div className="achv-fill" style={{ width: `${percentage}%` }} />
                             </div>
                           </div>

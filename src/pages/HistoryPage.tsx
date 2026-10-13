@@ -33,12 +33,14 @@ type SortMode = 'newest' | 'oldest' | 'rating';
 type FilterType = 'all' | 'movie' | 'series';
 type ViewMode = 'timeline' | 'grid' | 'past';
 
-/* Mono etiket: katalog/kayıt defteri başlıkları */
-const monoLabel = 'font-mono text-[10px] font-bold uppercase tracking-[0.22em]';
+/* Premium tokenlar yalnızca premium-dark temasında tanımlı; plain-dark gibi
+   diğer temalarda fallback taban değişkenlere düşer (var(--r, 16px), var(--red, var(--color-1, #e8384f)), var(--glass, var(--bg-card))). */
 
 /* Premium tokenlar yalnızca premium-dark temasında tanımlı; plain-dark gibi
    diğer temalarda fallback taban değişkenlere düşer (var(--x, var(--y))). */
-const accent = 'var(--red,var(--color-1))';
+const monoLabel = 'font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--red-hi,var(--color-1))]';
+
+const accent = 'var(--red, var(--color-1, #e8384f))';
 
 export default function HistoryPage() {
   const { data, updateHistoryRating } = useApp();
@@ -273,11 +275,11 @@ export default function HistoryPage() {
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
       {/* 1. BAŞLIK — KATALOG MASTHEAD */}
-      <div className="relative overflow-hidden rounded-2xl border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--glass,var(--bg-surface))] shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] p-4 sm:p-5">
-        <div className="absolute inset-x-4 sm:inset-x-6 -bottom-px h-px bg-gradient-to-r from-[color:var(--red,var(--color-1))] via-[color:var(--red-hi,var(--color-2))] to-transparent opacity-70" />
+      <div className="relative overflow-hidden rounded-2xl border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--glass, var(--bg-card))] shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] p-4 sm:p-5">
+        <div className="absolute inset-x-4 sm:inset-x-6 -bottom-px h-px bg-gradient-to-r from-[color:var(--red, var(--color-1, #e8384f))] via-[color:var(--red-hi,var(--color-2))] to-transparent opacity-70" />
         <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[color:var(--red,var(--color-1))] to-[color:var(--red-deep,var(--color-3))] border border-[color:var(--line-2,var(--border-dim))] flex items-center justify-center shadow-[0_8px_22px_-8px_var(--red,var(--color-1))]">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[color:var(--red, var(--color-1, #e8384f))] to-[color:var(--red-deep,var(--color-3))] border border-[color:var(--line-2,var(--border-dim))] flex items-center justify-center shadow-[0_8px_22px_-8px_var(--red, var(--color-1, #e8384f))]">
               <Clock size={20} className="text-white" />
             </div>
             <div>
@@ -305,7 +307,7 @@ export default function HistoryPage() {
       {data.history.length > 0 && (
         <div
           data-tutorial="history-stats"
-          className="grid grid-cols-2 sm:grid-cols-5 rounded-2xl overflow-hidden border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--glass,var(--bg-surface))] shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))]"
+          className="grid grid-cols-2 sm:grid-cols-5 rounded-2xl overflow-hidden border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--glass, var(--bg-card))] shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))]"
         >
           <StatCell icon={<Sparkles size={15} className="text-[color:var(--red-hi,var(--color-1))]" />} value={diaryStats.total} label="Toplam Kayıt" accent />
           <StatCell icon={<Film size={15} className="text-amber-400" />} value={diaryStats.movies} label="İzlenen Film" />
@@ -356,14 +358,14 @@ export default function HistoryPage() {
                 onClick={() => setIsFilterPanelOpen((prev) => !prev)}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold border transition-all ${
                   isFilterPanelOpen || activeFilterCount > 0
-                    ? 'bg-[color:var(--surface2,var(--bg-card))] text-[color:var(--red-hi,var(--color-1))] border-[color:var(--red,var(--color-1))]/40 shadow-[0_0_18px_-6px_var(--red,var(--color-1))]'
+                    ? 'bg-[color:var(--surface2,var(--bg-card))] text-[color:var(--red-hi,var(--color-1))] border-[color:var(--red, var(--color-1, #e8384f))]/40 shadow-[0_0_18px_-6px_var(--red, var(--color-1, #e8384f))]'
                     : 'bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] text-ink-300 border-[color:var(--line-2,var(--border-dim))]'
                 }`}
               >
                 <SlidersHorizontal size={14} className="text-[color:var(--red-hi,var(--color-1))]" />
                 <span className="uppercase tracking-wider">Ara & Filtrele</span>
                 {activeFilterCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-[color:var(--red,var(--color-1))] text-white text-[10px] font-black font-mono tabular-nums">
+                  <span className="px-1.5 py-0.2 rounded-full bg-[color:var(--red, var(--color-1, #e8384f))] text-white text-[10px] font-black font-mono tabular-nums">
                     {activeFilterCount}
                   </span>
                 )}
@@ -385,7 +387,7 @@ export default function HistoryPage() {
 
           {/* AÇILIR/KAPANIR ARAMA VE FİLTRE MERKEZİ */}
           {isFilterPanelOpen && (
-            <div className="bg-[color:var(--glass,var(--bg-surface))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] rounded-2xl p-3 sm:p-4 space-y-3 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] animate-fade-in">
+            <div className="bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] rounded-2xl p-3 sm:p-4 space-y-3 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] animate-fade-in">
               <div className="relative">
                 <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
                 <input
@@ -393,7 +395,7 @@ export default function HistoryPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Yapım adı, başlık, tür veya inceleme notu ara..."
-                  className="w-full bg-[color:var(--surface,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] rounded-xl pl-9 pr-8 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-[color:var(--red,var(--color-1))]/60 focus:shadow-[0_0_0_3px_rgba(232,56,79,0.16)] transition-all"
+                  className="w-full bg-[color:var(--surface,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] rounded-xl pl-9 pr-8 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-[color:var(--red, var(--color-1, #e8384f))]/60 focus:shadow-[0_0_0_3px_rgba(232,56,79,0.16)] transition-all"
                 />
                 {search && (
                   <button
@@ -462,7 +464,7 @@ export default function HistoryPage() {
                     onClick={() => setSelectedTagFilter(null)}
                     className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 min-h-9 sm:min-h-0 rounded-lg border transition-all font-mono ${
                       selectedTagFilter === null
-                        ? 'bg-[color:var(--red,var(--color-1))] text-white border-[color:var(--red,var(--color-1))]'
+                        ? 'bg-[color:var(--red, var(--color-1, #e8384f))] text-white border-[color:var(--red, var(--color-1, #e8384f))]'
                         : 'bg-[color:var(--surface,var(--bg-surface))] text-ink-400 border-[color:var(--line-2,var(--border-dim))] hover:text-ink-200'
                     }`}
                   >
@@ -477,8 +479,8 @@ export default function HistoryPage() {
                         onClick={() => setSelectedTagFilter(active ? null : tag)}
                         className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 min-h-9 sm:min-h-0 rounded-lg border transition-all font-mono ${
                           active
-                            ? 'bg-[color:var(--red,var(--color-1))] text-white border-[color:var(--red,var(--color-1))] shadow-[0_0_16px_-4px_var(--red,var(--color-1))]'
-                            : 'bg-[color:var(--surface,var(--bg-surface))] text-ink-300 border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red,var(--color-1))]/40'
+                            ? 'bg-[color:var(--red, var(--color-1, #e8384f))] text-white border-[color:var(--red, var(--color-1, #e8384f))] shadow-[0_0_16px_-4px_var(--red, var(--color-1, #e8384f))]'
+                            : 'bg-[color:var(--surface,var(--bg-surface))] text-ink-300 border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40'
                         }`}
                       >
                         {tag}
@@ -556,7 +558,7 @@ export default function HistoryPage() {
                 onClick={() =>
                   isMovie ? openMovieDetail(item, movieData) : openSeriesDetail(item, seriesData)
                 }
-                className="group relative flex flex-col bg-[color:var(--glass,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red,var(--color-1))]/50 hover:shadow-[0_0_28px_-8px_var(--red,var(--color-1))] rounded-2xl overflow-hidden shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all hover:-translate-y-1.5 cursor-pointer"
+                className="group relative flex flex-col bg-[color:var(--glass, var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/50 hover:shadow-[0_0_28px_-8px_var(--red, var(--color-1, #e8384f))] rounded-2xl overflow-hidden shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all hover:-translate-y-1.5 cursor-pointer"
               >
                 <div className="aspect-[2/3] w-full bg-[color:var(--surface,var(--bg-surface))] relative overflow-hidden">
                   {posterUrl ? (
@@ -609,7 +611,7 @@ export default function HistoryPage() {
                     {item.reviewTags && item.reviewTags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {item.reviewTags.slice(0, 2).map((t) => (
-                          <span key={t} className="text-[9px] font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red,var(--color-1))]/30 px-1.5 py-0.5 rounded truncate font-mono">
+                          <span key={t} className="text-[9px] font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30 px-1.5 py-0.5 rounded truncate font-mono">
                             {t}
                           </span>
                         ))}
@@ -643,12 +645,12 @@ export default function HistoryPage() {
         </div>
       ) : (
         <div className="relative pl-2.5 sm:pl-6 space-y-6 sm:space-y-8">
-          <div className="absolute left-0.5 sm:left-2.5 top-3 bottom-3 w-px bg-gradient-to-b from-[color:var(--red,var(--color-1))] via-[color:var(--line-2,var(--border-dim))] to-transparent pointer-events-none" />
+          <div className="absolute left-0.5 sm:left-2.5 top-3 bottom-3 w-px bg-gradient-to-b from-[color:var(--red, var(--color-1, #e8384f))] via-[color:var(--line-2,var(--border-dim))] to-transparent pointer-events-none" />
 
           {Array.from(groupedByDate.entries()).map(([dateLabel, items]) => (
             <div key={dateLabel} className="relative animate-fade-in-up">
               <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                <div className="absolute -left-[10px] sm:-left-[20px] w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[color:var(--bg-base,#0a0a0d)] border-2 border-[color:var(--red,var(--color-1))] shadow-[0_0_10px_var(--red,var(--color-1))]" />
+                <div className="absolute -left-[10px] sm:-left-[20px] w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[color:var(--bg-base,#0a0a0d)] border-2 border-[color:var(--red, var(--color-1, #e8384f))] shadow-[0_0_10px_var(--red, var(--color-1, #e8384f))]" />
                 <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-[color:var(--surface2,var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg backdrop-blur-md shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))]">
                   <Calendar size={12} className="text-[color:var(--red-hi,var(--color-1))] flex-shrink-0" />
                   <span className={`${monoLabel} text-ink-100 truncate`}>{dateLabel}</span>
@@ -697,7 +699,7 @@ export default function HistoryPage() {
                     return (
                       <div
                         key={sid}
-                        className="relative bg-[color:var(--glass,var(--bg-surface))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red,var(--color-1))]/40 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all group/series"
+                        className="relative bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all group/series"
                       >
                         {seriesData?.posterUrl && (
                           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-15">
@@ -718,7 +720,7 @@ export default function HistoryPage() {
                                 openSeriesDetail(item, seriesData);
                               }}
                               title="Dizi Sinema Kartını Gör"
-                              className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red,var(--color-1))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
+                              className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red, var(--color-1, #e8384f))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
                             >
                               {seriesData?.posterUrl ? (
                                 <img src={seriesData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
@@ -788,7 +790,7 @@ export default function HistoryPage() {
                                 return (
                                   <div
                                     key={ep.id}
-                                    className="bg-[color:var(--glass,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red,var(--color-1))]/40 hover:shadow-[0_0_20px_-8px_var(--red,var(--color-1))] rounded-xl p-3 flex flex-col justify-between gap-2 transition-all"
+                                    className="bg-[color:var(--glass, var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[0_0_20px_-8px_var(--red, var(--color-1, #e8384f))] rounded-xl p-3 flex flex-col justify-between gap-2 transition-all"
                                   >
                                     <div className="flex items-start justify-between gap-2">
                                       <div>
@@ -797,7 +799,7 @@ export default function HistoryPage() {
                                           onClick={() => openSeriesDetail(ep, seriesData)}
                                           className="text-xs sm:text-sm font-black text-ink-100 hover:text-[color:var(--red-hi,var(--color-1))] transition-colors text-left flex items-center gap-1.5"
                                         >
-                                          <span className="w-2 h-2 rounded-full bg-[color:var(--red,var(--color-1))]" />
+                                          <span className="w-2 h-2 rounded-full bg-[color:var(--red, var(--color-1, #e8384f))]" />
                                           <span className="font-mono">{ep.season}. Sezon {ep.episode}. Bölüm</span>
                                         </button>
                                         <div className="text-[10px] text-ink-500 mt-0.5 flex items-center gap-1 font-mono tabular-nums">
@@ -833,7 +835,7 @@ export default function HistoryPage() {
                                     {ep.note && (
                                       <div
                                         onClick={() => toggleNoteExpand(ep.id)}
-                                        className="bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] rounded-xl p-2 border-l-2 border-[color:var(--red,var(--color-1))] flex items-start gap-2 cursor-pointer transition-colors"
+                                        className="bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] rounded-xl p-2 border-l-2 border-[color:var(--red, var(--color-1, #e8384f))] flex items-start gap-2 cursor-pointer transition-colors"
                                       >
                                         <Quote size={12} className="text-[color:var(--red-hi,var(--color-1))] flex-shrink-0 mt-0.5" />
                                         <p className={`text-xs text-ink-200 italic leading-relaxed flex-1 min-w-0 ${isEpNoteExpanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-1'}`}>
@@ -911,7 +913,7 @@ function StatCell({
     >
       <div
         className={`w-9 h-9 rounded-lg border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--surface,var(--bg-surface))] flex items-center justify-center flex-shrink-0 ${
-          accent ? 'shadow-[0_0_16px_-6px_var(--red,var(--color-1))]' : ''
+          accent ? 'shadow-[0_0_16px_-6px_var(--red, var(--color-1, #e8384f))]' : ''
         }`}
       >
         {icon}
@@ -946,7 +948,7 @@ function ViewTab({
   const activeCls =
     accent === 'violet'
       ? 'bg-violet-500 text-white shadow-md'
-      : 'bg-[color:var(--red,var(--color-1))] text-white shadow-[0_0_16px_-4px_var(--red,var(--color-1))]';
+      : 'bg-[color:var(--red, var(--color-1, #e8384f))] text-white shadow-[0_0_16px_-4px_var(--red, var(--color-1, #e8384f))]';
   const idleCls =
     accent === 'violet'
       ? 'text-ink-400 hover:text-violet-300'
@@ -1008,7 +1010,7 @@ function ToggleChip({
       onClick={onClick}
       className={`flex items-center gap-1 px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all font-mono ${
         active
-          ? 'bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border-[color:var(--red,var(--color-1))]/40'
+          ? 'bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border-[color:var(--red, var(--color-1, #e8384f))]/40'
           : 'bg-[color:var(--surface,var(--bg-surface))] text-ink-400 border-[color:var(--line-2,var(--border-dim))] hover:text-ink-200'
       }`}
     >
@@ -1064,7 +1066,7 @@ function MovieHistoryCard({
   const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch);
 
   return (
-    <div className="relative bg-[color:var(--glass,var(--bg-surface))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red,var(--color-1))]/40 hover:shadow-[0_0_30px_-8px_var(--red,var(--color-1))] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all overflow-hidden group">
+    <div className="relative bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[0_0_30px_-8px_var(--red, var(--color-1, #e8384f))] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all overflow-hidden group">
       {movieData?.posterUrl && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-15 group-hover:opacity-25 transition-opacity">
           <img src={movieData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150" />
@@ -1078,7 +1080,7 @@ function MovieHistoryCard({
             type="button"
             onClick={onSelectDetail}
             title="Sinema Kartını & Detayları Gör"
-            className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red,var(--color-1))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
+            className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red, var(--color-1, #e8384f))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
           >
             {movieData?.posterUrl ? (
               <img src={movieData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
@@ -1094,7 +1096,7 @@ function MovieHistoryCard({
                   <History size={10} /> Daha Önce İzlendi
                 </span>
               ) : (
-                <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red,var(--color-1))]/30`}>
+                <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30`}>
                   <Film size={10} /> Film Kaydı
                 </span>
               )}
@@ -1146,7 +1148,7 @@ function MovieHistoryCard({
             {hasTags && (
               <div className="mt-2 flex flex-wrap items-center gap-1">
                 {item.reviewTags!.map((tag) => (
-                  <span key={tag} className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red,var(--color-1))]/30 px-2 py-0.5 rounded-lg font-mono">
+                  <span key={tag} className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30 px-2 py-0.5 rounded-lg font-mono">
                     {tag}
                   </span>
                 ))}
@@ -1169,7 +1171,7 @@ function MovieHistoryCard({
             {item.note && (
               <div
                 onClick={onToggleNote}
-                className="mt-2.5 bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red,var(--color-1))]/40 border-l-4 border-l-[color:var(--red,var(--color-1))] rounded-xl px-3 py-2 relative cursor-pointer transition-all"
+                className="mt-2.5 bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 border-l-4 border-l-[color:var(--red, var(--color-1, #e8384f))] rounded-xl px-3 py-2 relative cursor-pointer transition-all"
               >
                 <div className="flex items-start gap-2">
                   <Quote size={13} className="text-[color:var(--red-hi,var(--color-1))] flex-shrink-0 mt-0.5 opacity-80" />

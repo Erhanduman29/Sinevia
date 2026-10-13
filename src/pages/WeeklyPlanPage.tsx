@@ -19,6 +19,65 @@ const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cu
 const MONTH_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 const WINDOW_SIZE = 8;
 
+/* ══════════════════════════════════════════════════════════════
+   PREMIUM GÖRSEL JETONLAR (sinevia-premium.html önizlemesiyle hizalı)
+   Hafta ızgarası / sürükle-bırak / plan mantığı DEĞİŞMEZ — yalnızca
+   görsel yüzeyler token fallback'li hale getirildi:
+   · cam gün kartları (var(--glass, var(--bg-card)))
+   · bugün / aktif gün: kırmızı kenarlık + glow (var(--red, var(--color-1, #e8384f)))
+   · mono (JetBrains) gün etiketleri + Archivo başlıklar
+   · ince ayraçlar (var(--line) / var(--line-2))
+   plain-dark fallback ZORUNLU kalıplar: var(--r, 16px),
+   var(--red, var(--color-1, #e8384f)), var(--glass, var(--bg-card)).
+   ══════════════════════════════════════════════════════════════ */
+const WEEKLY_PREMIUM_CSS = `
+.wp-root{
+  --wp-a1:var(--red,var(--color-1,#e8384f));
+  --wp-a2:var(--red-hi,var(--color-2,#ff6b7a));
+  --wp-a3:var(--red-deep,var(--color-3,#8e1220));
+  --wp-glass:var(--glass,var(--bg-card,rgba(255,255,255,.05)));
+  --wp-surf:var(--surface,var(--bg-surface,rgba(255,255,255,.04)));
+  --wp-line:var(--line,var(--border-dim,rgba(244,244,242,.07)));
+  --wp-line2:var(--line-2,var(--border-dim,rgba(244,244,242,.13)));
+  --wp-r:var(--r,16px);
+  --wp-r-lg:var(--r-lg,22px);
+  --wp-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8));
+  --wp-glow:var(--glow,0 0 0 1px rgba(232,56,79,.35),0 8px 32px -8px rgba(232,56,79,.45));
+  --wp-inset:inset 0 1px 0 rgba(255,255,255,.07);
+  --wp-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --wp-font:'Archivo',system-ui,-apple-system,sans-serif;
+}
+/* Archivo başlıklar */
+.wp-title{font-family:var(--wp-font);}
+/* JetBrains Mono etiketler */
+.wp-mono{font-family:var(--wp-mono);}
+/* İnce ayraçlar */
+.wp-hr{border-color:var(--wp-line);}
+.wp-hr2{border-color:var(--wp-line2);}
+/* Cam yüzeyler */
+.wp-glass{background:var(--wp-glass);border:1px solid var(--wp-line2);border-radius:var(--wp-r-lg);box-shadow:var(--wp-shadow),var(--wp-inset);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:border-color .3s,box-shadow .3s,transform .3s;}
+.wp-glass-soft{background:color-mix(in srgb,var(--wp-surf) 70%,transparent);border:1px solid var(--wp-line);border-radius:var(--wp-r-lg);box-shadow:var(--wp-inset);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+/* İstatistik kartı — cam + kırmızı ışık hover */
+.wp-stat{background:var(--wp-glass);border:1px solid var(--wp-line2);border-radius:var(--wp-r-lg);box-shadow:var(--wp-shadow),var(--wp-inset);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:border-color .3s,box-shadow .3s,transform .3s;}
+.wp-stat:hover{border-color:color-mix(in srgb,var(--wp-a1) 34%,transparent);box-shadow:var(--wp-shadow),var(--wp-glow),var(--wp-inset);}
+/* Film çipi — cam */
+.wp-card{position:relative;background:var(--wp-glass);border:1px solid var(--wp-line2);border-radius:var(--wp-r);box-shadow:var(--wp-inset);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+.wp-card:hover{border-color:color-mix(in srgb,var(--wp-a1) 50%,transparent);box-shadow:0 18px 40px -24px var(--wp-a1),var(--wp-inset);}
+/* Gün kartı — cam yüzey */
+.wp-day{position:relative;overflow:hidden;background:var(--wp-glass);border:1px solid var(--wp-line);border-radius:var(--wp-r-lg);box-shadow:var(--wp-shadow),var(--wp-inset);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:border-color .3s,box-shadow .3s,transform .3s,background .3s;}
+.wp-day::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;z-index:1;background:transparent;transition:background .3s,box-shadow .3s;}
+.wp-day:hover{border-color:color-mix(in srgb,var(--wp-a1) 30%,transparent);box-shadow:0 0 36px -18px var(--wp-a1),var(--wp-inset);}
+.wp-day__head{border-bottom:1px solid var(--wp-line);background:color-mix(in srgb,var(--wp-surf) 40%,transparent);}
+/* Bugün / aktif gün — kırmızı kenarlık + glow */
+.wp-day--today{border-color:var(--wp-a1);background:var(--wp-glass);box-shadow:0 0 0 1px var(--wp-a1),0 22px 50px -26px var(--wp-a1),var(--wp-inset);}
+.wp-day--today::before{background:var(--wp-a1);box-shadow:0 0 12px var(--wp-a1);}
+.wp-day--today .wp-day__head{border-color:var(--wp-a1);background:color-mix(in srgb,var(--wp-a1) 10%,transparent);}
+.wp-day--over{border-color:var(--wp-a1);transform:scale(1.01);box-shadow:0 0 0 3px color-mix(in srgb,var(--wp-a1) 20%,transparent),0 24px 54px -24px var(--wp-a1),var(--wp-inset);}
+.wp-day--over::before{background:var(--wp-a1);box-shadow:0 0 12px var(--wp-a1);}
+/* BUGÜN hapı — kırmızı gradyan */
+.wp-pill{background:linear-gradient(140deg,var(--wp-a2),var(--wp-a3));color:#fff;box-shadow:0 4px 14px -4px var(--wp-a1),inset 0 1px 0 rgba(255,255,255,.35);}
+`;
+
 function toDateStr(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -157,7 +216,7 @@ export default function WeeklyPlanPage() {
       <div
         draggable onDragStart={(e) => handleDragStart(e, item)} onDragEnd={handleDragEnd} key={item.id}
         className={`group relative flex-shrink-0 flex gap-2.5 sm:gap-3 transition-all duration-300 animate-fade-in border rounded-2xl overflow-hidden cursor-grab active:cursor-grabbing backdrop-blur-xl w-[250px] sm:w-[280px] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ${
-          movie.watched ? 'bg-emerald-950/20 border-emerald-500/20 opacity-80 hover:opacity-100' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_18px_-8px_rgba(239,68,68,0.6)] hover:shadow-[0_0_24px_-8px_rgba(239,68,68,0.8)] hover:border-red-500/60' : 'bg-ink-900/40 border-ink-800/50 hover:border-gold-500/50 hover:bg-ink-900/70 hover:shadow-[0_18px_40px_-24px_var(--color-1)] hover:-translate-y-0.5'
+          movie.watched ? 'bg-emerald-950/20 border-emerald-500/20 opacity-80 hover:opacity-100' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_18px_-8px_rgba(239,68,68,0.6)] hover:shadow-[0_0_24px_-8px_rgba(239,68,68,0.8)] hover:border-red-500/60' : 'wp-card hover:-translate-y-0.5'
         }`}
       >
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -230,7 +289,7 @@ export default function WeeklyPlanPage() {
 
     return (
       <div className={`relative w-full max-w-2xl rounded-xl sm:rounded-2xl overflow-hidden border transition-all animate-fade-in flex flex-row shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_20px_46px_-28px_rgba(0,0,0,0.9)] ${
-        movie.watched ? 'bg-emerald-950/10 border-emerald-500/30 opacity-80' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_18px_-8px_rgba(239,68,68,0.6)]' : 'bg-ink-900/60 border-ink-700/60 hover:border-gold-500/50 hover:bg-ink-900/80 backdrop-blur-xl hover:shadow-[0_24px_50px_-26px_var(--color-1)]'
+        movie.watched ? 'bg-emerald-950/10 border-emerald-500/30 opacity-80' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_18px_-8px_rgba(239,68,68,0.6)]' : 'wp-card hover:border-gold-500/50'
       }`}>
         <div className="w-20 sm:w-24 h-auto flex-shrink-0 bg-ink-950 relative">
           {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover opacity-90" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={20} className="text-ink-600" /></div>}
@@ -305,10 +364,11 @@ export default function WeeklyPlanPage() {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 pb-8 animate-fade-in">
-      
+    <div className="wp-root space-y-4 sm:space-y-6 pb-8 animate-fade-in">
+      <style>{WEEKLY_PREMIUM_CSS}</style>
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <h1 className="text-lg sm:text-2xl font-black text-white flex items-center gap-3 drop-shadow-md">
+        <h1 className="wp-title text-lg sm:text-2xl font-black text-white flex items-center gap-3 drop-shadow-md">
           <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-gold-600 to-gold-700 border border-white/20 flex items-center justify-center shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.35)]">
             <CalendarClock size={18} sm-size={20} className="text-white" />
           </div>
@@ -333,8 +393,10 @@ export default function WeeklyPlanPage() {
         </div>
       </div>
 
+      <div className="wp-hr2 border-t" />
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex items-center gap-3 sm:gap-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_24px_60px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl relative overflow-hidden group transition-all duration-300 hover:border-gold-500/30">
+        <div className="wp-stat relative overflow-hidden group p-4 flex items-center gap-3 sm:gap-4">
           <div className="absolute -right-4 -bottom-4 text-ink-800/20 transition-opacity group-hover:opacity-60"><Target size={80} /></div>
           <div className="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 flex items-center justify-center">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
@@ -349,7 +411,7 @@ export default function WeeklyPlanPage() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex flex-col justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_24px_60px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl relative overflow-hidden transition-all duration-300 hover:border-azure-500/30">
+        <div className="wp-stat p-4 flex flex-col justify-center relative overflow-hidden">
           <div className="text-[9px] sm:text-[10px] font-black uppercase font-mono tracking-[0.18em] text-azure-400 flex items-center gap-1 mb-1.5"><Zap size={12} /> Toplam Maraton Hacmi</div>
           <div className="text-xl sm:text-2xl font-black font-mono text-white leading-none tracking-tight mb-2">
             {formatDuration(stats.totalMinutes)}
@@ -361,7 +423,7 @@ export default function WeeklyPlanPage() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-ink-900/80 to-ink-950/80 border border-ink-800 rounded-2xl p-4 flex items-center justify-between shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_24px_60px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl relative overflow-hidden transition-all duration-300 hover:border-gold-500/30">
+        <div className="wp-stat p-4 flex items-center justify-between relative overflow-hidden">
            <div>
             <div className="text-[9px] sm:text-[10px] font-black uppercase font-mono tracking-[0.18em] text-gold-400 flex items-center gap-1 mb-1"><Flame size={12} /> Kalan Seyir Yükü</div>
             <div className="text-lg sm:text-xl font-black font-mono text-white">
@@ -430,13 +492,7 @@ export default function WeeklyPlanPage() {
                 onDragOver={(e) => handleDragOver(e, dateStr)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, dateStr)}
-                className={`group/day relative rounded-2xl sm:rounded-3xl border transition-all duration-300 overflow-hidden backdrop-blur-xl before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:content-[''] before:transition-colors ${
-                  isDragOver
-                    ? 'border-[var(--color-1)] bg-gold-500/10 shadow-[0_0_0_3px_var(--blob-1),0_24px_54px_-24px_var(--color-1)] scale-[1.01]'
-                    : isToday
-                      ? 'border-[var(--color-1)] bg-ink-900/60 before:bg-[var(--color-1)] shadow-[0_0_0_1px_var(--color-1),0_22px_50px_-26px_var(--color-1)]'
-                      : 'border-ink-800/50 bg-ink-900/30 before:bg-transparent hover:border-gold-500/30 hover:bg-ink-900/50 hover:shadow-[0_0_36px_-18px_var(--color-1)]'
-                }`}
+                className={`group/day wp-day ${isDragOver ? 'wp-day--over' : isToday ? 'wp-day--today' : ''}`}
               >
                 {isDragOver && (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-ink-950/60 backdrop-blur-sm rounded-2xl pointer-events-none">
@@ -446,14 +502,14 @@ export default function WeeklyPlanPage() {
                   </div>
                 )}
 
-                <div className={`flex items-center justify-between px-4 sm:px-5 py-2.5 sm:py-3 border-b gap-3 ${isToday ? 'border-[var(--color-1)] bg-gold-500/10' : 'border-ink-800/50 bg-ink-950/30'}`}>
+                <div className="wp-day__head flex items-center justify-between px-4 sm:px-5 py-2.5 sm:py-3 gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`font-mono text-[9px] font-black uppercase tracking-[0.14em] px-1.5 py-0.5 rounded flex-shrink-0 leading-none ${isToday ? 'text-white bg-gradient-to-br from-gold-500 to-gold-700 shadow-[0_4px_14px_-4px_var(--color-1)]' : 'text-ink-500 bg-ink-800/60 border border-ink-800'}`}>
+                    <span className={`wp-mono text-[9px] font-black uppercase tracking-[0.14em] px-1.5 py-0.5 rounded flex-shrink-0 leading-none ${isToday ? 'text-white bg-gradient-to-br from-gold-500 to-gold-700 shadow-[0_4px_14px_-4px_var(--color-1)]' : 'text-ink-500 bg-ink-800/60 border border-ink-800'}`}>
                       {String(dayDate.getDate()).padStart(2, '0')}
                     </span>
-                    <span className={`font-mono text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] truncate ${isToday ? 'text-gold-400' : 'text-white'}`}>{DAY_NAMES[dayDate.getDay()]}</span>
-                    <span className="font-mono text-[10px] sm:text-xs font-bold text-ink-500 flex-shrink-0">{formatDayDate(dayDate)}</span>
-                    {isToday && <span className="font-mono text-[9px] font-black uppercase tracking-[0.16em] bg-gold-500 text-white px-2 py-0.5 rounded flex-shrink-0 shadow-[0_4px_14px_-4px_var(--color-1)]">BUGÜN</span>}
+                    <span className={`wp-mono text-[11px] sm:text-xs font-bold uppercase tracking-[0.18em] truncate ${isToday ? 'text-gold-400' : 'text-white'}`}>{DAY_NAMES[dayDate.getDay()]}</span>
+                    <span className="wp-mono text-[10px] sm:text-xs font-bold text-ink-500 flex-shrink-0">{formatDayDate(dayDate)}</span>
+                    {isToday && <span className="wp-mono wp-pill text-[9px] font-black uppercase tracking-[0.16em] px-2 py-0.5 rounded flex-shrink-0">BUGÜN</span>}
                   </div>
                   <button onClick={() => setShowAdd({ presetDate: dateStr })} title="Bu güne film ekle" className="w-11 h-11 md:w-7 md:h-7 flex items-center justify-center rounded-lg bg-gold-500/10 hover:!bg-[var(--blob-2)] text-gold-400 border border-gold-500/30 hover:!border-[var(--color-2)] hover:shadow-[0_0_16px_-4px_var(--color-1)] transition-all">
                     <Plus size={14} strokeWidth={2.5} />
@@ -462,7 +518,7 @@ export default function WeeklyPlanPage() {
 
                 <div className="p-3 sm:p-4">
                   {items.length === 0 ? (
-                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-600 text-center py-4 border border-dashed border-ink-800/60 rounded-xl">
+                    <div className="wp-mono text-[10px] uppercase tracking-[0.2em] text-ink-600 text-center py-4 border border-dashed border-ink-800/60 rounded-xl">
                       Bu gün için planlanmış film yok.
                     </div>
                   ) : (
@@ -496,14 +552,14 @@ export default function WeeklyPlanPage() {
                 <div key={dateStr} className="relative">
                   <div className="flex items-center gap-3 sm:gap-5 mb-4 sm:mb-5">
                     <div className="w-14 sm:w-20 text-right flex-shrink-0">
-                      <div className={`font-mono text-[11px] sm:text-xs font-black uppercase tracking-[0.16em] ${isToday ? 'text-gold-400' : 'text-white'}`}>{DAY_NAMES[dayDate.getDay()]}</div>
-                      <div className="font-mono text-[9px] sm:text-[10px] font-bold text-ink-500">{formatDayDate(dayDate)}</div>
+                      <div className={`wp-mono text-[11px] sm:text-xs font-black uppercase tracking-[0.16em] ${isToday ? 'text-gold-400' : 'text-white'}`}>{DAY_NAMES[dayDate.getDay()]}</div>
+                      <div className="wp-mono text-[9px] sm:text-[10px] font-bold text-ink-500">{formatDayDate(dayDate)}</div>
                     </div>
                     <div className="relative flex items-center justify-center w-5">
                       <div className={`w-2.5 h-2.5 rounded-full relative z-10 transition-all ${isToday ? 'bg-gold-500 ring-4 ring-[var(--blob-1)] shadow-[0_0_14px_var(--color-1)]' : 'bg-gold-500/10 border border-gold-500/30 ring-4 ring-[var(--blob-1)]'}`}></div>
                     </div>
                     <div className="flex-1 h-px bg-gradient-to-r from-ink-800 to-transparent"></div>
-                    {isToday && <span className="font-mono text-[9px] font-black uppercase tracking-[0.16em] bg-gold-500 text-white px-2 py-0.5 rounded shadow-[0_4px_14px_-4px_var(--color-1)] flex-shrink-0">BUGÜN</span>}
+                    {isToday && <span className="wp-mono wp-pill text-[9px] font-black uppercase tracking-[0.16em] px-2 py-0.5 rounded flex-shrink-0">BUGÜN</span>}
                   </div>
 
                   <div className="space-y-3 sm:space-y-4">
@@ -516,9 +572,9 @@ export default function WeeklyPlanPage() {
                       return (
                         <div key={item.id} className="flex gap-3 sm:gap-5 group">
                           <div className="w-14 sm:w-20 text-right flex-shrink-0 pt-3">
-                            <div className={`font-mono text-base sm:text-lg font-black ${!movie.watched && (item.date < todayStrVal || (item.date === todayStrVal && item.time < currentTimeStr)) ? 'text-red-400' : movie.watched ? 'text-emerald-500/50' : 'text-gold-400'}`}>{item.time}</div>
+                            <div className={`wp-mono text-base sm:text-lg font-black ${!movie.watched && (item.date < todayStrVal || (item.date === todayStrVal && item.time < currentTimeStr)) ? 'text-red-400' : movie.watched ? 'text-emerald-500/50' : 'text-gold-400'}`}>{item.time}</div>
                             {/* TYPESCRIPT DÜZELTMESİ: runtime tanımsızsa varsayılan 115 kullan */}
-                            <div className="font-mono text-[9px] sm:text-[10px] font-bold text-ink-600 mt-0.5">{computeEndTime(item.time, movie.runtime || item.runtime || 115)}</div>
+                            <div className="wp-mono text-[9px] sm:text-[10px] font-bold text-ink-600 mt-0.5">{computeEndTime(item.time, movie.runtime || item.runtime || 115)}</div>
                           </div>
 
                           <div className="relative flex justify-center w-5">
@@ -542,7 +598,7 @@ export default function WeeklyPlanPage() {
             })}
             
             {plan.length === 0 && (
-              <div className="text-center py-10 text-ink-500 font-mono text-[11px] uppercase tracking-[0.2em] font-bold bg-ink-900/20 rounded-2xl border border-ink-800/40 mr-4 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <div className="wp-glass-soft wp-mono text-center py-10 text-ink-500 text-[11px] uppercase tracking-[0.2em] font-bold mr-4">
                 <TimelineIcon size={32} className="mx-auto mb-3 opacity-20 text-gold-400" />
                 Zaman çizelgen bomboş.
               </div>
@@ -661,10 +717,10 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-[0_28px_70px_-28px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.07)] flex flex-col max-h-[90svh] animate-fade-in-up backdrop-blur-2xl">
+      <div onClick={(e) => e.stopPropagation()} className="wp-glass w-full max-w-lg overflow-hidden flex flex-col max-h-[90svh] animate-fade-in-up">
         <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-gold-500/10 to-transparent relative">
           <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-gold-500 via-gold-500/40 to-transparent"></div>
-          <h3 className="text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
+          <h3 className="wp-title text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
             <div className="w-6 h-6 rounded border border-gold-500/30 bg-gold-500/10 text-gold-400 flex items-center justify-center"><Sparkles size={12} /></div>
             Maraton Kurulumu
           </h3>
@@ -840,10 +896,10 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-ink-900 border border-ink-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-[0_28px_70px_-28px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.07)] flex flex-col max-h-[90svh] animate-fade-in-up backdrop-blur-2xl">
+      <div onClick={(e) => e.stopPropagation()} className="wp-glass w-full max-w-lg overflow-hidden flex flex-col max-h-[90svh] animate-fade-in-up">
         <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-gold-500/10 to-transparent relative">
           <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-gold-500 via-gold-500/40 to-transparent"></div>
-          <h3 className="text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
+          <h3 className="wp-title text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
             <div className="w-6 h-6 rounded border border-gold-500/30 bg-gold-500/10 text-gold-400 flex items-center justify-center"><Edit2 size={12} /></div>
             Maratonu Düzenle / Taşı
           </h3>

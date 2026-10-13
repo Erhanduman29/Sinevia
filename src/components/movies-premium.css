@@ -11,14 +11,24 @@
    ============================================================ */
 
 .mpx-root {
-  /* Vurgu: premium-dark'da kırmızı, diğer temalarda tema rengi */
-  --mpx-a1: var(--color-1, #e8384f);
-  --mpx-a2: var(--color-2, #ff6b7a);
-  --mpx-a3: var(--color-3, #8e1220);
+  /* Yarıçap: premium token'lar (--r/--r-lg/--r-sm) öncelikli, yoksa sabit.
+     plain-dark'da --r tanımlı DEĞİLDİR → var(--r, 16px) fallback ZORUNLU. */
+  --r: var(--r, 16px);
+  --r-lg: var(--r-lg, 22px);
+  --r-sm: var(--r-sm, 10px);
+
+  /* Vurgu: premium'da --red zinciri, yoksa --color-1, en son sabit kırmızı.
+     plain-dark'da --red tanımlı DEĞİLDİR → var(--red, var(--color-1, #e8384f))
+     fallback ZORUNLU. */
+  --mpx-a1: var(--red, var(--color-1, #e8384f));
+  --mpx-a2: var(--red-hi, var(--color-2, #ff6b7a));
+  --mpx-a3: var(--red-deep, var(--color-3, #8e1220));
   --mpx-on-acc: #ffffff;
 
-  /* Cam yüzeyler */
-  --mpx-glass: var(--glass, var(--bg-card, rgba(255, 255, 255, 0.05)));
+  /* Cam yüzeyler: premium'da --glass gradyanı, yoksa --bg-card.
+     plain-dark'da --glass tanımlı DEĞİLDİR → var(--glass, var(--bg-card))
+     fallback ZORUNLU. */
+  --mpx-glass: var(--glass, var(--bg-card));
   --mpx-surf: var(--surface, color-mix(in srgb, var(--text-main, #f4f4f2) 6%, transparent));
   --mpx-surf2: var(--surface2, color-mix(in srgb, var(--text-main, #f4f4f2) 10%, transparent));
   --mpx-line: var(--line, color-mix(in srgb, var(--text-main, #f4f4f2) 8%, transparent));
@@ -42,7 +52,7 @@ body[data-theme='paper-light'] .mpx-root {
   position: relative;
   background: var(--mpx-glass);
   border: 1px solid var(--mpx-line2);
-  border-radius: 22px;
+  border-radius: var(--r-lg);
   box-shadow: var(--mpx-shadow), var(--mpx-inset);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -190,9 +200,9 @@ body[data-theme='paper-light'] .mpx-root {
   gap: 0.4em;
   font-size: 11.5px;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  padding: 10px 18px;
+  padding: 13px 22px;
   min-height: 44px;
   border-radius: 13px;
   border: 1px solid transparent;
@@ -356,7 +366,7 @@ body[data-theme='paper-light'] .mpx-root {
   display: flex;
   gap: 4px;
   padding: 4px;
-  border-radius: 16px;
+  border-radius: var(--r);
   background: var(--mpx-glass);
   border: 1px solid var(--mpx-line2);
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-main, #f4f4f2) 7%, transparent);
@@ -388,11 +398,11 @@ body[data-theme='paper-light'] .mpx-root {
   border-color: color-mix(in srgb, var(--text-main, #f4f4f2) 32%, transparent);
   transform: translateY(-2px);
 }
-/* Aktif chip = vurgu zemin, açık yazı (premium: kırmızı) */
+/* Aktif chip = vurgu gradyan zemin, açık yazı (önizleme: red-hi → red-deep) */
 .mpx-chip.on {
   color: var(--mpx-on-acc);
   border-color: transparent;
-  background: linear-gradient(140deg, var(--mpx-a1), var(--mpx-a3));
+  background: linear-gradient(140deg, var(--mpx-a2), var(--mpx-a3));
   box-shadow:
     0 8px 22px -8px color-mix(in srgb, var(--mpx-a1) 80%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
@@ -617,7 +627,7 @@ body[data-theme='paper-light'] .mpx-link:hover {
   gap: 8px;
   flex-wrap: wrap;
   padding: 10px 14px;
-  border-radius: 16px;
+  border-radius: var(--r);
   background: var(--mpx-glass);
   border: 1px solid var(--mpx-line2);
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-main, #f4f4f2) 7%, transparent);
@@ -651,12 +661,48 @@ body[data-theme='paper-light'] .mpx-link:hover {
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
+/* Üst kırmızı saç teli (önizleme: .modal::before topBar) */
+.mpx-modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 26px;
+  right: 26px;
+  height: 2px;
+  z-index: 3;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, transparent, var(--mpx-a2), transparent);
+  background-size: 200% 100%;
+  animation: mpxTopBar 2.8s linear infinite;
+  opacity: .9;
+}
+@keyframes mpxTopBar {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
 .mpx-modal-bar {
   position: relative;
   background: linear-gradient(120deg,
       color-mix(in srgb, var(--mpx-a1) 18%, transparent),
       color-mix(in srgb, var(--text-main, #f4f4f2) 3%, transparent) 70%);
   border-bottom: 1px solid var(--mpx-line2);
+}
+/* Başlık pulse noktası (önizleme: .mdot) */
+.mpx-modal-bar::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mpx-a2);
+  box-shadow: 0 0 10px var(--mpx-a2);
+  animation: mpxPulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes mpxPulse {
+  50% { opacity: .35; transform: translateY(-50%) scale(.75); }
 }
 .mpx-modal-bar::after {
   content: '';
