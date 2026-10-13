@@ -1,0 +1,557 @@
+/* ============================================================
+   AI ASİSTAN SAYFASI — PREMIUM ÖNİZLEME HİZASI
+   Kaynak: sinevia-premium.html (cam yüzeyler · kırmızı gradyan
+   buton/input stilleri · uv-wave floating-label · mono etiketler ·
+   blur barlar · ortam ışığı + ince doku)
+
+   Tema uyumu: tüm stiller var(--...) token'larına bağlıdır.
+   premium-dark bu token'ları tanımlar (--red/--glass/--r/...);
+   plain-dark ve diğer temalarda zincir fallback devrededir:
+   var(--r, 16px) · var(--red, var(--color-1, #e8384f)) ·
+   var(--glass, var(--bg-card)) — hiçbir tema kırılmaz.
+   ============================================================ */
+
+.ai-root {
+  /* Yarıçap: premium token'lar öncelikli, yoksa sabit.
+     plain-dark'da --r tanımlı DEĞİLDİR → var(--r, 16px) fallback ZORUNLU. */
+  --ai-r: var(--r, 16px);
+  --ai-r-lg: var(--r-lg, 22px);
+  --ai-r-sm: var(--r-sm, 10px);
+
+  /* Vurgu: premium'da --red zinciri, yoksa --color-*, en son sabit kırmızı.
+     plain-dark'da --red tanımlı DEĞİLDİR → var(--red, var(--color-1, #e8384f))
+     fallback ZORUNLU. */
+  --ai-a1: var(--red, var(--color-1, #e8384f));
+  --ai-a2: var(--red-hi, var(--color-2, #ff6b7a));
+  --ai-a3: var(--red-deep, var(--color-3, #8e1220));
+  --ai-on-acc: #ffffff;
+
+  /* Cam yüzeyler: premium'da --glass gradyanı, yoksa --bg-card.
+     plain-dark'da --glass tanımlı DEĞİLDİR → var(--glass, var(--bg-card))
+     fallback ZORUNLU. */
+  --ai-glass: var(--glass, var(--bg-card));
+  --ai-surf: var(--surface, color-mix(in srgb, var(--text-main, #f4f4f2) 6%, transparent));
+  --ai-surf2: var(--surface2, color-mix(in srgb, var(--text-main, #f4f4f2) 10%, transparent));
+  --ai-line: var(--line, color-mix(in srgb, var(--text-main, #f4f4f2) 8%, transparent));
+  --ai-line2: var(--line-2, color-mix(in srgb, var(--text-main, #f4f4f2) 14%, transparent));
+  --ai-shadow: var(--shadow, 0 24px 60px -24px rgba(0, 0, 0, 0.8));
+  --ai-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --ai-muted: var(--muted, color-mix(in srgb, var(--text-main, #f4f4f2) 62%, transparent));
+  --ai-blob: var(--blob-1, color-mix(in srgb, var(--ai-a1) 18%, transparent));
+  --ai-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --ai-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* Açık temalarda vurgu üzerindeki yazı koyulaşır */
+body[data-theme='light'] .ai-root,
+body[data-theme='paper-light'] .ai-root {
+  --ai-on-acc: #16110c;
+}
+
+/* ---------- CAM KABUK (dış panel) ---------- */
+.ai-shell {
+  position: relative;
+  background: var(--ai-glass);
+  border: 1px solid var(--ai-line2);
+  border-radius: var(--ai-r-lg);
+  box-shadow: var(--ai-shadow), var(--ai-inset);
+  overflow: hidden;
+}
+
+/* ---------- ORTAM IŞIĞI + İNCE DOKU (blur overlays) ---------- */
+.ai-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(600px 240px at 85% -10%, var(--ai-blob), transparent 65%),
+    radial-gradient(700px 420px at 50% 45%, rgba(255, 255, 255, 0.025), transparent 70%);
+}
+.ai-ambient::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");
+}
+
+/* ---------- ÜST BAR (blur) ---------- */
+.ai-topbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--ai-line);
+  background: var(--ai-surf);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 18px 44px -26px rgba(0, 0, 0, 0.9);
+}
+@media (min-width: 768px) {
+  .ai-topbar { padding: 1.25rem; }
+}
+/* alt kırmızı saç teli */
+.ai-topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--ai-a1) 55%, transparent) 30%,
+      color-mix(in srgb, var(--ai-a2) 35%, transparent) 60%,
+      transparent);
+}
+
+/* ---------- AVATARLAR ---------- */
+.ai-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+.ai-avatar-ai {
+  background: linear-gradient(140deg, var(--ai-a2), var(--ai-a3));
+  color: var(--ai-on-acc);
+  box-shadow:
+    0 6px 18px -6px color-mix(in srgb, var(--ai-a1) 85%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.ai-avatar-user {
+  background: var(--ai-surf);
+  border: 1px solid var(--ai-line2);
+  color: var(--ai-a2);
+  box-shadow: var(--ai-inset);
+}
+
+/* üst bardaki bot rozeti (köşeli) */
+.ai-botmark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: var(--ai-r-sm);
+  background: linear-gradient(140deg, var(--ai-a2), var(--ai-a3));
+  color: var(--ai-on-acc);
+  box-shadow:
+    0 8px 22px -8px color-mix(in srgb, var(--ai-a1) 85%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- BAŞLIK ---------- */
+.ai-title {
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  background: linear-gradient(100deg,
+      var(--text-main, #f4f4f2) 20%,
+      var(--text-main, #f4f4f2) 60%,
+      var(--ai-a2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ai-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ai-a2);
+}
+@media (min-width: 768px) {
+  .ai-kicker { font-size: 0.75rem; }
+  .ai-title { font-size: 1.125rem; }
+}
+
+/* ---------- BUTONLAR ---------- */
+/* temizle — secondary cam (preview .btn-s) */
+.ai-btn-s {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--ai-r-sm);
+  color: var(--text-main, #f4f4f2);
+  background: var(--ai-surf);
+  border: 1px solid var(--ai-line2);
+  box-shadow: var(--ai-inset);
+  transition: 0.25s var(--ai-ease);
+}
+@media (min-width: 768px) {
+  .ai-btn-s { font-size: 0.75rem; padding: 0.375rem 0.75rem; }
+}
+.ai-btn-s:hover {
+  border-color: color-mix(in srgb, var(--ai-a1) 60%, transparent);
+  color: #fff;
+  background: color-mix(in srgb, var(--ai-a1) 14%, transparent);
+  box-shadow:
+    0 8px 22px -12px rgba(0, 0, 0, 0.9),
+    0 0 22px -10px color-mix(in srgb, var(--ai-a1) 65%, transparent),
+    var(--ai-inset);
+}
+
+/* primary kırmızı gradyan (preview .btn-p) */
+.ai-btn-p {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ai-on-acc);
+  border: 1px solid transparent;
+  border-radius: var(--ai-r-sm);
+  background: linear-gradient(150deg, var(--ai-a2) 0%, var(--ai-a1) 45%, var(--ai-a3) 130%);
+  box-shadow:
+    0 10px 28px -10px color-mix(in srgb, var(--ai-a1) 75%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.25);
+  transition: 0.25s var(--ai-ease);
+}
+/* süpürme parıltısı (preview .btn::after) */
+.ai-btn-p::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 55%;
+  height: 100%;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.5s ease;
+}
+.ai-btn-p:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 16px 36px -10px color-mix(in srgb, var(--ai-a1) 90%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.ai-btn-p:hover::after { left: 130%; }
+.ai-btn-p:active { transform: translateY(1px) scale(0.985); }
+.ai-btn-p:disabled { opacity: 0.4; pointer-events: none; }
+
+/* kare gönder butonu */
+.ai-send {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+@media (min-width: 768px) {
+  .ai-send { width: 3.5rem; height: 3.5rem; }
+}
+
+/* "Ekli" durumu — nötr cam */
+.ai-added {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0;
+  border-radius: var(--ai-r-sm);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ai-a2);
+  background: var(--ai-blob);
+  border: 1px solid var(--ai-line2);
+  box-shadow: var(--ai-inset);
+}
+@media (min-width: 768px) {
+  .ai-added { font-size: 0.75rem; padding: 0.5rem 0; }
+}
+
+/* ---------- BALONLAR ---------- */
+.ai-bubble {
+  padding: 0.75rem 1rem;
+  border-radius: var(--ai-r);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 768px) {
+  .ai-bubble { padding: 1rem; font-size: 0.875rem; }
+}
+/* cam asistan balonu — kırmızı kenar */
+.ai-bubble-ai {
+  border-top-left-radius: 0;
+  background: var(--ai-surf);
+  border: 1px solid var(--ai-line2);
+  border-left: 2px solid var(--ai-a1);
+  color: var(--text-main, #f4f4f2);
+  box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+/* kırmızı gradyan kullanıcı balonu */
+.ai-bubble-user {
+  border-top-right-radius: 0;
+  background: linear-gradient(150deg, var(--ai-a2) 0%, var(--ai-a1) 45%, var(--ai-a3) 130%);
+  color: #fff;
+  box-shadow:
+    0 10px 28px -10px color-mix(in srgb, var(--ai-a1) 75%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* "düşünüyor" balonu */
+.ai-typing {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ai-a2);
+  font-weight: 500;
+}
+
+/* mono zaman etiketi */
+.ai-time {
+  font-family: var(--ai-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ai-a2);
+  opacity: 0.75;
+}
+@media (min-width: 768px) {
+  .ai-time { font-size: 10px; }
+}
+
+/* ---------- ÖNERİ KARTLARI ---------- */
+.ai-card {
+  width: 8rem;
+  border-radius: var(--ai-r);
+  background: var(--ai-surf);
+  border: 1px solid var(--ai-line2);
+  box-shadow: var(--ai-inset);
+  overflow: hidden;
+  transition: 0.28s var(--ai-ease);
+}
+@media (min-width: 768px) {
+  .ai-card { width: 10rem; }
+}
+.ai-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--ai-a1) 45%, transparent);
+  box-shadow:
+    0 26px 50px -22px rgba(0, 0, 0, 0.9),
+    0 0 30px -12px color-mix(in srgb, var(--ai-a1) 50%, transparent),
+    var(--ai-inset);
+}
+.ai-card-media {
+  position: relative;
+  height: 11rem;
+  background: var(--ai-surf2);
+}
+@media (min-width: 768px) {
+  .ai-card-media { height: 14rem; }
+}
+.ai-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s var(--ai-ease);
+}
+.ai-card:hover .ai-card-media img { transform: scale(1.05); }
+.ai-card-badge {
+  position: absolute;
+  top: 0.375rem;
+  left: 0.375rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 6px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ai-on-acc);
+  background: linear-gradient(135deg, var(--ai-a2), var(--ai-a3));
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--ai-a1) 80%, transparent);
+}
+@media (min-width: 768px) {
+  .ai-card-badge { top: 0.5rem; left: 0.5rem; font-size: 10px; padding: 0.25rem 0.5rem; }
+}
+.ai-card-body {
+  padding: 0.5rem 0.625rem;
+  border-top: 1px solid var(--ai-line);
+}
+.ai-card-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-main, #f4f4f2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (min-width: 768px) {
+  .ai-card-title { font-size: 0.75rem; }
+}
+.ai-card-year {
+  font-family: var(--ai-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--ai-a2);
+  margin-bottom: 0.5rem;
+}
+@media (min-width: 768px) {
+  .ai-card-year { font-size: 10px; margin-bottom: 0.75rem; }
+}
+
+/* ---------- API ANAHTARI UYARISI ---------- */
+.ai-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border-radius: var(--ai-r);
+  color: var(--text-main, #f4f4f2);
+  background: color-mix(in srgb, var(--ai-a1) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ai-a1) 28%, transparent);
+}
+.ai-note-icon {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  color: var(--ai-a2);
+}
+.ai-note code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0 0.25rem;
+  border-radius: 4px;
+}
+
+/* ---------- GİRİŞ ALANI — uv-wave floating label (blur bar) ---------- */
+.ai-inputarea {
+  position: relative;
+  z-index: 10;
+  padding: 0.75rem;
+  border-top: 1px solid var(--ai-line);
+  background: var(--ai-surf);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+@media (min-width: 768px) {
+  .ai-inputarea { padding: 1.25rem; }
+}
+/* üst kırmızı saç teli */
+.ai-inputarea::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--ai-a1) 45%, transparent),
+      transparent);
+}
+
+.ai-wave {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.ai-input {
+  display: block;
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 1.25rem 0.25rem 0.5rem;
+  border: 0;
+  border-bottom: 2px solid var(--ai-line2);
+  background: transparent;
+  color: var(--text-main, #f4f4f2);
+  outline: none;
+  transition: border-color 0.3s;
+}
+@media (min-width: 768px) {
+  .ai-input { font-size: 0.875rem; }
+}
+.ai-input::placeholder { color: transparent; }
+.ai-input:focus {
+  border-bottom-color: var(--ai-a1);
+  box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--ai-a1) 90%, transparent);
+}
+.ai-input:disabled { opacity: 0.5; }
+
+.ai-label {
+  position: absolute;
+  left: 0.25rem;
+  top: 1.05rem;
+  max-width: calc(100% - 0.5rem);
+  pointer-events: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ai-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: 0.2s ease all;
+}
+/* floating: odakta VEYA içeride metin varken (placeholder=" ") */
+.ai-input:focus ~ .ai-label,
+.ai-input:not(:placeholder-shown) ~ .ai-label {
+  top: 2px;
+  font-size: 9px;
+  color: var(--ai-a2);
+}
+
+/* odak dalgası — ortadan açılan gradyan çizgi */
+.ai-bar {
+  position: relative;
+  display: block;
+  height: 2px;
+}
+.ai-bar::before,
+.ai-bar::after {
+  content: '';
+  position: absolute;
+  height: 2px;
+  width: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, var(--ai-a1), var(--ai-a2));
+  transition: 0.2s ease all;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--ai-a1) 80%, transparent);
+}
+.ai-bar::before { left: 50%; }
+.ai-bar::after { right: 50%; }
+.ai-input:focus ~ .ai-bar::before,
+.ai-input:focus ~ .ai-bar::after { width: 50%; }
+
+/* ---------- ERİŞİLEBİLİRLİK / HAREKET AZALTMA ---------- */
+.ai-input:focus-visible,
+.ai-btn-p:focus-visible,
+.ai-btn-s:focus-visible {
+  outline: 2px solid var(--ai-a2);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-root *,
+  .ai-root *::before,
+  .ai-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
