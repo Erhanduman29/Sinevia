@@ -246,12 +246,12 @@ export default function SettingsPage() {
   const negativeTags = reviewTagsList.filter((t) => !isPositiveTag(t, data.tagSentiments));
 
   const THEMES = [
-    { id: 'default', name: 'Karanlık (Orijinal)', desc: 'Kehribar, Safir & Mor', icon: Moon, previewBg: '#0a0a0e', textMode: 'dark', colors: ['#f59e0b', '#0ea5e9', '#8b5cf6'] },
+    { id: 'default', name: 'Karanlık (Orijinal)', desc: 'Kehribar, Safir & Mor', icon: Moon, previewBg: '#000000', textMode: 'dark', colors: ['#f59e0b', '#0ea5e9', '#8b5cf6'] },
     { id: 'light', name: 'Aydınlık (Ferah)', desc: 'Amber, Mavi & Pembe', icon: Sun, previewBg: '#f1f5f9', textMode: 'light', colors: ['#f59e0b', '#3b82f6', '#ec4899'] },
     { id: 'cyberpunk', name: 'Cyberpunk', desc: 'Neon Pembe, Mavi & Sarı', icon: Sparkles, previewBg: '#070312', textMode: 'dark', colors: ['#ec4899', '#06b6d4', '#eab308'] },
     { id: 'blood', name: 'Dracula', desc: 'Kızıl, Mor & Turuncu', icon: Moon, previewBg: '#0a0204', textMode: 'dark', colors: ['#e11d48', '#a855f7', '#f97316'] },
     { id: 'matrix', name: 'Matrix Terminal', desc: 'Zümrüt & Camgöbeği', icon: Sparkles, previewBg: '#020804', textMode: 'dark', colors: ['#10b981', '#84cc16', '#14b8a6'] },
-    { id: 'ocean', name: 'Aurora', desc: 'Buz Mavisi & İndigo', icon: Sparkles, previewBg: '#020617', textMode: 'dark', colors: ['#38bdf8', '#6366f1', '#2dd4bf'] },
+    { id: 'ocean', name: 'Aurora', desc: 'Buz Mavisi & İndigo', icon: Sparkles, previewBg: '#020617', textMode: 'dark', colors: ['#38bdf8', '#4f46e5', '#2dd4bf'] },
     { id: 'dracula', name: 'Dracula Klasik', desc: 'Mor, Pembe & Camgöbeği', icon: Ghost, previewBg: '#1b1724', textMode: 'dark', colors: ['#bd93f9', '#ff79c6', '#8be9fd'] },
     { id: 'nord', name: 'Nord Buzul', desc: 'Buz Mavisi, Mor & Auroral', icon: Snowflake, previewBg: '#232733', textMode: 'dark', colors: ['#88c0d0', '#b48ead', '#bf616a'] },
     { id: 'solarized-dark', name: 'Solarized Koyu', desc: 'Hardal, Mazı & Turuncu', icon: Coffee, previewBg: '#001f27', textMode: 'dark', colors: ['#b58900', '#268bd2', '#cb4b16'] },

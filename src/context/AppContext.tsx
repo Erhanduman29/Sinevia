@@ -177,7 +177,7 @@ function defaultData(): ExtendedAppData {
       { id: 'crit_3', name: 'Görsel Yönetim', weight: 7, appliesTo: 'both', genres: [] }
     ],
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
-    showLockedNames: false, aiChatHistory: [], theme: 'default',
+    showLockedNames: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
     weeklyPlan: [], notificationsEnabled: false,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
@@ -865,7 +865,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         let parsedData: ExtendedAppData = { ...defaultData(), ...parsed, collections: migrated.collections, movies: migrated.movies, achievements: createInitialAchievements(parsed.achievements) };
         if (!parsedData.agentId) parsedData.agentId = generateAgentId(); if (!parsedData.nickname) parsedData.nickname = 'Yeni Üye'; if (!parsedData.recoveryKey) parsedData.recoveryKey = generateRecoveryKey();
         if (parsedData.aiChatHistory) parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= Date.now() - 3 * 86400000);
-        if (!parsedData.criteria) parsedData.criteria = defaultData().criteria; if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS; if (!parsedData.theme) parsedData.theme = 'default';
+        if (!parsedData.criteria) parsedData.criteria = defaultData().criteria; if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS; if (!parsedData.theme) parsedData.theme = 'premium-dark';
         if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) parsedData.weeklyPlan = [];
         if (parsedData.notificationsEnabled === undefined) parsedData.notificationsEnabled = false;
         if (parsedData.notifyMessages === undefined) parsedData.notifyMessages = true;
@@ -889,7 +889,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [levelUpData, setLevelUpData] = useReducer((_s: any, a: any) => a, null); const [seasonCompleteData, setSeasonCompleteData] = useReducer((_s: any, a: any) => a, null);
   const [xpGainData, setXpGainData] = useState<{ gained: number; oldTotal: number; newTotal: number } | null>(null);
 
-  useEffect(() => { document.body.setAttribute('data-theme', !data.theme || data.theme === 'default' ? 'premium-dark' : data.theme); }, [data.theme]);
+  useEffect(() => { document.body.setAttribute('data-theme', !data.theme ? 'premium-dark' : data.theme); }, [data.theme]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
 
   // AÇILIŞ KONTROLÜ (BOOT CHECK)

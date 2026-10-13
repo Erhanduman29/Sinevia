@@ -8,9 +8,9 @@
   font-family: 'Archivo', system-ui, -apple-system, sans-serif;
   
   /* 1. KARANLIK (Orijinal Sinema) */
-  --bg-base: #0a0a0e;
-  --bg-surface: rgba(18, 18, 26, 0.75);
-  --bg-card: rgba(28, 28, 38, 0.6);
+  --bg-base: #000000; /* Varsayılan tema: saf siyah zemin */
+  --bg-surface: #12121a; /* tek renk (opak) yüzey — blob'lar yüzeyden sızamaz */
+  --bg-card: #1a1a24;
   --border-dim: rgba(63, 63, 70, 0.4);
 
   --color-1: #f59e0b; /* Amber/Gold */
@@ -33,8 +33,8 @@
 /* 2. AYDINLIK (Ferah ve Modern) */
 body[data-theme="light"] {
   --bg-base: #f1f5f9;
-  --bg-surface: rgba(255, 255, 255, 0.85);
-  --bg-card: rgba(255, 255, 255, 0.6);
+  --bg-surface: #fcfcfd;
+  --bg-card: #f8fafc;
   --border-dim: rgba(203, 213, 225, 0.8);
 
   --color-1: #f59e0b; 
@@ -55,8 +55,8 @@ body[data-theme="light"] {
 /* 3. CYBERPUNK (Neon) */
 body[data-theme="cyberpunk"] {
   --bg-base: #070312;
-  --bg-surface: rgba(16, 8, 34, 0.80);
-  --bg-card: rgba(28, 14, 56, 0.65);
+  --bg-surface: #0e071f;
+  --bg-card: #150a2b;
   --border-dim: rgba(236, 72, 153, 0.3);
 
   --color-1: #ec4899; 
@@ -77,8 +77,8 @@ body[data-theme="cyberpunk"] {
 /* 4. DRACULA (Kan Kırmızı & Gotik) */
 body[data-theme="blood"] {
   --bg-base: #0a0204;
-  --bg-surface: rgba(24, 6, 10, 0.85);
-  --bg-card: rgba(40, 10, 16, 0.65);
+  --bg-surface: #160509;
+  --bg-card: #1e070c;
   --border-dim: rgba(225, 29, 72, 0.3);
 
   --color-1: #e11d48; 
@@ -99,8 +99,8 @@ body[data-theme="blood"] {
 /* 5. MATRIX (Terminal Yeşili) */
 body[data-theme="matrix"] {
   --bg-base: #020804;
-  --bg-surface: rgba(6, 20, 12, 0.85);
-  --bg-card: rgba(10, 34, 20, 0.65);
+  --bg-surface: #05120b;
+  --bg-card: #071914;
   --border-dim: rgba(16, 185, 129, 0.3);
 
   --color-1: #10b981; 
@@ -121,30 +121,30 @@ body[data-theme="matrix"] {
 /* 6. AURORA (Kuzey Işıkları) */
 body[data-theme="ocean"] {
   --bg-base: #020617;
-  --bg-surface: rgba(15, 23, 42, 0.80);
-  --bg-card: rgba(30, 41, 59, 0.65);
+  --bg-surface: #0c1426;
+  --bg-card: #141d2e;
   --border-dim: rgba(56, 189, 248, 0.3);
 
   --color-1: #38bdf8; 
-  --color-2: #6366f1; 
+  --color-2: #4f46e5; /* indigo-600: beyaz yazıyla 5.9:1 (eski #6366f1 4.4 idi) */
   --color-3: #2dd4bf; 
 
   --blob-1: rgba(56, 189, 248, 0.25);
-  --blob-2: rgba(99, 102, 241, 0.25);
+  --blob-2: rgba(79, 70, 229, 0.25);
   --blob-3: rgba(45, 212, 191, 0.2);
   
   --text-main: #f0f9ff;
 
   --on-color-1: #0a0a0e; /* buz mavisi → koyu yazı */
-  --on-color-2: #0a0a0e; /* indigo → koyu yazı */
+  --on-color-2: #ffffff; /* indigo → beyaz yazı (5.9:1) */
   --on-color-3: #0a0a0e; /* turkuaz → koyu yazı */
 }
 
 /* 7. DRACULA (Klasik Mor-Pembe, sıcak koyu) */
 body[data-theme="dracula"] {
   --bg-base: #1b1724;
-  --bg-surface: rgba(40, 32, 52, 0.85);
-  --bg-card: rgba(56, 45, 74, 0.7);
+  --bg-surface: #261f32;
+  --bg-card: #2f263f;
   --border-dim: rgba(157, 120, 214, 0.4);
 
   --color-1: #bd93f9; /* Dracula Mor */
@@ -165,8 +165,8 @@ body[data-theme="dracula"] {
 /* 8. NORD (Buzul Grisi & Auroral) */
 body[data-theme="nord"] {
   --bg-base: #232733;
-  --bg-surface: rgba(46, 52, 64, 0.85);
-  --bg-card: rgba(59, 66, 82, 0.7);
+  --bg-surface: #2c323e;
+  --bg-card: #343a49;
   --border-dim: rgba(136, 192, 208, 0.35);
 
   --color-1: #88c0d0; /* Frost Camgöbeği */
@@ -187,8 +187,8 @@ body[data-theme="nord"] {
 /* 9. SOLARIZED KOYU (Hardal, Mazı & Turuncu) */
 body[data-theme="solarized-dark"] {
   --bg-base: #001f27;
-  --bg-surface: rgba(0, 43, 54, 0.88);
-  --bg-card: rgba(7, 54, 66, 0.7);
+  --bg-surface: #002a34;
+  --bg-card: #052f3a;
   --border-dim: rgba(38, 139, 210, 0.35);
 
   --color-1: #b58900; /* Hardal Sarı */
@@ -209,8 +209,8 @@ body[data-theme="solarized-dark"] {
 /* 10. MONOKAI (Sıcak Neon) */
 body[data-theme="monokai"] {
   --bg-base: #1c1c16;
-  --bg-surface: rgba(39, 40, 34, 0.9);
-  --bg-card: rgba(58, 59, 50, 0.7);
+  --bg-surface: #262721;
+  --bg-card: #31322a;
   --border-dim: rgba(166, 226, 46, 0.3);
 
   --color-1: #f92672; /* Monokai Pembe */
@@ -231,8 +231,8 @@ body[data-theme="monokai"] {
 /* 11. KÂĞIT (Sepya, Açık & Sıcak) */
 body[data-theme="paper-light"] {
   --bg-base: #efe9dc;
-  --bg-surface: rgba(255, 253, 247, 0.9);
-  --bg-card: rgba(255, 255, 255, 0.7);
+  --bg-surface: #fdfbf4;
+  --bg-card: #faf8f4;
   --border-dim: rgba(180, 165, 135, 0.75);
 
   --color-1: #b45309; /* Sepya Kehribar */
@@ -253,8 +253,8 @@ body[data-theme="paper-light"] {
 /* 12. RETRO AMBER (Tek Renkli CRT Amber) */
 body[data-theme="retro-amber"] {
   --bg-base: #0d0801;
-  --bg-surface: rgba(28, 18, 4, 0.88);
-  --bg-card: rgba(46, 30, 6, 0.7);
+  --bg-surface: #1a1104;
+  --bg-card: #241705;
   --border-dim: rgba(255, 171, 0, 0.35);
 
   --color-1: #ffab00; /* Amber Fosfor */
@@ -275,8 +275,8 @@ body[data-theme="retro-amber"] {
 /* 13. PREMIUM KOYU (Cam yüzeyler · İnce saydam çizgiler · Kırmızı vurgu) */
 body[data-theme="premium-dark"] {
   --bg-base: #0a0a0d;
-  --bg-surface: rgba(255, 255, 255, 0.04);
-  --bg-card: rgba(255, 255, 255, 0.07);
+  --bg-surface: #141417;
+  --bg-card: #1b1b1e;
   --border-dim: rgba(244, 244, 242, 0.12);
 
   --color-1: #e8384f; /* Premium Kırmızı */
@@ -289,8 +289,9 @@ body[data-theme="premium-dark"] {
 
   --text-main: #f4f4f2;
 
-  /* Vurgu üstü yazı rengi: açık kırmızı yüzeylerde okunurluk garantili */
-  --on-color-1: #ffffff; /* premium kırmızı → beyaz (buton estetiği, 3.9:1 large-text) */
+  /* Vurgu üstü yazı rengi: koyu yazı — beyaz 4.11:1'de küçük yazıda
+     AA geçmiyordu ("yazılar okunmuyor"), koyu yazı 5.3:1 ✓ */
+  --on-color-1: #0a0a0e; /* premium kırmızı → koyu yazı (5.3:1) */
   --on-color-2: #0a0a0e; /* açık kırmızı (hi) → koyu yazı (kontrast 7.7:1) */
   --on-color-3: #ffffff; /* derin bordo → beyaz (kontrast 9.4:1) */
 
@@ -302,9 +303,9 @@ body[data-theme="premium-dark"] {
   --red-deep: #8e1220;
   --line: rgba(244, 244, 242, 0.07);
   --line-2: rgba(244, 244, 242, 0.13);
-  --glass: linear-gradient(155deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018) 55%, rgba(255, 255, 255, 0.03));
-  --surface: rgba(255, 255, 255, 0.04);
-  --surface2: rgba(255, 255, 255, 0.07);
+  --glass: linear-gradient(155deg, #16161a, #111114 55%, #141418);
+  --surface: #141417;
+  --surface2: #1b1b1e;
   --r: 16px;
   --r-lg: 22px;
   --r-sm: 10px;
@@ -315,8 +316,8 @@ body[data-theme="premium-dark"] {
 /* 14. PLAIN KOYU (Sade · Simsiyah zemin, beyaz vurgu — gri yok) */
 body[data-theme="plain-dark"] {
   --bg-base: #000000;
-  --bg-surface: rgba(8, 8, 8, 0.96);
-  --bg-card: rgba(13, 13, 13, 0.92);
+  --bg-surface: #141414; /* tek renk (opak) — siyah zeminde yüzeyler seçilebilir */
+  --bg-card: #1f1f1f;
   --border-dim: rgba(255, 255, 255, 0.14);
 
   --color-1: #ffffff; /* Saf Beyaz */
@@ -337,8 +338,8 @@ body[data-theme="plain-dark"] {
 /* 15. SOLO KIZIL (Tek Renk · sadece kızılın tonları — aile tek, ton 3) */
 body[data-theme="solo-crimson"] {
   --bg-base: #12060a;
-  --bg-surface: rgba(36, 10, 16, 0.88);
-  --bg-card: rgba(52, 14, 22, 0.7);
+  --bg-surface: #220a0f;
+  --bg-card: #2a0c12;
   --border-dim: rgba(239, 68, 68, 0.35);
 
   --color-1: #ef4444; /* Parlak kızıl */
@@ -359,8 +360,8 @@ body[data-theme="solo-crimson"] {
 /* 16. DUO GÜN BATIMI (Çift Renk · turuncu & mor ailesi) */
 body[data-theme="duo-sunset"] {
   --bg-base: #16101d;
-  --bg-surface: rgba(44, 28, 56, 0.85);
-  --bg-card: rgba(58, 38, 74, 0.7);
+  --bg-surface: #291a34;
+  --bg-card: #2f1f3d;
   --border-dim: rgba(167, 139, 250, 0.35);
 
   --color-1: #fb923c; /* Gün batımı turuncusu */
@@ -381,8 +382,8 @@ body[data-theme="duo-sunset"] {
 /* 17. QUAD FESTİVAL (4 Renk · pembe, sarı, mavi & yeşil) */
 body[data-theme="quad-festival"] {
   --bg-base: #100a16;
-  --bg-surface: rgba(30, 18, 42, 0.85);
-  --bg-card: rgba(44, 26, 60, 0.7);
+  --bg-surface: #1c1127;
+  --bg-card: #241531;
   --border-dim: rgba(244, 114, 182, 0.32);
 
   --color-1: #f472b6; /* Pembe */
@@ -539,6 +540,99 @@ body[data-theme] [class*="from-azure"]:not([class*="/"]) {
        temada --color-4, diğerlerinde --color-1'e fallback) --- */
 body[data-theme] ::selection { background-color: var(--color-1) !important; color: var(--on-color-1) !important; }
 body[data-theme] *:focus-visible { outline-color: var(--color-4, var(--color-1)) !important; }
+
+/* =========================================================
+   MOTOR v2.1 — OKUNABİLİRLİK + AMBER AİLESİ
+   (A) Amber/Sarı Tailwind ailesi → tema rampası:
+       eski hâlde from-amber/to-yellow gradyanları ve text-amber-*
+       SABİT altın döküyordu; tema seçince "sarı hiç yok / her yerde
+       eski renk" tutarsızlığı bitiyor.
+   (B) KOYU temalarda soluk metin/ikon tabanı (text-ink-400..700:
+       koyu zeminde 1.6-2.9:1 → görünmüyordu; artık 4.0-5.7:1).
+       hover eşleri (B2) bu tabanı ezmeden geri gelir.
+   (C) AÇIK temalarda (light + paper-light) sabit vurgu/durum renkleri
+       koyulaşır: emerald/amber/red/... 2-3:1'den 4.5-8:1'e.
+   ========================================================= */
+
+/* (A) Amber & Sarı → color-1 / color-2 */
+body[data-theme] [class*="text-amber"]:not([class*="/"]) { color: var(--color-1) !important; }
+body[data-theme] [class*="text-yellow"]:not([class*="/"]) { color: var(--color-1) !important; }
+body[data-theme] [class*="bg-amber"]:not([class*="/"]) { background-color: var(--color-1) !important; color: var(--on-color-1) !important; }
+body[data-theme] [class*="bg-yellow"]:not([class*="/"]) { background-color: var(--color-1) !important; color: var(--on-color-1) !important; }
+body[data-theme] [class*="border-amber"] { border-color: var(--color-1) !important; }
+body[data-theme] [class*="border-yellow"] { border-color: var(--color-1) !important; }
+body[data-theme] [class*="from-amber"]:not([class*="/"]) {
+  --tw-gradient-from: var(--color-1) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: var(--color-2) var(--tw-gradient-to-position) !important;
+  color: var(--on-color-1) !important;
+}
+body[data-theme] [class*="to-amber"]:not([class*="/"]) {
+  --tw-gradient-to: var(--color-2) var(--tw-gradient-to-position) !important;
+}
+body[data-theme] [class*="from-yellow"]:not([class*="/"]) {
+  --tw-gradient-from: var(--color-1) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: var(--color-2) var(--tw-gradient-to-position) !important;
+  color: var(--on-color-1) !important;
+}
+body[data-theme] [class*="to-yellow"]:not([class*="/"]) {
+  --tw-gradient-to: var(--color-2) var(--tw-gradient-to-position) !important;
+}
+
+/* (B) KOYU zeminde soluk metin/ikon tabanı (light/paper hariç) */
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="text-ink-400"]:not([class*="/"]) { color: #8f8f9a !important; }
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="text-ink-500"]:not([class*="/"]) { color: #83838e !important; }
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="text-ink-600"]:not([class*="/"]) { color: #7b7b86 !important; }
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="text-ink-700"]:not([class*="/"]) { color: #73737e !important; }
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="placeholder-ink"]::placeholder { color: #8a8a95 !important; }
+
+/* (B2) hover eşleri: ink tabanı ezmeden hover renkleri geri gelir
+   (specificity hover tarafında daha yüksek → :hover anında kazanır) */
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="hover:text-gold"]:hover { color: var(--color-1) !important; }
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="hover:text-amber"]:hover,
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="hover:text-yellow"]:hover { color: var(--color-1) !important; }
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="hover:text-azure"]:hover { color: var(--color-2) !important; }
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="hover:text-ink-300"]:hover { color: #c3c3cc !important; }
+body[data-theme]:not([data-theme="light"]):not([data-theme="paper-light"]) [class*="hover:text-ink-200"]:hover { color: #d6d6de !important; }
+
+/* (C) AÇIK temalarda okunmaz sabit renkler → koyu tonlar */
+body[data-theme="light"] [class*="text-gold"]:not([class*="/"]),
+body[data-theme="paper-light"] [class*="text-gold"]:not([class*="/"]) { color: #b45309 !important; }
+body[data-theme="light"] [class*="text-azure"]:not([class*="/"]),
+body[data-theme="paper-light"] [class*="text-azure"]:not([class*="/"]) { color: #1d4ed8 !important; }
+body[data-theme="light"] [class*="text-emerald"],
+body[data-theme="paper-light"] [class*="text-emerald"] { color: #047857 !important; }
+body[data-theme="light"] [class*="text-green"],
+body[data-theme="paper-light"] [class*="text-green"] { color: #15803d !important; }
+body[data-theme="light"] [class*="text-teal"],
+body[data-theme="paper-light"] [class*="text-teal"] { color: #0f766e !important; }
+body[data-theme="light"] [class*="text-lime"],
+body[data-theme="paper-light"] [class*="text-lime"] { color: #4d7c0f !important; }
+body[data-theme="light"] [class*="text-yellow"],
+body[data-theme="paper-light"] [class*="text-yellow"] { color: #a16207 !important; }
+body[data-theme="light"] [class*="text-amber"],
+body[data-theme="paper-light"] [class*="text-amber"] { color: #b45309 !important; }
+body[data-theme="light"] [class*="text-orange"],
+body[data-theme="paper-light"] [class*="text-orange"] { color: #c2410c !important; }
+body[data-theme="light"] [class*="text-red"]:not([class*="text-red-deep"]),
+body[data-theme="paper-light"] [class*="text-red"]:not([class*="text-red-deep"]) { color: #dc2626 !important; }
+body[data-theme="light"] [class*="text-rose"],
+body[data-theme="paper-light"] [class*="text-rose"] { color: #be123c !important; }
+body[data-theme="light"] [class*="text-sky"],
+body[data-theme="paper-light"] [class*="text-sky"] { color: #0369a1 !important; }
+body[data-theme="light"] [class*="text-cyan"],
+body[data-theme="paper-light"] [class*="text-cyan"] { color: #0e7490 !important; }
+body[data-theme="light"] [class*="text-blue"],
+body[data-theme="paper-light"] [class*="text-blue"] { color: #1d4ed8 !important; }
+body[data-theme="light"] [class*="text-indigo"],
+body[data-theme="paper-light"] [class*="text-indigo"] { color: #4338ca !important; }
+body[data-theme="light"] [class*="text-violet"],
+body[data-theme="paper-light"] [class*="text-violet"] { color: #6d28d9 !important; }
+body[data-theme="light"] [class*="text-purple"],
+body[data-theme="paper-light"] [class*="text-purple"] { color: #7e22ce !important; }
+body[data-theme="light"] [class*="text-fuchsia"],
+body[data-theme="paper-light"] [class*="text-fuchsia"] { color: #a21caf !important; }
+body[data-theme="light"] [class*="text-pink"],
+body[data-theme="paper-light"] [class*="text-pink"] { color: #be185d !important; }
 
 /* Hareketli Arka Plan Işıkları (Blobs) */
 .ambient-glow-1 { background: radial-gradient(circle, var(--blob-1) 0%, transparent 70%); }
