@@ -293,6 +293,94 @@ const HOME_PREMIUM_CSS = `
   .hn-duo{grid-template-columns:1fr}
   .hn-panel + .hn-panel{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
 }
+@media (max-width:767px){
+  /* bölüm başlıkları — taşma yok, sarar */
+  .hn-sec{gap:12px}
+  .hn-sec-t{gap:10px;flex-wrap:wrap}
+  .hn-sec-t .ln{min-width:16px}
+  .hn-idx{padding:4px 8px;font-size:9px}
+  .hn-more{padding:8px 4px}
+  /* butonlar — mobil dokunma hedefi + sığdırma */
+  .hn-btn{padding:12px 14px;font-size:10.5px;letter-spacing:.08em;gap:5px;min-height:44px;justify-content:center}
+  .hn-planned{padding:12px 14px;font-size:10.5px;letter-spacing:.08em}
+  /* ajankartı — küçültülmüş kimlik/xp/yol */
+  .hp-id{padding:14px 16px;gap:14px;min-height:0}
+  .hp-ava{width:52px;height:52px}
+  .hp-ava svg{width:52px;height:52px}
+  .hp-core{font-size:19px}
+  .hp-core-ic{width:24px;height:24px}
+  .hp-pid h3{font-size:20px;margin:4px 0 7px}
+  .hp-copy{width:32px;height:32px}
+  .hp-badge{min-height:36px}
+  .hp-badge-tx b{max-width:110px}
+  .hp-xpool{padding-left:0}
+  .hp-xpool b{font-size:19px}
+  .hp-xpline{padding:0 16px 14px;gap:14px}
+  .hp-lvbox b{font-size:23px}
+  .hp-path{padding:11px 16px;gap:12px}
+  .hp-path-track{gap:8px 10px}
+  .hp-tiers{padding:10px 16px}
+  .hp-tier{min-height:34px}
+  .hp-stat{min-height:48px;padding:9px 6px}
+  /* serişeridi */
+  .hp-streakbar{padding:10px 16px;gap:12px}
+  /*geri sayım */
+  .hn-timer{padding:14px;gap:12px}
+  .hn-timer-ic{width:40px;height:40px;border-radius:12px}
+  .hn-timer-tx{flex:1 1 100%;min-width:0}
+  .hn-timer-btns{margin-left:0;width:100%}
+  .hn-timer-btns .hn-btn{flex:1}
+  .hn-timer-x{flex-shrink:0}
+  /* 03 · günün sineması */
+  .hn-sp-poster{min-height:210px;padding:18px}
+  .hn-big-letter{font-size:130px}
+  .hn-pt{font-size:21px}
+  .hn-rate{top:12px;right:12px;font-size:14px;padding:5px 10px}
+  .hn-filmbadge{font-size:8.5px;padding:6px 11px;letter-spacing:.16em}
+  .hn-sp-body{padding:20px 16px;gap:14px}
+  .hn-sp-body h2{font-size:26px}
+  .hn-meta-chips span{font-size:9.5px;padding:6px 11px;letter-spacing:.08em}
+  .hn-genre{font-size:9.5px;padding:6px 11px;letter-spacing:.12em}
+  .hn-gdesc{font-size:12.5px;line-height:1.65}
+  .hn-btnrow{gap:8px}
+  .hn-btnrow .hn-btn{flex:1 1 auto}
+  .hn-link-chip{font-size:9px;padding:7px 10px;letter-spacing:.08em}
+  /* 04 · arşiv kısayolları — 1 sütun yerine 2x2 */
+  .hn-shortcuts{grid-template-columns:repeat(2,1fr);gap:10px}
+  .hn-sc{padding:16px 10px}
+  .hn-sci{width:38px;height:38px;border-radius:12px;margin-bottom:9px}
+  .hn-sc b{font-size:26px}
+  .hn-sc>span:last-child{font-size:8.5px;letter-spacing:.12em}
+  /* 05 · diziler */
+  .hn-scard{padding:14px;gap:12px}
+  .hn-sposter{width:72px}
+  .hn-sinfo h4{font-size:14px}
+  .hn-rate-btn{margin-top:12px;padding:10px}
+  /* 06 · rozetler + ağ */
+  .hn-panel{padding:18px 16px}
+  .hn-panel h3{font-size:13.5px;margin-bottom:14px;gap:8px}
+  .hn-ach{padding:13px;margin-bottom:10px;border-radius:14px}
+  .hn-ach .top{gap:10px}
+  .hn-ai{width:38px;height:38px;border-radius:11px}
+  .hn-an b{font-size:12px}
+  .hn-an span{font-size:10.5px}
+  .hn-net-note{font-size:11.5px;padding:11px 13px}
+  .hn-agent{padding:11px 12px;gap:10px}
+  .hn-aa{width:34px;height:34px;border-radius:10px;font-size:13px}
+  .hn-agent-tx b{font-size:12px}
+  /* 07 · son izlenenler (afişler korunur, yalnız sığdırma) */
+  .hp-recent{gap:10px}
+  .hp-rec-tx{padding:10px 12px 12px}
+  .hp-rec-tx b{font-size:12px}
+  .hp-rec-ph b{font-size:40px}
+  .hp-rec-kind{top:8px;left:8px;font-size:7px;padding:3px 7px}
+  .hp-rec-rate{top:8px;right:8px;font-size:10px;padding:3px 7px}
+  /* bento · alt alan */
+  .hn-bento-card{padding:20px 18px}
+  .hn-bento-title{font-size:24px}
+  .hn-bento-ic{width:40px;height:40px;border-radius:12px;margin-bottom:12px}
+  .hn-bento-badge{font-size:9px;padding:6px 13px;letter-spacing:.14em}
+}
 @media (max-width:640px){
   .hn-sec-t h2{font-size:15px}
   .hp-stats{grid-template-columns:repeat(2,1fr)}
@@ -311,10 +399,10 @@ const HOME_PREMIUM_CSS = `
   .hp-node{min-height:24px}
   .hp-streakbar{padding:10px 14px;min-height:0}
   .hp-tiers{padding:10px 14px}
-  .hn-sp-body h2{font-size:28px}
-  .hn-bento-title{font-size:24px}
+  .hn-sp-body h2{font-size:24px}
+  .hn-bento-title{font-size:22px}
   .hn-big-letter{font-size:120px}
-  .hn-sp-body{padding:22px 18px}
+  .hn-sp-body{padding:18px 14px}
 }
 @media (prefers-reduced-motion:reduce){
   .hn-agents-loading{animation:none}
