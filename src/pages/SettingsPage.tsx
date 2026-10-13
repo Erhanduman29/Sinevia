@@ -258,7 +258,7 @@ export default function SettingsPage() {
     { id: 'monokai', name: 'Monokai Neon', desc: 'Sıcak Yeşil, Pembe & Mavi', icon: Code, previewBg: '#1c1c16', textMode: 'dark', colors: ['#f92672', '#a6e22e', '#66d9ef'] },
     { id: 'paper-light', name: 'Kâğıt Sepya', desc: 'Sepya, Mürekkep Mavi & Bordo', icon: FileText, previewBg: '#efe9dc', textMode: 'light', colors: ['#b45309', '#1d4ed8', '#be123c'] },
     { id: 'retro-amber', name: 'Retro Amber CRT', desc: 'Amber, Turuncu & Soluk Sarı', icon: Terminal, previewBg: '#0d0801', textMode: 'dark', colors: ['#ffab00', '#ff7a00', '#ffe082'] },
-    { id: 'premium-dark', name: 'Premium Koyu', desc: 'Cam Yüzeyler & Kırmızı Vurgu', icon: Flame, previewBg: '#0a0a0d', textMode: 'dark', colors: ['#e8384f', '#ff6b7a', '#8e1220'] },
+    { id: 'premium-dark', name: 'Premium Koyu', desc: 'Cam Yüzeyler & Kırmızı Vurgu', icon: Flame, previewBg: '#000000', textMode: 'dark', colors: ['#e8384f', '#ff6b7a', '#8e1220'] },
     { id: 'plain-dark', name: 'Sade Koyu', desc: 'Simsiyah Zemin & Beyaz Vurgu', icon: Moon, previewBg: '#000000', textMode: 'dark', colors: ['#ffffff', '#fbfbfb', '#f3f3f4'] },
     { id: 'solo-crimson', name: 'Tek Renk Kızıl', desc: 'Tek Renk · Sadece Kızılın Tonları', icon: Droplet, previewBg: '#12060a', textMode: 'dark', colors: ['#ef4444', '#dc2626', '#b91c1c'] },
     { id: 'duo-sunset', name: 'Çift Renk Gün Batımı', desc: 'Çift Renk · Turuncu & Mor', icon: Palette, previewBg: '#16101d', textMode: 'dark', colors: ['#fb923c', '#a78bfa', '#7c3aed'] },
@@ -963,7 +963,7 @@ export default function SettingsPage() {
                     onClick={() => updateTheme(theme.id)}
                     className={`relative flex flex-col justify-between p-3 sm:p-4 rounded-2xl border text-left transition-all duration-300 overflow-hidden group ${
                       isSelected ? 'border-gold-500 ring-2 ring-gold-500/30 scale-[1.02] shadow-2xl' : 'border-ink-700/60 hover:border-ink-500'
-                    }`}
+                    } ${theme.textMode === 'dark' ? 'theme-preview-dark' : 'theme-preview-light'}`}
                     style={{ backgroundColor: theme.previewBg }}
                   >
                     <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full blur-2xl opacity-40 group-hover:opacity-70 transition-opacity" style={{ backgroundColor: theme.colors[0] }} />

@@ -73,10 +73,12 @@ const accentTextStyle: React.CSSProperties = {
   color: 'transparent',
 };
 
-/** Premium btn-p: açık vurgu → vurgu → koyu vurgu (red-hi/red/red-deep düzeni). */
+/** Premium btn-p: açık vurgu → vurgu → koyu vurgu (red-hi/red/red-deep düzeni).
+ *  TUR-3: plain-dark'ta beyaz buton VERMESİN diye duraklar --btn-p-* ile
+ *  sarılır; tanımsızken (tüm diğer temalar) eskisiyle BİREBİR aynı. */
 const btnPrimaryStyle: React.CSSProperties = {
   backgroundImage:
-    'linear-gradient(150deg, color-mix(in srgb, var(--color-2) 80%, white), var(--color-1) 45%, color-mix(in srgb, var(--color-1) 55%, black))',
+    'linear-gradient(150deg, var(--btn-p-hi, color-mix(in srgb, var(--color-2) 80%, white)), var(--btn-p-mid, var(--color-1)) 45%, var(--btn-p-low, color-mix(in srgb, var(--color-1) 55%, black)))',
   boxShadow:
     '0 10px 28px -10px color-mix(in srgb, var(--color-1) 75%, transparent), inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 6px rgba(0,0,0,.25)',
 };
@@ -96,9 +98,10 @@ const topbarStyle: React.CSSProperties = {
   boxShadow: '0 18px 44px -26px rgba(0,0,0,.9)',
 };
 
-/** Topbar altındaki kırmızı (tema vurgulu) gradyan saç teli. */
+/** Topbar altındaki kırmızı (tema vurgulu) gradyan saç teli.
+ *  TUR-3: plain-dark için duraklar --accent-line (gri) üzerinden. */
 const TOPBAR_HAIRLINE =
-  'linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-1) 55%, transparent) 30%, color-mix(in srgb, var(--color-2) 35%, transparent) 60%, transparent)';
+  'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-line, var(--color-1)) 55%, transparent) 30%, color-mix(in srgb, var(--accent-line, var(--color-2)) 35%, transparent) 60%, transparent)';
 
 /** Buton üzerinde hover'da geçen parlak süpürme (premium shine). */
 function ButtonShimmer() {
@@ -110,13 +113,14 @@ function ButtonShimmer() {
   );
 }
 
-/** Aktif nav öğesinin solundaki ince ışıklı çizgi. */
+/** Aktif nav öğesinin solundaki ince ışıklı çizgi.
+ *  TUR-3: plain-dark'ta çizgi beyaz değil, gri vurgu (--accent-line). */
 function ActiveRail() {
   return (
     <span
       aria-hidden
       className="absolute -left-3 top-[22%] bottom-[22%] w-[3px] rounded-full"
-      style={{ background: 'var(--color-1)', boxShadow: '0 0 12px var(--color-1)' }}
+      style={{ background: 'var(--accent-line, var(--color-1))', boxShadow: '0 0 12px var(--accent-line, var(--color-1))' }}
     />
   );
 }
@@ -909,7 +913,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           <span
             aria-hidden
             className="absolute left-5 right-5 bottom-[-1px] h-px opacity-70"
-            style={{ background: 'linear-gradient(90deg, var(--color-1), transparent)' }}
+            style={{ background: 'linear-gradient(90deg, var(--accent-line, var(--color-1)), transparent)' }}
           />
         </button>
 

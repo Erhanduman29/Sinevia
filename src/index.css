@@ -274,7 +274,7 @@ body[data-theme="retro-amber"] {
 
 /* 13. PREMIUM KOYU (Cam yüzeyler · İnce saydam çizgiler · Kırmızı vurgu) */
 body[data-theme="premium-dark"] {
-  --bg-base: #0a0a0d;
+  --bg-base: #000000; /* TUR-3: simsiyah zemin (önizleme previewBg ile senkron) */
   --bg-surface: #141417;
   --bg-card: #1b1b1e;
   --border-dim: rgba(244, 244, 242, 0.12);
@@ -406,9 +406,15 @@ body[data-theme="quad-festival"] {
 body {
   background-color: var(--bg-base) !important;
   color: var(--text-main) !important;
-  transition: background-color 0.5s ease, color 0.3s ease;
+  /* TUR-3: tema değişimini dikkat çekmeden, yumuşak ve yavaş */
+  transition: background-color 0.8s ease-out, color 0.4s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Uygulama kökü de aynı yumuşak geçişi taşısın (panel/zemin değişimi ani olmasın) */
+#root > div {
+  transition: background-color 0.8s ease-out, color 0.4s ease;
 }
 
 /* =========================================================
@@ -634,10 +640,40 @@ body[data-theme="paper-light"] [class*="text-fuchsia"] { color: #a21caf !importa
 body[data-theme="light"] [class*="text-pink"],
 body[data-theme="paper-light"] [class*="text-pink"] { color: #be185d !important; }
 
-/* Hareketli Arka Plan Işıkları (Blobs) */
-.ambient-glow-1 { background: radial-gradient(circle, var(--blob-1) 0%, transparent 70%); }
-.ambient-glow-2 { background: radial-gradient(circle, var(--blob-2) 0%, transparent 70%); }
-.ambient-glow-3 { background: radial-gradient(circle, var(--blob-3) 0%, transparent 70%); }
+/* Hareketli Arka Plan Işıkları (Blobs)
+   TUR-3: gradyan → tek renk + radyal maske. Gradyanlar tema değişiminde
+   ANİ sıçrıyordu; background-color ise 0.9-1s'te yumuşak geçiş yapar.
+   blur-[130px] + radyal maske = önceki gradyan görünümü korunur. */
+.ambient-glow-1 {
+  background-color: var(--blob-1);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0) 70%);
+  mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0) 70%);
+  opacity: 0.7;
+  transition: background-color 0.9s ease, opacity 0.9s ease;
+}
+.ambient-glow-2 {
+  background-color: var(--blob-2);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0) 70%);
+  mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0) 70%);
+  opacity: 0.7;
+  transition: background-color 0.9s ease, opacity 0.9s ease;
+}
+.ambient-glow-3 {
+  background-color: var(--blob-3);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0) 70%);
+  mask-image: radial-gradient(circle, #000 0%, rgba(0, 0, 0, 0) 70%);
+  opacity: 0.7;
+  transition: background-color 0.9s ease, opacity 0.9s ease;
+}
+/* Açık temalarda ışıklar daha da kısılır (beyaz zeminde dikkat çekmesin) */
+body[data-theme="light"] .ambient-glow-1,
+body[data-theme="light"] .ambient-glow-2,
+body[data-theme="light"] .ambient-glow-3,
+body[data-theme="paper-light"] .ambient-glow-1,
+body[data-theme="paper-light"] .ambient-glow-2,
+body[data-theme="paper-light"] .ambient-glow-3 {
+  opacity: 0.5;
+}
 
 /* =========================================================
    YENİ MODERN KAYDIRMA ÇUBUĞU (SCROLLBAR) - TEMAYA UYUMLU
@@ -797,4 +833,385 @@ input[type='number'] { -moz-appearance: textfield; }
 @keyframes trophy-lock-pulse {
   0%, 100% { opacity: .55; }
   50% { opacity: .9; }
+}
+
+/* =========================================================
+   TUR-3 · OKUNABİLİRLİK + TEMA DURULUĞU
+   (Açık temalarda beyaz/soluk sızıntılar · Sade Koyu'da yalnız
+   yazılarda beyaz · Premium'da simsiyah zemin senkronu)
+   ========================================================= */
+
+/* ---------- 1) AÇIK TEMALAR: eksik premium tokenları ----------
+   Tanımsız kalan tokenlar yalnızca çıplak fallback'e düşüyordu
+   (var(--muted, #9a9a96) → soluk gri, var(--red-hi, #ff6b7a) → pembe).
+   Burada tema paletine bağlanır; koyu temalar ETKİLENMEZ. */
+body[data-theme="light"] {
+  --muted: #475569; /* slate-600: beyaz zeminde 7.4:1 */
+  --surface: var(--bg-surface);
+  --surface2: var(--bg-card);
+  --line: var(--border-dim);
+  --line-2: var(--border-dim);
+  --red: var(--color-1);
+  --red-hi: var(--color-2);
+  --red-deep: var(--color-3);
+}
+body[data-theme="paper-light"] {
+  --muted: #57534e; /* stone-600: kâğıt zeminde ~7:1 */
+  --surface: var(--bg-surface);
+  --surface2: var(--bg-card);
+  --line: var(--border-dim);
+  --line-2: var(--border-dim);
+  --red: var(--color-1);
+  --red-hi: var(--color-2);
+  --red-deep: var(--color-3);
+}
+
+/* ---------- 2) AÇIK TEMALAR: beyaz yazı sızıntısı ----------
+   hover:/group-hover:/…/70 dâhil TÜM text-white varyantları
+   (motorun .text-white kuralı varyantları kaçıyordu). */
+body[data-theme="light"] [class*="text-white"],
+body[data-theme="paper-light"] [class*="text-white"] {
+  color: var(--text-main) !important;
+}
+
+/* İSTİSNA: ağır siyah katman ÜSTÜNDEN okunan rozet/aksiyon yazıları
+   beyaz kalır (poster üzerine binen koyu katmanlar). `fixed` karartmalar
+   (modal örtüsü) bu istisnaya GİRMEZ: onların altındaki açık kartlarda
+   beyaz yazı kalmaz. */
+body[data-theme="light"] [class*="text-white"][class*="bg-black/5"]:not(.fixed),
+body[data-theme="light"] [class*="text-white"][class*="bg-black/6"]:not(.fixed),
+body[data-theme="light"] [class*="text-white"][class*="bg-black/7"]:not(.fixed),
+body[data-theme="light"] [class*="text-white"][class*="bg-black/8"]:not(.fixed),
+body[data-theme="light"] [class*="text-white"][class*="bg-black/9"]:not(.fixed),
+body[data-theme="light"] [class*="text-white"][class~="bg-black"]:not(.fixed),
+body[data-theme="light"] [class*="bg-black/5"]:not(.fixed) [class*="text-white"],
+body[data-theme="light"] [class*="bg-black/6"]:not(.fixed) [class*="text-white"],
+body[data-theme="light"] [class*="bg-black/7"]:not(.fixed) [class*="text-white"],
+body[data-theme="light"] [class*="bg-black/8"]:not(.fixed) [class*="text-white"],
+body[data-theme="light"] [class*="bg-black/9"]:not(.fixed) [class*="text-white"],
+body[data-theme="light"] [class~="bg-black"]:not(.fixed) [class*="text-white"],
+body[data-theme="paper-light"] [class*="text-white"][class*="bg-black/5"]:not(.fixed),
+body[data-theme="paper-light"] [class*="text-white"][class*="bg-black/6"]:not(.fixed),
+body[data-theme="paper-light"] [class*="text-white"][class*="bg-black/7"]:not(.fixed),
+body[data-theme="paper-light"] [class*="text-white"][class*="bg-black/8"]:not(.fixed),
+body[data-theme="paper-light"] [class*="text-white"][class*="bg-black/9"]:not(.fixed),
+body[data-theme="paper-light"] [class*="text-white"][class~="bg-black"]:not(.fixed),
+body[data-theme="paper-light"] [class*="bg-black/5"]:not(.fixed) [class*="text-white"],
+body[data-theme="paper-light"] [class*="bg-black/6"]:not(.fixed) [class*="text-white"],
+body[data-theme="paper-light"] [class*="bg-black/7"]:not(.fixed) [class*="text-white"],
+body[data-theme="paper-light"] [class*="bg-black/8"]:not(.fixed) [class*="text-white"],
+body[data-theme="paper-light"] [class*="bg-black/9"]:not(.fixed) [class*="text-white"],
+body[data-theme="paper-light"] [class~="bg-black"]:not(.fixed) [class*="text-white"] {
+  color: #ffffff !important;
+}
+
+/* İSTİSNA: Ayarlar > Tema önizleme kartları koyu temayı TEMSİL eder —
+   oradaki beyaz/zinc yazım korunur (Siyah zeminli kartta siyah yazı olmasın). */
+body[data-theme="light"] .theme-preview-dark [class*="text-white"],
+body[data-theme="paper-light"] .theme-preview-dark [class*="text-white"] {
+  color: #ffffff !important;
+}
+body[data-theme="light"] .theme-preview-dark [class*="text-zinc-"],
+body[data-theme="paper-light"] .theme-preview-dark [class*="text-zinc-"] {
+  color: #a1a1aa !important;
+}
+
+/* ---------- 3) AÇIK TEMALAR: soluk nötr gri metinler ----------
+   slate/zinc/gray/neutral/stone 50-950 arası hepsi okunur koyağa. */
+body[data-theme="light"] [class*="text-slate-"],
+body[data-theme="paper-light"] [class*="text-slate-"],
+body[data-theme="light"] [class*="text-zinc-"],
+body[data-theme="paper-light"] [class*="text-zinc-"],
+body[data-theme="light"] [class*="text-gray-"],
+body[data-theme="paper-light"] [class*="text-gray-"],
+body[data-theme="light"] [class*="text-neutral-"],
+body[data-theme="paper-light"] [class*="text-neutral-"],
+body[data-theme="light"] [class*="text-stone-"],
+body[data-theme="paper-light"] [class*="text-stone-"] {
+  color: var(--text-main) !important;
+}
+
+/* hover:/focus:/md: VARYANTLI ink sınıfları (sabit .text-ink-* kuralları
+   yalnızca birebir eşleşiyordu → hover'da soluk/okunmaz kalıyordu) */
+body[data-theme="light"] [class*=":text-ink-"],
+body[data-theme="paper-light"] [class*=":text-ink-"] {
+  color: #1e293b !important;
+}
+
+/* Placeholder'lar her temada okunur koyu */
+body[data-theme="light"] ::placeholder,
+body[data-theme="paper-light"] ::placeholder {
+  color: #475569 !important;
+}
+
+/* ---------- 4) AÇIK TEMALAR: satır içi (inline) beyaz yazılar ----------
+   CSS-in-JSX'te color:'#fff' yazan buton/ikon/rozetler gradyanlar açık
+   temada açık tona dönünce okunmazdı → koyu metin. (Kâğıt temada gradyanlar
+   koyu ton kaldığı için beyaz doğru; o yüzden sadece "light".) */
+body[data-theme="light"] [style*="color: #fff"],
+body[data-theme="light"] [style*="color:#fff"],
+body[data-theme="light"] [style*="color: #ffffff"],
+body[data-theme="light"] [style*="color:#ffffff"],
+body[data-theme="light"] [style*="color: white"],
+body[data-theme="light"] [style*="color:white"],
+body[data-theme="light"] [style*="color: rgb(255, 255, 255)"],
+body[data-theme="light"] [style*="color:rgb(255,255,255)"] {
+  color: var(--text-main) !important;
+}
+
+/* Ayarlar'daki gradyanlı başlık: açık temada beyaz duran son %30'luk
+   bölge koyu metne döner (clip-text korunur). */
+body[data-theme="light"] [style*="-webkit-background-clip: text"][style*="--red-hi"],
+body[data-theme="paper-light"] [style*="-webkit-background-clip: text"][style*="--red-hi"] {
+  background: linear-gradient(100deg, var(--red-hi, var(--color-2)), var(--text-main) 70%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+}
+
+/* ---------- 5) AÇIK TEMALAR: vurgu gradyanı ÜSTÜ GRUPLAR ----------
+   GROUP A — gradyan zemin (--red* → --color-*) + gömülü beyaz yazı:
+   açık temada gradyan AÇIK tonlara döner → yazı (--on-color-1) teması
+   koyu; kâğıt temada gradyan KOYU tonlarda kalır → yazı beyaz kalır.
+   Yani her iki açık temada da WCAG kontrastı otomatik doğru. */
+body[data-theme="light"] .achv-xp,
+body[data-theme="paper-light"] .achv-xp,
+body[data-theme="light"] .achv-chip.on,
+body[data-theme="paper-light"] .achv-chip.on,
+body[data-theme="light"] .hn-idx,
+body[data-theme="paper-light"] .hn-idx,
+body[data-theme="light"] .hn-timer-ic,
+body[data-theme="paper-light"] .hn-timer-ic,
+body[data-theme="light"] .hn-btn-p,
+body[data-theme="paper-light"] .hn-btn-p,
+body[data-theme="light"] .hn-rate-btn:hover,
+body[data-theme="paper-light"] .hn-rate-btn:hover,
+body[data-theme="light"] .hn-net-more:hover,
+body[data-theme="paper-light"] .hn-net-more:hover,
+body[data-theme="light"] .wp-pill,
+body[data-theme="paper-light"] .wp-pill,
+body[data-theme="light"] .svp-btn-p,
+body[data-theme="paper-light"] .svp-btn-p,
+body[data-theme="light"] .svp-tab-on,
+body[data-theme="paper-light"] .svp-tab-on,
+body[data-theme="light"] .svp-tab-on .svp-tab-n,
+body[data-theme="paper-light"] .svp-tab-on .svp-tab-n,
+body[data-theme="light"] .svp-chip-on,
+body[data-theme="paper-light"] .svp-chip-on,
+body[data-theme="light"] .svp-chip-on:hover,
+body[data-theme="paper-light"] .svp-chip-on:hover,
+body[data-theme="light"] .svp-poster::after,
+body[data-theme="paper-light"] .svp-poster::after,
+body[data-theme="light"] .svp-ep-done,
+body[data-theme="paper-light"] .svp-ep-done,
+body[data-theme="light"] .svp-ep-del:hover,
+body[data-theme="paper-light"] .svp-ep-del:hover,
+body[data-theme="light"] .svp-x:hover,
+body[data-theme="paper-light"] .svp-x:hover,
+body[data-theme="light"] .svp-empty-tile,
+body[data-theme="paper-light"] .svp-empty-tile,
+body[data-theme="light"] .svp-modal-tile,
+body[data-theme="paper-light"] .svp-modal-tile,
+body[data-theme="light"] .svp-modal-check,
+body[data-theme="paper-light"] .svp-modal-check {
+  color: var(--on-color-1, #0a0a0e) !important;
+}
+
+/* GROUP B — açık zemin üstünde beyaz/soluk kalan durum yazıları:
+   her iki açık temada da koyu metin. */
+body[data-theme="light"] .hn-timer-x:hover,
+body[data-theme="paper-light"] .hn-timer-x:hover,
+body[data-theme="light"] .svp-ep-ready:hover,
+body[data-theme="paper-light"] .svp-ep-ready:hover,
+body[data-theme="light"] .svp-modal-tag,
+body[data-theme="paper-light"] .svp-modal-tag {
+  color: var(--text-main) !important;
+}
+
+/* ---------- 6) AÇIK TEMALAR: kalan okunmaz sabit değerler ---------- */
+/* Stats kırmızı etiketi (--red → amber: beyaz zeminde 1.8:1) */
+body[data-theme="light"] .stats-red { color: #b45309 !important; }
+body[data-theme="paper-light"] .stats-red { color: #be123c !important; }
+
+/* Başarı madalyaları: altın #EFC94C / gümüş #D3D7DE beyazda görünmez */
+body[data-theme="light"] .achv-medal.gold,
+body[data-theme="paper-light"] .achv-medal.gold {
+  color: #a16207 !important;
+  border-color: rgba(161, 98, 7, 0.45) !important;
+  background: rgba(245, 158, 11, 0.14) !important;
+  box-shadow: 0 0 20px -6px rgba(245, 158, 11, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+body[data-theme="light"] .achv-medal.silver,
+body[data-theme="paper-light"] .achv-medal.silver {
+  color: #475569 !important;
+  border-color: rgba(100, 116, 139, 0.45) !important;
+  background: rgba(148, 163, 184, 0.18) !important;
+}
+
+/* Series: sabit koyu cam ikon butonu / sabit soluk yeşil "tamam" etiketi /
+   soluk kırmızı silme hover'ı — açık temada okunmazdı */
+body[data-theme="light"] .svp-ep-del,
+body[data-theme="paper-light"] .svp-ep-del {
+  background: linear-gradient(150deg, var(--bg-surface), var(--bg-card)) !important;
+}
+body[data-theme="light"] .svp-ep-del:hover,
+body[data-theme="paper-light"] .svp-ep-del:hover {
+  background: linear-gradient(150deg, var(--svp-a2), var(--svp-a3)) !important;
+  border-color: transparent !important;
+}
+body[data-theme="light"] .svp-btn-s,
+body[data-theme="paper-light"] .svp-btn-s {
+  background: rgba(255, 255, 255, 0.55) !important;
+  border-color: var(--border-dim) !important;
+}
+body[data-theme="light"] .svp-btn-s:hover,
+body[data-theme="paper-light"] .svp-btn-s:hover {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border-color: #cbd5e1 !important;
+}
+body[data-theme="light"] .svp-done-tag,
+body[data-theme="paper-light"] .svp-done-tag {
+  color: #047857 !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(4, 120, 87, 0.4) !important;
+  box-shadow: 0 0 14px -6px rgba(16, 185, 129, 0.5) !important;
+}
+body[data-theme="light"] .svp-act-del:hover,
+body[data-theme="paper-light"] .svp-act-del:hover {
+  color: #dc2626 !important;
+  border-color: rgba(220, 38, 38, 0.45) !important;
+  box-shadow: 0 8px 20px -10px rgba(220, 38, 38, 0.5) !important;
+}
+
+/* Tutorial kartı: index.css'in shorthand gradienti Tailwind from-ink-*
+   sınıfını eziyor → her temada KOYU kart kalıyordu (açık temada
+   siyah yazı == görünmez kart). Açık temalarda açık yüzey + koyu yazı. */
+body[data-theme="light"] .tutorial-card {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.98));
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 34px 90px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.06) inset, 0 0 90px rgba(245, 158, 11, 0.16);
+}
+body[data-theme="paper-light"] .tutorial-card {
+  background: linear-gradient(165deg, rgba(253, 251, 244, 0.98), rgba(239, 233, 220, 0.98));
+  border-color: rgba(180, 83, 9, 0.5);
+  box-shadow: 0 34px 90px rgba(41, 37, 36, 0.16), 0 0 0 1px rgba(41, 37, 36, 0.06) inset, 0 0 90px rgba(180, 83, 9, 0.16);
+}
+
+/* =========================================================
+   SADE KOYU (plain-dark) — simsiyah zemin, yalnız YAZILAR beyaz;
+   vurgular siyah-gri tonlarında ayrılır (beyaz buton/ikon yok).
+   ========================================================= */
+
+/* Vurgu gradyanlarının dolgusu koyu griye döner; --on-color-* beyaz
+   olduğu için gradyan üstü yazı/ikon okunur beyaz kalır.
+   --red* tanımlanana kadar plain-dark'ta var(--color-1)=#fff'e düşüp
+   BİREY Beyaz buton üretiyordu (kullanıcı şikâyetinin kaynağı). */
+body[data-theme="plain-dark"] {
+  --on-color-1: #ffffff;
+  --on-color-2: #ffffff;
+  --on-color-3: #ffffff;
+  --red: #3f3f46;
+  --red-hi: #7d7d86;
+  --red-deep: #18181c;
+  --btn-p-hi: #52525b;
+  --btn-p-mid: #33333b;
+  --btn-p-low: #17171a;
+  --accent-line: #9a9aa3;
+}
+
+/* Motor dolguları (bg-/from- gradyanları) → koyu gri; yazı beyaz */
+body[data-theme="plain-dark"] [class*="bg-gold"]:not([class*="/"]),
+body[data-theme="plain-dark"] [class*="bg-amber"]:not([class*="/"]),
+body[data-theme="plain-dark"] [class*="bg-yellow"]:not([class*="/"]) {
+  background-color: #2c2c33 !important;
+  color: #ffffff !important;
+}
+body[data-theme="plain-dark"] [class*="bg-azure"]:not([class*="/"]) {
+  background-color: #34343c !important;
+  color: #ffffff !important;
+}
+body[data-theme="plain-dark"] [class*="from-gold"]:not([class*="/"]),
+body[data-theme="plain-dark"] [class*="from-amber"]:not([class*="/"]),
+body[data-theme="plain-dark"] [class*="from-yellow"]:not([class*="/"]) {
+  --tw-gradient-from: #2c2c33 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: #34343c var(--tw-gradient-to-position) !important;
+  color: #ffffff !important;
+}
+body[data-theme="plain-dark"] [class*="to-gold"]:not([class*="/"]),
+body[data-theme="plain-dark"] [class*="to-amber"]:not([class*="/"]),
+body[data-theme="plain-dark"] [class*="to-yellow"]:not([class*="/"]) {
+  --tw-gradient-to: #34343c var(--tw-gradient-to-position) !important;
+}
+body[data-theme="plain-dark"] [class*="from-azure"]:not([class*="/"]) {
+  --tw-gradient-from: #34343c var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: #24242b var(--tw-gradient-to-position) !important;
+}
+/* Vurgu kenarlıkları / halkaları → gri */
+body[data-theme="plain-dark"] [class*="border-gold"],
+body[data-theme="plain-dark"] [class*="border-amber"],
+body[data-theme="plain-dark"] [class*="border-yellow"],
+body[data-theme="plain-dark"] [class*="border-azure"] {
+  border-color: #4b4b54 !important;
+}
+body[data-theme="plain-dark"] [class*="ring-gold"],
+body[data-theme="plain-dark"] [class*="ring-azure"] {
+  --tw-ring-color: #4b4b54 !important;
+}
+/* Seçim / odak / kaydırma çubuğu → gri (beyaz değil) */
+body[data-theme="plain-dark"] ::selection {
+  background-color: #3f3f46 !important;
+  color: #ffffff !important;
+}
+body[data-theme="plain-dark"] *:focus-visible {
+  outline-color: #a1a1aa !important;
+}
+body[data-theme="plain-dark"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #52525b, #3f3f46) !important;
+}
+body[data-theme="plain-dark"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #7d7d86, #52525b) !important;
+}
+body[data-theme="plain-dark"] .center-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #52525b, #3f3f46) !important;
+}
+body[data-theme="plain-dark"] .center-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #7d7d86, #52525b) !important;
+}
+/* Beyaz gövdeli butonlar → koyu gri gövde + beyaz yazı */
+body[data-theme="plain-dark"] [class~="bg-white"] {
+  background-color: #1f1f1f !important;
+  color: #ffffff !important;
+}
+/* Altın/azure dolgulu ikonlar (yıldız puanları vb.) → gri */
+body[data-theme="plain-dark"] [class*="fill-gold"],
+body[data-theme="plain-dark"] [class*="fill-azure"] {
+  fill: #d4d4d8 !important;
+}
+body[data-theme="plain-dark"] .achv-medal.gold {
+  color: #d4d4d8 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 0 20px -6px rgba(255, 255, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+body[data-theme="plain-dark"] .achv-medal.silver {
+  color: #a1a1aa !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+/* Sabit kırmızı (rgba 232,56,79) neon tintsleri → beyaz-gri tints */
+body[data-theme="plain-dark"] .hn-timer-x:hover,
+body[data-theme="plain-dark"] .hn-genre:first-child,
+body[data-theme="plain-dark"] .hn-sc:hover .hn-sci,
+body[data-theme="plain-dark"] .hn-axp,
+body[data-theme="plain-dark"] .hn-bento-badge,
+body[data-theme="plain-dark"] .hn-net-note {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+body[data-theme="plain-dark"] .hn-sc.red b {
+  text-shadow: 0 0 26px rgba(190, 190, 200, 0.45) !important;
+}
+/* "Aşağıdaki bölümü gör" gibi --blob-1 zeminli rozetlerde yazı okunur kalsın */
+body[data-theme="plain-dark"] .hn-net-more {
+  color: #b4b4bd !important;
 }
