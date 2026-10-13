@@ -18,14 +18,14 @@ import QuestBoard from '../components/QuestBoard';
 const ACHV_PREMIUM_CSS = `
 .achv-card{
   position:relative; overflow:hidden;
-  background:rgba(255,255,255,.035);
+  background:var(--glass, var(--bg-card, rgba(255,255,255,.05)));
   border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
   border-radius:var(--r, 16px);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
   transition:transform .24s cubic-bezier(.2,.7,.3,1), box-shadow .24s, border-color .24s;
 }
 .achv-card.is-locked{
-  background:rgba(255,255,255,.04);
+  background:var(--glass, var(--bg-card, rgba(255,255,255,.05)));
 }
 .achv-card:hover{
   transform:translateX(4px);
@@ -77,12 +77,14 @@ const ACHV_PREMIUM_CSS = `
   position:absolute; right:0; bottom:0; z-index:4;
   display:inline-flex; align-items:center; gap:5px;
   padding:5px 12px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+  font-family:'JetBrains Mono',monospace;
   color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.4);
   background:linear-gradient(135deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-deep, var(--color-3, #8e1220)) 130%);
   border-top-left-radius:14px;
   border-bottom-right-radius:var(--r, 16px);
   box-shadow:-6px -6px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35);
 }
+.achv-card .achv-body span{ font-family:'JetBrains Mono',monospace; }
 .achv-track{
   position:relative; overflow:hidden;
   height:8px;

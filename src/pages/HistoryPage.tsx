@@ -558,7 +558,7 @@ export default function HistoryPage() {
                 onClick={() =>
                   isMovie ? openMovieDetail(item, movieData) : openSeriesDetail(item, seriesData)
                 }
-                className="group relative flex flex-col bg-[color:var(--glass, var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/50 hover:shadow-[0_0_28px_-8px_var(--red, var(--color-1, #e8384f))] rounded-2xl overflow-hidden shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all hover:-translate-y-1.5 cursor-pointer"
+                className="group relative flex flex-col bg-[color:var(--glass, var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/50 hover:shadow-[var(--glow)] rounded-2xl overflow-hidden shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all hover:-translate-y-1.5 cursor-pointer"
               >
                 <div className="aspect-[2/3] w-full bg-[color:var(--surface,var(--bg-surface))] relative overflow-hidden">
                   {posterUrl ? (
@@ -790,7 +790,7 @@ export default function HistoryPage() {
                                 return (
                                   <div
                                     key={ep.id}
-                                    className="bg-[color:var(--glass, var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[0_0_20px_-8px_var(--red, var(--color-1, #e8384f))] rounded-xl p-3 flex flex-col justify-between gap-2 transition-all"
+                                    className="bg-[color:var(--glass, var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[var(--glow)] rounded-xl p-3 flex flex-col justify-between gap-2 transition-all"
                                   >
                                     <div className="flex items-start justify-between gap-2">
                                       <div>
@@ -1066,7 +1066,7 @@ function MovieHistoryCard({
   const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch);
 
   return (
-    <div className="relative bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[0_0_30px_-8px_var(--red, var(--color-1, #e8384f))] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all overflow-hidden group">
+    <div className="relative bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[var(--glow)] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all overflow-hidden group">
       {movieData?.posterUrl && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-15 group-hover:opacity-25 transition-opacity">
           <img src={movieData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150" />

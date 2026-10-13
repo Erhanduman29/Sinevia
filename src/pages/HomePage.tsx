@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import * as Icons from 'lucide-react';
 import {
-  Shuffle, Projector, Tv, Sparkles, Trophy, Star, Search,
+  Shuffle, Tv, Sparkles, Trophy, Star, Search,
   Clock, Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
   ChevronRight, Target, Film, RefreshCw, User, Users, Lock,
-  CheckCircle2, Timer, Play, Pause, X, Compass, Layers, ShieldAlert,
-  Activity, CheckSquare, Medal, Copy
+  Timer, Play, Pause, X, Compass, ShieldAlert, Copy
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
@@ -22,6 +21,287 @@ import MediaDetailModal from '../components/MediaDetailModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
 import { RANK_TIERS } from '../lib/rankTiers';
+
+// ============================================================
+// PREMIUM HOME STILLERİ (sinevia-premium.html kriteri)
+// Cam yüzeyler · kırmızı gradyan barlar · mono etiketler ·
+// hover kaldırılma + glow · ince ayraçlar · Archivo başlıklar.
+// Tüm renkler tema CSS değişkenlerine bağlıdır; premium-dark
+// tokenları önce gelir (--red/--red-hi/--red-deep, --glass,
+// --line-2, --r, --shadow, --glow), plain-dark gibi token
+// tanımsız temalar için zincirleme fallback:
+// --color-1/2/3 → sabit değer.
+// ============================================================
+const HOME_PREMIUM_CSS = `
+.hn-sec{display:flex;flex-direction:column;gap:16px}
+.hn-sec-t{display:flex;align-items:center;gap:14px}
+.hn-sec-t h2{font-family:inherit;font-size:17px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;color:var(--text-main,#f4f4f2);margin:0}
+.hn-sec-t .ln{flex:1;height:1px;background:linear-gradient(90deg,var(--line-2,var(--border-dim,rgba(244,244,242,.13))),transparent)}
+.hn-idx{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.18em;color:#fff;background:linear-gradient(135deg,var(--red,var(--color-1,#e8384f)),var(--red-deep,var(--color-3,#8e1220)));padding:5px 10px;border-radius:8px;box-shadow:0 4px 14px -4px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.3)}
+.hn-more{font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);background:none;border:0;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:4px;padding:4px 0}
+.hn-more:hover{color:var(--red-hi,var(--color-2,#ff6b7a));transform:translateX(3px)}
+.hn-band,.hn-profile,.hn-xp,.hn-spotlight,.hn-duo,.hn-scard,.hn-sc,.hn-rchip,.hn-timer,.hn-bento-card{
+  background:var(--glass,var(--bg-card,rgba(255,255,255,.05)));
+  border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));
+  border-radius:var(--r-lg,22px);
+  box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8)),inset 0 1px 0 rgba(255,255,255,.07);
+}
+.hn-rchip{border-radius:var(--r,16px)}
+
+/* ---------- 01 · SERİ + KADEMELER ---------- */
+.hn-band{display:flex;flex-wrap:wrap;overflow:hidden}
+.hn-streak{display:flex;align-items:center;gap:15px;padding:18px 24px;border-right:1px solid var(--line,rgba(244,244,242,.07));background:linear-gradient(120deg,var(--blob-1,rgba(232,56,79,.14)),transparent 70%)}
+.hn-fl{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:#fff;flex-shrink:0;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 8px 22px -8px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.4)}
+.hn-streak b{font-family:inherit;font-size:19px;font-weight:900;letter-spacing:-.02em;display:block;color:var(--text-main,#f4f4f2)}
+.hn-streak b em{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hn-streak span{font-size:9.5px;font-weight:700;letter-spacing:.16em;color:var(--muted,#9a9a96);text-transform:uppercase}
+.hn-tiers{display:flex;flex:1;flex-wrap:wrap}
+.hn-tier{flex:1;min-width:104px;padding:15px 16px;border-right:1px solid var(--line,rgba(244,244,242,.07));text-align:center;transition:.22s;cursor:pointer;background:none;color:inherit;font-family:inherit;border:0}
+.hn-tier:last-child{border-right:0}
+.hn-tier:hover{background:rgba(255,255,255,.05);transform:translateY(-2px)}
+.hn-tier b{display:block;font-size:17px;font-weight:900;color:var(--text-main,#f4f4f2)}
+.hn-tier span{font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--muted,#9a9a96);text-transform:uppercase}
+.hn-tier.br b{color:#C98B4B}.hn-tier.sl b{color:#D3D7DE}.hn-tier.gd b{color:#EFC94C}
+.hn-tier.pt b{color:#8BE5EC}.hn-tier.em b{color:#5BDCA3}.hn-tier.di b{color:#7FC1FF}
+
+/* ---------- 02 · PROFİL + XP ---------- */
+.hn-profile{display:grid;grid-template-columns:auto 1fr;overflow:hidden}
+.hn-avatar-cell{padding:28px 32px;border-right:1px solid var(--line,rgba(244,244,242,.07));display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.hn-ava{position:relative;width:106px;height:106px;flex-shrink:0}
+.hn-ava svg{position:absolute;inset:0;width:106px;height:106px;transform:rotate(-90deg);filter:drop-shadow(0 0 10px rgba(232,56,79,.65))}
+.hn-core{position:absolute;inset:13px;border-radius:50%;background:linear-gradient(150deg,#23232A,#101014);border:1px solid rgba(255,255,255,.14);box-shadow:inset 0 2px 6px rgba(0,0,0,.7),0 8px 24px -10px rgba(0,0,0,.9);display:grid;place-items:center;font-size:44px;font-weight:900;color:#fff}
+.hn-core span{position:relative;z-index:1}
+.hn-core-ic{position:absolute;inset:0;margin:auto;width:56px;height:56px;opacity:.18;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hn-lv{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:#fff;font-size:10px;font-weight:900;letter-spacing:.1em;padding:5px 12px;text-transform:uppercase;white-space:nowrap;border-radius:99px;border:3px solid var(--bg-base,#0a0a0d);box-shadow:0 6px 18px -6px var(--red,var(--color-1,#e8384f))}
+.hn-persona{font-size:10.5px;font-weight:900;letter-spacing:.24em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
+.hn-idn h3{font-family:inherit;font-size:34px;font-weight:900;letter-spacing:-.035em;text-transform:uppercase;line-height:1;margin:7px 0 11px;background:linear-gradient(100deg,#fff 30%,#A9A9AE);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hn-code-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hn-code{display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:6px 12px;color:var(--muted,#9a9a96);border-radius:9px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.hn-code b{color:var(--text-main,#f4f4f2)}
+.hn-copy{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);cursor:pointer;transition:.2s}
+.hn-copy:hover{color:var(--red-hi,var(--color-2,#ff6b7a));border-color:var(--red,var(--color-1,#e8384f))}
+.hn-badge-slot{margin-top:13px;display:inline-flex;align-items:center;gap:12px;cursor:pointer;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--glass,var(--bg-card,rgba(255,255,255,.05)));padding:9px 16px 9px 9px;border-radius:15px;transition:.25s cubic-bezier(.2,.7,.3,1);box-shadow:0 8px 24px -14px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.08);font-family:inherit;color:inherit}
+.hn-badge-slot:hover{border-color:var(--red,var(--color-1,#e8384f));transform:translateY(-2px);box-shadow:var(--glow,0 0 0 1px rgba(232,56,79,.35),0 8px 32px -8px rgba(232,56,79,.45))}
+.hn-bi{width:40px;height:40px;border-radius:12px;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:#fff;display:grid;place-items:center;font-size:17px;box-shadow:0 6px 16px -6px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.4);flex-shrink:0}
+.hn-badge-empty-ic{color:var(--muted,#9a9a96)}
+.hn-bt{text-align:left}
+.hn-bt s{display:block;text-decoration:none;font-size:8.5px;font-weight:900;letter-spacing:.2em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
+.hn-bt b{font-size:13px;font-weight:900;text-transform:uppercase;color:var(--text-main,#f4f4f2)}
+.hn-stat-grid{display:grid;grid-template-columns:repeat(5,1fr)}
+.hn-stat{padding:22px 14px;border-left:1px solid var(--line,rgba(244,244,242,.07));text-align:center;background:rgba(255,255,255,.02);position:relative;overflow:hidden;transition:.22s}
+.hn-stat:first-child{border-left:0}
+.hn-stat:hover{background:rgba(255,255,255,.06)}
+.hn-stat b{display:block;font-size:27px;font-weight:900;letter-spacing:-.02em;color:var(--text-main,#f4f4f2)}
+.hn-stat span.lab{font-size:8.5px;font-weight:700;letter-spacing:.16em;color:var(--muted,#9a9a96);text-transform:uppercase;display:block;margin-top:5px}
+.hn-stat.red b{color:var(--red-hi,var(--color-2,#ff6b7a));text-shadow:0 0 22px rgba(232,56,79,.55)}
+.hn-stat .ghost{position:absolute;right:-4px;bottom:-6px;opacity:.05;font-size:44px;font-weight:900;color:#fff;pointer-events:none}
+.hn-xp{margin-top:-1px;border-radius:0 0 var(--r-lg,22px) var(--r-lg,22px);border-top:0;background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));padding:24px 32px}
+.hn-xp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.hn-xp-head s{display:block;text-decoration:none;font-size:9.5px;font-weight:700;letter-spacing:.2em;color:var(--muted,#9a9a96);text-transform:uppercase}
+.hn-xp-bigrow{display:flex;align-items:baseline;gap:10px;margin-top:4px}
+.hn-xp-big{font-family:inherit;font-size:28px;font-weight:900;letter-spacing:-.02em;background:linear-gradient(100deg,var(--red-hi,var(--color-2,#ff6b7a)),#fff 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hn-xp-pct{font-size:13px;font-weight:700;color:var(--muted,#9a9a96)}
+.hn-xp-r{text-align:right}
+.hn-xp-left{font-family:inherit;font-size:15px;font-weight:900;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hn-xp-track{margin-top:15px;height:26px;background:rgba(0,0,0,.45);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.7)}
+.hn-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red,var(--color-1,#e8384f)) 55%,var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 22px var(--red,var(--color-1,#e8384f));transition:width 1s ease}
+.hn-xp-fill::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);transform:translateX(-100%);animation:hnXpShine 2.6s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes hnXpShine{60%,100%{transform:translateX(100%)}}
+.hn-xp-cells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(20,1fr);pointer-events:none}
+.hn-xp-cells i{border-right:1px solid rgba(0,0,0,.35)}
+.hn-xp-cells i:last-child{border:0}
+.hn-rank-row{display:flex;justify-content:space-between;align-items:center;margin-top:17px;flex-wrap:wrap;gap:8px}
+.hn-rank-row .lab{font-size:9.5px;font-weight:700;letter-spacing:.18em;color:var(--muted,#9a9a96);text-transform:uppercase}
+.hn-next-pill{font-size:10.5px;font-weight:900;letter-spacing:.1em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase;background:rgba(232,56,79,.14);border:1px solid rgba(232,56,79,.4);padding:6px 12px;border-radius:99px}
+.hn-ranks{display:flex;gap:9px;margin-top:11px;flex-wrap:wrap}
+.hn-rank{border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:10px 15px;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border-radius:12px;transition:.2s}
+.hn-rank:hover{border-color:rgba(255,255,255,.28);color:var(--text-main,#f4f4f2)}
+.hn-rank.done{color:var(--text-main,#f4f4f2);background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.16)}
+.hn-rank.now{background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:#fff;border-color:transparent;box-shadow:0 8px 22px -8px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.35)}
+.hn-rank .t{display:block;font-size:9px;letter-spacing:.16em;opacity:.75;font-family:'JetBrains Mono',monospace}
+
+/* ---------- HIZLI ERİŞİM + ZAMANLAYICI ---------- */
+.hn-action{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%}
+.hn-timer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:16px 20px}
+.hn-timer-ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;color:#fff;flex-shrink:0;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 8px 22px -8px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.4)}
+.hn-timer-tx{flex:1;min-width:220px}
+.hn-timer-status{font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hn-timer-status span{color:var(--text-main,#f4f4f2)}
+.hn-timer-sub{font-size:12px;color:var(--muted,#9a9a96);margin-top:5px}
+.hn-timer-sub b{color:var(--text-main,#f4f4f2)}
+.hn-timer-sub .hn-mono{font-family:'JetBrains Mono',monospace}
+.hn-timer-warn{color:#EFC94C;margin-left:8px}
+.hn-timer-btns{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.hn-timer-x{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);cursor:pointer;transition:.22s}
+.hn-timer-x:hover{color:#fff;border-color:var(--red,var(--color-1,#e8384f));background:rgba(232,56,79,.12)}
+
+/* ---------- BUTON SİSTEMİ ---------- */
+.hn-btn{position:relative;overflow:hidden;isolation:isolate;font-family:inherit;font-size:11.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;padding:13px 22px;border-radius:13px;border:1px solid transparent;cursor:pointer;transition:.25s cubic-bezier(.2,.7,.3,1);display:inline-flex;align-items:center;gap:6px;color:inherit}
+.hn-btn::after{content:'';position:absolute;top:0;left:-80%;width:55%;height:100%;z-index:-1;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-20deg);transition:left .5s ease}
+.hn-btn:hover::after{left:130%}
+.hn-btn:active{transform:translateY(1px) scale(.985)}
+.hn-btn-p{color:#fff;background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)) 0%,var(--red,var(--color-1,#e8384f)) 45%,var(--red-deep,var(--color-3,#8e1220)) 130%);box-shadow:0 10px 28px -10px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.35),inset 0 -2px 6px rgba(0,0,0,.25)}
+.hn-btn-p:hover{transform:translateY(-2px);box-shadow:0 16px 36px -10px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.4)}
+.hn-btn-s{color:var(--text-main,#f4f4f2);background:linear-gradient(150deg,rgba(255,255,255,.14),rgba(255,255,255,.05));border-color:rgba(255,255,255,.16);box-shadow:0 8px 22px -12px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.16)}
+.hn-btn-s:hover{transform:translateY(-2px);background:linear-gradient(150deg,rgba(255,255,255,.2),rgba(255,255,255,.08));border-color:rgba(255,255,255,.3)}
+.hn-btn-g{color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border-color:var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
+.hn-btn-g:hover{color:var(--text-main,#f4f4f2);border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.07);transform:translateY(-2px)}
+.hn-btn:disabled{opacity:.4;pointer-events:none}
+.hn-btn-ic{vertical-align:-2px}
+.hn-planned{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;padding:13px 22px;border-radius:13px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border:1px dashed var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
+
+/* ---------- 03 · GÜNÜN SİNEMA KARTI ---------- */
+.hn-spotlight{display:grid;grid-template-columns:280px 1fr;overflow:hidden}
+.hn-sp-poster{border-right:1px solid var(--line,rgba(244,244,242,.07));min-height:400px;position:relative;overflow:hidden;background:radial-gradient(420px 320px at 70% 15%,var(--blob-1,rgba(232,56,79,.28)),transparent 60%),linear-gradient(155deg,#2A2118 0%,#161215 55%,#0A0A0D 100%);display:flex;align-items:flex-end;padding:26px;cursor:pointer;font-family:inherit;text-align:left;color:inherit}
+.hn-sp-poster:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:-2px}
+.hn-sp-poster::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.55));pointer-events:none}
+.hn-sp-poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35}
+.hn-big-letter{position:absolute;inset:0;display:grid;place-items:center;font-size:190px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-.06em;user-select:none;pointer-events:none}
+.hn-filmbadge{position:absolute;top:0;left:0;z-index:2;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;padding:8px 14px;background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-radius:0 0 14px 0;box-shadow:0 6px 18px -6px var(--red,var(--color-1,#e8384f))}
+.hn-rate{position:absolute;top:16px;right:16px;z-index:2;font-weight:900;font-size:16px;background:rgba(10,10,13,.75);border:1px solid rgba(255,255,255,.18);padding:6px 12px;border-radius:12px;color:#fff;backdrop-filter:blur(10px);box-shadow:0 8px 22px -10px rgba(0,0,0,.9)}
+.hn-pt{position:relative;z-index:2;font-family:inherit;font-size:26px;font-weight:900;text-transform:uppercase;letter-spacing:-.03em;line-height:1.02;text-shadow:0 4px 24px rgba(0,0,0,.8);color:#fff}
+.hn-sp-body{padding:30px 34px;display:flex;flex-direction:column;gap:16px}
+.hn-sp-kick{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.26em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
+.hn-sp-body h2{font-family:inherit;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-.035em;line-height:.98;margin:0;background:linear-gradient(100deg,#fff 35%,#9C9CA1);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hn-meta-chips{display:flex;gap:8px;flex-wrap:wrap;width:fit-content}
+.hn-meta-chips span{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:8px 14px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px}
+.hn-meta-chips span b{color:var(--text-main,#f4f4f2)}
+.hn-genre-row{display:flex;gap:8px;flex-wrap:wrap}
+.hn-genre{font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:7px 14px;color:var(--muted,#9a9a96);border-radius:99px;transition:.2s;background:none}
+.hn-genre:first-child{color:var(--red-hi,var(--color-2,#ff6b7a));border-color:rgba(232,56,79,.5);background:rgba(232,56,79,.12)}
+.hn-gdesc{font-family:inherit;font-size:13.5px;line-height:1.75;color:var(--muted,#9a9a96);max-width:640px;margin:0}
+.hn-gdesc b{color:var(--text-main,#f4f4f2);font-weight:700}
+.hn-gdesc-empty{font-style:italic}
+.hn-btnrow{display:flex;flex-wrap:wrap;gap:11px;margin-top:auto;padding-top:6px}
+.hn-links{display:flex;gap:8px;flex-wrap:wrap}
+.hn-link-chip{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:8px 13px;border-radius:99px;transition:.2s;text-decoration:none}
+.hn-link-chip:hover{color:var(--text-main,#f4f4f2);border-color:rgba(255,255,255,.3);transform:translateY(-2px)}
+.hn-link-logo{width:13px;height:13px;border-radius:3px;object-fit:cover}
+
+/* ---------- 04 · ARŞİV KISAYOLLARI ---------- */
+.hn-shortcuts{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.hn-sc{padding:26px 20px;text-align:center;position:relative;transition:.28s cubic-bezier(.2,.7,.3,1);cursor:pointer;font-family:inherit;color:inherit}
+.hn-sc:hover{transform:translateY(-6px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 28px 54px -20px rgba(0,0,0,.9),0 0 34px -12px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.1)}
+.hn-sc:hover .hn-sci{border-color:var(--red,var(--color-1,#e8384f));color:var(--red-hi,var(--color-2,#ff6b7a));background:rgba(232,56,79,.12);box-shadow:0 0 22px -6px var(--red,var(--color-1,#e8384f));transform:scale(1.06)}
+.hn-sci{width:46px;height:46px;margin:0 auto 13px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));display:grid;place-items:center;color:var(--muted,#9a9a96);transition:.28s;border-radius:14px;background:rgba(255,255,255,.04)}
+.hn-sc b{display:block;font-family:inherit;font-size:34px;font-weight:900;letter-spacing:-.03em;color:var(--text-main,#f4f4f2)}
+.hn-sc>span:last-child{font-size:9.5px;font-weight:700;letter-spacing:.18em;color:var(--muted,#9a9a96);text-transform:uppercase}
+.hn-sc.red b{color:var(--red-hi,var(--color-2,#ff6b7a));text-shadow:0 0 26px rgba(232,56,79,.6)}
+
+/* ---------- 05 · İZLEMEYE DEVAM ET ---------- */
+.hn-series-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.hn-scard{padding:20px;display:flex;gap:16px;transition:.28s cubic-bezier(.2,.7,.3,1)}
+.hn-scard:hover{transform:translateY(-6px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 30px 56px -22px rgba(0,0,0,.9),0 0 36px -14px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.1)}
+.hn-sposter{width:86px;flex-shrink:0;aspect-ratio:2/3;border-radius:12px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.12);background:linear-gradient(160deg,#221D2A,#0D0D11);display:flex;align-items:flex-end;padding:8px;box-shadow:0 10px 26px -12px rgba(0,0,0,.9);cursor:pointer;font-family:inherit;padding:0}
+.hn-sposter img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hn-sl{position:absolute;inset:0;display:grid;place-items:center;font-size:56px;font-weight:900;color:rgba(255,255,255,.07);pointer-events:none}
+.hn-ep{position:relative;z-index:1;margin:8px;color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.1em;padding:4px 8px;text-transform:uppercase;background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-radius:7px;box-shadow:0 4px 12px -4px var(--red,var(--color-1,#e8384f))}
+.hn-sinfo{flex:1;min-width:0;display:flex;flex-direction:column}
+.hn-sinfo h4{font-family:inherit;font-size:15.5px;font-weight:900;text-transform:uppercase;letter-spacing:-.015em;margin:0;color:var(--text-main,#f4f4f2)}
+.hn-next-ep{display:inline-block;width:fit-content;margin-top:8px;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);padding:5px 10px;border-radius:99px}
+.hn-next-ep b{color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hn-prog-lab{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:15px}
+.hn-prog-lab i{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hn-prog{height:8px;background:rgba(0,0,0,.5);border-radius:99px;margin-top:6px;position:relative;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+.hn-prog i{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 12px var(--red,var(--color-1,#e8384f))}
+.hn-rate-btn{margin-top:15px;width:100%;padding:11px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;transition:.24s;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.hn-rate-btn:hover{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;color:#fff;box-shadow:0 10px 26px -8px var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
+
+/* ---------- 06 · ROZETLER + AĞ ---------- */
+.hn-duo{display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
+.hn-panel{padding:26px 28px}
+.hn-panel + .hn-panel{border-left:1px solid var(--line,rgba(244,244,242,.07))}
+.hn-panel h3{font-family:inherit;font-size:15px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;margin:0 0 18px;display:flex;align-items:center;gap:10px;color:var(--text-main,#f4f4f2);flex-wrap:wrap}
+.hn-di{width:9px;height:9px;border-radius:3px;background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 0 12px var(--red,var(--color-1,#e8384f));flex-shrink:0}
+.hn-panel h3 .hn-more{margin-left:auto}
+.hn-empty{font-family:inherit;font-size:12px;color:var(--muted,#9a9a96);line-height:1.7;padding:13px 16px;background:rgba(255,255,255,.03);border:1px dashed var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:14px;margin:0}
+.hn-ach{border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:rgba(255,255,255,.035);padding:16px 17px;margin-bottom:13px;border-radius:16px;transition:.24s;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.hn-ach:last-child{margin-bottom:0}
+.hn-ach:hover{border-color:var(--red,var(--color-1,#e8384f));background:rgba(255,255,255,.06);transform:translateX(4px);box-shadow:0 10px 28px -14px rgba(0,0,0,.9),-4px 0 24px -14px var(--red,var(--color-1,#e8384f))}
+.hn-ach .top{display:flex;align-items:center;gap:13px}
+.hn-ai{width:44px;height:44px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));display:grid;place-items:center;font-size:17px;flex-shrink:0;background:rgba(255,255,255,.05);border-radius:13px}
+.hn-an{flex:1;min-width:0}
+.hn-an b{display:block;font-family:inherit;font-size:13px;font-weight:900;text-transform:uppercase;color:var(--text-main,#f4f4f2)}
+.hn-an span{font-size:11px;color:var(--muted,#9a9a96);font-weight:500}
+.hn-axp{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:900;letter-spacing:.08em;color:var(--red-hi,var(--color-2,#ff6b7a));background:rgba(232,56,79,.14);border:1px solid rgba(232,56,79,.45);padding:5px 10px;white-space:nowrap;border-radius:99px}
+.hn-pl{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:13px}
+.hn-pl i{font-style:normal;color:var(--text-main,#f4f4f2)}
+.hn-pt{height:8px;background:rgba(0,0,0,.5);border-radius:99px;margin-top:6px;position:relative;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+.hn-pt i{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 12px var(--red,var(--color-1,#e8384f))}
+.hn-net-note{font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);padding:13px 16px;margin:0 0 18px;background:linear-gradient(120deg,var(--blob-1,rgba(232,56,79,.12)),transparent 80%);border:1px solid rgba(232,56,79,.3);border-radius:14px}
+.hn-agents{display:flex;flex-direction:column;gap:9px}
+.hn-agent{display:flex;align-items:center;gap:13px;padding:13px 15px;border:1px solid var(--line,rgba(244,244,242,.07));border-radius:14px;background:rgba(255,255,255,.03);transition:.22s}
+.hn-agent:hover{background:rgba(255,255,255,.07);border-color:var(--line-2,var(--border-dim,rgba(244,244,242,.13)));transform:translateX(4px)}
+.hn-aa{width:38px;height:38px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:linear-gradient(150deg,#23232A,#131317);display:grid;place-items:center;font-weight:900;font-size:14px;border-radius:12px;color:var(--text-main,#f4f4f2);flex-shrink:0}
+.hn-agent-tx{flex:1;min-width:0}
+.hn-agent-tx b{font-family:inherit;font-size:13px;font-weight:900;text-transform:uppercase;display:block;color:var(--text-main,#f4f4f2)}
+.hn-agent-tx .sub{font-size:9.5px;font-weight:700;letter-spacing:.14em;color:var(--muted,#9a9a96);text-transform:uppercase;display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hn-st{margin-left:auto;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:5px 10px;color:var(--muted,#9a9a96);border-radius:99px;white-space:nowrap;flex-shrink:0}
+.hn-st.on{color:#67E39B;border-color:rgba(78,203,142,.5);background:rgba(78,203,142,.1);box-shadow:0 0 14px -5px rgba(78,203,142,.7)}
+.hn-agents-loading{text-align:center;padding:26px 10px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);animation:hnPulse 1.6s ease-in-out infinite}
+.hn-agents-empty{text-align:center;padding:26px 10px;font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border:1px dashed var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:14px;font-style:italic}
+@keyframes hnPulse{50%{opacity:.4}}
+.hn-net-more{margin-top:4px;width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--red-hi,var(--color-2,#ff6b7a));font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:.24s;display:flex;align-items:center;justify-content:center;gap:6px}
+.hn-net-more:hover{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;color:#fff;box-shadow:0 10px 26px -8px var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
+
+/* ---------- 07 · SON İZLENENLER ---------- */
+.hn-recent{display:flex;gap:14px;flex-wrap:wrap}
+.hn-rchip{display:flex;align-items:center;gap:13px;padding:14px 20px 14px 14px;flex:1;min-width:200px;cursor:pointer;transition:.26s cubic-bezier(.2,.7,.3,1);font-family:inherit;color:inherit;text-align:left}
+.hn-rchip:hover{transform:translateY(-5px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 24px 46px -18px rgba(0,0,0,.9),0 0 30px -12px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.1)}
+.hn-th{width:36px;height:50px;border:1px solid rgba(255,255,255,.14);border-radius:9px;background:linear-gradient(160deg,#26212F,#0D0D11);display:grid;place-items:center;font-size:16px;font-weight:900;color:rgba(255,255,255,.4);flex-shrink:0;box-shadow:0 8px 20px -10px rgba(0,0,0,.9)}
+.hn-rchip-tx{min-width:0}
+.hn-rchip-tx b{display:block;font-family:inherit;font-size:12.5px;font-weight:900;text-transform:uppercase;color:var(--text-main,#f4f4f2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hn-rchip-tx>span{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:var(--muted,#9a9a96);text-transform:uppercase;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- BENTO (Nasıl Çalışır) ---------- */
+.hn-bento-badge{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 16px;border-radius:99px;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));background:rgba(232,56,79,.1);border:1px solid rgba(232,56,79,.3)}
+.hn-bento-title{font-family:inherit;font-size:30px;font-weight:900;letter-spacing:-.03em;text-transform:uppercase;margin:14px 0 0;background:linear-gradient(100deg,#fff 30%,#A9A9AE);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hn-bento-card{padding:26px;transition:.28s cubic-bezier(.2,.7,.3,1)}
+.hn-bento-card:hover{transform:translateY(-6px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 28px 54px -20px rgba(0,0,0,.9),0 0 34px -12px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.1)}
+.hn-bento-ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;margin-bottom:16px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:rgba(255,255,255,.04);color:var(--red-hi,var(--color-2,#ff6b7a));transition:.28s}
+.hn-bento-card:hover .hn-bento-ic{border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 0 22px -6px var(--red,var(--color-1,#e8384f));transform:scale(1.06)}
+.hn-bento-card h4{font-family:inherit;font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:-.015em;margin:0 0 8px;color:var(--text-main,#f4f4f2)}
+.hn-bento-card p{font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);margin:0}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width:1080px){
+  .hn-profile{grid-template-columns:1fr}
+  .hn-avatar-cell{border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
+  .hn-stat-grid{grid-template-columns:repeat(3,1fr)}
+  .hn-spotlight{grid-template-columns:1fr}
+  .hn-sp-poster{min-height:240px;border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
+  .hn-series-grid,.hn-shortcuts{grid-template-columns:1fr}
+  .hn-duo{grid-template-columns:1fr}
+  .hn-panel + .hn-panel{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
+}
+@media (max-width:640px){
+  .hn-sec-t h2{font-size:15px}
+  .hn-stat-grid{grid-template-columns:repeat(2,1fr)}
+  .hn-idn h3{font-size:26px}
+  .hn-sp-body h2{font-size:28px}
+  .hn-bento-title{font-size:24px}
+  .hn-big-letter{font-size:120px}
+  .hn-xp{padding:20px 18px}
+  .hn-sp-body{padding:22px 18px}
+}
+@media (prefers-reduced-motion:reduce){
+  .hn-xp-fill::before{animation:none}
+  .hn-agents-loading{animation:none}
+}
+`;
+
+// Kademe tintleri — önizleme ile birebir (bronz/gümüş/altın/platin/zümrüt/elmas)
+const TIER_TINT: Record<string, string> = {
+  bronze: 'rgba(201,139,75,.12)', silver: 'rgba(211,215,222,.10)', gold: 'rgba(239,201,76,.14)',
+  platinum: 'rgba(139,229,236,.12)', emerald: 'rgba(91,220,163,.12)', diamond: 'rgba(127,193,255,.12)',
+};
+const TIER_INK: Record<string, string> = {
+  bronze: '#C98B4B', silver: '#D3D7DE', gold: '#EFC94C', platinum: '#8BE5EC', emerald: '#5BDCA3', diamond: '#7FC1FF',
+};
+const TIER_EDGE: Record<string, string> = {
+  bronze: 'rgba(201,139,75,.5)', silver: 'rgba(211,215,222,.45)', gold: 'rgba(239,201,76,.55)',
+  platinum: 'rgba(139,229,236,.5)', emerald: 'rgba(91,220,163,.5)', diamond: 'rgba(127,193,255,.5)',
+};
 
 function timeAgo(dateString: string) {
   const date = new Date(dateString);
@@ -295,649 +575,552 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-fade-in pb-10 max-w-[1400px] mx-auto">
-      
-      {/* =========================================================
-          1. EFSANEVİ BİRLEŞİK KAHRAMAN (HERO) KARTI (PROFIL + BAR)
-          ========================================================= */}
-      <div data-tutorial="home-hero" className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-[2rem] p-5 sm:p-8 shadow-2xl overflow-hidden`}>
-        {/* Arka plan ışıkları */}
-        <div className={`absolute -top-24 -right-20 w-72 h-72 sm:w-96 sm:h-96 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none opacity-60 transition-all duration-1000`} />
-        <div className={`hidden sm:block absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`} />
-        <div className="hidden sm:block absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+      <style>{HOME_PREMIUM_CSS}</style>
 
-        {/* ÜST: Streak ve Başarımlar */}
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 sm:pb-5 mb-4 sm:mb-6 border-b border-ink-800/80">
-          <div className="flex items-center gap-3 bg-gradient-to-r from-orange-500/20 via-red-500/15 to-amber-500/10 border border-orange-500/40 px-4 py-2 rounded-2xl shadow-[0_0_25px_rgba(249,115,22,0.18)] w-fit">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-orange-500 via-amber-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30 flex-shrink-0">
-              <Flame size={20} className="text-white fill-white animate-pulse" />
-            </div>
+      {/* =========================================================
+          01 · SERİ + KADEMELER
+          ========================================================= */}
+      <section className="hn-sec">
+        <div className="hn-sec-t">
+          <span className="hn-idx">01</span>
+          <h2>Seri &amp; Kademeler</h2>
+          <span className="ln" />
+          <button type="button" className="hn-more" onClick={() => navigateTo('achievements')}>Başarımlar <ChevronRight size={13} /></button>
+        </div>
+        <div className="hn-band">
+          <div className="hn-streak">
+            <div className="hn-fl"><Flame size={21} /></div>
             <div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-lg sm:text-xl font-black text-white tracking-tight leading-none">{data.dailyStreak || 0} Günlük</span>
-                <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-orange-400">İzleme Serisi</span>
-              </div>
-              <div className="text-[10px] sm:text-[11px] font-semibold text-orange-200/80 mt-0.5">{data.dailyStreak > 0 ? '🔥 Alev aldın! Seriyi bozmadan devam et' : 'Bugün bir yapım izleyerek seriyi başlat!'}</div>
+              <b>{data.dailyStreak || 0} <em>Günlük</em> İzleme Serisi</b>
+              <span>{data.dailyStreak > 0 ? 'Alev aldın — seriyi bozmadan devam et' : 'Bugün bir yapım izleyerek seriyi başlat'}</span>
             </div>
           </div>
+          <div className="hn-tiers">
+            {(
+              [
+                ['br', 'Bronz', quickMetrics.tierCounts.bronze],
+                ['sl', 'Gümüş', quickMetrics.tierCounts.silver],
+                ['gd', 'Altın', quickMetrics.tierCounts.gold],
+                ['pt', 'Platin', quickMetrics.tierCounts.platinum],
+                ['em', 'Zümrüt', quickMetrics.tierCounts.emerald],
+                ['di', 'Elmas', quickMetrics.tierCounts.diamond],
+              ] as const
+            ).map(([cls, label, count]) => (
+              <button key={cls} type="button" className={`hn-tier ${cls}`} onClick={() => navigateTo('achievements')}>
+                <b>{count}</b>
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
 
-          <button onClick={() => navigateTo('achievements')} className="flex items-center justify-between md:justify-end gap-2 sm:gap-3 bg-ink-950/90 hover:bg-ink-900 border border-ink-800 hover:border-gold-500/40 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl transition-all group overflow-x-auto hide-scrollbar">
-            <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-black whitespace-nowrap">
-              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm">Bronz: {quickMetrics.tierCounts.bronze}</span>
-              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-slate-400/15 text-slate-200 border border-slate-400/30 shadow-sm">Gümüş: {quickMetrics.tierCounts.silver}</span>
-              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-yellow-500/15 text-yellow-300 border border-yellow-500/30 shadow-sm">Altın: {quickMetrics.tierCounts.gold}</span>
-              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-cyan-400/15 text-cyan-200 border border-cyan-400/30 shadow-sm">Platin: {quickMetrics.tierCounts.platinum}</span>
-              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm">Zümrüt: {quickMetrics.tierCounts.emerald}</span>
-              <span className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-xl bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-sm">Elmas: {quickMetrics.tierCounts.diamond}</span>
-            </div>
-            <ChevronRight size={16} className="text-ink-500 group-hover:text-gold-400 flex-shrink-0 ml-1" />
-          </button>
+      {/* =========================================================
+          02 · PROFİL KARTI + XP
+          ========================================================= */}
+      <section className="hn-sec">
+        <div className="hn-sec-t">
+          <span className="hn-idx">02</span>
+          <h2>Profil Kartı</h2>
+          <span className="ln" />
+          <button type="button" className="hn-more" onClick={() => navigateTo('settings')}>Düzenle <ChevronRight size={13} /></button>
         </div>
 
-        {/* ORTA: Avatar, SVG Çember, İsim, Stats */}
-        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-8">
-          <div className="flex flex-row items-center gap-4 sm:gap-6 flex-shrink-0 w-full lg:w-auto justify-start">
-            
-            <div className="relative w-24 h-24 sm:w-32 sm:h-32 flex items-center justify-center flex-shrink-0">
-              <div className={`absolute inset-1 sm:inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-lg sm:blur-xl animate-pulse`} />
-              <svg className="w-24 h-24 sm:w-32 sm:h-32 -rotate-90 transform" viewBox="0 0 108 108">
-                <circle cx="54" cy="54" r={circleRadius} stroke="currentColor" strokeWidth="7" fill="transparent" className="text-ink-950" />
-                <circle cx="54" cy="54" r={circleRadius} stroke={userPersona.strokeColor} strokeWidth="7" strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round" fill="transparent" className="transition-all duration-1000 ease-out" />
+        <div className="hn-profile" data-tutorial="home-hero">
+          <div className="hn-avatar-cell">
+            <div className="hn-ava">
+              <svg viewBox="0 0 108 108" aria-hidden="true">
+                <circle cx="54" cy="54" r={circleRadius} fill="none" stroke="rgba(244,244,242,.09)" strokeWidth="6" />
+                <circle cx="54" cy="54" r={circleRadius} fill="none" stroke={userPersona.strokeColor} strokeWidth="6" strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round" />
               </svg>
-              <div className={`absolute inset-2.5 sm:inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}>
-                <div className="w-full h-full bg-ink-950 rounded-full flex flex-col items-center justify-center relative overflow-hidden">
-                  <span className="text-3xl sm:text-5xl font-black text-white drop-shadow-md z-10">{data.nickname?.[0]?.toUpperCase() || 'U'}</span>
-                  <PersonaIcon className={`absolute opacity-20 ${userPersona.color} w-16 h-16 sm:w-24 sm:h-24`} />
-                </div>
+              <div className="hn-core">
+                <span>{data.nickname?.[0]?.toUpperCase() || 'U'}</span>
+                <PersonaIcon className="hn-core-ic" />
               </div>
-              <div className={`hidden sm:block absolute -bottom-2 px-3 py-1 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-sm shadow-lg border border-white/30`}>
-                SV. {lvl.level}
-              </div>
+              <div className="hn-lv">Sv. {lvl.level}</div>
             </div>
-
-            <div className="text-left flex-1 min-w-0 flex flex-col items-start">
-              <div className={`text-xs sm:text-sm font-black uppercase tracking-widest mb-1 truncate ${userPersona.color}`}>
-                {userPersona.title}
+            <div className="hn-idn">
+              <div className="hn-persona">{userPersona.title}</div>
+              <h3>{data.nickname}</h3>
+              <div className="hn-code-row">
+                <span className="hn-code">AĞ KODU <b>{data.agentId}</b></span>
+                <button
+                  type="button"
+                  className="hn-copy"
+                  title="Kodu kopyala"
+                  onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }}
+                >
+                  <Copy size={13} />
+                </button>
               </div>
-              <div className="text-2xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none mb-3 truncate max-w-full">
-                {data.nickname}
-              </div>
-              <div className="flex items-center gap-2 flex-wrap mb-4">
-                <span className="text-[10px] text-ink-400 font-mono bg-ink-950/80 px-2 py-1 rounded border border-ink-800" title="Ağ Kodun">Ağ Kodu: {data.agentId}</span>
-                <button onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }} className="min-h-11 min-w-11 md:min-h-0 md:min-w-0 p-2.5 md:p-1.5 flex items-center justify-center text-ink-500 hover:text-emerald-400 bg-ink-900 rounded-md transition-colors" title="Kodu kopyala"><Copy size={12} /></button>
-              </div>
-
-              {/* Rozet */}
               {activeBadgeDef ? (
-                <div onClick={() => navigateTo('achievements')} className="inline-flex items-center gap-3 sm:gap-4 bg-ink-900 border border-ink-700/80 px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl shadow-lg group relative transition-transform hover:scale-105 cursor-pointer" title={`${activeBadgeDef.title} (${activeBadgeDef.rarity})`}>
-                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-xl sm:text-2xl border shadow-sm flex-shrink-0 ${RARITY_STYLES[activeBadgeDef.rarity].bg} ${RARITY_STYLES[activeBadgeDef.rarity].border}`}>
-                    {activeBadgeDef.icon}
-                  </div>
-                  <div className="flex flex-col pr-2">
-                    <span className={`text-[10px] sm:text-xs font-black uppercase tracking-widest ${RARITY_STYLES[activeBadgeDef.rarity].color} leading-none mb-1`}>Aktif Rozet</span>
-                    <span className="text-sm sm:text-base font-black text-white truncate max-w-[160px] sm:max-w-[200px] leading-tight">{activeBadgeDef.title}</span>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  className="hn-badge-slot"
+                  onClick={() => navigateTo('achievements')}
+                  title={`${activeBadgeDef.title} (${activeBadgeDef.rarity})`}
+                >
+                  <span className="hn-bi">{activeBadgeDef.icon}</span>
+                  <span className="hn-bt"><s>Aktif Rozet</s><b>{activeBadgeDef.title}</b></span>
+                </button>
               ) : (
-                <button onClick={() => navigateTo('achievements')} className="inline-flex items-center gap-3 sm:gap-4 bg-ink-900/50 border border-dashed border-ink-700/50 px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl hover:bg-ink-800 transition-colors">
-                  <ShieldAlert size={20} className="text-ink-500" />
-                  <div className="flex flex-col items-start justify-center">
-                    <span className="text-sm sm:text-base font-bold text-ink-400">Rozet Yuvası Boş</span>
-                    <span className="text-[10px] text-ink-500">Koleksiyonundan bir rozet kuşan</span>
-                  </div>
+                <button type="button" className="hn-badge-slot" onClick={() => navigateTo('achievements')}>
+                  <ShieldAlert size={18} className="hn-badge-empty-ic" />
+                  <span className="hn-bt"><s>Rozet Yuvası Boş</s><b>Koleksiyonundan kuşan</b></span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Sağdaki 5'li Stats Grid (Kişisel Profil Bilgileri) */}
-          <div className="flex-1 w-full grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3 bg-ink-950/70 border border-ink-800/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-inner">
-              <div className="bg-ink-900/50 border border-ink-800/80 p-3 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
-                 <Film size={20} className="absolute -right-2 -bottom-2 opacity-10" />
-                 <div className="text-lg sm:text-2xl font-black text-white leading-none mb-1">{quickMetrics.watchedMoviesCount}</div>
-                 <div className="text-[9px] sm:text-[10px] font-bold text-ink-500 uppercase tracking-widest text-center">Film İzledi</div>
-              </div>
-              <div className="bg-ink-900/50 border border-ink-800/80 p-3 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
-                 <Tv size={20} className="absolute -right-2 -bottom-2 opacity-10" />
-                 <div className="text-lg sm:text-2xl font-black text-white leading-none mb-1">{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</div>
-                 <div className="text-[9px] sm:text-[10px] font-bold text-ink-500 uppercase tracking-widest text-center">Dizi Bitirdi</div>
-              </div>
-              <div className="bg-ink-900/50 border border-ink-800/80 p-3 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
-                 <Activity size={20} className="absolute -right-2 -bottom-2 opacity-10" />
-                 <div className="text-lg sm:text-2xl font-black text-white leading-none mb-1">{quickMetrics.watchedEpsCount}</div>
-                 <div className="text-[9px] sm:text-[10px] font-bold text-ink-500 uppercase tracking-widest text-center">Bölüm İzledi</div>
-              </div>
-              <div className="bg-ink-900/50 border border-ink-800/80 p-3 rounded-xl flex flex-col items-center justify-center relative overflow-hidden">
-                 <Medal size={20} className="absolute -right-2 -bottom-2 opacity-10 text-gold-500" />
-                 <div className="text-lg sm:text-2xl font-black text-gold-400 leading-none mb-1">{quickMetrics.unlockedAchievementsCount}</div>
-                 <div className="text-[9px] sm:text-[10px] font-bold text-gold-500/50 uppercase tracking-widest text-center">Rozet Açtı</div>
-              </div>
-              <div className="bg-ink-900/50 border border-ink-800/80 p-3 rounded-xl flex flex-col items-center justify-center relative overflow-hidden col-span-2 sm:col-span-1">
-                 <CheckSquare size={20} className="absolute -right-2 -bottom-2 opacity-10 text-orange-500" />
-                 <div className="text-lg sm:text-2xl font-black text-orange-400 leading-none mb-1">{quickMetrics.questsCompleted}</div>
-                 <div className="text-[9px] sm:text-[10px] font-bold text-orange-500/50 uppercase tracking-widest text-center">Görev Bitti</div>
-              </div>
+          <div className="hn-stat-grid">
+            <div className="hn-stat"><b>{quickMetrics.watchedMoviesCount}</b><span className="lab">Film İzledi</span><span className="ghost">F</span></div>
+            <div className="hn-stat"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span className="lab">Dizi Bitirdi</span><span className="ghost">D</span></div>
+            <div className="hn-stat"><b>{quickMetrics.watchedEpsCount}</b><span className="lab">Bölüm İzledi</span><span className="ghost">B</span></div>
+            <div className="hn-stat red"><b>{quickMetrics.unlockedAchievementsCount}</b><span className="lab">Rozet Açtı</span><span className="ghost">R</span></div>
+            <div className="hn-stat red"><b>{quickMetrics.questsCompleted}</b><span className="lab">Görev Bitti</span><span className="ghost">G</span></div>
           </div>
         </div>
 
-        {/* ALT BÖLÜM: Orijinal Yatay Seviye Barı ve Slider */}
-        <div className="relative z-10 w-full bg-ink-950/70 border border-ink-800/90 rounded-2xl p-4 sm:p-5 shadow-inner space-y-3 sm:space-y-4 mt-5 border-t border-ink-800/60">
-          <div className="flex items-center justify-between gap-2">
+        <div className="hn-xp">
+          <div className="hn-xp-head">
             <div>
-              <span className="hidden sm:block text-[10px] sm:text-xs font-black uppercase tracking-widest text-ink-400">Deneyim Puanı (XP) Havuzu</span>
-              <div className="text-base sm:text-2xl font-black text-ink-50 flex items-baseline gap-1.5">
-                <span>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</span>
-                <span className="text-xs font-bold text-ink-400">(%{Math.floor(lvl.progress)})</span>
+              <s>Deneyim Puanı (XP) Havuzu</s>
+              <div className="hn-xp-bigrow">
+                <b className="hn-xp-big">{(data.totalXp || 0).toLocaleString('tr-TR')} XP</b>
+                <span className="hn-xp-pct">(%{Math.floor(lvl.progress)})</span>
               </div>
             </div>
-            <div className="text-right">
-              <span className="hidden sm:block text-[10px] sm:text-xs font-black uppercase tracking-widest text-ink-400">Seviye {lvl.level + 1} Hedefi</span>
-              <span className={`text-sm sm:text-base font-black ${userPersona.color}`}>
-                {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı
-              </span>
+            <div className="hn-xp-r">
+              <s>Seviye {lvl.level + 1} Hedefi</s>
+              <b className="hn-xp-left">{Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı</b>
             </div>
           </div>
 
-          <div className="relative h-4 sm:h-6 w-full bg-ink-900 rounded-lg sm:rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
-            <div className={`h-full rounded-md sm:rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`} style={{ width: `${Math.max(3, lvl.progress)}%` }}>
-              <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_25%,rgba(255,255,255,0.35)_50%,transparent_75%)] bg-[length:200%_100%] animate-pulse" />
-              <div className="absolute right-0 top-0 bottom-0 w-1 sm:w-1.5 bg-white shadow-[0_0_10px_#fff]" />
-            </div>
-            <div className="hidden sm:grid absolute inset-0 grid-cols-20 pointer-events-none">
-              {Array.from({ length: 20 }).map((_, idx) => (
-                <div key={idx} className="border-r border-ink-950/40 last:border-0" />
-              ))}
+          <div className="hn-xp-track">
+            <div className="hn-xp-fill" style={{ width: `${Math.max(3, lvl.progress)}%` }} />
+            <div className="hn-xp-cells" aria-hidden="true">
+              {Array.from({ length: 20 }).map((_, idx) => <i key={idx} />)}
             </div>
           </div>
 
-          <div className="pt-1 sm:pt-3">
-            <div className="flex items-center justify-between text-[10px] sm:text-xs font-black uppercase tracking-wider text-ink-400 sm:mb-2.5">
-              <span className="hidden sm:inline">Unvan Evrim Haritası</span>
-              {nextRank ? (
-                <span className={userPersona.color}>Sonraki Unvan: {nextRank.title} ({nextRank.minLevel - lvl.level} Seviye Kaldı)</span>
-              ) : (
-                <span className="text-cyan-300">Maksimum Unvana Ulaşıldı! 👑</span>
-              )}
-            </div>
-            
-            <div className="flex gap-2.5 overflow-x-auto hide-scrollbar pb-1">
-              {RANK_TIERS.map((tier, idx) => {
-                if (idx < currentRankIndex - 1 || idx > currentRankIndex + 2) return null;
+          <div className="hn-rank-row">
+            <span className="lab">Unvan Evrim Haritası</span>
+            {nextRank ? (
+              <span className="hn-next-pill">Sonraki Unvan: {nextRank.title} — {nextRank.minLevel - lvl.level} Seviye Kaldı</span>
+            ) : (
+              <span className="hn-next-pill">Maksimum Unvana Ulaşıldı!</span>
+            )}
+          </div>
 
-                const isUnlocked = lvl.level >= tier.minLevel;
-                const isCurrent = idx === currentRankIndex;
-                const TierIcon = tier.icon;
-                
-                return (
-                  <div
-                    key={tier.title}
-                    className={`relative rounded-xl p-2.5 border transition-all flex items-center justify-center gap-2.5 flex-1 min-w-max ${
-                      isCurrent ? `${tier.badgeBg} ${tier.border} shadow-md scale-[1.02]` : isUnlocked ? 'bg-ink-900/70 border-ink-800/90 opacity-90' : 'bg-ink-950/40 border-ink-800/40 opacity-45'
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
-                      {isUnlocked ? <TierIcon size={16} className={tier.color} /> : <Lock size={14} className="text-ink-500" />}
-                    </div>
-                    
-                    <div className="flex flex-col items-start justify-center">
-                      <div className={`text-[11px] sm:text-xs font-black whitespace-nowrap ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>
-                        {tier.title}
-                      </div>
-                      <div className="text-[10px] font-bold text-ink-500 flex items-center gap-1 mt-0.5">
-                        <span>Sv. {tier.minLevel}+</span>
-                        {isUnlocked && <CheckCircle2 size={10} className="text-emerald-400" />}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="hn-ranks">
+            {RANK_TIERS.map((tier, idx) => {
+              if (idx < currentRankIndex - 1 || idx > currentRankIndex + 2) return null;
+              const isUnlocked = lvl.level >= tier.minLevel;
+              const isCurrent = idx === currentRankIndex;
+              return (
+                <div key={tier.title} className={`hn-rank ${isUnlocked ? 'done' : ''} ${isCurrent ? 'now' : ''}`}>
+                  <span className="t">Sv. {tier.minLevel}{isCurrent ? ' · Şimdi' : ''}</span>
+                  {tier.title}
+                </div>
+              );
+            })}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ============================== */}
-      {/* 2. HIZLI ERİŞİM BUTONLARI */}
-      {/* ============================== */}
-      <div data-tutorial="home-actions" className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <button onClick={() => setShowPick(true)} className="flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 px-4 py-3 min-h-11 sm:min-h-0 sm:py-4 rounded-2xl font-black text-xs sm:text-sm hover:from-gold-400 hover:to-gold-500 transition-all hover:scale-[1.02] shadow-lg shadow-gold-500/20 group">
-          <Shuffle size={18} className="group-hover:rotate-180 transition-transform duration-500" />
-          <span>Ne İzlesem?</span>
+      {/* ==============================
+          HIZLI ERİŞİM BUTONLARI
+          ============================== */}
+      <div data-tutorial="home-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <button type="button" className="hn-btn hn-btn-p hn-action" onClick={() => setShowPick(true)}>
+          <Shuffle size={16} /> Ne İzlesem?
         </button>
-        <button onClick={() => setShowDnaModal(true)} className="flex items-center justify-center gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-4 py-3 min-h-11 sm:min-h-0 sm:py-4 rounded-2xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] group">
-          <Dna size={18} className="text-emerald-400 group-hover:rotate-45 transition-transform" />
-          <span>DNA Sentezle</span>
+        <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowDnaModal(true)}>
+          <Dna size={16} /> DNA Sentezle
         </button>
-        <button onClick={() => setShowBulkAdd('movie')} className="flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600/25 via-fuchsia-600/20 to-purple-600/25 hover:from-violet-500/35 hover:to-fuchsia-500/35 text-violet-200 border border-violet-500/40 px-4 py-3 min-h-11 sm:min-h-0 sm:py-4 rounded-2xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] shadow-lg shadow-violet-500/10 group">
-          <Compass size={18} className="text-fuchsia-400 group-hover:rotate-90 transition-transform duration-500" />
-          <span>Katalog Ekle</span>
+        <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowBulkAdd('movie')}>
+          <Compass size={16} /> Katalog Ekle
         </button>
-        <button onClick={() => navigateTo('plan')} className="flex items-center justify-center gap-2 bg-azure-500/15 hover:bg-azure-500/25 text-azure-300 border border-azure-500/30 px-4 py-3 min-h-11 sm:min-h-0 sm:py-4 rounded-2xl font-bold text-xs sm:text-sm transition-all hover:scale-[1.02] group">
-          <Calendar size={18} className="text-azure-400 group-hover:scale-110 transition-transform" />
-          <span>Planlayıcı</span>
+        <button type="button" className="hn-btn hn-btn-g hn-action" onClick={() => navigateTo('plan')}>
+          <Calendar size={16} /> Planlayıcı
         </button>
       </div>
 
       {activeTimerMovie && (() => {
         const info = getMovieTimerInfo(activeTimerMovie, nowMs);
         return (
-          <div className="bg-gradient-to-r from-emerald-950/85 via-ink-900 to-ink-950 border border-emerald-500/40 rounded-[2rem] p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl animate-fade-in-up">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
-                <Timer size={24} className={info.isPaused ? 'text-amber-400' : 'text-emerald-400 animate-pulse'} />
+          <div className="hn-timer">
+            <div className="hn-timer-ic"><Timer size={22} /></div>
+            <div className="hn-timer-tx">
+              <div className="hn-timer-status">
+                <span>{info.isPaused ? 'Sayaç Duraklatıldı' : 'Canlı Geri Sayım Aktif'}</span>
+                <span>• {activeTimerMovie.title}</span>
               </div>
-              <div>
-                <div className="text-xs sm:text-sm font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2 flex-wrap">
-                  <span>{info.isPaused ? '⏸️ Sayaç Duraklatıldı' : '⏳ Canlı Geri Sayım Aktif'}</span>
-                  <span className="text-white">• {activeTimerMovie.title}</span>
-                </div>
-                <div className="text-xs text-ink-300 mt-1">
-                  Kalan Süre: <strong className="text-emerald-300 font-mono text-sm">{info.formattedRemaining}</strong> • Geçen: <strong>{info.elapsedMins} dk</strong> / {info.maxMins} dk
-                  {!info.canRateWithTimer && (
-                    <span className="text-amber-400 ml-2 block sm:inline mt-1 sm:mt-0">(En az {info.minRequiredMins} dk geçmeden puanlanamaz)</span>
-                  )}
-                </div>
+              <div className="hn-timer-sub">
+                Kalan Süre: <strong className="hn-mono">{info.formattedRemaining}</strong> · Geçen: <strong>{info.elapsedMins} dk</strong> / {info.maxMins} dk
+                {!info.canRateWithTimer && (
+                  <span className="hn-timer-warn">(En az {info.minRequiredMins} dk geçmeden puanlanamaz)</span>
+                )}
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-              <button onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)} className="flex items-center gap-1.5 px-4 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-amber-300 border border-amber-500/30 text-xs font-bold transition-colors whitespace-nowrap">
-                {info.isPaused ? <><Play size={14} className="fill-current" /> Devam Et</> : <><Pause size={14} /> Duraklat</>}
+            <div className="hn-timer-btns">
+              <button type="button" className="hn-btn hn-btn-g" onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)}>
+                {info.isPaused ? <><Play size={14} className="hn-btn-ic" /> Devam Et</> : <><Pause size={14} className="hn-btn-ic" /> Duraklat</>}
               </button>
-              <button onClick={() => handleRequestRateMovie(activeTimerMovie)} className={`flex items-center gap-1.5 px-5 py-2.5 min-h-11 md:min-h-0 rounded-xl text-xs font-black transition-all whitespace-nowrap ${info.canRateWithTimer ? 'bg-gold-500 hover:bg-gold-400 text-ink-950 shadow-md' : 'bg-ink-800 text-ink-500 border border-ink-700 cursor-not-allowed'}`}>
-                {info.canRateWithTimer ? <><Star size={14} className="fill-current" /> Bitir & Puanla</> : <><Lock size={13} /> Kilitli</>}
+              <button
+                type="button"
+                className="hn-btn hn-btn-p"
+                onClick={() => handleRequestRateMovie(activeTimerMovie)}
+                disabled={!info.canRateWithTimer}
+              >
+                {info.canRateWithTimer ? <><Star size={14} className="hn-btn-ic" /> Bitir &amp; Puanla</> : <><Lock size={13} className="hn-btn-ic" /> Kilitli</>}
               </button>
-              <button onClick={() => cancelWatchingMovie(activeTimerMovie.id)} title="Sayacı İptal Et" className="min-h-11 min-w-11 md:min-h-0 md:min-w-0 p-2.5 flex items-center justify-center rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-colors">
-                <X size={18} />
+              <button type="button" className="hn-timer-x" onClick={() => cancelWatchingMovie(activeTimerMovie.id)} title="Sayacı İptal Et">
+                <X size={16} />
               </button>
             </div>
           </div>
         );
       })()}
 
-      {/* ============================== */}
-      {/* 3. VİTRİN FİLMİ */}
-      {/* ============================== */}
+      {/* =========================================================
+          03 · GÜNÜN SİNEMA KARTI
+          ========================================================= */}
       {spotlightMovie && (() => {
         const isSpotlightTimerActive = activeTimerMovie?.id === spotlightMovie.id;
         const spotlightColName = spotlightMovie.collectionId ? data.collections.find((c) => c.id === spotlightMovie.collectionId)?.name : null;
+        const spotlightNo = String(data.movies.findIndex((m) => m.id === spotlightMovie.id) + 1).padStart(3, '0');
 
         return (
-          <div className="relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border border-gold-500/35 rounded-[2.5rem] p-6 sm:p-10 shadow-2xl overflow-hidden animate-fade-in-up">
-            {spotlightMovie.posterUrl && (
-              <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-25">
-                <img src={spotlightMovie.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150" />
-                <div className="absolute inset-0 bg-gradient-to-r from-ink-950 via-ink-950/85 to-ink-950/60" />
-              </div>
-            )}
-
-            <div className="relative z-10 flex items-center justify-between flex-wrap gap-2 mb-6 pb-4 border-b border-ink-800/70">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-gold-500/20 to-amber-500/10 border border-gold-500/40 text-gold-300 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest shadow-sm">
-                  <Sparkles size={16} className="text-gold-400" /> Bu Akşamın Vitrin Önerisi
-                </div>
-                {spotlightColName && (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-azure-300 bg-azure-500/15 border border-azure-500/30 px-3.5 py-2 rounded-full">
-                    <Layers size={14} /> {spotlightColName}
-                  </span>
-                )}
-              </div>
-
+          <section className="hn-sec">
+            <div className="hn-sec-t">
+              <span className="hn-idx">03</span>
+              <h2>Günün Sinema Kartı</h2>
+              <span className="ln" />
               {eligibleMovies.length > 1 && (
-                <button onClick={() => setSpotlightOffset((prev) => prev + 1)} className="inline-flex items-center gap-1.5 text-xs font-bold text-ink-200 hover:text-gold-300 bg-ink-900/90 hover:bg-ink-800 px-4 py-2 rounded-xl border border-ink-700/80 hover:border-gold-500/40 transition-all group">
-                  <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500 text-gold-400" /> Başka Film Öner
+                <button type="button" className="hn-more" onClick={() => setSpotlightOffset((prev) => prev + 1)}>
+                  <RefreshCw size={13} /> Kartı Değiştir
                 </button>
               )}
             </div>
 
-            <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center md:items-stretch">
-              <button onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })} title="Sinema Kartını Gör" className="w-48 sm:w-56 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-gold-500/40 shadow-2xl relative group/poster cursor-pointer self-center md:self-start">
-                {spotlightMovie.posterUrl ? (
-                  <img src={spotlightMovie.posterUrl} alt={spotlightMovie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-500" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-ink-600"><Projector size={48} /></div>
+            <div className="hn-spotlight">
+              <div
+                className="hn-sp-poster"
+                onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}
+                role="button"
+                tabIndex={0}
+                title="Sinema Kartını Gör"
+              >
+                {spotlightMovie.posterUrl && <img src={spotlightMovie.posterUrl} alt="" />}
+                <span className="hn-big-letter" aria-hidden="true">{(spotlightMovie.title || 'S').charAt(0).toUpperCase()}</span>
+                <span className="hn-filmbadge">Sinema Kartı</span>
+                {spotlightMovie.rating != null && <span className="hn-rate">{spotlightMovie.rating}</span>}
+                <div className="hn-pt">{spotlightMovie.title}</div>
+              </div>
+
+              <div className="hn-sp-body">
+                <div className="hn-sp-kick">Kayıt No. {spotlightNo} · Vitrin Önerisi</div>
+                <h2>{spotlightMovie.title}</h2>
+                <div className="hn-meta-chips">
+                  {spotlightMovie.year && <span><b>{spotlightMovie.year}</b></span>}
+                  {spotlightMovie.runtime && <span><b>{spotlightMovie.runtime}</b> dk</span>}
+                  {spotlightMovie.directors && spotlightMovie.directors.length > 0 && <span>Yönetmen <b>{spotlightMovie.directors[0]}</b></span>}
+                  {spotlightMovie.cast && spotlightMovie.cast.length > 0 && <span>Oyuncu <b>{spotlightMovie.cast.slice(0, 2).join(', ')}</b></span>}
+                  {spotlightColName && <span>Koleksiyon <b>{spotlightColName}</b></span>}
+                </div>
+
+                {spotlightMovie.genres.length > 0 && (
+                  <div className="hn-genre-row">
+                    {spotlightMovie.genres.map((g) => <span key={g} className="hn-genre">{g}</span>)}
+                  </div>
                 )}
-                <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                  <div className="w-12 h-12 rounded-full bg-gold-500 text-ink-950 flex items-center justify-center shadow-lg"><Eye size={22} /></div>
-                  <span className="text-[11px] font-black text-white uppercase tracking-wider">Sinema Kartı</span>
-                </div>
-              </button>
 
-              <div className="flex-1 min-w-0 text-center md:text-left flex flex-col justify-between w-full">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-3xl sm:text-4xl font-black text-ink-50 tracking-tight leading-tight">{spotlightMovie.title}</h3>
-                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 mt-3 text-xs sm:text-sm text-ink-200 font-semibold">
-                      {spotlightMovie.year && <span className="flex items-center gap-1.5 bg-ink-950/80 px-3 py-1.5 rounded-lg border border-ink-800"><Calendar size={14} className="text-gold-400" /> {spotlightMovie.year}</span>}
-                      {spotlightMovie.runtime && <span className="flex items-center gap-1.5 bg-ink-950/80 px-3 py-1.5 rounded-lg border border-ink-800"><Clock size={14} className="text-gold-400" /> {spotlightMovie.runtime} dk</span>}
-                      {spotlightMovie.directors && spotlightMovie.directors.length > 0 && <span className="flex items-center gap-1.5 bg-ink-950/80 px-3 py-1.5 rounded-lg border border-ink-800"><User size={14} className="text-gold-400" /> {spotlightMovie.directors[0]}</span>}
-                      {spotlightMovie.cast && spotlightMovie.cast.length > 0 && <span className="flex items-center gap-1.5 bg-ink-950/80 px-3 py-1.5 rounded-lg border border-ink-800"><Users size={14} className="text-azure-400" /> {spotlightMovie.cast.slice(0, 2).join(', ')}</span>}
-                    </div>
-                  </div>
+                {spotlightMovie.overview ? (
+                  <p className="hn-gdesc">{spotlightMovie.overview}</p>
+                ) : (
+                  <p className="hn-gdesc hn-gdesc-empty">Bu film için henüz özet bilgisi çekilmemiş. Filmler sekmesindeki "Eksikleri Bul" butonuyla özeti indirebilirsin.</p>
+                )}
 
-                  {spotlightMovie.genres.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                      {spotlightMovie.genres.map((g) => <span key={g} className="text-[11px] font-bold px-3.5 py-1 rounded-full bg-gold-500/15 text-gold-300 border border-gold-500/30">{g}</span>)}
-                    </div>
+                <div className="hn-btnrow">
+                  <button type="button" className="hn-btn hn-btn-p" onClick={() => handleRequestRateMovie(spotlightMovie)}>
+                    <Star size={14} className="hn-btn-ic" /> Puanla
+                  </button>
+                  <button type="button" className="hn-btn hn-btn-s" onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}>
+                    <Eye size={14} className="hn-btn-ic" /> Sinema Kartını Gör
+                  </button>
+                  {!isSpotlightTimerActive && (
+                    <button
+                      type="button"
+                      className="hn-btn hn-btn-g"
+                      onClick={() => startWatchingMovie(spotlightMovie.id, false)}
+                      disabled={Boolean(activeTimerMovie)}
+                    >
+                      <Play size={14} className="hn-btn-ic" /> Canlı Geri Sayım
+                    </button>
                   )}
-
-                  <div className="bg-ink-950/70 border border-ink-800/90 rounded-2xl p-4 sm:p-5 text-left shadow-inner">
-                    <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-gold-400/90 mb-1.5">Film Konusu & Özet</div>
-                    {spotlightMovie.overview ? (
-                      <div className="max-h-24 sm:max-h-32 overflow-y-auto pr-3 custom-scrollbar text-xs sm:text-sm text-ink-200 leading-relaxed">{spotlightMovie.overview}</div>
-                    ) : (
-                      <p className="text-xs sm:text-sm text-ink-500 italic">Bu film için henüz özet bilgisi çekilmemiş. Filmler sekmesindeki "Eksikleri Bul" butonuyla özeti indirebilirsin.</p>
-                    )}
-                  </div>
+                  {isSpotlightPlanned ? (
+                    <span className="hn-planned"><Lock size={13} className="hn-btn-ic" /> Takvime Planlandı</span>
+                  ) : (
+                    <button type="button" className="hn-btn hn-btn-g" onClick={() => navigateTo('plan')}>
+                      <Calendar size={14} className="hn-btn-ic" /> Haftalığa Ekle
+                    </button>
+                  )}
                 </div>
 
-                <div className="mt-6 pt-5 border-t border-ink-800/70 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                    {getMovieWatchLinks(spotlightMovie).map((link, idx) => {
-                      const Icon = link.icon;
-                      if (link.isTrailer) return <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md hover:scale-105"><Icon size={16} /> {link.text}</a>;
-                      return <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-105">{link.logo ? <img src={link.logo} alt={link.text} className="w-4 h-4 rounded-sm object-cover" /> : <Icon size={15} />} {link.text}</a>;
-                    })}
-                  </div>
-
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
-                    {isSpotlightPlanned ? (
-                      <div 
-                        title="Bu film haftalık planda. Puanlamak veya izlemek için Planlayıcı sekmesine gidin."
-                        className="flex items-center justify-center gap-1.5 text-xs px-5 py-3 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 font-bold w-full md:w-auto whitespace-nowrap cursor-not-allowed"
-                      >
-                        <Lock size={15} /> Takvime Planlandı
-                      </div>
-                    ) : (
-                      <>
-                        {!isSpotlightTimerActive && (
-                          <button onClick={() => startWatchingMovie(spotlightMovie.id, false)} disabled={Boolean(activeTimerMovie)} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold border transition-all ${activeTimerMovie ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed' : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border-emerald-500/35'}`} title="Canlı geri sayımı başlat">
-                            <Play size={15} className="fill-current" /> Başlat
-                          </button>
-                        )}
-                        <button onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-ink-800 hover:bg-ink-700 text-ink-100 border border-ink-700 px-4 py-3 rounded-xl text-xs font-bold transition-all">
-                          <Eye size={16} /> Künye
-                        </button>
-                        <button onClick={() => handleRequestRateMovie(spotlightMovie)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 px-6 py-3 rounded-xl text-sm font-black shadow-lg shadow-gold-500/20 transition-all hover:scale-105">
-                          <Star size={16} className="fill-current" /> Puanla
-                        </button>
-                      </>
-                    )}
-                  </div>
+                <div className="hn-links">
+                  {getMovieWatchLinks(spotlightMovie).map((link, idx) => {
+                    const LinkIcon = link.icon;
+                    return (
+                      <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="hn-link-chip">
+                        {link.logo ? <img src={link.logo} alt={link.text} className="hn-link-logo" /> : <LinkIcon size={13} />}
+                        {link.text}
+                      </a>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          </div>
+          </section>
         );
       })()}
 
+      {/* =========================================================
+          04 · ARŞİV KISAYOLLARI
+          ========================================================= */}
+      <section className="hn-sec">
+        <div className="hn-sec-t">
+          <span className="hn-idx">04</span>
+          <h2>Arşiv Kısayolları</h2>
+          <span className="ln" />
+        </div>
+        <div className="hn-shortcuts">
+          <button type="button" className="hn-sc" onClick={() => navigateTo('movies')}>
+            <span className="hn-sci"><Film size={20} /></span>
+            <b>{data.movies.length}</b>
+            <span>Film Arşivi</span>
+          </button>
+          <button type="button" className="hn-sc" onClick={() => navigateTo('series')}>
+            <span className="hn-sci"><Tv size={20} /></span>
+            <b>{data.series.length}</b>
+            <span>Dizi Arşivi</span>
+          </button>
+          <button type="button" className="hn-sc" onClick={() => navigateTo('history')}>
+            <span className="hn-sci"><Clock size={20} /></span>
+            <b>{quickMetrics.regularHistoryCount}</b>
+            <span>Geçmiş Kaydı</span>
+          </button>
+          <button type="button" className="hn-sc red" onClick={() => navigateTo('achievements')}>
+            <span className="hn-sci"><Trophy size={20} /></span>
+            <b>{quickMetrics.tierCounts.total}</b>
+            <span>Başarım</span>
+          </button>
+        </div>
+      </section>
+
+      {/* =========================================================
+          05 · İZLEMEYE DEVAM ET
+          ========================================================= */}
       {ongoingSeries.length > 0 && (
-        <div className="space-y-4 animate-fade-in-up">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-2">
-            <h2 className="text-lg sm:text-xl font-black text-ink-100 flex items-center gap-2">
-              <Tv size={22} className="text-azure-400" /> İzlemeye Devam Et
-              <span className="text-xs font-bold bg-azure-500/20 text-azure-300 px-3 py-1 rounded-full border border-azure-500/30">{ongoingSeries.length} Dizi</span>
-            </h2>
-            <button onClick={() => navigateTo('series')} className="text-xs sm:text-sm font-bold text-azure-400 hover:underline flex items-center gap-1 py-1.5 md:py-0">Tüm Diziler <ChevronRight size={16} /></button>
+        <section className="hn-sec">
+          <div className="hn-sec-t">
+            <span className="hn-idx">05</span>
+            <h2>İzlemeye Devam Et — {ongoingSeries.length} Dizi</h2>
+            <span className="ln" />
+            <button type="button" className="hn-more" onClick={() => navigateTo('series')}>Tüm Diziler <ChevronRight size={13} /></button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div className="hn-series-grid">
             {ongoingSeries.slice(0, 6).map(({ series, episode, watchedCount, totalCount, pct }) => (
-              <div key={series.id} className="bg-ink-900/70 backdrop-blur-sm border border-ink-700/60 hover:border-azure-500/40 rounded-[1.5rem] p-4 flex gap-4 items-center shadow-lg transition-all group">
-                <button onClick={() => setDetailTarget({ type: 'series', data: series })} title="Sinema Kartını Gör" className="w-20 aspect-[2/3] flex-shrink-0 rounded-xl overflow-hidden bg-ink-950 border border-ink-700/60 relative group/poster cursor-pointer">
-                  {series.posterUrl ? <img src={series.posterUrl} alt={series.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" /> : <div className="w-full h-full flex items-center justify-center text-ink-600"><Tv size={24} /></div>}
-                  <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex items-center justify-center"><Eye size={20} className="text-azure-400" /></div>
+              <div key={series.id} className="hn-scard">
+                <button
+                  type="button"
+                  className="hn-sposter"
+                  onClick={() => setDetailTarget({ type: 'series', data: series })}
+                  title="Sinema Kartını Gör"
+                >
+                  {series.posterUrl && <img src={series.posterUrl} alt={series.title} />}
+                  <span className="hn-sl" aria-hidden="true">{(series.title || 'S').charAt(0).toUpperCase()}</span>
+                  <span className="hn-ep">S{episode.season} B{episode.episode}</span>
                 </button>
 
-                <div className="flex-1 min-w-0">
-                  <button onClick={() => setDetailTarget({ type: 'series', data: series })} className="font-black text-base text-ink-100 hover:text-azure-400 truncate block text-left w-full transition-colors">{series.title}</button>
-                  <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-azure-300 bg-azure-500/15 border border-azure-500/30 px-2.5 py-1 rounded-md mt-1.5"><span>Sıradaki: S{episode.season} B{episode.episode}</span></div>
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex justify-between text-[10px] font-bold text-ink-400"><span>{watchedCount} / {totalCount} Bölüm</span><span className="text-azure-400">%{pct}</span></div>
-                    <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800"><div className="h-full bg-gradient-to-r from-azure-500 to-indigo-500 rounded-full transition-all duration-500" style={{ width: `${Math.max(4, pct)}%` }} /></div>
-                  </div>
-                  <button onClick={() => setPickedItem({ kind: 'series', series, episode })} className="mt-3 w-full py-2 min-h-11 md:min-h-0 px-3 rounded-xl bg-azure-500/20 hover:bg-azure-500 text-azure-300 hover:text-white border border-azure-500/30 text-xs font-black transition-all flex items-center justify-center gap-1.5"><Star size={14} className="fill-current" /> Bölümü Puanla</button>
+                <div className="hn-sinfo">
+                  <h4>{series.title}</h4>
+                  <span className="hn-next-ep">Sıradaki: <b>S{episode.season} B{episode.episode}</b></span>
+                  <div className="hn-prog-lab"><span>{watchedCount} / {totalCount} Bölüm</span><i>%{pct}</i></div>
+                  <div className="hn-prog"><i style={{ width: `${Math.max(4, pct)}%` }} /></div>
+                  <button type="button" className="hn-rate-btn" onClick={() => setPickedItem({ kind: 'series', series, episode })}>
+                    <Star size={12} className="hn-btn-ic" /> Bölümü Puanla
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* ============================== */}
-      {/* 4. ARŞİV KISAYOLLARI */}
-      {/* ============================== */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        <button onClick={() => navigateTo('movies')} className="group relative overflow-hidden flex flex-col items-center justify-center bg-ink-900/60 border border-ink-700/50 rounded-[2rem] p-6 text-center shadow-lg hover:border-gold-500/40 transition-all hover:-translate-y-1">
-          <div className="absolute inset-0 bg-gradient-to-br from-gold-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <Projector size={32} className="text-gold-400 mb-3 group-hover:scale-110 transition-transform duration-300" />
-          <div className="text-4xl font-black text-ink-100">{data.movies.length}</div>
-          <div className="text-xs sm:text-sm font-bold text-ink-500 tracking-wider uppercase mt-1 group-hover:text-gold-400/80 transition-colors">Film Arşivi</div>
-        </button>
-
-        <button onClick={() => navigateTo('series')} className="group relative overflow-hidden flex flex-col items-center justify-center bg-ink-900/60 border border-ink-700/50 rounded-[2rem] p-6 text-center shadow-lg hover:border-azure-500/40 transition-all hover:-translate-y-1">
-          <div className="absolute inset-0 bg-gradient-to-br from-azure-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <Tv size={32} className="text-azure-400 mb-3 group-hover:scale-110 transition-transform duration-300" />
-          <div className="text-4xl font-black text-ink-100">{data.series.length}</div>
-          <div className="text-xs sm:text-sm font-bold text-ink-500 tracking-wider uppercase mt-1 group-hover:text-azure-400/80 transition-colors">Dizi Arşivi</div>
-        </button>
-
-        <button onClick={() => navigateTo('history')} className="group relative overflow-hidden flex flex-col items-center justify-center bg-ink-900/60 border border-ink-700/50 rounded-[2rem] p-6 text-center shadow-lg hover:border-violet-500/40 transition-all hover:-translate-y-1">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <Clock size={32} className="text-violet-400 mb-3 group-hover:scale-110 transition-transform duration-300" />
-          <div className="text-4xl font-black text-ink-100">{quickMetrics.regularHistoryCount}</div>
-          <div className="text-xs sm:text-sm font-bold text-ink-500 tracking-wider uppercase mt-1 group-hover:text-violet-400/80 transition-colors">Geçmiş</div>
-        </button>
-
-        <button onClick={() => navigateTo('achievements')} className="group relative overflow-hidden flex flex-col items-center justify-center bg-ink-900/60 border border-ink-700/50 rounded-[2rem] p-6 text-center shadow-lg hover:border-emerald-500/40 transition-all hover:-translate-y-1">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <Trophy size={32} className="text-emerald-400 mb-3 group-hover:scale-110 transition-transform duration-300" />
-          <div className="text-4xl font-black text-ink-100">{quickMetrics.tierCounts.total}</div>
-          <div className="text-xs sm:text-sm font-bold text-ink-500 tracking-wider uppercase mt-1 group-hover:text-emerald-400/80 transition-colors">Başarımlar</div>
-        </button>
-      </div>
-
-      {/* ============================== */}
-      {/* 5. BAŞARIMLAR VE SİNEVİA AĞI (YAN YANA YENİ GRID - UZAMAZ!) */}
-      {/* ============================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 items-start">
-        
-        {/* EN YAKIN ROZETLER */}
-        {closestAchievements.length > 0 && (
-          <div className="bg-ink-900/60 border border-ink-700/60 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col w-full">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <h3 className="text-base sm:text-lg font-black text-ink-100 flex items-center gap-2"><Target size={20} className="text-gold-400" /> En Yakın Rozetler</h3>
-              <button onClick={() => navigateTo('achievements')} className="text-xs font-bold text-gold-400 hover:underline flex items-center gap-1 py-1.5 md:py-0">Tümü <ChevronRight size={14} /></button>
-            </div>
-            <div className="space-y-3 sm:space-y-4">
-              {closestAchievements.map((ach) => {
-                const tierInfo = (TIER_COLORS as any)[ach.tier];
-                const AchIcon = (Icons as any)[ach.icon] || Trophy;
-                return (
-                  <div key={ach.id} className="bg-ink-950/70 border border-ink-800/80 rounded-2xl p-4 space-y-2.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${tierInfo?.bg || 'bg-ink-800'}`}>
-                          <AchIcon size={20} className={tierInfo?.text || 'text-gold-400'} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-black text-ink-100 truncate">{ach.name}</div>
-                          <div className="text-xs text-ink-400 truncate">{ach.desc}</div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] sm:text-[11px] font-black text-gold-400 bg-gold-500/10 border border-gold-500/20 px-2.5 py-1 rounded-md flex-shrink-0">+{ach.xp} XP</span>
-                    </div>
-                    <div className="space-y-1.5 mt-1">
-                      <div className="flex justify-between text-[10px] sm:text-[11px] font-bold text-ink-400"><span>İlerleme: {ach.current} / {ach.target}</span><span className="text-gold-400">%{ach.pct}</span></div>
-                      <div className="h-2 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800"><div className={`h-full rounded-full ${tierInfo?.bg || 'bg-gold-500'}`} style={{ width: `${ach.pct}%` }} /></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* SİNEVİA AĞI */}
-        <div className="bg-ink-900/60 border border-ink-700/60 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col relative overflow-hidden w-full">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-azure-500/10 blur-[60px] rounded-full pointer-events-none" />
-          
-          <div className="flex items-center justify-between mb-5 relative z-10">
-            <h3 className="text-base sm:text-lg font-black text-ink-100 flex items-center gap-2"><Users size={20} className="text-azure-400" /> Sinevia Ağı</h3>
-          </div>
-
-          <div className="flex flex-col space-y-3 relative z-10">
-            {networkLoading ? (
-              <div className="text-center py-10 text-xs text-ink-500 animate-pulse">Ağ verileri çekiliyor...</div>
-            ) : networkFeed.length === 0 ? (
-              <div className="text-center py-10 text-sm text-ink-500 italic bg-ink-900/30 rounded-2xl border border-ink-800/50">
-                Ağında henüz bir hareket yok veya arkadaşın yok.
-              </div>
-            ) : (
-              <>
-                {networkFeed.slice(0, 3).map(log => {
-                  const profile = profilesMap[log.agent_id];
-                  if (!profile) return null;
-                  return (
-                    <div key={log.id} className="flex gap-3 sm:gap-4 items-center p-2.5 sm:p-3 rounded-2xl bg-ink-950/50 border border-ink-800/50">
-                      <div className="w-12 sm:w-14 aspect-[2/3] bg-ink-900 rounded-lg overflow-hidden flex-shrink-0 border border-ink-700 shadow-sm">
-                        {log.item_poster ? <img src={log.item_poster} className="w-full h-full object-cover" /> : <Film size={18} className="text-ink-600 m-auto mt-6" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <span className="text-[10px] sm:text-[11px] font-black text-emerald-400 truncate max-w-[100px] sm:max-w-[120px]">{profile.nickname}</span>
-                          <span className="text-[10px] text-ink-500 font-medium">izledi</span>
-                        </div>
-                        <h4 className="text-xs sm:text-sm font-bold text-white truncate leading-tight">{log.item_title}</h4>
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          {log.rating && <span className="text-[9px] font-black text-gold-400 flex items-center gap-1 bg-gold-500/10 px-2 py-0.5 rounded border border-gold-500/20"><Star size={10} className="fill-gold-400"/> {log.rating}</span>}
-                          <span className="text-[9px] text-ink-500 font-mono pl-1">{timeAgo(log.created_at)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-                <button onClick={() => navigateTo('network')} className="w-full mt-2 bg-azure-500/10 hover:bg-azure-500/20 text-azure-400 border border-azure-500/30 py-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2">
-                  Tüm Ağ Akışını Gör <ChevronRight size={14} />
-                </button>
-              </>
-            )}
-          </div>
+      {/* =========================================================
+          06 · ROZETLER + SİNEVİA AĞI
+          ========================================================= */}
+      <section className="hn-sec">
+        <div className="hn-sec-t">
+          <span className="hn-idx">06</span>
+          <h2>Rozetler &amp; Sinevia Ağı</h2>
+          <span className="ln" />
         </div>
 
-      </div>
+        <div className="hn-duo">
+          <div className="hn-panel">
+            <h3>
+              <span className="hn-di" /> En Yakın Rozetler
+              <button type="button" className="hn-more" onClick={() => navigateTo('achievements')}>Tümü <ChevronRight size={13} /></button>
+            </h3>
 
-      {/* ============================== */}
-      {/* 6. SON İZLENENLER (TAM GENİŞLİK - TEK SATIR YENİ TASARIM) */}
-      {/* ============================== */}
-      {recentWatched.length > 0 && (
-        <div className="bg-ink-900/60 border border-ink-700/60 rounded-3xl p-5 sm:p-6 shadow-xl w-full mt-6">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
-            <h3 className="text-base sm:text-lg font-black text-ink-100 flex items-center gap-2"><Clock size={20} className="text-violet-400" /> Son İzlenenler</h3>
-            <button onClick={() => navigateTo('history')} className="text-xs font-bold text-violet-400 hover:text-white bg-violet-500/10 hover:bg-violet-500/20 px-4 py-2.5 md:py-2 min-h-11 md:min-h-0 rounded-xl border border-violet-500/20 transition-colors flex items-center gap-1 whitespace-nowrap">
-              Tüm Geçmişi Gör <ChevronRight size={14} />
-            </button>
+            {closestAchievements.length === 0 ? (
+              <p className="hn-empty">Rozet eşiğine yakın bir izleme yok. Koleksiyonunu büyüt, ilk kademeni aç.</p>
+            ) : (
+              closestAchievements.map((ach) => {
+                const AchIcon = (Icons as any)[ach.icon] || Trophy;
+                return (
+                  <div key={ach.id} className="hn-ach">
+                    <div className="top">
+                      <div
+                        className="hn-ai"
+                        style={{
+                          color: TIER_INK[ach.tier] || '#9A9A96',
+                          background: TIER_TINT[ach.tier] || 'rgba(255,255,255,.05)',
+                          borderColor: TIER_EDGE[ach.tier] || 'var(--line-2, rgba(244,244,242,.13))',
+                        }}
+                      >
+                        <AchIcon size={20} />
+                      </div>
+                      <div className="hn-an"><b>{ach.name}</b><span>{ach.desc}</span></div>
+                      <span className="hn-axp">+{ach.xp} XP</span>
+                    </div>
+                    <div className="hn-pl"><span>İlerleme: {ach.current} / {ach.target}</span><i>%{ach.pct}</i></div>
+                    <div className="hn-pt"><i style={{ width: `${ach.pct}%` }} /></div>
+                  </div>
+                );
+              })
+            )}
           </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+
+          <div className="hn-panel">
+            <h3>
+              <span className="hn-di" /> Sinevia Ağı
+              <button type="button" className="hn-more" onClick={() => navigateTo('network')}>Katıl <ChevronRight size={13} /></button>
+            </h3>
+            <p className="hn-net-note">Ajan kontratlarını yerine getir. Gizli başarımları açarak XP topla, rütbeni yükselt ve vitrinine rozet kuşan.</p>
+            <div className="hn-agents">
+              {networkLoading ? (
+                <div className="hn-agents-loading">Ağ verileri çekiliyor...</div>
+              ) : networkFeed.length === 0 ? (
+                <div className="hn-agents-empty">Ağında henüz bir hareket yok veya arkadaşın yok.</div>
+              ) : (
+                <>
+                  {networkFeed.slice(0, 3).map(log => {
+                    const profile = profilesMap[log.agent_id];
+                    if (!profile) return null;
+                    return (
+                      <div key={log.id} className="hn-agent">
+                        <div className="hn-aa">{(profile.nickname || profile.agent_id || '?').charAt(0).toUpperCase()}</div>
+                        <div className="hn-agent-tx">
+                          <b>{profile.nickname || 'Ajan'}</b>
+                          <span className="sub">{log.item_title}{log.rating ? ` · ${log.rating} puan` : ''} · {timeAgo(log.created_at)}</span>
+                        </div>
+                        <span className={`hn-st ${log.rating ? 'on' : ''}`}>{log.rating ? `★ ${log.rating}` : 'İzledi'}</span>
+                      </div>
+                    );
+                  })}
+                  <button type="button" className="hn-net-more" onClick={() => navigateTo('network')}>
+                    Tüm Ağ Akışını Gör <ChevronRight size={13} />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================
+          07 · SON İZLENENLER
+          ========================================================= */}
+      {recentWatched.length > 0 && (
+        <section className="hn-sec">
+          <div className="hn-sec-t">
+            <span className="hn-idx">07</span>
+            <h2>Son İzlenenler</h2>
+            <span className="ln" />
+            <button type="button" className="hn-more" onClick={() => navigateTo('history')}>Geçmiş <ChevronRight size={13} /></button>
+          </div>
+
+          <div className="hn-recent">
             {recentWatched.map((h) => {
               const isMovie = h.kind === 'movie' || h.type === 'movie';
-              const poster = isMovie ? data.movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl : data.series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.posterUrl;
               return (
-                <button key={h.id} type="button" onClick={() => openHistoryItemDetail(h)} className="bg-ink-950/70 hover:bg-ink-800 border border-ink-800/80 hover:border-gold-500/40 rounded-2xl overflow-hidden transition-all group flex flex-col text-left h-full relative shadow-md">
-                  <div className="w-full aspect-[2/3] bg-ink-900 border-b border-ink-800/60 relative">
-                    {poster ? <img src={poster} alt={h.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-ink-600">{isMovie ? <Film size={32} /> : <Tv size={32} />}</div>}
-                    
-                    {h.rating !== null && (
-                      <div className="absolute top-2 right-2 bg-ink-950/90 backdrop-blur-sm border border-gold-500/30 text-gold-400 px-2 py-1 rounded-lg text-xs font-black shadow-lg flex items-center gap-1 z-10">
-                        <Star size={10} className="fill-current" /> {h.rating}
-                      </div>
-                    )}
-                    
-                    <div className="absolute inset-0 bg-gradient-to-t from-ink-950 to-transparent opacity-80" />
-                  </div>
-                  
-                  <div className="p-3 sm:p-4 flex flex-col flex-1 z-10 -mt-10">
-                    <div className="text-xs sm:text-sm font-black text-white line-clamp-2 drop-shadow-md group-hover:text-gold-400 transition-colors leading-tight mb-1">{h.title}</div>
-                    <div className="text-[10px] text-ink-400 mb-1">{h.season != null ? `S${h.season} B${h.episode}` : h.year || 'Film'}</div>
-                    <div className="mt-auto text-[9px] font-mono text-ink-500 pt-1.5">{formatDateShort(h.watchedAt)}</div>
-                  </div>
+                <button key={h.id} type="button" className="hn-rchip" onClick={() => openHistoryItemDetail(h)}>
+                  <span className="hn-th">{(h.title || 'I').charAt(0).toUpperCase()}</span>
+                  <span className="hn-rchip-tx">
+                    <b>{h.title}</b>
+                    <span>{isMovie ? 'Film' : `Dizi S${h.season} B${h.episode}`} · {formatDateShort(h.watchedAt)}{h.rating != null ? ` · ${h.rating}` : ''}</span>
+                  </span>
                 </button>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* ============================== */}
-      {/* 7. "SİSTEM NASIL ÇALIŞIR?" BENTO GRID TASARIMI (YAPAY ZEKA YOK!) */}
-      {/* ============================== */}
+      {/* =========================================================
+          BENTO — SİNEVİA NASIL ÇALIŞIR?
+          ========================================================= */}
       <div className="pt-10 pb-12">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-full bg-gold-500/10 border border-gold-500/20 text-gold-400 text-xs font-black uppercase tracking-widest mb-4 shadow-sm">
-            <Sparkles size={14} /> Yeni Nesil Sinema Deneyimi
-          </div>
-          <h3 className="text-3xl sm:text-4xl font-black text-white tracking-tight">Sinevia Nasıl Çalışır?</h3>
+          <div className="hn-bento-badge"><Sparkles size={14} /> Yeni Nesil Sinema Deneyimi</div>
+          <h3 className="hn-bento-title">Sinevia Nasıl Çalışır?</h3>
         </div>
-        
-        {/* 8 KUTULU BENTO GRID */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 relative">
-          
-          <div className="bg-ink-950/80 backdrop-blur-md border border-ink-800 rounded-[2rem] p-6 hover:border-blue-500/50 transition-all group relative z-10 shadow-xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-blue-500/20 transition-all" />
-            <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.15)]"><Search size={22} className="text-blue-400" /></div>
-            <h4 className="font-black text-white mb-2 text-lg tracking-tight">Katalog & Keşif</h4>
-            <p className="text-xs text-ink-400 leading-relaxed font-medium">Binlerce yapım arasından filtreleme yap, türlere göre ayır ve kişisel izleme kütüphaneni oluştur.</p>
-          </div>
-          
-          <div className="bg-ink-950/80 backdrop-blur-md border border-ink-800 rounded-[2rem] p-6 hover:border-emerald-500/50 transition-all group relative z-10 shadow-xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-emerald-500/20 transition-all" />
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]"><Dna size={22} className="text-emerald-400" /></div>
-            <h4 className="font-black text-white mb-2 text-lg tracking-tight">DNA Laboratuvarı</h4>
-            <p className="text-xs text-ink-400 leading-relaxed font-medium">İki favori filminin DNA'sını sentezle. Algoritma bu karışımın genetiğine en uygun yapımı bulup önersin.</p>
-          </div>
 
-          <div className="bg-ink-950/80 backdrop-blur-md border border-ink-800 rounded-[2rem] p-6 hover:border-gold-500/50 transition-all group relative z-10 shadow-xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gold-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-gold-500/20 transition-all" />
-            <div className="w-12 h-12 rounded-xl bg-gold-500/10 flex items-center justify-center mb-4 border border-gold-500/30 shadow-[0_0_15px_rgba(234,179,8,0.15)]"><Shuffle size={22} className="text-gold-400" /></div>
-            <h4 className="font-black text-white mb-2 text-lg tracking-tight">Kararsızlık Çarkı</h4>
-            <p className="text-xs text-ink-400 leading-relaxed font-medium">Ne izleyeceğine karar veremiyor musun? Türü ve süreyi belirle, sistem senin için kütüphanenden rastgele seçsin.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+          <div className="hn-bento-card">
+            <div className="hn-bento-ic"><Search size={22} /></div>
+            <h4>Katalog &amp; Keşif</h4>
+            <p>Binlerce yapım arasından filtreleme yap, türlere göre ayır ve kişisel izleme kütüphaneni oluştur.</p>
           </div>
-
-          <div className="bg-ink-950/80 backdrop-blur-md border border-ink-800 rounded-[2rem] p-6 hover:border-purple-500/50 transition-all group relative z-10 shadow-xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-purple-500/20 transition-all" />
-            <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.15)]"><Calendar size={22} className="text-purple-400" /></div>
-            <h4 className="font-black text-white mb-2 text-lg tracking-tight">Haftalık Planlayıcı</h4>
-            <p className="text-xs text-ink-400 leading-relaxed font-medium">Hangi gün ne izleyeceğini takvime ekle. Çakışmaları engelle ve izleme maratonunu düzenli hale getir.</p>
+          <div className="hn-bento-card">
+            <div className="hn-bento-ic"><Dna size={22} /></div>
+            <h4>DNA Laboratuvarı</h4>
+            <p>İki favori filminin DNA'sını sentezle. Algoritma bu karışımın genetiğine en uygun yapımı bulup önersin.</p>
           </div>
-
-          <div className="bg-ink-950/80 backdrop-blur-md border border-ink-800 rounded-[2rem] p-6 hover:border-rose-500/50 transition-all group relative z-10 shadow-xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-rose-500/20 transition-all" />
-            <div className="w-12 h-12 rounded-xl bg-rose-500/10 flex items-center justify-center mb-4 border border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.15)]"><Timer size={22} className="text-rose-400" /></div>
-            <h4 className="font-black text-white mb-2 text-lg tracking-tight">Canlı İzleme Sayacı</h4>
-            <p className="text-xs text-ink-400 leading-relaxed font-medium">Yapıma başladığında sayacı çalıştır, mola verince duraklat. Filmi yeteri kadar izlemeden sahte puan veremezsin.</p>
+          <div className="hn-bento-card">
+            <div className="hn-bento-ic"><Shuffle size={22} /></div>
+            <h4>Kararsızlık Çarkı</h4>
+            <p>Ne izleyeceğine karar veremiyor musun? Türü ve süreyi belirle, sistem senin için kütüphaneden rastgele seçsin.</p>
           </div>
-
-          <div className="bg-ink-950/80 backdrop-blur-md border border-ink-800 rounded-[2rem] p-6 hover:border-amber-500/50 transition-all group relative z-10 shadow-xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-amber-500/20 transition-all" />
-            <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center mb-4 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"><Star size={22} className="text-amber-400" /></div>
-            <h4 className="font-black text-white mb-2 text-lg tracking-tight">Detaylı Puanlama</h4>
-            <p className="text-xs text-ink-400 leading-relaxed font-medium">Senaryo, oyunculuk ve görsellik gibi kendi belirlediğin alt kırılımlarla yapıma ince ayarlı bir puan ver.</p>
+          <div className="hn-bento-card">
+            <div className="hn-bento-ic"><Calendar size={22} /></div>
+            <h4>Haftalık Planlayıcı</h4>
+            <p>Hangi gün ne izleyeceğini takvime ekle. Çakışmaları engelle ve izleme maratonunu düzenli hale getir.</p>
           </div>
-
-          <div className="bg-ink-950/80 backdrop-blur-md border border-ink-800 rounded-[2rem] p-6 hover:border-cyan-500/50 transition-all group relative z-10 shadow-xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-cyan-500/20 transition-all" />
-            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-4 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.15)]"><Target size={22} className="text-cyan-400" /></div>
-            <h4 className="font-black text-white mb-2 text-lg tracking-tight">Görev & Rozetler</h4>
-            <p className="text-xs text-ink-400 leading-relaxed font-medium">Ajan kontratlarını yerine getir. Gizli başarımları açarak XP topla, rütbeni yükselt ve vitrinine rozet kuşan.</p>
+          <div className="hn-bento-card">
+            <div className="hn-bento-ic"><Timer size={22} /></div>
+            <h4>Canlı İzleme Sayacı</h4>
+            <p>Yapıma başladığında sayacı çalıştır, mola verince duraklat. Filmi yeteri kadar izlemeden sahte puan veremezsin.</p>
           </div>
-
-          <div className="bg-ink-950/80 backdrop-blur-md border border-ink-800 rounded-[2rem] p-6 hover:border-indigo-500/50 transition-all group relative z-10 shadow-xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-indigo-500/20 transition-all" />
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-4 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.15)]"><Users size={22} className="text-indigo-400" /></div>
-            <h4 className="font-black text-white mb-2 text-lg tracking-tight">Sinevia Sosyal Ağı</h4>
-            <p className="text-xs text-ink-400 leading-relaxed font-medium">Arkadaşlarını ekle, profillerini stalkla, özel film listeleri gönder, canlı mesajlaş ve Liderlik Tablosunda yarış.</p>
+          <div className="hn-bento-card">
+            <div className="hn-bento-ic"><Star size={22} /></div>
+            <h4>Detaylı Puanlama</h4>
+            <p>Senaryo, oyunculuk ve görsellik gibi kendi belirlediğin alt kırılımlarla yapıma ince ayarlı bir puan ver.</p>
           </div>
-
+          <div className="hn-bento-card">
+            <div className="hn-bento-ic"><Target size={22} /></div>
+            <h4>Görev &amp; Rozetler</h4>
+            <p>Ajan kontratlarını yerine getir. Gizli başarımları açarak XP topla, rütbeni yükselt ve vitrinine rozet kuşan.</p>
+          </div>
+          <div className="hn-bento-card">
+            <div className="hn-bento-ic"><Users size={22} /></div>
+            <h4>Sinevia Sosyal Ağı</h4>
+            <p>Arkadaşlarını ekle, profillerini gözle, özel film listeleri gönder, canlı mesajlaş ve Liderlik Tablosunda yarış.</p>
+          </div>
         </div>
       </div>
 
@@ -945,7 +1128,21 @@ export default function HomePage() {
       {showPick && <PickModal seriesCount={allNextEpisodes.length} unwatchedMovies={eligibleMovies} nextEpisodes={allNextEpisodes} onPick={(item) => setPickedItem(item)} onClose={() => setShowPick(false)} />}
       {showDnaModal && <DnaSynthesizerModal onClose={() => setShowDnaModal(false)} />}
       {pickedItem && (
-        <RatingModal title={pickedItem.kind === 'movie' ? pickedItem.movie.title : pickedItem.series.title} subtitle={pickedItem.kind === 'movie' ? pickedItem.movie.year ? `Çıkış Yılı: ${pickedItem.movie.year}` : 'Film' : `${pickedItem.episode.season}. Sezon ${pickedItem.episode.episode}. Bölüm`} initialIsPastWatch={pickedItem.kind === 'movie' ? Boolean(pickedItem.movie.isPastWatch) : false} allowPastWatch={pickedItem.kind === 'movie'} onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => { if (pickedItem.kind === 'movie') { watchMovie(pickedItem.movie.id, rating, note, detailedRating, reviewTags, isPastWatch); } else { watchEpisode(pickedItem.series.id, pickedItem.episode.id, rating, note, detailedRating, reviewTags); } setPickedItem(null); }} onClose={() => setPickedItem(null)} />
+        <RatingModal
+          title={pickedItem.kind === 'movie' ? pickedItem.movie.title : pickedItem.series.title}
+          subtitle={pickedItem.kind === 'movie' ? pickedItem.movie.year ? `Çıkış Yılı: ${pickedItem.movie.year}` : 'Film' : `${pickedItem.episode.season}. Sezon ${pickedItem.episode.episode}. Bölüm`}
+          initialIsPastWatch={pickedItem.kind === 'movie' ? Boolean(pickedItem.movie.isPastWatch) : false}
+          allowPastWatch={pickedItem.kind === 'movie'}
+          onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
+            if (pickedItem.kind === 'movie') {
+              watchMovie(pickedItem.movie.id, rating, note, detailedRating, reviewTags, isPastWatch);
+            } else {
+              watchEpisode(pickedItem.series.id, pickedItem.episode.id, rating, note, detailedRating, reviewTags);
+            }
+            setPickedItem(null);
+          }}
+          onClose={() => setPickedItem(null)}
+        />
       )}
       {detailTarget && <MediaDetailModal target={detailTarget} onClose={() => setDetailTarget(null)} />}
     </div>
