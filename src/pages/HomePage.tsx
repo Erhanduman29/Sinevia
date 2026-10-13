@@ -40,85 +40,88 @@ const HOME_PREMIUM_CSS = `
 .hn-idx{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.18em;color:#fff;background:linear-gradient(135deg,var(--red,var(--color-1,#e8384f)),var(--red-deep,var(--color-3,#8e1220)));padding:5px 10px;border-radius:8px;box-shadow:0 4px 14px -4px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.3)}
 .hn-more{font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);background:none;border:0;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:4px;padding:4px 0}
 .hn-more:hover{color:var(--red-hi,var(--color-2,#ff6b7a));transform:translateX(3px)}
-.hn-band,.hn-profile,.hn-xp,.hn-spotlight,.hn-duo,.hn-scard,.hn-sc,.hn-rchip,.hn-timer,.hn-bento-card{
+.hp-card,.hp-fire,.hp-tier,.hp-profile,.hp-rec{
+  background:var(--glass,var(--bg-card,#1a1a24));
+  border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));
+  border-radius:var(--r-lg,22px);
+  box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8));
+}
+.hn-spotlight,.hn-duo,.hn-scard,.hn-sc,.hn-timer,.hn-bento-card{
   background:var(--glass,var(--bg-card,rgba(255,255,255,.05)));
   border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));
   border-radius:var(--r-lg,22px);
   box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8)),inset 0 1px 0 rgba(255,255,255,.07);
 }
-.hn-rchip{border-radius:var(--r,16px)}
 
-/* ---------- 01 · SERİ + KADEMELER ---------- */
-.hn-band{display:flex;flex-wrap:wrap;overflow:hidden}
-.hn-streak{display:flex;align-items:center;gap:15px;padding:18px 24px;border-right:1px solid var(--line,rgba(244,244,242,.07));background:linear-gradient(120deg,var(--blob-1,rgba(232,56,79,.14)),transparent 70%)}
-.hn-fl{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:#fff;flex-shrink:0;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 8px 22px -8px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.4)}
-.hn-streak b{font-family:inherit;font-size:19px;font-weight:900;letter-spacing:-.02em;display:block;color:var(--text-main,#f4f4f2)}
-.hn-streak b em{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hn-streak span{font-size:9.5px;font-weight:700;letter-spacing:.16em;color:var(--muted,#9a9a96);text-transform:uppercase}
-.hn-tiers{display:flex;flex:1;flex-wrap:wrap}
-.hn-tier{flex:1;min-width:104px;padding:15px 16px;border-right:1px solid var(--line,rgba(244,244,242,.07));text-align:center;transition:.22s;cursor:pointer;background:none;color:inherit;font-family:inherit;border:0}
-.hn-tier:last-child{border-right:0}
-.hn-tier:hover{background:rgba(255,255,255,.05);transform:translateY(-2px)}
-.hn-tier b{display:block;font-size:17px;font-weight:900;color:var(--text-main,#f4f4f2)}
-.hn-tier span{font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--muted,#9a9a96);text-transform:uppercase}
-.hn-tier.br b{color:#C98B4B}.hn-tier.sl b{color:#D3D7DE}.hn-tier.gd b{color:#EFC94C}
-.hn-tier.pt b{color:#8BE5EC}.hn-tier.em b{color:#5BDCA3}.hn-tier.di b{color:#7FC1FF}
+/* ---------- 01 · SERİ + KADEMELER (yenileme v2) ---------- */
+.hp-streak{display:grid;grid-template-columns:minmax(300px,360px) 1fr;gap:16px}
+.hp-fire{padding:24px 26px;display:flex;flex-direction:column;gap:20px;justify-content:center}
+.hp-fire-head{display:flex;align-items:center;gap:15px}
+.hp-fire-ic{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;flex-shrink:0;color:var(--on-color-1,#0a0a0e);background:linear-gradient(145deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 10px 26px -10px var(--red,var(--color-1,#e8384f))}
+.hp-fire-num{display:block;font-family:inherit;font-size:30px;font-weight:900;letter-spacing:-.03em;line-height:1;color:var(--text-main,#f4f4f2)}
+.hp-fire-num em{font-style:normal;font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));margin-left:7px}
+.hp-fire-sub{display:block;font-family:inherit;font-size:11.5px;line-height:1.5;color:var(--muted,#9a9a96);margin-top:7px}
+.hp-week{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+.hp-day{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px;border-radius:12px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);transition:.2s}
+.hp-day s{text-decoration:none;font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-day b{font-size:12.5px;font-weight:900;color:var(--text-main,#f4f4f2)}
+.hp-day.today{border-color:var(--red,var(--color-1,#e8384f))}
+.hp-day.on{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;box-shadow:0 8px 20px -10px var(--red,var(--color-1,#e8384f))}
+.hp-day.on s,.hp-day.on b{color:var(--on-color-1,#0a0a0e)}
+.hp-tiers{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.hp-tier{padding:20px 10px;display:flex;flex-direction:column;align-items:center;gap:7px;font-family:inherit;color:inherit;cursor:pointer;transition:.24s cubic-bezier(.2,.7,.3,1)}
+.hp-tier:hover{transform:translateY(-4px);border-color:var(--red,var(--color-1,#e8384f))}
+.hp-tier i{width:10px;height:10px;border-radius:4px;box-shadow:0 0 12px currentColor}
+.hp-tier b{display:block;font-size:23px;font-weight:900;letter-spacing:-.02em;line-height:1;color:var(--text-main,#f4f4f2)}
+.hp-tier span{font-size:8.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96)}
 
-/* ---------- 02 · PROFİL + XP ---------- */
-.hn-profile{display:grid;grid-template-columns:auto 1fr;overflow:hidden}
-.hn-avatar-cell{padding:28px 32px;border-right:1px solid var(--line,rgba(244,244,242,.07));display:flex;align-items:center;gap:24px;flex-wrap:wrap}
-.hn-ava{position:relative;width:106px;height:106px;flex-shrink:0}
-.hn-ava svg{position:absolute;inset:0;width:106px;height:106px;transform:rotate(-90deg);filter:drop-shadow(0 0 10px rgba(232,56,79,.65))}
-.hn-core{position:absolute;inset:13px;border-radius:50%;background:linear-gradient(150deg,#23232A,#101014);border:1px solid rgba(255,255,255,.14);box-shadow:inset 0 2px 6px rgba(0,0,0,.7),0 8px 24px -10px rgba(0,0,0,.9);display:grid;place-items:center;font-size:44px;font-weight:900;color:#fff}
-.hn-core span{position:relative;z-index:1}
-.hn-core-ic{position:absolute;inset:0;margin:auto;width:56px;height:56px;opacity:.18;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hn-lv{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:#fff;font-size:10px;font-weight:900;letter-spacing:.1em;padding:5px 12px;text-transform:uppercase;white-space:nowrap;border-radius:99px;border:3px solid var(--bg-base,#0a0a0d);box-shadow:0 6px 18px -6px var(--red,var(--color-1,#e8384f))}
-.hn-persona{font-size:10.5px;font-weight:900;letter-spacing:.24em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
-.hn-idn h3{font-family:inherit;font-size:34px;font-weight:900;letter-spacing:-.035em;text-transform:uppercase;line-height:1;margin:7px 0 11px;background:linear-gradient(100deg,#fff 30%,#A9A9AE);-webkit-background-clip:text;background-clip:text;color:transparent}
-.hn-code-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.hn-code{display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:6px 12px;color:var(--muted,#9a9a96);border-radius:9px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
-.hn-code b{color:var(--text-main,#f4f4f2)}
-.hn-copy{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);cursor:pointer;transition:.2s}
-.hn-copy:hover{color:var(--red-hi,var(--color-2,#ff6b7a));border-color:var(--red,var(--color-1,#e8384f))}
-.hn-badge-slot{margin-top:13px;display:inline-flex;align-items:center;gap:12px;cursor:pointer;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--glass,var(--bg-card,rgba(255,255,255,.05)));padding:9px 16px 9px 9px;border-radius:15px;transition:.25s cubic-bezier(.2,.7,.3,1);box-shadow:0 8px 24px -14px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.08);font-family:inherit;color:inherit}
-.hn-badge-slot:hover{border-color:var(--red,var(--color-1,#e8384f));transform:translateY(-2px);box-shadow:var(--glow,0 0 0 1px rgba(232,56,79,.35),0 8px 32px -8px rgba(232,56,79,.45))}
-.hn-bi{width:40px;height:40px;border-radius:12px;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:#fff;display:grid;place-items:center;font-size:17px;box-shadow:0 6px 16px -6px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.4);flex-shrink:0}
-.hn-badge-empty-ic{color:var(--muted,#9a9a96)}
-.hn-bt{text-align:left}
-.hn-bt s{display:block;text-decoration:none;font-size:8.5px;font-weight:900;letter-spacing:.2em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
-.hn-bt b{font-size:13px;font-weight:900;text-transform:uppercase;color:var(--text-main,#f4f4f2)}
-.hn-stat-grid{display:grid;grid-template-columns:repeat(5,1fr)}
-.hn-stat{padding:22px 14px;border-left:1px solid var(--line,rgba(244,244,242,.07));text-align:center;background:rgba(255,255,255,.02);position:relative;overflow:hidden;transition:.22s}
-.hn-stat:first-child{border-left:0}
-.hn-stat:hover{background:rgba(255,255,255,.06)}
-.hn-stat b{display:block;font-size:27px;font-weight:900;letter-spacing:-.02em;color:var(--text-main,#f4f4f2)}
-.hn-stat span.lab{font-size:8.5px;font-weight:700;letter-spacing:.16em;color:var(--muted,#9a9a96);text-transform:uppercase;display:block;margin-top:5px}
-.hn-stat.red b{color:var(--red-hi,var(--color-2,#ff6b7a));text-shadow:0 0 22px rgba(232,56,79,.55)}
-.hn-stat .ghost{position:absolute;right:-4px;bottom:-6px;opacity:.05;font-size:44px;font-weight:900;color:#fff;pointer-events:none}
-.hn-xp{margin-top:-1px;border-radius:0 0 var(--r-lg,22px) var(--r-lg,22px);border-top:0;background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));padding:24px 32px}
-.hn-xp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
-.hn-xp-head s{display:block;text-decoration:none;font-size:9.5px;font-weight:700;letter-spacing:.2em;color:var(--muted,#9a9a96);text-transform:uppercase}
-.hn-xp-bigrow{display:flex;align-items:baseline;gap:10px;margin-top:4px}
-.hn-xp-big{font-family:inherit;font-size:28px;font-weight:900;letter-spacing:-.02em;background:linear-gradient(100deg,var(--red-hi,var(--color-2,#ff6b7a)),#fff 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.hn-xp-pct{font-size:13px;font-weight:700;color:var(--muted,#9a9a96)}
-.hn-xp-r{text-align:right}
-.hn-xp-left{font-family:inherit;font-size:15px;font-weight:900;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hn-xp-track{margin-top:15px;height:26px;background:rgba(0,0,0,.45);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.7)}
-.hn-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red,var(--color-1,#e8384f)) 55%,var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 22px var(--red,var(--color-1,#e8384f));transition:width 1s ease}
-.hn-xp-fill::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);transform:translateX(-100%);animation:hnXpShine 2.6s cubic-bezier(.4,0,.2,1) infinite}
-@keyframes hnXpShine{60%,100%{transform:translateX(100%)}}
-.hn-xp-cells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(20,1fr);pointer-events:none}
-.hn-xp-cells i{border-right:1px solid rgba(0,0,0,.35)}
-.hn-xp-cells i:last-child{border:0}
-.hn-rank-row{display:flex;justify-content:space-between;align-items:center;margin-top:17px;flex-wrap:wrap;gap:8px}
-.hn-rank-row .lab{font-size:9.5px;font-weight:700;letter-spacing:.18em;color:var(--muted,#9a9a96);text-transform:uppercase}
-.hn-next-pill{font-size:10.5px;font-weight:900;letter-spacing:.1em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase;background:rgba(232,56,79,.14);border:1px solid rgba(232,56,79,.4);padding:6px 12px;border-radius:99px}
-.hn-ranks{display:flex;gap:9px;margin-top:11px;flex-wrap:wrap}
-.hn-rank{border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:10px 15px;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border-radius:12px;transition:.2s}
-.hn-rank:hover{border-color:rgba(255,255,255,.28);color:var(--text-main,#f4f4f2)}
-.hn-rank.done{color:var(--text-main,#f4f4f2);background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.16)}
-.hn-rank.now{background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:#fff;border-color:transparent;box-shadow:0 8px 22px -8px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.35)}
-.hn-rank .t{display:block;font-size:9px;letter-spacing:.16em;opacity:.75;font-family:'JetBrains Mono',monospace}
+/* ---------- 02 · PROFİL + XP (yenileme v2) ---------- */
+.hp-profile{overflow:hidden;display:flex;flex-direction:column}
+.hp-phead{display:flex;align-items:center;gap:26px;padding:28px 30px;flex-wrap:wrap}
+.hp-ava{position:relative;width:96px;height:96px;flex-shrink:0}
+.hp-ava svg{position:absolute;inset:0;width:96px;height:96px;transform:rotate(-90deg)}
+.hp-core{position:absolute;inset:12px;border-radius:50%;background:linear-gradient(155deg,var(--bg-card,#1a1a24),var(--bg-surface,#12121a));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));box-shadow:inset 0 2px 8px rgba(0,0,0,.5);display:grid;place-items:center;font-size:38px;font-weight:900;color:var(--text-main,#f4f4f2)}
+.hp-core span{position:relative;z-index:1}
+.hp-core-ic{position:absolute;inset:0;margin:auto;width:46px;height:46px;opacity:.14;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-lv{position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);font-size:9.5px;font-weight:900;letter-spacing:.12em;padding:4px 12px;text-transform:uppercase;white-space:nowrap;border-radius:99px;border:3px solid var(--bg-base,#0a0a0d);box-shadow:0 6px 16px -6px var(--red,var(--color-1,#e8384f))}
+.hp-pid{flex:1;min-width:230px}
+.hp-ptag{display:inline-flex;align-items:center;gap:7px;font-size:9.5px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-pid h3{font-family:inherit;font-size:32px;font-weight:900;letter-spacing:-.035em;text-transform:uppercase;line-height:1.05;margin:8px 0 13px;color:var(--text-main,#f4f4f2)}
+.hp-prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hp-code{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.04em;color:var(--muted,#9a9a96);background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:6px 11px;border-radius:10px}
+.hp-code b{color:var(--text-main,#f4f4f2);font-weight:700}
+.hp-copy{width:29px;height:29px;border-radius:10px;display:grid;place-items:center;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);cursor:pointer;transition:.2s}
+.hp-copy:hover{color:var(--red-hi,var(--color-2,#ff6b7a));border-color:var(--red,var(--color-1,#e8384f))}
+.hp-badge{display:inline-flex;align-items:center;gap:11px;cursor:pointer;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);padding:7px 14px 7px 7px;border-radius:13px;transition:.24s cubic-bezier(.2,.7,.3,1);font-family:inherit;color:inherit;text-align:left}
+.hp-badge:hover{border-color:var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
+.hp-badge-ic{width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);display:grid;place-items:center;font-size:15px;flex-shrink:0}
+.hp-badge-ic.empty{background:var(--bg-card,#1a1a24);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96)}
+.hp-badge-tx s{display:block;text-decoration:none;font-size:8px;font-weight:900;letter-spacing:.18em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
+.hp-badge-tx b{display:block;font-size:12px;font-weight:800;text-transform:uppercase;color:var(--text-main,#f4f4f2);margin-top:2px}
+.hp-xpool{text-align:right;margin-left:auto}
+.hp-xpool s{display:block;text-decoration:none;font-size:8.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-xpool b{display:block;font-family:inherit;font-size:27px;font-weight:900;letter-spacing:-.025em;margin-top:4px;background:linear-gradient(100deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--text-main,#f4f4f2) 85%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hp-xpool span{display:block;font-size:11px;font-weight:700;color:var(--muted,#9a9a96);margin-top:3px}
+.hp-xpool span i{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a));font-weight:900}
+.hp-xpbar{padding:0 30px 22px}
+.hp-xp-track{height:11px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.45)}
+.hp-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red,var(--color-1,#e8384f)) 60%,var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 14px var(--red,var(--color-1,#e8384f));transition:width 1s ease}
+.hp-xp-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:11px}
+.hp-xp-meta .lab{font-size:9px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-next{font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));background:var(--blob-1,rgba(232,56,79,.14));border:1px solid var(--red,var(--color-1,#e8384f));padding:5px 12px;border-radius:99px}
+.hp-stats{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line,rgba(244,244,242,.07))}
+.hp-stat{padding:20px 12px;text-align:center;border-left:1px solid var(--line,rgba(244,244,242,.07));transition:.22s}
+.hp-stat:first-child{border-left:0}
+.hp-stat:hover{background:var(--blob-3,rgba(244,244,242,.025))}
+.hp-stat b{display:block;font-size:25px;font-weight:900;letter-spacing:-.02em;color:var(--text-main,#f4f4f2)}
+.hp-stat span{display:block;font-size:8.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:5px}
+.hp-stat.accent b{color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-ranks{display:flex;gap:9px;flex-wrap:wrap;padding:18px 30px;border-top:1px solid var(--line,rgba(244,244,242,.07))}
+.hp-rank{border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:9px 15px;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);background:var(--bg-surface,#12121a);border-radius:12px;transition:.2s}
+.hp-rank:hover{border-color:var(--red,var(--color-1,#e8384f));color:var(--text-main,#f4f4f2)}
+.hp-rank.done{color:var(--text-main,#f4f4f2);border-color:var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
+.hp-rank.now{background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));color:var(--on-color-1,#0a0a0e);border-color:transparent;box-shadow:0 8px 20px -10px var(--red,var(--color-1,#e8384f))}
+.hp-rank .t{display:block;font-size:8.5px;letter-spacing:.14em;opacity:.75;font-family:'JetBrains Mono',monospace}
 
 /* ---------- HIZLI ERİŞİM + ZAMANLAYICI ---------- */
 .hn-action{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%}
@@ -244,14 +247,21 @@ const HOME_PREMIUM_CSS = `
 .hn-net-more{margin-top:4px;width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--red-hi,var(--color-2,#ff6b7a));font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:.24s;display:flex;align-items:center;justify-content:center;gap:6px}
 .hn-net-more:hover{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;color:#fff;box-shadow:0 10px 26px -8px var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
 
-/* ---------- 07 · SON İZLENENLER ---------- */
-.hn-recent{display:flex;gap:14px;flex-wrap:wrap}
-.hn-rchip{display:flex;align-items:center;gap:13px;padding:14px 20px 14px 14px;flex:1;min-width:200px;cursor:pointer;transition:.26s cubic-bezier(.2,.7,.3,1);font-family:inherit;color:inherit;text-align:left}
-.hn-rchip:hover{transform:translateY(-5px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 24px 46px -18px rgba(0,0,0,.9),0 0 30px -12px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.1)}
-.hn-th{width:36px;height:50px;border:1px solid rgba(255,255,255,.14);border-radius:9px;background:linear-gradient(160deg,#26212F,#0D0D11);display:grid;place-items:center;font-size:16px;font-weight:900;color:rgba(255,255,255,.4);flex-shrink:0;box-shadow:0 8px 20px -10px rgba(0,0,0,.9)}
-.hn-rchip-tx{min-width:0}
-.hn-rchip-tx b{display:block;font-family:inherit;font-size:12.5px;font-weight:900;text-transform:uppercase;color:var(--text-main,#f4f4f2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hn-rchip-tx>span{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.12em;color:var(--muted,#9a9a96);text-transform:uppercase;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ---------- 07 · SON İZLENENLER (afişli yenileme v2) ---------- */
+.hp-recent{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+.hp-rec{display:flex;flex-direction:column;padding:0;overflow:hidden;cursor:pointer;font-family:inherit;color:inherit;text-align:left;transition:.26s cubic-bezier(.2,.7,.3,1)}
+.hp-rec:hover{transform:translateY(-6px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 28px 52px -22px rgba(0,0,0,.9),0 0 30px -14px var(--red,var(--color-1,#e8384f))}
+.hp-rec-art{display:block;position:relative;aspect-ratio:2/3;overflow:hidden;background:var(--bg-surface,#12121a);border-bottom:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
+.hp-rec-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .45s cubic-bezier(.2,.7,.3,1)}
+.hp-rec:hover .hp-rec-art img{transform:scale(1.05)}
+.hp-rec-ph{position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(165deg,var(--blob-1,rgba(232,56,79,.26)),transparent 72%)}
+.hp-rec-ph b{font-size:52px;font-weight:900;letter-spacing:-.04em;color:var(--red-hi,var(--color-2,#ff6b7a));text-shadow:0 6px 24px var(--red,rgba(232,56,79,.5))}
+.hp-rec-kind{position:absolute;top:10px;left:10px;z-index:2;font-size:8px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;padding:4px 9px;border-radius:99px;color:var(--on-color-1,#0a0a0e);background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 4px 14px -6px var(--red,var(--color-1,#e8384f))}
+.hp-rec-rate{position:absolute;top:10px;right:10px;z-index:2;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--text-main,#f4f4f2);background:var(--glass,var(--bg-card,#1a1a24));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:4px 9px;border-radius:99px;backdrop-filter:blur(8px)}
+.hp-rec-tx{display:block;padding:13px 15px 15px;min-width:0}
+.hp-rec-tx b{display:block;font-family:inherit;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;color:var(--text-main,#f4f4f2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hp-rec-tx span{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hp-rec-tx span i{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a))}
 
 /* ---------- BENTO (Nasıl Çalışır) ---------- */
 .hn-bento-badge{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 16px;border-radius:99px;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));background:rgba(232,56,79,.1);border:1px solid rgba(232,56,79,.3)}
@@ -265,9 +275,10 @@ const HOME_PREMIUM_CSS = `
 
 /* ---------- RESPONSIVE ---------- */
 @media (max-width:1080px){
-  .hn-profile{grid-template-columns:1fr}
-  .hn-avatar-cell{border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
-  .hn-stat-grid{grid-template-columns:repeat(3,1fr)}
+  .hp-streak{grid-template-columns:1fr}
+  .hp-tiers{grid-template-columns:repeat(3,1fr)}
+  .hp-xpool{text-align:left;margin-left:0;width:100%}
+  .hp-recent{grid-template-columns:repeat(3,1fr)}
   .hn-spotlight{grid-template-columns:1fr}
   .hn-sp-poster{min-height:240px;border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
   .hn-series-grid,.hn-shortcuts{grid-template-columns:1fr}
@@ -276,16 +287,21 @@ const HOME_PREMIUM_CSS = `
 }
 @media (max-width:640px){
   .hn-sec-t h2{font-size:15px}
-  .hn-stat-grid{grid-template-columns:repeat(2,1fr)}
-  .hn-idn h3{font-size:26px}
+  .hp-stats{grid-template-columns:repeat(2,1fr)}
+  .hp-stat{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
+  .hp-tiers{grid-template-columns:repeat(2,1fr)}
+  .hp-recent{grid-template-columns:repeat(2,1fr)}
+  .hp-pid h3{font-size:25px}
+  .hp-xpool b{font-size:22px}
+  .hp-phead{padding:22px 18px;gap:18px}
+  .hp-xpbar{padding:0 18px 18px}
+  .hp-ranks{padding:16px 18px}
   .hn-sp-body h2{font-size:28px}
   .hn-bento-title{font-size:24px}
   .hn-big-letter{font-size:120px}
-  .hn-xp{padding:20px 18px}
   .hn-sp-body{padding:22px 18px}
 }
 @media (prefers-reduced-motion:reduce){
-  .hn-xp-fill::before{animation:none}
   .hn-agents-loading{animation:none}
 }
 `;
@@ -499,8 +515,36 @@ export default function HomePage() {
     return [...(data.history || [])]
       .filter((h) => !h.isPastWatch)
       .sort((a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime())
-      .slice(0, 5); // Maksimum 5 tane alıyoruz ki tek satıra sığsın
+      .slice(0, 5) // Maksimum 5 tane alıyoruz ki tek satıra sığsın
+      .map((h) => {
+        // Geçmiş kaydı afiş taşımaz — ana kayıttan (film/dizi) posterUrl çözülür.
+        const isMovie = h.kind === 'movie' || h.type === 'movie';
+        const posterUrl = isMovie
+          ? data.movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl
+          : data.series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.posterUrl;
+        return { h, isMovie, posterUrl: posterUrl || null };
+      });
+  }, [data.history, data.movies, data.series]);
+
+  const weekStrip = useMemo(() => {
+    const watchedDays = new Set<string>();
+    (data.history || []).forEach((h) => {
+      if (h.isPastWatch || !h.watchedAt) return;
+      const d = new Date(h.watchedAt);
+      watchedDays.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    });
+    const dayLabels = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+    const now = new Date();
+    const strip: { key: string; label: string; dayNum: number; active: boolean; today: boolean }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      strip.push({ key, label: dayLabels[d.getDay()], dayNum: d.getDate(), active: watchedDays.has(key), today: i === 0 });
+    }
+    return strip;
   }, [data.history]);
+
+  const [posterErrors, setPosterErrors] = useState<Record<string, boolean>>({});
 
   const lvl = levelFromXp(data.totalXp);
   const currentRankIndex = useMemo(() => {
@@ -587,26 +631,45 @@ export default function HomePage() {
           <span className="ln" />
           <button type="button" className="hn-more" onClick={() => navigateTo('achievements')}>Başarımlar <ChevronRight size={13} /></button>
         </div>
-        <div className="hn-band">
-          <div className="hn-streak">
-            <div className="hn-fl"><Flame size={21} /></div>
-            <div>
-              <b>{data.dailyStreak || 0} <em>Günlük</em> İzleme Serisi</b>
-              <span>{data.dailyStreak > 0 ? 'Alev aldın — seriyi bozmadan devam et' : 'Bugün bir yapım izleyerek seriyi başlat'}</span>
+        <div className="hp-streak">
+          <div className="hp-fire">
+            <div className="hp-fire-head">
+              <span className="hp-fire-ic"><Flame size={22} /></span>
+              <div>
+                <b className="hp-fire-num">{data.dailyStreak || 0}<em>Gün Seri</em></b>
+                <span className="hp-fire-sub">
+                  {data.dailyStreak > 0
+                    ? 'Alevin sönmedi — bugün de izleyerek seriyi taşı.'
+                    : 'Bugün bir yapım izleyerek seriyi başlat.'}
+                </span>
+              </div>
+            </div>
+            <div className="hp-week" aria-label="Son 7 gün izleme">
+              {weekStrip.map((d) => (
+                <span
+                  key={d.key}
+                  className={`hp-day${d.active ? ' on' : ''}${d.today && !d.active ? ' today' : ''}`}
+                  title={d.today ? 'Bugün' : `${d.dayNum}`}
+                >
+                  <s>{d.label}</s>
+                  <b>{d.dayNum}</b>
+                </span>
+              ))}
             </div>
           </div>
-          <div className="hn-tiers">
+          <div className="hp-tiers">
             {(
               [
-                ['br', 'Bronz', quickMetrics.tierCounts.bronze],
-                ['sl', 'Gümüş', quickMetrics.tierCounts.silver],
-                ['gd', 'Altın', quickMetrics.tierCounts.gold],
-                ['pt', 'Platin', quickMetrics.tierCounts.platinum],
-                ['em', 'Zümrüt', quickMetrics.tierCounts.emerald],
-                ['di', 'Elmas', quickMetrics.tierCounts.diamond],
+                ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
+                ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
+                ['gold', 'Altın', quickMetrics.tierCounts.gold],
+                ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
+                ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
+                ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
               ] as const
-            ).map(([cls, label, count]) => (
-              <button key={cls} type="button" className={`hn-tier ${cls}`} onClick={() => navigateTo('achievements')}>
+            ).map(([tier, label, count]) => (
+              <button key={tier} type="button" className="hp-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
+                <i style={{ background: TIER_INK[tier], color: TIER_INK[tier] }} />
                 <b>{count}</b>
                 <span>{label}</span>
               </button>
@@ -626,99 +689,90 @@ export default function HomePage() {
           <button type="button" className="hn-more" onClick={() => navigateTo('settings')}>Düzenle <ChevronRight size={13} /></button>
         </div>
 
-        <div className="hn-profile" data-tutorial="home-hero">
-          <div className="hn-avatar-cell">
-            <div className="hn-ava">
+        <div className="hp-profile" data-tutorial="home-hero">
+          <div className="hp-phead">
+            <div className="hp-ava">
               <svg viewBox="0 0 108 108" aria-hidden="true">
-                <circle cx="54" cy="54" r={circleRadius} fill="none" stroke="rgba(244,244,242,.09)" strokeWidth="6" />
-                <circle cx="54" cy="54" r={circleRadius} fill="none" stroke={userPersona.strokeColor} strokeWidth="6" strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round" />
+                <circle cx="54" cy="54" r={circleRadius} fill="none" stroke="var(--line-2, rgba(244,244,242,.13))" strokeWidth="5" />
+                <circle cx="54" cy="54" r={circleRadius} fill="none" stroke={userPersona.strokeColor} strokeWidth="5" strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round" />
               </svg>
-              <div className="hn-core">
+              <div className="hp-core">
                 <span>{data.nickname?.[0]?.toUpperCase() || 'U'}</span>
-                <PersonaIcon className="hn-core-ic" />
+                <PersonaIcon className="hp-core-ic" />
               </div>
-              <div className="hn-lv">Sv. {lvl.level}</div>
+              <div className="hp-lv">Sv. {lvl.level}</div>
             </div>
-            <div className="hn-idn">
-              <div className="hn-persona">{userPersona.title}</div>
+
+            <div className="hp-pid">
+              <div className="hp-ptag"><PersonaIcon size={13} /> {userPersona.title}</div>
               <h3>{data.nickname}</h3>
-              <div className="hn-code-row">
-                <span className="hn-code">AĞ KODU <b>{data.agentId}</b></span>
+              <div className="hp-prow">
+                <span className="hp-code">AĞ KODU <b>{data.agentId}</b></span>
                 <button
                   type="button"
-                  className="hn-copy"
+                  className="hp-copy"
                   title="Kodu kopyala"
                   onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }}
                 >
                   <Copy size={13} />
                 </button>
+                {activeBadgeDef ? (
+                  <button
+                    type="button"
+                    className="hp-badge"
+                    onClick={() => navigateTo('achievements')}
+                    title={`${activeBadgeDef.title} (${activeBadgeDef.rarity})`}
+                  >
+                    <span className="hp-badge-ic">{activeBadgeDef.icon}</span>
+                    <span className="hp-badge-tx"><s>Aktif Rozet</s><b>{activeBadgeDef.title}</b></span>
+                  </button>
+                ) : (
+                  <button type="button" className="hp-badge" onClick={() => navigateTo('achievements')}>
+                    <span className="hp-badge-ic empty"><ShieldAlert size={16} /></span>
+                    <span className="hp-badge-tx"><s>Rozet Yuvası Boş</s><b>Kuşanmak için tıkla</b></span>
+                  </button>
+                )}
               </div>
-              {activeBadgeDef ? (
-                <button
-                  type="button"
-                  className="hn-badge-slot"
-                  onClick={() => navigateTo('achievements')}
-                  title={`${activeBadgeDef.title} (${activeBadgeDef.rarity})`}
-                >
-                  <span className="hn-bi">{activeBadgeDef.icon}</span>
-                  <span className="hn-bt"><s>Aktif Rozet</s><b>{activeBadgeDef.title}</b></span>
-                </button>
+            </div>
+
+            <div className="hp-xpool">
+              <s>Deneyim Puanı</s>
+              <b>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</b>
+              <span>Seviye <i>{lvl.level}</i> · %{Math.floor(lvl.progress)}</span>
+            </div>
+          </div>
+
+          <div className="hp-xpbar">
+            <div className="hp-xp-track">
+              <div className="hp-xp-fill" style={{ width: `${Math.max(3, lvl.progress)}%` }} />
+            </div>
+            <div className="hp-xp-meta">
+              <span className="lab">
+                Seviye {lvl.level + 1} hedefine {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP kaldı
+              </span>
+              {nextRank ? (
+                <span className="hp-next">Sonraki Unvan: {nextRank.title} · {nextRank.minLevel - lvl.level} Seviye</span>
               ) : (
-                <button type="button" className="hn-badge-slot" onClick={() => navigateTo('achievements')}>
-                  <ShieldAlert size={18} className="hn-badge-empty-ic" />
-                  <span className="hn-bt"><s>Rozet Yuvası Boş</s><b>Koleksiyonundan kuşan</b></span>
-                </button>
+                <span className="hp-next">Maksimum Unvana Ulaşıldı!</span>
               )}
             </div>
           </div>
 
-          <div className="hn-stat-grid">
-            <div className="hn-stat"><b>{quickMetrics.watchedMoviesCount}</b><span className="lab">Film İzledi</span><span className="ghost">F</span></div>
-            <div className="hn-stat"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span className="lab">Dizi Bitirdi</span><span className="ghost">D</span></div>
-            <div className="hn-stat"><b>{quickMetrics.watchedEpsCount}</b><span className="lab">Bölüm İzledi</span><span className="ghost">B</span></div>
-            <div className="hn-stat red"><b>{quickMetrics.unlockedAchievementsCount}</b><span className="lab">Rozet Açtı</span><span className="ghost">R</span></div>
-            <div className="hn-stat red"><b>{quickMetrics.questsCompleted}</b><span className="lab">Görev Bitti</span><span className="ghost">G</span></div>
-          </div>
-        </div>
-
-        <div className="hn-xp">
-          <div className="hn-xp-head">
-            <div>
-              <s>Deneyim Puanı (XP) Havuzu</s>
-              <div className="hn-xp-bigrow">
-                <b className="hn-xp-big">{(data.totalXp || 0).toLocaleString('tr-TR')} XP</b>
-                <span className="hn-xp-pct">(%{Math.floor(lvl.progress)})</span>
-              </div>
-            </div>
-            <div className="hn-xp-r">
-              <s>Seviye {lvl.level + 1} Hedefi</s>
-              <b className="hn-xp-left">{Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı</b>
-            </div>
+          <div className="hp-stats">
+            <div className="hp-stat"><b>{quickMetrics.watchedMoviesCount}</b><span>Film İzledi</span></div>
+            <div className="hp-stat"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span>Dizi Bitirdi</span></div>
+            <div className="hp-stat"><b>{quickMetrics.watchedEpsCount}</b><span>Bölüm İzledi</span></div>
+            <div className="hp-stat accent"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Rozet Açtı</span></div>
+            <div className="hp-stat accent"><b>{quickMetrics.questsCompleted}</b><span>Görev Bitti</span></div>
           </div>
 
-          <div className="hn-xp-track">
-            <div className="hn-xp-fill" style={{ width: `${Math.max(3, lvl.progress)}%` }} />
-            <div className="hn-xp-cells" aria-hidden="true">
-              {Array.from({ length: 20 }).map((_, idx) => <i key={idx} />)}
-            </div>
-          </div>
-
-          <div className="hn-rank-row">
-            <span className="lab">Unvan Evrim Haritası</span>
-            {nextRank ? (
-              <span className="hn-next-pill">Sonraki Unvan: {nextRank.title} — {nextRank.minLevel - lvl.level} Seviye Kaldı</span>
-            ) : (
-              <span className="hn-next-pill">Maksimum Unvana Ulaşıldı!</span>
-            )}
-          </div>
-
-          <div className="hn-ranks">
+          <div className="hp-ranks">
             {RANK_TIERS.map((tier, idx) => {
               if (idx < currentRankIndex - 1 || idx > currentRankIndex + 2) return null;
               const isUnlocked = lvl.level >= tier.minLevel;
               const isCurrent = idx === currentRankIndex;
               return (
-                <div key={tier.title} className={`hn-rank ${isUnlocked ? 'done' : ''} ${isCurrent ? 'now' : ''}`}>
+                <div key={tier.title} className={`hp-rank ${isUnlocked ? 'done' : ''} ${isCurrent ? 'now' : ''}`}>
                   <span className="t">Sv. {tier.minLevel}{isCurrent ? ' · Şimdi' : ''}</span>
                   {tier.title}
                 </div>
@@ -1054,15 +1108,30 @@ export default function HomePage() {
             <button type="button" className="hn-more" onClick={() => navigateTo('history')}>Geçmiş <ChevronRight size={13} /></button>
           </div>
 
-          <div className="hn-recent">
-            {recentWatched.map((h) => {
-              const isMovie = h.kind === 'movie' || h.type === 'movie';
+          <div className="hp-recent">
+            {recentWatched.map(({ h, isMovie, posterUrl }) => {
+              const showPoster = Boolean(posterUrl) && !posterErrors[h.id];
               return (
-                <button key={h.id} type="button" className="hn-rchip" onClick={() => openHistoryItemDetail(h)}>
-                  <span className="hn-th">{(h.title || 'I').charAt(0).toUpperCase()}</span>
-                  <span className="hn-rchip-tx">
+                <button key={h.id} type="button" className="hp-rec" onClick={() => openHistoryItemDetail(h)} title={h.title}>
+                  <span className="hp-rec-art">
+                    {showPoster ? (
+                      <img
+                        src={posterUrl!}
+                        alt={h.title}
+                        loading="lazy"
+                        onError={() => setPosterErrors((prev) => ({ ...prev, [h.id]: true }))}
+                      />
+                    ) : (
+                      <span className="hp-rec-ph" aria-hidden="true"><b>{(h.title || 'S').charAt(0).toUpperCase()}</b></span>
+                    )}
+                    <span className="hp-rec-kind">{isMovie ? 'Film' : 'Dizi'}</span>
+                    {h.rating != null && <span className="hp-rec-rate">{h.rating}</span>}
+                  </span>
+                  <span className="hp-rec-tx">
                     <b>{h.title}</b>
-                    <span>{isMovie ? 'Film' : `Dizi S${h.season} B${h.episode}`} · {formatDateShort(h.watchedAt)}{h.rating != null ? ` · ${h.rating}` : ''}</span>
+                    <span>
+                      {isMovie ? 'Film' : `S${h.season} B${h.episode}`} · <i>{formatDateShort(h.watchedAt)}</i>
+                    </span>
                   </span>
                 </button>
               );
