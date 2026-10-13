@@ -700,8 +700,10 @@ body[data-theme='paper-light'] .mpx-link:hover {
   box-shadow: 0 0 10px var(--mpx-a2);
   animation: mpxPulse 1.6s ease-in-out infinite;
   pointer-events: none;
+  transform: translateY(-50%);
 }
 @keyframes mpxPulse {
+  0%, 100% { opacity: 1; transform: translateY(-50%) scale(1); }
   50% { opacity: .35; transform: translateY(-50%) scale(.75); }
 }
 .mpx-modal-bar::after {
@@ -756,5 +758,9 @@ body[data-theme='paper-light'] .mpx-link:hover {
   .mpx-row:hover,
   .mpx-poster:hover {
     transform: none;
+  }
+  .mpx-modal::before,
+  .mpx-modal-bar::before {
+    animation: none;
   }
 }
