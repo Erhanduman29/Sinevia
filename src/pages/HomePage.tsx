@@ -81,11 +81,29 @@ const HOME_PREMIUM_CSS = `
 .hp-xpool b{display:block;font-family:inherit;font-size:22px;font-weight:900;letter-spacing:-.025em;margin-top:2px;background:linear-gradient(100deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--text-main,#f4f4f2) 85%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hp-xpool span{display:block;font-size:10px;font-weight:700;color:var(--muted,#9a9a96);margin-top:2px;white-space:nowrap}
 .hp-xpool span i{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a));font-weight:900}
-.hp-xpline{display:flex;align-items:center;gap:12px;padding:0 20px 12px;min-height:32px}
-.hp-xp-lab{font-size:8px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap}
-.hp-xp-track{flex:1;height:8px;min-width:70px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.45)}
-.hp-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red,var(--color-1,#e8384f)) 60%,var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 14px var(--red,var(--color-1,#e8384f));transition:width 1s ease}
-.hp-xp-pct{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--red-hi,var(--color-2,#ff6b7a));min-width:30px;text-align:right;white-space:nowrap}
+/* ---------- SERİ ŞERİDİ (ajan kartından bağımsız üst bant) ---------- */
+.hp-streakbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:11px 20px;background:var(--glass,var(--bg-card,#1a1a24));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:var(--r-lg,22px);box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8));position:relative;overflow:hidden;min-height:56px}
+.hp-streakbar::before{content:'';position:absolute;inset:0;background:linear-gradient(100deg,var(--blob-1,rgba(232,56,79,.16)),transparent 62%);pointer-events:none}
+.hp-streakbar>*{position:relative;z-index:1}
+.hp-fire-ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;color:var(--on-color-1,#0a0a0e);background:linear-gradient(145deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 8px 22px -10px var(--red,var(--color-1,#e8384f))}
+.hp-streak-num{display:flex;align-items:baseline;gap:6px;font-family:inherit;white-space:nowrap}
+.hp-streak-num b{font-size:22px;font-weight:900;letter-spacing:-.03em;line-height:1;color:var(--text-main,#f4f4f2)}
+.hp-streak-num em{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-streak-sub{font-size:11px;line-height:1.5;color:var(--muted,#9a9a96);min-width:0}
+.hp-streak-sub b{color:var(--text-main,#f4f4f2);font-weight:800}
+
+/* ---------- XP HATTI (büyük sv + belirgin dolu bar) ---------- */
+.hp-xpline{display:flex;align-items:center;gap:16px;padding:2px 20px 14px}
+.hp-lvbox{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;min-width:60px;padding:5px 12px;border-radius:14px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a)}
+.hp-lvbox s{display:block;text-decoration:none;font-size:7.5px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#9a9a96)}
+.hp-lvbox b{display:block;font-size:27px;font-weight:900;letter-spacing:-.03em;line-height:1.1;background:linear-gradient(120deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--text-main,#f4f4f2) 85%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hp-xpmain{flex:1;min-width:0}
+.hp-xp-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px}
+.hp-xp-lab{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp-xp-lab i{font-style:normal;font-weight:900;color:var(--red-hi,var(--color-2,#ff6b7a))}
+.hp-xp-pct{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--red-hi,var(--color-2,#ff6b7a));white-space:nowrap;flex-shrink:0}
+.hp-xp-track{height:14px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.45)}
+.hp-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red,var(--color-1,#e8384f)) 60%,var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 16px var(--red,var(--color-1,#e8384f));transition:width 1s ease}
 
 /* ---------- UNVAN YOLU (öne çıkan rütbe ilerlemesi) ---------- */
 .hp-path{display:flex;align-items:center;gap:14px;padding:11px 20px;border-top:1px solid var(--line,rgba(244,244,242,.07));background:linear-gradient(180deg,var(--blob-3,rgba(244,244,242,.025)),transparent)}
@@ -109,21 +127,8 @@ const HOME_PREMIUM_CSS = `
 .hp-node.now .hp-node-tx b{color:var(--on-color-1,#0a0a0e);font-size:12.5px}
 .hp-node.now .hp-node-tx span{color:var(--on-color-1,#0a0a0e);opacity:.78;font-weight:900}
 
-.hp-mid{display:grid;grid-template-columns:minmax(300px,1fr) auto;border-top:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-fire{display:flex;align-items:center;gap:12px;padding:12px 20px;flex-wrap:wrap;border-right:1px solid var(--line,rgba(244,244,242,.07));min-height:64px}
-.hp-fire-ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;color:var(--on-color-1,#0a0a0e);background:linear-gradient(145deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 8px 22px -10px var(--red,var(--color-1,#e8384f))}
-.hp-fire-tx{min-width:96px}
-.hp-fire-num{display:block;font-family:inherit;font-size:17px;font-weight:900;letter-spacing:-.03em;line-height:1;color:var(--text-main,#f4f4f2)}
-.hp-fire-num em{font-style:normal;font-size:8.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));margin-left:5px}
-.hp-fire-sub{display:block;font-family:inherit;font-size:9.5px;line-height:1.4;color:var(--muted,#9a9a96);margin-top:3px}
-.hp-week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;flex:1;min-width:196px}
-.hp-day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:36px;padding:3px 1px;border-radius:8px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);transition:border-color .2s,background-color .2s}
-.hp-day s{text-decoration:none;font-size:7px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-day b{font-size:11px;font-weight:900;color:var(--text-main,#f4f4f2)}
-.hp-day.today{border-color:var(--red,var(--color-1,#e8384f))}
-.hp-day.on{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;box-shadow:0 6px 16px -10px var(--red,var(--color-1,#e8384f))}
-.hp-day.on s,.hp-day.on b{color:var(--on-color-1,#0a0a0e)}
-.hp-tiers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 20px}
+.hp-tiers{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 20px;border-top:1px solid var(--line,rgba(244,244,242,.07))}
+.hp-tiers-lab{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;margin-right:6px;font-size:8.5px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
 .hp-tier{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:5px 11px;border-radius:10px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:var(--bg-surface,#12121a);font-family:inherit;color:inherit;cursor:pointer;transition:border-color .2s,background-color .2s}
 .hp-tier:hover{border-color:var(--red,var(--color-1,#e8384f))}
 .hp-tier i{width:7px;height:7px;border-radius:3px;box-shadow:0 0 8px currentColor;flex-shrink:0}
@@ -289,8 +294,6 @@ const HOME_PREMIUM_CSS = `
 
 /* ---------- RESPONSIVE ---------- */
 @media (max-width:1080px){
-  .hp-mid{grid-template-columns:1fr}
-  .hp-fire{border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
   .hp-xpool{text-align:left;width:100%;order:3;padding-left:0}
   .hp-recent{grid-template-columns:repeat(3,1fr)}
   .hn-spotlight{grid-template-columns:1fr}
@@ -308,13 +311,15 @@ const HOME_PREMIUM_CSS = `
   .hp-id{padding:12px 14px;gap:12px;min-height:0}
   .hp-pid h3{font-size:19px}
   .hp-xpool b{font-size:19px}
-  .hp-xpline{padding:0 14px 10px;gap:8px}
-  .hp-xp-lab{font-size:7.5px}
+  .hp-xpline{padding:2px 14px 12px;gap:10px}
+  .hp-xp-lab{font-size:8.5px}
+  .hp-lvbox{min-width:52px;padding:4px 10px}
+  .hp-lvbox b{font-size:22px}
   .hp-path{padding:10px 14px;gap:10px}
   .hp-path-lab{width:100%}
   .hp-node{min-height:40px;padding:5px 11px}
   .hp-node.now{padding:5px 13px}
-  .hp-fire{padding:10px 14px;min-height:0}
+  .hp-streakbar{padding:10px 14px;min-height:0}
   .hp-tiers{padding:10px 14px}
   .hn-sp-body h2{font-size:28px}
   .hn-bento-title{font-size:24px}
@@ -546,24 +551,6 @@ export default function HomePage() {
       });
   }, [data.history, data.movies, data.series]);
 
-  const weekStrip = useMemo(() => {
-    const watchedDays = new Set<string>();
-    (data.history || []).forEach((h) => {
-      if (h.isPastWatch || !h.watchedAt) return;
-      const d = new Date(h.watchedAt);
-      watchedDays.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-    });
-    const dayLabels = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
-    const now = new Date();
-    const strip: { key: string; label: string; dayNum: number; active: boolean; today: boolean }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      strip.push({ key, label: dayLabels[d.getDay()], dayNum: d.getDate(), active: watchedDays.has(key), today: i === 0 });
-    }
-    return strip;
-  }, [data.history]);
-
   const [posterErrors, setPosterErrors] = useState<Record<string, boolean>>({});
 
   const lvl = levelFromXp(data.totalXp);
@@ -654,6 +641,22 @@ export default function HomePage() {
       <style>{HOME_PREMIUM_CSS}</style>
 
       {/* =========================================================
+          SERİ ŞERİDİ (ajan kartından bağımsız, üst bant)
+          ========================================================= */}
+      <div className="hp-streakbar" data-tutorial="home-streak">
+        <span className="hp-fire-ic"><Flame size={18} /></span>
+        <span className="hp-streak-num">
+          <b>{data.dailyStreak || 0}</b>
+          <em>Gün Seri</em>
+        </span>
+        <span className="hp-streak-sub">
+          {data.dailyStreak > 0
+            ? <>Alevin sönmedi — bugün de izleyerek seriyi <b>bozmadan</b> taşı.</>
+            : <>Bugün bir yapım izleyerek seriyi <b>başlat</b>.</>}
+        </span>
+      </div>
+
+      {/* =========================================================
           01 · AJAN KARTI (profil + seri/kademe birleşik kompakt)
           ========================================================= */}
       <section className="hn-sec">
@@ -662,7 +665,6 @@ export default function HomePage() {
           <h2>Ajan Kartı</h2>
           <span className="ln" />
           <button type="button" className="hn-more" onClick={() => navigateTo('achievements')}>Başarımlar <ChevronRight size={13} /></button>
-          <button type="button" className="hn-more" onClick={() => navigateTo('settings')}>Düzenle <ChevronRight size={13} /></button>
         </div>
 
         <div className="hp-hero" data-tutorial="home-hero">
@@ -719,13 +721,23 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* XP HATTI (tek satır) */}
+          {/* XP HATTI (büyük sv + belirgin dolu bar) */}
           <div className="hp-xpline">
-            <span className="hp-xp-lab">Sv. {lvl.level + 1} Hedefi</span>
-            <div className="hp-xp-track">
-              <div className="hp-xp-fill" style={{ width: `${Math.max(3, lvl.progress)}%` }} />
+            <span className="hp-lvbox">
+              <s>Sv.</s>
+              <b>{lvl.level}</b>
+            </span>
+            <div className="hp-xpmain">
+              <div className="hp-xp-top">
+                <span className="hp-xp-lab">
+                  Sv. {lvl.level + 1} hedefine <i>{xpToNext.toLocaleString('tr-TR')}</i> XP kaldı
+                </span>
+                <span className="hp-xp-pct">%{Math.floor(lvl.progress)}</span>
+              </div>
+              <div className="hp-xp-track">
+                <div className="hp-xp-fill" style={{ width: `${Math.max(3, lvl.progress)}%` }} />
+              </div>
             </div>
-            <span className="hp-xp-pct">%{Math.floor(lvl.progress)}</span>
           </div>
 
           {/* UNVAN YOLU — öne çıkan rütbe ilerlemesi */}
@@ -759,47 +771,23 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* SERİ + KADEMELER */}
-          <div className="hp-mid">
-            <div className="hp-fire">
-              <span className="hp-fire-ic"><Flame size={19} /></span>
-              <div className="hp-fire-tx">
-                <b className="hp-fire-num">{data.dailyStreak || 0}<em>Gün Seri</em></b>
-                <span className="hp-fire-sub">
-                  {data.dailyStreak > 0 ? 'Alevin sönmedi — bozmadan devam et.' : 'Bugün izleyerek seriyi başlat.'}
-                </span>
-              </div>
-              <div className="hp-week" aria-label="Son 7 gün izleme">
-                {weekStrip.map((d) => (
-                  <span
-                    key={d.key}
-                    className={`hp-day${d.active ? ' on' : ''}${d.today && !d.active ? ' today' : ''}`}
-                    title={d.today ? 'Bugün' : `${d.dayNum}`}
-                  >
-                    <s>{d.label}</s>
-                    <b>{d.dayNum}</b>
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="hp-tiers">
-              {(
-                [
-                  ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
-                  ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
-                  ['gold', 'Altın', quickMetrics.tierCounts.gold],
-                  ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
-                  ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
-                  ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
-                ] as const
-              ).map(([tier, label, count]) => (
-                <button key={tier} type="button" className="hp-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
-                  <i style={{ background: TIER_INK[tier], color: TIER_INK[tier] }} />
-                  <b>{count}</b>
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
+          {/* KADEMELER */}
+          <div className="hp-tiers">
+            <span className="hp-tiers-lab">Kademeler</span>
+            {([
+              ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
+              ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
+              ['gold', 'Altın', quickMetrics.tierCounts.gold],
+              ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
+              ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
+              ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
+            ] as const).map(([tier, label, count]) => (
+              <button key={tier} type="button" className="hp-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
+                <i style={{ background: TIER_INK[tier], color: TIER_INK[tier] }} />
+                <b>{count}</b>
+                <span>{label}</span>
+              </button>
+            ))}
           </div>
 
           {/* STAT'LAR */}
