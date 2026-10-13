@@ -257,22 +257,22 @@ body[data-theme="premium-dark"] {
   --glow: 0 0 0 1px rgba(232, 56, 79, 0.35), 0 8px 32px -8px rgba(232, 56, 79, 0.45);
 }
 
-/* 14. PLAIN KOYU (Sade · Minimal · Gölgesiz, sakin tek vurgu) */
+/* 14. PLAIN KOYU (Sade · Simsiyah zemin, beyaz vurgu — gri yok) */
 body[data-theme="plain-dark"] {
-  --bg-base: #111113;
-  --bg-surface: rgba(23, 23, 26, 0.96);
-  --bg-card: rgba(30, 30, 34, 0.92);
-  --border-dim: rgba(124, 124, 133, 0.28);
+  --bg-base: #000000;
+  --bg-surface: rgba(8, 8, 8, 0.96);
+  --bg-card: rgba(13, 13, 13, 0.92);
+  --border-dim: rgba(255, 255, 255, 0.14);
 
-  --color-1: #7c7c85; /* Sakin Gri */
-  --color-2: #8e8e97; /* Açık Gri */
-  --color-3: #6b6b73; /* Koyu Gri */
+  --color-1: #ffffff; /* Saf Beyaz */
+  --color-2: #fbfbfb; /* Kırık Beyaz */
+  --color-3: #f3f3f4; /* Açık Beyaz */
 
-  --blob-1: rgba(124, 124, 133, 0.07);
-  --blob-2: rgba(142, 142, 151, 0.05);
-  --blob-3: rgba(107, 107, 115, 0.05);
+  --blob-1: rgba(255, 255, 255, 0.05);
+  --blob-2: rgba(255, 255, 255, 0.035);
+  --blob-3: rgba(255, 255, 255, 0.025);
 
-  --text-main: #f2f2f4;
+  --text-main: #ffffff;
 }
 
 body {

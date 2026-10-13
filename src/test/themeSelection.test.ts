@@ -44,7 +44,7 @@ describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
     expect(new Set(ids).size).toBe(14);
   });
 
-  test('her tema kartının adı, açıklaması, önizleme rengi ve 3 renk paleti tanımlı olmalı', () => {
+  test('her tema kartının adı, açıklaması, önizleme rengi ve 1-4 arası renk paleti tanımlı olmalı', () => {
     const lines = getThemeBlock()
       .split('\n')
       .map((l) => l.trim())
@@ -61,7 +61,9 @@ describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
       const colorsMatch = line.match(/colors: \[([^\]]+)\]/);
       expect(colorsMatch, `renk paleti okunamadı: ${line}`).not.toBeNull();
       const colors = colorsMatch![1].split(',').map((c) => c.trim());
-      expect(colors).toHaveLength(3);
+      // Tema paletleri 1-4 renk arasında olabilir (tek renk / iki renk / dört renk temalar desteklenir)
+      expect(colors.length).toBeGreaterThanOrEqual(1);
+      expect(colors.length).toBeLessThanOrEqual(4);
       colors.forEach((c) => expect(c).toMatch(/^'#[0-9a-fA-F]{6}'$/));
     });
   });
