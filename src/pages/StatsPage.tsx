@@ -17,12 +17,16 @@ import { calculateStats, StatsScopeMode } from '../lib/statsLogic';
 /* ══════════════════════════════════════════════════════════════
    PREMIUM TASARIM JETONLARI (sinevia-premium.html ile uyumlu)
    Cam paneller / ince çizgili kutular tema CSS değişkenlerine bağlı:
-   ink sınıfları → --bg-surface & --border-dim, gold → --color-1
-   (premium-dark temasında tam olarak kırmızı #E8384F ailesi).
-   Grafik dolguları ise doğrudan kırmızı paletle uyumludur.
+   premium tokenlar önce gelir (--red/--red-hi/--red-deep, --glass,
+   --surface, --line-2, --r-lg, --shadow, --glow); plain-dark gibi token
+   tanımsız temalar için zincirleme fallback: --color-1/2/3 → sabit değer.
+   plain-dark fallback ZORUNLU kalıplar: var(--r, 16px),
+   var(--red, var(--color-1, #e8384f)), var(--glass, var(--bg-card)).
+   Grafik/heatmap VERİSİ değişmez (kütüphanesiz el SVG + eşik haritası);
+   yalnızca görsel jetonlar sertleştirildi.
    ══════════════════════════════════════════════════════════════ */
 const PREMIUM_PANEL =
-  'bg-ink-900/60 bg-[image:var(--glass)] backdrop-blur-xl border border-ink-700/50 rounded-[var(--r-lg,22px)] p-4 sm:p-5 shadow-[var(--shadow,0_24px_60px_-24px_rgba(0,0,0,0.85))] transition-colors duration-300';
+  'bg-ink-900/60 bg-[image:var(--glass,var(--bg-card))] backdrop-blur-xl border border-ink-700/50 rounded-[var(--r-lg,22px)] p-4 sm:p-5 shadow-[var(--shadow,0_24px_60px_-24px_rgba(0,0,0,0.85))] transition-colors duration-300';
 const PREMIUM_CELL =
   'bg-white/[0.03] border border-ink-800/70 rounded-[var(--r,16px)] transition-all duration-300 hover:bg-white/[0.06] hover:shadow-[var(--glow,0_0_0_1px_rgba(232,56,79,0.35),0_10px_30px_-10px_rgba(232,56,79,0.5))]';
 const PREMIUM_GLOW =
@@ -31,10 +35,17 @@ const PREMIUM_GLOW =
 const PREMIUM_NUM = 'font-mono font-black tracking-tight tabular-nums';
 /* İkon karo — premium cam + kırmızı ışık */
 const RED_TILE =
-  'bg-gradient-to-br from-red-500 to-red-700 border border-rose-400/40 flex items-center justify-center shadow-[0_6px_18px_-6px_rgba(232,56,79,0.85),inset_0_1px_0_rgba(255,255,255,0.35)]';
+  'stats-tile bg-gradient-to-br from-red-500 to-red-700 border border-rose-400/40 flex items-center justify-center shadow-[0_6px_18px_-6px_rgba(232,56,79,0.85),inset_0_1px_0_rgba(255,255,255,0.35)]';
 /* Aktif sekme — premium kırmızı hap */
 const RED_PILL_ACTIVE =
   'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-[0_6px_18px_-6px_rgba(232,56,79,0.85),inset_0_1px_0_rgba(255,255,255,0.3)]';
+/* Önizleme ince ayraç + kırmızı ışık yardımcısı (boşluklu zincir fallback) */
+const STATS_PREMIUM_CSS = `
+.stats-glass{background:var(--glass, var(--bg-card));border-radius:var(--r, 16px);}
+.stats-tile{box-shadow:0 6px 18px -6px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35);}
+.stats-red{color:var(--red, var(--color-1, #e8384f));}
+.stats-hr{border-color:var(--line-2, var(--border-dim, rgba(244,244,242,.13)));}
+`;
 
 function RadarChart({ data, maxScore = 10 }: { data: { name: string; score: number }[]; maxScore?: number }) {
   if (data.length < 3) {
@@ -486,6 +497,7 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in pb-10">
+      <style>{STATS_PREMIUM_CSS}</style>
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-ink-100 flex items-center gap-2.5">
@@ -856,7 +868,7 @@ export default function StatsPage() {
                 );
               })}
             </div>
-            <div className="flex justify-between text-[10px] font-mono font-semibold text-ink-500 border-t border-ink-800/60 pt-2 mt-2">
+            <div className="flex justify-between text-[10px] font-mono font-semibold text-ink-500 border-t stats-hr border-ink-800/60 pt-2 mt-2">
               <span>{stats.last14Days[0]?.label}</span>
               <span>Bugün ({stats.last14Days[stats.last14Days.length - 1]?.count || 0} izleme)</span>
             </div>
