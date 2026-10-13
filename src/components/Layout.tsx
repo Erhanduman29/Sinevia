@@ -432,7 +432,7 @@ function GlobalSearch({
 
   return (
     <div
-      className="fixed inset-0 z-[220] flex items-start justify-center px-4 pt-[12vh]"
+      className="sv-search-wrap fixed inset-0 z-[220] flex items-start justify-center px-4 pt-[12vh]"
       role="dialog"
       aria-modal="true"
       aria-label="Global arama"
@@ -472,8 +472,8 @@ function GlobalSearch({
           </kbd>
         </div>
 
-        {/* Sonuçlar (gruplu) */}
-        <div className="max-h-[52vh] overflow-y-auto custom-scrollbar py-1.5">
+        {/* Sonuçlar (gruplu) — MOBİL: klavye açıkken daha yüksek kullanım (index.css @media) */}
+        <div className="sv-search-results max-h-[52vh] overflow-y-auto custom-scrollbar py-1.5">
           {groups.length === 0 ? (
             <div className="px-4 py-12 text-center">
               <p className="text-[13px] font-semibold text-ink-300">Sonuç bulunamadı</p>
@@ -745,17 +745,19 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] bg-ink-950 font-sans text-ink-50 selection:bg-azure-500/30 selection:text-azure-200 overflow-hidden relative isolate transition-colors duration-500">
-      {/* Ortam ışıkları: negatif z ile her zaman içeriknin ARKASINDA kalır */}
-      <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full blur-[130px] pointer-events-none ambient-glow-1 -z-10 transition-all duration-700" />
-      <div className="fixed bottom-[-10%] left-[-5%] w-[600px] h-[600px] rounded-full blur-[130px] pointer-events-none ambient-glow-2 -z-10 transition-all duration-700" />
-      <div className="fixed top-[40%] left-[30%] w-[500px] h-[500px] rounded-full blur-[140px] pointer-events-none ambient-glow-3 -z-10 transition-all duration-700" />
+      {/* Ortam ışıkları: negatif z ile her zaman içeriknin ARKASINDA kalır
+          MOBİL: 600/500px blob'lar tam ekranı kaplayıp büyük ölçüyordu →
+          daraltıldı; ≥768px (md:) değerleri ÖNCEDENKİ İLE BİREBİR aynı. */}
+      <div className="fixed top-[-10%] right-[-5%] w-[300px] h-[300px] sm:w-[420px] sm:h-[420px] md:w-[600px] md:h-[600px] rounded-full blur-[70px] sm:blur-[100px] md:blur-[130px] pointer-events-none ambient-glow-1 -z-10 transition-all duration-700" />
+      <div className="fixed bottom-[-10%] left-[-5%] w-[300px] h-[300px] sm:w-[420px] sm:h-[420px] md:w-[600px] md:h-[600px] rounded-full blur-[70px] sm:blur-[100px] md:blur-[130px] pointer-events-none ambient-glow-2 -z-10 transition-all duration-700" />
+      <div className="fixed top-[40%] left-[30%] w-[260px] h-[260px] sm:w-[380px] sm:h-[380px] md:w-[500px] md:h-[500px] rounded-full blur-[80px] sm:blur-[110px] md:blur-[140px] pointer-events-none ambient-glow-3 -z-10 transition-all duration-700" />
 
       {/* MOBİL: SABİT ÜST BAR */}
       {/* iOS çentik/safe-area: başlık calc ile büyür, içerik satırı 56px'te kalır */}
       <header className="md:hidden fixed top-0 inset-x-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-ink-900/80 backdrop-blur-xl border-b border-ink-800 z-[60] flex items-center justify-between pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] shadow-md shrink-0 transition-transform duration-300" style={glassSurface}>
         {/* Premium kırmızı (tema vurgulu) alt saç teli */}
         <span aria-hidden className="absolute inset-x-0 bottom-[-1px] h-px pointer-events-none" style={{ background: TOPBAR_HAIRLINE }} />
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
           {/* 44px dokunma hedefi (iOS HIG) */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -770,15 +772,17 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
               <Sini size={30} mood="idle" showGlow={false} />
             </div>
-            <span className="text-[13px] font-black text-white tracking-[0.16em] uppercase whitespace-nowrap">SINEVIA</span>
+            {/* MOBİL: dar ekranda (safe-area dâhil) taşmasın diye marka
+                yazısı bir kademe küçük + sıkı harf aralığı */}
+            <span className="text-[12px] font-black text-white tracking-[0.1em] uppercase whitespace-nowrap">SINEVIA</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           
           {/* YENİ: MOBİL BULUT EŞİTLEME İKONU */}
           <div 
-            className={`relative flex items-center justify-center w-9 h-9 rounded-xl border transition-all mr-0.5 ${
+            className={`relative flex items-center justify-center w-8 h-8 rounded-xl border transition-all mr-0.5 ${
               syncStatus === 'syncing' ? 'bg-azure-500/10 border-azure-500/30 text-azure-400' :
               syncStatus === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
               'bg-emerald-500/5 border-emerald-500/20 text-emerald-500/70'
@@ -831,11 +835,11 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
       {/* MOBİL: AÇILIR TAM MENÜ EKRANI */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed top-[calc(3.5rem+env(safe-area-inset-top))] inset-x-0 bottom-0 bg-ink-900/80 backdrop-blur-3xl z-[55] animate-fade-in flex flex-col p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] overflow-y-auto" style={glassSurface}>
-          <div className="flex flex-col gap-2">
+        <div className="md:hidden fixed top-[calc(3.5rem+env(safe-area-inset-top))] inset-x-0 bottom-0 bg-ink-900/80 backdrop-blur-3xl z-[55] animate-fade-in flex flex-col p-3 pb-[calc(4.5rem+env(safe-area-inset-bottom))] overflow-y-auto" style={glassSurface}>
+          <div className="flex flex-col gap-1.5">
             <button
               onClick={() => { setIsMobileMenuOpen(false); setShowWrapped(true); }}
-              className="relative overflow-hidden flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-black text-white shadow-lg mb-1"
+              className="relative overflow-hidden flex items-center justify-between px-3.5 py-3 rounded-xl text-[13px] font-black text-white shadow-lg mb-1"
               style={btnPrimaryStyle}
             >
               <span className="flex items-center gap-3">
@@ -852,7 +856,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                   key={item.id}
                   onClick={() => handleMobileMenuClick(item.id as TabId)}
                   data-tutorial={`nav-${item.id}`}
-                  className={`relative flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all ${
+                  className={`relative flex items-center gap-3 px-3.5 py-3 rounded-xl text-[13px] font-bold transition-all ${
                     isActive
                       ? 'text-gold-400 bg-ink-800'
                       : 'text-ink-300 bg-ink-900/60 hover:bg-ink-800/50 hover:text-ink-100'
@@ -868,7 +872,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
             <button
               onClick={() => handleMobileMenuClick('settings')}
-              className={`relative flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all ${
+              className={`relative flex items-center gap-3 px-3.5 py-3 rounded-xl text-[13px] font-bold transition-all ${
                 activeTab === 'settings'
                   ? 'text-gold-400 bg-ink-800'
                   : 'text-ink-300 bg-ink-900/60 hover:bg-ink-800/50 hover:text-ink-100'
@@ -1077,7 +1081,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
       {/* MOBİL: AKILLI (GİZLENEN) SABİT ALT NAVİGASYON BARI */}
       <nav
-        className={`md:hidden fixed bottom-0 inset-x-0 min-h-[68px] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-ink-900/80 backdrop-blur-2xl border-t border-ink-800/60 z-[58] grid grid-cols-5 px-1.5 shadow-[0_-8px_25px_rgba(0,0,0,0.6)] transition-transform duration-300 ease-in-out ${
+        className={`md:hidden fixed bottom-0 inset-x-0 min-h-[62px] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-ink-900/80 backdrop-blur-2xl border-t border-ink-800/60 z-[58] grid grid-cols-5 px-1.5 shadow-[0_-8px_25px_rgba(0,0,0,0.6)] transition-transform duration-300 ease-in-out ${
           isNavVisible && !isModalOpen ? 'translate-y-0' : 'translate-y-[120%]'
         }`}
         style={glassSurface}
@@ -1099,7 +1103,8 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
               style={isActive ? { backgroundImage: activePillStyle.backgroundImage } : undefined}
             >
               <Icon size={20} className={isActive ? 'scale-110' : ''} />
-              <span className={`text-[10px] tracking-tight ${isActive ? 'font-black' : 'font-semibold'}`}>
+              {/* MOBİL: dar ekranda satır kırılmasın (taşma/çakışma olmasın) */}
+              <span className={`text-[9.5px] tracking-tight whitespace-nowrap ${isActive ? 'font-black' : 'font-semibold'}`}>
                 {tab.label}
               </span>
             </button>

@@ -1234,3 +1234,58 @@ body[data-theme="premium-dark"] #root > div {
 body[data-theme="premium-dark"] #main-scroll {
   background-color: transparent !important;
 }
+
+/* =========================================================
+   MOBİL STABİLİZASYON — YALNIZCA @MEDIA BLOKLARI
+   KURAL: bu bloklar HARİCİNDE hiçbir global/tema kuralına
+   dokunulmadı → 17 tema bloğu, renk motoru v2/v2.1,
+   --on-color-1/2/3, light + plain-dark blokları AYNEN kalır.
+   Tüm ayarlar yalnızca mobil kırılımda geçerlidir;
+   ≥768px (masaüstü) görünümü birebir aynıdır.
+   ========================================================= */
+
+/* ---------- <768px : MOBİL KIRILIM ---------- */
+@media (max-width: 767px) {
+  /* Yatay taşma kilidi: sayfa içi süsler (negatif sağa taşan blur
+     daireler, taşan rozet/etiketler) mobilde iç kaydırıcıda yan
+     kaydırma üretmesin. Dikey kaydırma ve içerideki kendi
+     overflow-x-auto şeritleri (yatay karuseller) ETKİLENMEZ. */
+  #main-scroll {
+    overflow-x: hidden;
+  }
+
+  /* Kaydırma zinciri kesilsin: liste bitince sayfa/alt nav zıplamasın */
+  #main-scroll,
+  .custom-scrollbar {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* ---------- ≤639px : TELEFON ----------
+   (sm: varyantları bu kırılımda zaten kapalıdır → Tailwind'in
+    sm:text-* / md:p-* kurallarıyla çakışma oluşmaz.) */
+@media (max-width: 639px) {
+  /* Mobilde büyük kalan başlıklar */
+  .text-6xl { font-size: 2.25rem; line-height: 1.1; }
+  .text-5xl { font-size: 1.875rem; line-height: 1.15; }
+  .text-4xl { font-size: 1.75rem; line-height: 1.2; }
+
+  /* Mobilde büyük kalan iç boşluklar */
+  .p-8 { padding: 1.25rem; }
+  .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
+  .py-10 { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+
+  /* Global arama paneli: klavye açıkken sonuç satırları daha yüksek
+     kalsın, üst boşluk daralsın (masaüstü 12vh/52vh olarak kalır) */
+  .sv-search-wrap { padding-top: 8vh; }
+  .sv-search-results { max-height: 56vh; }
+}
+
+/* ---------- ≤380px : ÇOK DAR EKRAN ---------- */
+@media (max-width: 380px) {
+  .text-4xl { font-size: 1.5rem; line-height: 1.2; }
+  .p-8 { padding: 1rem; }
+  .px-8 { padding-left: 1rem; padding-right: 1rem; }
+  .py-10 { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+}
+
