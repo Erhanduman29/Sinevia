@@ -1,0 +1,269 @@
+/* ============================================================
+   NETWORK (SINEVIA AĞI) — PREMIUM ÖNİZLEME HİZASI
+   Kaynak: sinevia-premium.html · 06 Rozetler & Sinevia Ağı
+   cam kartlar · çevrimiçi yeşil nokta glow · hover'da kaldırma +
+   kırmızı glow · mono etiketler · ince ayraçlar
+
+   Tema uyumu: tüm stiller var(--...) token'larına bağlıdır.
+   premium-dark bu token'ları tanımlar (--red/--glass/--r/...);
+   plain-dark ve diğer temalarda zincir fallback devrededir:
+   var(--r, 16px) · var(--red, var(--color-1, #e8384f)) ·
+   var(--glass, var(--bg-card)) — hiçbir tema kırılmaz.
+   ============================================================ */
+
+.ntw-root {
+  /* Cam yüzeyler */
+  --ntw-glass: var(--glass, var(--bg-card, rgba(255, 255, 255, 0.04)));
+  --ntw-surf: var(--surface, color-mix(in srgb, var(--text-main, #f4f4f2) 6%, transparent));
+  --ntw-surf2: var(--surface2, color-mix(in srgb, var(--text-main, #f4f4f2) 10%, transparent));
+  /* İnce ayraçlar */
+  --ntw-line: var(--line, color-mix(in srgb, var(--text-main, #f4f4f2) 8%, transparent));
+  --ntw-line2: var(--line-2, color-mix(in srgb, var(--text-main, #f4f4f2) 14%, transparent));
+  /* Yarıçaplar */
+  --ntw-r: var(--r, 16px);
+  --ntw-r-lg: var(--r-lg, 22px);
+  --ntw-r-sm: var(--r-sm, 10px);
+  /* Derinlik */
+  --ntw-shadow: var(--shadow, 0 18px 40px -22px rgba(0, 0, 0, 0.5));
+  --ntw-inset: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  /* Vurgu (premium: kırmızı — plain-dark'de tema nötr rengi) */
+  --ntw-a1: var(--red, var(--color-1, #e8384f));
+  --ntw-a2: var(--red-hi, var(--color-2, #ff6b7a));
+  --ntw-a3: var(--red-deep, var(--color-3, #8e1220));
+  --ntw-muted: var(--muted, color-mix(in srgb, var(--text-main, #f4f4f2) 62%, transparent));
+  --ntw-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Çevrimiçi yeşil (preview .st.on) */
+  --ntw-on: #67e39b;
+  --ntw-on-soft: rgba(78, 203, 142, 0.5);
+  --ntw-on-bg: rgba(78, 203, 142, 0.1);
+  --ntw-on-glow: 0 0 14px -5px rgba(78, 203, 142, 0.7);
+}
+
+/* ---------- CAM KARTLAR ---------- */
+.ntw-card {
+  position: relative;
+  background: var(--ntw-glass);
+  border: 1px solid var(--ntw-line2);
+  border-radius: var(--ntw-r-lg);
+  box-shadow: var(--ntw-shadow), var(--ntw-inset);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* hover: yukarı kalkma + kırmızı glow (preview .rchip / .card) */
+.ntw-hover {
+  transition: 0.28s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.ntw-hover:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--ntw-a1) 45%, transparent);
+  box-shadow:
+    0 30px 58px -24px rgba(0, 0, 0, 0.9),
+    0 0 34px -14px color-mix(in srgb, var(--ntw-a1) 50%, transparent),
+    var(--ntw-inset);
+}
+
+/* kart içi cam satır */
+.ntw-row {
+  position: relative;
+  background: var(--ntw-surf);
+  border: 1px solid var(--ntw-line);
+  border-radius: var(--ntw-r);
+  box-shadow: var(--ntw-inset);
+  transition: 0.24s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+/* satır hover: kırmızı glow + sağa kayma (preview .agent:hover) */
+.ntw-row-hover:hover {
+  background: var(--ntw-surf2);
+  border-color: color-mix(in srgb, var(--ntw-a1) 45%, transparent);
+  transform: translateX(4px);
+  box-shadow:
+    0 14px 30px -16px rgba(0, 0, 0, 0.9),
+    0 0 26px -12px color-mix(in srgb, var(--ntw-a1) 50%, transparent),
+    var(--ntw-inset);
+}
+
+/* üst kırmızı saç teli (preview .brand::after / panel başlığı) */
+.ntw-hair::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--ntw-a1) 65%, transparent) 30%,
+      color-mix(in srgb, var(--ntw-a2) 40%, transparent) 62%,
+      transparent);
+}
+
+/* ---------- İNCE AYRACLAR ---------- */
+.ntw-bt { border-top: 1px solid var(--ntw-line); }
+.ntw-bb { border-bottom: 1px solid var(--ntw-line); }
+.ntw-div {
+  height: 1px;
+  border: 0;
+  background: var(--ntw-line);
+}
+/* bölüm başlığı ayracı (preview .sec-t .ln) */
+.ntw-sec {
+  flex: 1;
+  height: 1px;
+  min-width: 12px;
+  background: linear-gradient(90deg, var(--ntw-line2), transparent);
+}
+
+/* ---------- AVATAR (preview .aa / .side-av) ---------- */
+.ntw-av {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-weight: 900;
+  border-radius: 12px;
+  background: linear-gradient(150deg, #23232a, #131317);
+  border: 1px solid var(--ntw-line2);
+  box-shadow:
+    0 8px 20px -10px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+/* kendi avatarı: kırmızı halka + parlama (preview .side-av) */
+.ntw-av-acc {
+  border-color: color-mix(in srgb, var(--ntw-a1) 50%, transparent);
+  box-shadow:
+    0 0 18px -6px color-mix(in srgb, var(--ntw-a1) 60%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- ÇEVRİMİÇİ NOKTA ---------- */
+.ntw-dot {
+  position: absolute;
+  border-radius: 999px;
+  border: 2px solid var(--bg-base, #0a0a0d);
+}
+/* çevrimiçi: yeşil + glow (preview .st.on) */
+.ntw-dot-on {
+  background: var(--ntw-on);
+  box-shadow: var(--ntw-on-glow);
+}
+/* canlı yayın: kırmızı nabız */
+.ntw-dot-live {
+  background: var(--ntw-a1);
+  box-shadow: 0 0 12px -4px color-mix(in srgb, var(--ntw-a1) 80%, transparent);
+}
+
+/* ---------- MONO DURUM ROZETİ (preview .st) ---------- */
+.ntw-st {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--ntw-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border: 1px solid var(--ntw-line2);
+  padding: 4px 9px;
+  color: var(--ntw-muted);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ntw-st.on {
+  color: var(--ntw-on);
+  border-color: var(--ntw-on-soft);
+  background: var(--ntw-on-bg);
+  box-shadow: var(--ntw-on-glow);
+}
+.ntw-st.live {
+  color: var(--ntw-a2);
+  border-color: color-mix(in srgb, var(--ntw-a1) 50%, transparent);
+  background: color-mix(in srgb, var(--ntw-a1) 13%, transparent);
+}
+.ntw-st.away {
+  color: #efc94c;
+  border-color: rgba(229, 193, 59, 0.45);
+  background: rgba(229, 193, 59, 0.08);
+}
+
+/* ---------- MONO ETİKET ---------- */
+.ntw-mono {
+  font-family: var(--ntw-mono);
+  letter-spacing: 0.08em;
+}
+
+/* ---------- HOVER'DA KALDIRMA İPACI ---------- */
+.ntw-del {
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.ntw-hover:hover .ntw-del,
+.ntw-row-hover:hover .ntw-del,
+.ntw-del:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+/* dokunmatik cihazlarda hover yok → ipucu her zaman görünür */
+@media (hover: none) {
+  .ntw-del {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
+
+/* ---------- SEKME / ÇİP (preview .nav a.on / .chipf span.on) ---------- */
+.ntw-tab {
+  position: relative;
+  transition: 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.ntw-tab.on {
+  color: #fff;
+  background: linear-gradient(120deg,
+      color-mix(in srgb, var(--ntw-a1) 28%, transparent),
+      color-mix(in srgb, var(--ntw-a1) 8%, transparent));
+  border-color: color-mix(in srgb, var(--ntw-a1) 45%, transparent);
+  box-shadow:
+    0 6px 22px -8px color-mix(in srgb, var(--ntw-a1) 55%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.ntw-chip {
+  transition: 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.ntw-chip.on {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(140deg, var(--ntw-a2), var(--ntw-a3));
+  box-shadow:
+    0 8px 22px -8px color-mix(in srgb, var(--ntw-a1) 80%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* ---------- ERİŞİLEBİLİRLİK / HAREKET TERCİHİ ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .ntw-hover,
+  .ntw-row,
+  .ntw-row-hover,
+  .ntw-tab,
+  .ntw-chip,
+  .ntw-del {
+    transition-duration: 0.01ms;
+  }
+  .ntw-hover:hover,
+  .ntw-row-hover:hover {
+    transform: none;
+  }
+}
+
+/* Açık temalarda vurgu üzerindeki yazı koyulaşsın */
+body[data-theme='light'] .ntw-root .ntw-tab.on,
+body[data-theme='light'] .ntw-root .ntw-chip.on,
+body[data-theme='paper-light'] .ntw-root .ntw-tab.on,
+body[data-theme='paper-light'] .ntw-root .ntw-chip.on {
+  color: #16110c;
+}

@@ -440,14 +440,18 @@ export default function SettingsPage() {
   };
 
   const renderTagChip = (tag: string) => (
-    <div key={tag} className={`flex items-center gap-1.5 bg-ink-800 border rounded-xl pl-2.5 pr-2 py-1.5 transition-colors ${isPositiveTag(tag, data.tagSentiments) ? 'border-emerald-700/40' : 'border-red-700/40'} hover:border-gold-500/50`}>
+    <div key={tag} className="flex items-center gap-1.5 px-2.5 pr-2 py-1.5 transition-colors rounded-xl" style={{
+      background: PREMIUM_ROW_BG,
+      border: `1px solid ${isPositiveTag(tag, data.tagSentiments) ? 'rgba(16, 185, 129, .4)' : 'rgba(232, 56, 79, .4)'}`,
+    }}>
       {editingReviewTag === tag ? (
         <>
           <input
             type="text"
             value={editReviewTagName}
             onChange={(e) => setEditReviewTagName(e.target.value)}
-            className="bg-ink-950 border border-gold-500 rounded px-2 py-0.5 text-xs sm:text-sm text-ink-100 focus:outline-none w-28 sm:w-36"
+            className="px-2 py-0.5 text-xs sm:text-sm text-ink-100 focus:outline-none w-28 sm:w-36"
+            style={{ background: 'var(--bg-base, #0a0a0d)', border: '1px solid var(--color-1, #f59e0b)', borderRadius: PREMIUM_RADIUS_SM }}
             onKeyDown={(e) => { if (e.key === 'Enter' && editReviewTagName.trim()) { applyReviewTagEdit(tag); } }}
           />
           <button
@@ -599,14 +603,14 @@ export default function SettingsPage() {
                 </div>
             
                 <div className="flex flex-col gap-2">
-                  <button onClick={() => copyToClipboard(data.agentId || '', 'Ağ Kodun')} className="flex items-center justify-between gap-3 bg-ink-900 border border-ink-700 hover:border-emerald-500/30 px-3 py-1.5 rounded-lg transition-colors group">
+                  <button onClick={() => copyToClipboard(data.agentId || '', 'Ağ Kodun')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
                     <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Ağ Kodun:</span>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-emerald-400 text-xs sm:text-sm font-bold">{data.agentId}</span>
                       <Copy size={12} className="text-ink-500 group-hover:text-emerald-400" />
                     </div>
                   </button>
-                  <button onClick={() => copyToClipboard(data.recoveryKey || '', 'Kurtarma Anahtarın')} className="flex items-center justify-between gap-3 bg-ink-900 border border-ink-700 hover:border-red-500/30 px-3 py-1.5 rounded-lg transition-colors group">
+                  <button onClick={() => copyToClipboard(data.recoveryKey || '', 'Kurtarma Anahtarın')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
                     <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Kurtarma Anahtarın:</span>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-red-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{data.recoveryKey}</span>
@@ -614,7 +618,7 @@ export default function SettingsPage() {
                     </div>
                   </button>
                   {currentSecretToken && (
-                    <button onClick={() => copyToClipboard(currentSecretToken, 'Güvenlik İmzan')} className="flex items-center justify-between gap-3 bg-ink-900 border border-ink-700 hover:border-amber-500/30 px-3 py-1.5 rounded-lg transition-colors group">
+                    <button onClick={() => copyToClipboard(currentSecretToken, 'Güvenlik İmzan')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
                       <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Güvenlik İmzan:</span>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-amber-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{currentSecretToken}</span>
@@ -666,26 +670,26 @@ export default function SettingsPage() {
                         value={transferBundleInput}
                         onChange={(e) => handleParseTransferCode(e.target.value)}
                         placeholder="SNV-TRANSFER-... ile başlayan kodu buraya yapıştır"
-                        className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300 focus:border-emerald-500 outline-none"
+                        className="w-full px-3 py-2 text-xs font-mono text-emerald-300 outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}
                       />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ Kodu (SNV-..)</label>
-                        <input type="text" value={recAgentId} onChange={(e) => setRecAgentId(e.target.value)} placeholder="SNV-XXXX-XXXX" className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono uppercase text-white focus:border-azure-500 outline-none" />
+                        <input type="text" value={recAgentId} onChange={(e) => setRecAgentId(e.target.value)} placeholder="SNV-XXXX-XXXX" className="w-full px-3 py-2 text-xs font-mono uppercase text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ İsmin</label>
-                        <input type="text" value={recNickname} onChange={(e) => setRecNickname(e.target.value)} placeholder="Eski ismin..." className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs text-white focus:border-azure-500 outline-none" />
+                        <input type="text" value={recNickname} onChange={(e) => setRecNickname(e.target.value)} placeholder="Eski ismin..." className="w-full px-3 py-2 text-xs text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Gizli Kurtarma Anahtarı</label>
-                        <input type="password" value={recKey} onChange={(e) => setRecKey(e.target.value)} placeholder="Kurtarma anahtarın..." className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-azure-500 outline-none" />
+                        <input type="password" value={recKey} onChange={(e) => setRecKey(e.target.value)} placeholder="Kurtarma anahtarın..." className="w-full px-3 py-2 text-xs font-mono text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-amber-400/90 mb-1 uppercase tracking-wider">Güvenlik İmzan (sec_...)</label>
-                        <input type="password" value={recSecretToken} onChange={(e) => setRecSecretToken(e.target.value)} placeholder="Mesaj/Profil yetkisi için (sec_...)" className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-amber-500 outline-none" />
+                        <input type="password" value={recSecretToken} onChange={(e) => setRecSecretToken(e.target.value)} placeholder="Mesaj/Profil yetkisi için (sec_...)" className="w-full px-3 py-2 text-xs font-mono text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
                       </div>
                     </div>
                     <div className="flex gap-2 mt-2">
@@ -1186,7 +1190,8 @@ export default function SettingsPage() {
                       value={critName}
                       onChange={(e) => setCritName(e.target.value)}
                       placeholder="Örn: Senaryo, Müzik, Atmosfer..."
-                      className="w-full bg-ink-900 border border-ink-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:border-gold-500/50 outline-none"
+                      className="w-full px-3 py-2 text-xs sm:text-sm text-white focus:border-gold-500/50 outline-none"
+                      style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS }}
                     />
                   </div>
                   <div>
@@ -1198,10 +1203,10 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-ink-400 mb-1.5 uppercase tracking-wider">Geçerli Olduğu Tip</label>
-                    <div className="flex bg-ink-900 rounded-xl p-1 border border-ink-800">
-                      <button onClick={() => setCritAppliesTo('both')} className={`flex-1 text-xs py-1.5 rounded-lg font-bold transition-all ${critAppliesTo === 'both' ? 'bg-ink-700 text-white' : 'text-ink-500 hover:text-ink-300'}`}>Tümü</button>
-                      <button onClick={() => setCritAppliesTo('movie')} className={`flex-1 text-xs py-1.5 rounded-lg font-bold transition-all ${critAppliesTo === 'movie' ? 'bg-ink-700 text-white' : 'text-ink-500 hover:text-ink-300'}`}>Film</button>
-                      <button onClick={() => setCritAppliesTo('series')} className={`flex-1 text-xs py-1.5 rounded-lg font-bold transition-all ${critAppliesTo === 'series' ? 'bg-ink-700 text-white' : 'text-ink-500 hover:text-ink-300'}`}>Dizi</button>
+                    <div className="flex p-1" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS }}>
+                      <button onClick={() => setCritAppliesTo('both')} className={`flex-1 text-xs py-1.5 rounded-[var(--r-sm,10px)] font-bold transition-all ${critAppliesTo === 'both' ? 'bg-white/10 text-white' : 'text-ink-500 hover:text-ink-300'}`}>Tümü</button>
+                      <button onClick={() => setCritAppliesTo('movie')} className={`flex-1 text-xs py-1.5 rounded-[var(--r-sm,10px)] font-bold transition-all ${critAppliesTo === 'movie' ? 'bg-white/10 text-white' : 'text-ink-500 hover:text-ink-300'}`}>Film</button>
+                      <button onClick={() => setCritAppliesTo('series')} className={`flex-1 text-xs py-1.5 rounded-[var(--r-sm,10px)] font-bold transition-all ${critAppliesTo === 'series' ? 'bg-white/10 text-white' : 'text-ink-500 hover:text-ink-300'}`}>Dizi</button>
                     </div>
                   </div>
                 </div>
@@ -1215,8 +1220,9 @@ export default function SettingsPage() {
                         key={g}
                         onClick={() => toggleCritGenre(g)}
                         className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
-                          critGenres.includes(g) ? 'bg-gold-500/20 text-gold-300 border-gold-500/40' : 'bg-ink-900 text-ink-500 border-ink-800 hover:border-ink-600'
+                          critGenres.includes(g) ? 'bg-gold-500/20 text-gold-300 border-gold-500/40' : 'text-ink-500 border-ink-800 hover:border-ink-600'
                         }`}
+                        style={{ background: critGenres.includes(g) ? 'var(--blob-1, rgba(245, 158, 11, 0.15))' : 'var(--bg-base, #0a0a0d)' }}
                       >
                         {g}
                       </button>
@@ -1236,19 +1242,23 @@ export default function SettingsPage() {
                 {data.criteria.map((c) => (
                   <div
                     key={c.id}
-                    className={`rounded-[var(--r-sm,10px)] p-3 flex flex-col gap-2 transition-all border ${editingCritId === c.id ? 'bg-white/[.06] border-white/[.22] shadow-md' : 'bg-white/[.03] border-white/[.09] hover:border-white/[.18]'}`}
+                    className="rounded-[var(--r-sm,10px)] p-3 flex flex-col gap-2 transition-all"
+                    style={{
+                      background: editingCritId === c.id ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.03)',
+                      border: `1px solid ${editingCritId === c.id ? 'rgba(255,255,255,.22)' : PREMIUM_LINE_SOFT}`,
+                    }}
                   >
                     <div className="flex items-start justify-between">
                       <div>
                         <h4 className="text-xs sm:text-sm font-bold text-white">{c.name}</h4>
                         <div className="text-[10px] text-ink-400 mt-1 flex gap-1.5">
-                          <span className="bg-ink-900 px-1.5 py-0.5 rounded border border-ink-800 text-gold-400 font-bold">Ağırlık: {c.weight}</span>
-                          <span className="bg-ink-900 px-1.5 py-0.5 rounded border border-ink-800">{c.appliesTo === 'both' ? 'Film + Dizi' : c.appliesTo === 'movie' ? 'Sadece Film' : 'Sadece Dizi'}</span>
+                          <span className="px-1.5 py-0.5 rounded border font-bold text-gold-400" style={{ background: 'var(--bg-base, #0a0a0d)', borderColor: PREMIUM_LINE }}>Ağırlık: {c.weight}</span>
+                          <span className="px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-base, #0a0a0d)', borderColor: PREMIUM_LINE }}>{c.appliesTo === 'both' ? 'Film + Dizi' : c.appliesTo === 'movie' ? 'Sadece Film' : 'Sadece Dizi'}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => handleEditCrit(c)} className="p-1.5 text-ink-400 hover:text-gold-400 bg-ink-900 rounded-lg transition-all"><Edit2 size={13} /></button>
-                        <button onClick={() => setDeleteCritTarget(c.id)} className="p-1.5 text-ink-400 hover:text-red-400 bg-ink-900 rounded-lg transition-all"><Trash2 size={13} /></button>
+                        <button onClick={() => handleEditCrit(c)} className="p-1.5 text-ink-400 hover:text-gold-400 transition-all" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS }}><Edit2 size={13} /></button>
+                        <button onClick={() => setDeleteCritTarget(c.id)} className="p-1.5 text-ink-400 hover:text-red-400 transition-all" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS }}><Trash2 size={13} /></button>
                       </div>
                     </div>
                     {c.genres.length > 0 && <div className="text-[10px] text-ink-400 truncate mt-0.5">Sadece: {c.genres.join(', ')}</div>}
@@ -1264,11 +1274,11 @@ export default function SettingsPage() {
             desc="Puanlama sırasında seçebileceğin hızlı değerlendirme rozetlerini ekle, düzenle veya sil."
           >
             <div className="flex flex-col sm:flex-row gap-2 mb-3">
-              <div className="flex bg-ink-900 rounded-xl p-1 border border-ink-800 flex-shrink-0">
-                <button onClick={() => setNewTagSentiment('positive')} className={`flex items-center gap-1 text-xs py-1.5 px-3 rounded-lg font-bold transition-all ${newTagSentiment === 'positive' ? 'bg-emerald-500/20 text-emerald-400' : 'text-ink-500 hover:text-ink-300'}`}>
+              <div className="flex p-1 flex-shrink-0" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS }}>
+                <button onClick={() => setNewTagSentiment('positive')} className={`flex items-center gap-1 text-xs py-1.5 px-3 rounded-[var(--r-sm,10px)] font-bold transition-all ${newTagSentiment === 'positive' ? 'bg-emerald-500/20 text-emerald-400' : 'text-ink-500 hover:text-ink-300'}`}>
                   <ThumbsUp size={13} /> Övgü
                 </button>
-                <button onClick={() => setNewTagSentiment('negative')} className={`flex items-center gap-1 text-xs py-1.5 px-3 rounded-lg font-bold transition-all ${newTagSentiment === 'negative' ? 'bg-red-500/20 text-red-400' : 'text-ink-500 hover:text-ink-300'}`}>
+                <button onClick={() => setNewTagSentiment('negative')} className={`flex items-center gap-1 text-xs py-1.5 px-3 rounded-[var(--r-sm,10px)] font-bold transition-all ${newTagSentiment === 'negative' ? 'bg-red-500/20 text-red-400' : 'text-ink-500 hover:text-ink-300'}`}>
                   <ThumbsDown size={13} /> Eleştiri
                 </button>
               </div>
@@ -1277,7 +1287,8 @@ export default function SettingsPage() {
                 value={newReviewTag}
                 onChange={(e) => setNewReviewTag(e.target.value)}
                 placeholder="Yeni başlık adı..."
-                className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+                className="flex-1 px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+                style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS }}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddReviewTag()}
               />
               <button onClick={handleAddReviewTag} disabled={!newReviewTag.trim()} className={`${BTN_P} px-3.5 py-2 text-xs sm:text-sm`} style={BTN_P_STYLE}>
