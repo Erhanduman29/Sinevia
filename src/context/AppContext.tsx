@@ -889,7 +889,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [levelUpData, setLevelUpData] = useReducer((_s: any, a: any) => a, null); const [seasonCompleteData, setSeasonCompleteData] = useReducer((_s: any, a: any) => a, null);
   const [xpGainData, setXpGainData] = useState<{ gained: number; oldTotal: number; newTotal: number } | null>(null);
 
-  useEffect(() => { document.body.setAttribute('data-theme', data.theme || 'default'); }, [data.theme]);
+  useEffect(() => { document.body.setAttribute('data-theme', !data.theme || data.theme === 'default' ? 'premium-dark' : data.theme); }, [data.theme]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
 
   // AÇILIŞ KONTROLÜ (BOOT CHECK)

@@ -1030,7 +1030,7 @@ export default function SettingsPage() {
                   aria-checked={data.notificationsEnabled}
                   aria-label="Cihaz bildirimleri"
                   className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
-                  style={switchTrackStyle(data.notificationsEnabled)}
+                  style={switchTrackStyle(!!data.notificationsEnabled)}
                 >
                   <span
                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`}
