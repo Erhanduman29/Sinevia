@@ -1,17 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Film, Tv, History, Trophy, Settings, BarChart3, Bot,
   Menu, X, LayoutDashboard, Sparkles, CalendarClock, Users,
-  Cloud, CloudOff, RefreshCw, Search, Plus
+  Cloud, CloudOff, RefreshCw, Search, Dices, ArrowRight, CornerDownLeft
 } from 'lucide-react';
 import WrappedModal from './WrappedModal';
-import AddMovieModal from './AddMovieModal';
-import AddSeriesModal from './AddSeriesModal';
 import { useApp } from '../context/AppContext';
 import { useTutorial } from '../context/TutorialContext';
 import Sini from '../tutorial/Sini';
-import { levelFromXp } from '../lib/xp';
-import { describeCombo, focusPageSearch, loadBindings } from '../lib/shortcuts';
+import { describeCombo, loadBindings } from '../lib/shortcuts';
+import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 
 export type TabId = 'home' | 'movies' | 'series' | 'network' | 'plan' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
 
@@ -118,28 +117,395 @@ function ActiveRail() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// GLOBAL ARAMA (komut paleti) — tüm sayfalarda AppContext verisini tarar.
+// Cam yüzey + kırmızı (tema) vurgu; sonuçlar gruplu (ikon + bölüm etiketi).
+// Tema değişkenleri tanımsız olduğunda (plain-dark/eski temalar) fallback
+// zinciri devreye girer: var(--glass, var(--bg-card)), var(--red, var(--color-1)).
+// ---------------------------------------------------------------------------
+const SEARCH_ACCENT = 'var(--red, var(--color-1, #e8384f))';
+
+const searchPanelStyle: React.CSSProperties = {
+  backgroundColor: 'var(--bg-card, #15151b)',
+  backgroundImage:
+    'var(--glass, linear-gradient(155deg, rgba(255,255,255,.06), rgba(255,255,255,.02)))',
+  borderColor: 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
+  borderRadius: 'var(--r, 16px)',
+  boxShadow: '0 30px 90px -30px rgba(0,0,0,.92), inset 0 1px 0 rgba(255,255,255,.08)',
+};
+
+interface SearchEntry {
+  key: string;
+  label: string;
+  sub?: string;
+  icon: LucideIcon;
+  tab: TabId;
+}
+
+interface SearchGroup {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  entries: SearchEntry[];
+}
+
+/** Tüm sayfalar (hash hedefleri) — arama sonuçlarında "Bölümler" grubunu besler. */
+const SEARCH_PAGES: { id: TabId; label: string; icon: LucideIcon }[] = [
+  { id: 'home', label: 'Ana Sayfa', icon: LayoutDashboard },
+  { id: 'movies', label: 'Filmler', icon: Film },
+  { id: 'series', label: 'Diziler', icon: Tv },
+  { id: 'network', label: 'Sinevia Ağı', icon: Users },
+  { id: 'plan', label: 'Haftalık Plan', icon: CalendarClock },
+  { id: 'history', label: 'Geçmiş', icon: History },
+  { id: 'achievements', label: 'Başarımlar', icon: Trophy },
+  { id: 'stats', label: 'İstatistik', icon: BarChart3 },
+  { id: 'ai', label: 'AI Asistan', icon: Bot },
+  { id: 'settings', label: 'Ayarlar', icon: Settings },
+];
+
+function pageEntries(): SearchEntry[] {
+  return SEARCH_PAGES.map((p) => ({
+    key: `page-${p.id}`,
+    label: p.label,
+    sub: 'Sayfaya git',
+    icon: p.icon,
+    tab: p.id,
+  }));
+}
+
+/** Türkçe-duyarlı küçük harfe çevirir (İ/ı sorunlarını önler). */
+function trLower(value: string): string {
+  return value.toLocaleLowerCase('tr-TR');
+}
+
+/** Sorguya göre gruplu arama sonuçlarını üretir (film, dizi, geçmiş, kişi, sayfa). */
+function buildSearchGroups(query: string, data: any): SearchGroup[] {
+  const q = trLower(query.trim());
+  const groups: SearchGroup[] = [];
+  if (!q) return groups;
+
+  const movies: any[] = Array.isArray(data?.movies) ? data.movies : [];
+  const series: any[] = Array.isArray(data?.series) ? data.series : [];
+  const history: any[] = Array.isArray(data?.history) ? data.history : [];
+
+  const movieHits: SearchEntry[] = movies
+    .filter((m) => trLower(`${m.title || ''} ${m.year || ''}`).includes(q))
+    .slice(0, 6)
+    .map((m) => ({
+      key: `movie-${m.id}`,
+      label: m.title || 'İsimsiz Film',
+      sub: [m.year, Array.isArray(m.genres) ? m.genres.join(', ') : ''].filter(Boolean).join(' · '),
+      icon: Film,
+      tab: 'movies' as TabId,
+    }));
+  if (movieHits.length) groups.push({ id: 'movies', label: 'Filmler', icon: Film, entries: movieHits });
+
+  const seriesHits: SearchEntry[] = series
+    .filter((s) => trLower(`${s.title || ''} ${s.year || ''}`).includes(q))
+    .slice(0, 6)
+    .map((s) => ({
+      key: `series-${s.id}`,
+      label: s.title || 'İsimsiz Dizi',
+      sub: [s.year, Array.isArray(s.genres) ? s.genres.join(', ') : ''].filter(Boolean).join(' · '),
+      icon: Tv,
+      tab: 'series' as TabId,
+    }));
+  if (seriesHits.length) groups.push({ id: 'series', label: 'Diziler', icon: Tv, entries: seriesHits });
+
+  // Geçmiş: aynı başlık tekrar etmesin (son izleme kayıtları).
+  const seenHistory = new Set<string>();
+  const historyHits: SearchEntry[] = history
+    .filter((h) => trLower(`${h.title || ''}`).includes(q))
+    .filter((h) => {
+      const key = trLower(`${h.title || ''}`);
+      if (seenHistory.has(key)) return false;
+      seenHistory.add(key);
+      return true;
+    })
+    .slice(0, 6)
+    .map((h) => ({
+      key: `history-${h.id}`,
+      label: h.title || 'İzleme Kaydı',
+      sub: [h.kind === 'series' || h.type === 'series' ? 'Dizi' : 'Film', h.year]
+        .filter(Boolean)
+        .join(' · '),
+      icon: History,
+      tab: 'history' as TabId,
+    }));
+  if (historyHits.length) groups.push({ id: 'history', label: 'Geçmiş', icon: History, entries: historyHits });
+
+  // Kişiler & oyuncular: film (oyuncu/yönetmen) + dizi (oyuncu/yaratıcı) kadroları.
+  const peopleMap = new Map<string, TabId>();
+  movies.forEach((m) => {
+    [...(m.cast || []), ...(m.directors || [])].forEach((p: string) => {
+      if (p && !peopleMap.has(p)) peopleMap.set(p, 'movies');
+    });
+  });
+  series.forEach((s) => {
+    [...(s.cast || []), ...(s.creators || [])].forEach((p: string) => {
+      if (p && !peopleMap.has(p)) peopleMap.set(p, 'series');
+    });
+  });
+  const peopleHits: SearchEntry[] = Array.from(peopleMap.entries())
+    .filter(([name]) => trLower(name).includes(q))
+    .slice(0, 6)
+    .map(([name, tab]) => ({
+      key: `person-${name}`,
+      label: name,
+      sub: tab === 'movies' ? 'Film kadrosu' : 'Dizi kadrosu',
+      icon: Users,
+      tab,
+    }));
+  if (peopleHits.length) {
+    groups.push({ id: 'people', label: 'Kişiler & Oyuncular', icon: Users, entries: peopleHits });
+  }
+
+  // Başarımlar: rozet adı/kategorisi ile eşleşme (kazanılan kademe sayısı alt bilgi).
+  const achievementProgress: any[] = Array.isArray(data?.achievements) ? data.achievements : [];
+  const achHits: SearchEntry[] = ACHIEVEMENT_DEFS
+    .filter((def) => trLower(`${def.name} ${def.category || ''}`).includes(q))
+    .slice(0, 6)
+    .map((def) => {
+      const prog = achievementProgress.find((a) => a?.achievementId === def.id);
+      const unlocked = Array.isArray(prog?.unlockedTiers) ? prog.unlockedTiers.length : 0;
+      return {
+        key: `achievement-${def.id}`,
+        label: def.name,
+        sub: [def.category, unlocked > 0 ? `${unlocked} rozet açıldı` : 'Henüz açılmadı'].filter(Boolean).join(' · '),
+        icon: Trophy,
+        tab: 'achievements' as TabId,
+      };
+    });
+  if (achHits.length) {
+    groups.push({ id: 'achievements', label: 'Başarımlar', icon: Trophy, entries: achHits });
+  }
+
+  // Sayfa/bölüm eşleşmeleri (ör. "ağ", "başarımlar").
+  const pageHits = pageEntries().filter((p) => trLower(p.label).includes(q));
+  if (pageHits.length) groups.push({ id: 'pages', label: 'Bölümler', icon: LayoutDashboard, entries: pageHits });
+
+  return groups;
+}
+
+/**
+ * Global arama katmanı: cam yüzey, gruplu sonuçlar, klavye ile gezinme.
+ * ESC / arka plan tıklaması kapatır; Enter seçili sonuca gider.
+ */
+function GlobalSearch({
+  open,
+  onClose,
+  onNavigate,
+  data,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onNavigate: (tab: TabId) => void;
+  data: any;
+}) {
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+
+  const groups: SearchGroup[] = query.trim()
+    ? buildSearchGroups(query, data)
+    : [{ id: 'pages', label: 'Bölümler', icon: LayoutDashboard, entries: pageEntries() }];
+  const flat: SearchEntry[] = groups.flatMap((g) => g.entries);
+
+  // Açılınca input'a odaklan; kapanınca önceki odağı geri ver.
+  useEffect(() => {
+    if (!open) return;
+    restoreRef.current = (typeof document !== 'undefined'
+      ? (document.activeElement as HTMLElement | null)
+      : null);
+    setQuery('');
+    setActive(0);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => {
+      clearTimeout(t);
+      document.body.style.overflow = prevOverflow;
+      restoreRef.current?.focus?.();
+    };
+  }, [open]);
+
+  // Sorgu değişince seçimi başa al.
+  useEffect(() => {
+    setActive(0);
+  }, [query]);
+
+  // ESC her durumda kapatır (input odağı kaymış olsa bile).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const select = (entry: SearchEntry | undefined) => {
+    if (!entry) return;
+    onNavigate(entry.tab);
+    onClose();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (flat.length) setActive((i) => (i + 1) % flat.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (flat.length) setActive((i) => (i - 1 + flat.length) % flat.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      select(flat[active]);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[220] flex items-start justify-center px-4 pt-[12vh]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Global arama"
+    >
+      {/* Arka plan: karartma + blur */}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'rgba(0,0,0,.62)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+        onClick={onClose}
+      />
+
+      <div className="relative w-full max-w-xl overflow-hidden border backdrop-blur-2xl" style={searchPanelStyle}>
+        {/* Üst saç teli (kırmızı vurgu) */}
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px pointer-events-none"
+          style={{ background: `linear-gradient(90deg, transparent, ${SEARCH_ACCENT}, transparent)` }}
+        />
+
+        {/* Arama girişi */}
+        <div className="flex items-center gap-3 px-4 py-3.5 border-b" style={{ borderColor: 'var(--line, var(--border-dim))' }}>
+          <Search size={18} className="shrink-0" style={{ color: SEARCH_ACCENT }} />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Film, dizi, geçmiş, kişi ara…"
+            aria-label="Global arama girişi"
+            className="flex-1 bg-transparent border-0 outline-none text-[15px] text-ink-50 placeholder:text-ink-500"
+          />
+          <kbd
+            className="text-[10px] px-1.5 py-0.5 rounded-md border shrink-0"
+            style={{ fontFamily: MONO, borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #8a8a94)' }}
+          >
+            ESC
+          </kbd>
+        </div>
+
+        {/* Sonuçlar (gruplu) */}
+        <div className="max-h-[52vh] overflow-y-auto custom-scrollbar py-1.5">
+          {groups.length === 0 ? (
+            <div className="px-4 py-12 text-center">
+              <p className="text-[13px] font-semibold text-ink-300">Sonuç bulunamadı</p>
+              <p className="mt-1 text-[11px] text-ink-500">Farklı bir film, dizi, kişi veya sayfa adı deneyin.</p>
+            </div>
+          ) : (
+            groups.map((group) => (
+              <div key={group.id} className="mb-1">
+                <div
+                  className="flex items-center gap-2 px-4 pt-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.2em]"
+                  style={{ color: 'var(--muted, #8a8a94)' }}
+                >
+                  <group.icon size={12} style={{ color: SEARCH_ACCENT }} />
+                  {group.label}
+                </div>
+                {group.entries.map((entry) => {
+                  const index = flat.indexOf(entry);
+                  const isActive = index === active;
+                  return (
+                    <button
+                      key={entry.key}
+                      type="button"
+                      onMouseEnter={() => setActive(index)}
+                      onClick={() => select(entry)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
+                      style={
+                        isActive
+                          ? { backgroundImage: `color-mix(in srgb, ${SEARCH_ACCENT} 15%, transparent)` }
+                          : undefined
+                      }
+                    >
+                      <span
+                        className="w-8 h-8 rounded-lg grid place-items-center shrink-0 border"
+                        style={{
+                          borderColor: isActive ? SEARCH_ACCENT : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
+                          color: isActive ? SEARCH_ACCENT : 'var(--muted, #8a8a94)',
+                        }}
+                      >
+                        <entry.icon size={15} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13.5px] font-semibold text-ink-100 truncate">{entry.label}</span>
+                        {entry.sub && <span className="block text-[11px] text-ink-500 truncate">{entry.sub}</span>}
+                      </span>
+                      {isActive && <ArrowRight size={14} className="shrink-0" style={{ color: SEARCH_ACCENT }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Alt bilgi satırı */}
+        <div
+          className="flex items-center justify-between gap-2 px-4 py-2.5 border-t text-[10px] font-semibold uppercase tracking-[0.14em]"
+          style={{ borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #8a8a94)' }}
+        >
+          <span className="flex items-center gap-1.5">
+            <CornerDownLeft size={12} /> Seç
+            <span className="mx-1 opacity-40">·</span>
+            <span>↑↓ Gezin</span>
+          </span>
+          <span>{flat.length} sonuç</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   // AppContext'ten (veya ilgili yerden) syncStatus durumunu çekiyoruz. 
   // Sen Context'e ekleyene kadar hata vermemesi için fallback atadık.
   const appCtx = useApp() as any;
   const syncStatus: 'syncing' | 'synced' | 'error' = appCtx.syncStatus || 'synced';
 
-  // Premium profil kartı / topbar karşılama satırı için gerçek veriler.
+  // Topbar karşılama satırı + global arama verisi.
   const profileData = appCtx?.data || {};
   const nickname: string = profileData.nickname || 'Sinevia Ajanı';
-  const agentCode: string = profileData.agentId || '';
   const level: number = Number(profileData.level) || 1;
-  const totalXp: number = Number(profileData.totalXp) || 0;
   const streak: number = Number(profileData.dailyStreak) || 0;
-  const levelInfo = levelFromXp(totalXp);
 
-  // Yan bardaki mono sayaç rozetleri (önizlemedeki .nav a .n) — gerçek verilerden.
+  // Yan bardaki mono sayaç rozetleri (önizlemedeki .nav a .n) — semantik:
+  // Filmler/Diziler = toplam kayıt; Geçmiş = izleme kaydı; Haftalık Plan =
+  // planlı öğe; Başarımlar = AÇILAN rozet (kademe) sayısı. 0 ise rozet gizli.
+  const unlockedBadgeCount = (Array.isArray(profileData.achievements) ? profileData.achievements : [])
+    .reduce((sum: number, a: any) => sum + (Array.isArray(a?.unlockedTiers) ? a.unlockedTiers.length : 0), 0);
   const navCounts: Partial<Record<TabId, number>> = {
     movies: profileData.movies?.length || 0,
     series: profileData.series?.length || 0,
     plan: profileData.weeklyPlan?.length || 0,
     history: profileData.history?.length || 0,
-    achievements: profileData.achievements?.length || 0,
+    achievements: unlockedBadgeCount,
   };
 
   // Karşılama (önizlemedeki .hello h1) — saate göre, gerçek takma adla.
@@ -152,8 +518,9 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showWrapped, setShowWrapped] = useState(false);
-  const [showAddMovie, setShowAddMovie] = useState(false);
-  const [showAddSeries, setShowAddSeries] = useState(false);
+  // Global arama katmanı + "Ne İzlesem" öneri açılışı.
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [suggestion, setSuggestion] = useState<any | null>(null);
 
   // Topbar'daki arama kutusunun kısayol rozeti ("/" varsayılan, ayarlardan değişir).
   const [searchCombo, setSearchCombo] = useState('/');
@@ -244,18 +611,46 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     setIsMobileMenuOpen(false);
   };
 
-  // Topbar araması: sayfadaki arama kutusuna odaklan; yoksa Filmler'e git.
-  const handleTopbarSearch = () => {
-    if (!focusPageSearch()) onTabChange('movies');
+  // Global arama: üst bardaki arama butonu tüm sayfalarda aynı katmanı açar.
+  // Sayfa-içi arama (focusPageSearch) korunur; global katman birincil.
+  const openGlobalSearch = () => setIsSearchOpen(true);
+
+  // Ctrl/Cmd+K ile global aramayı aç (bu kombinasyon başka yerde kullanılmıyor).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // "Ne İzlesem": izlenmemiş bir film seç; hiç yoksa AI sayfasına götür.
+  const handleWhatToWatch = () => {
+    const movies: any[] = Array.isArray(profileData.movies) ? profileData.movies : [];
+    const unwatched = movies.filter((m) => !m.watched);
+    if (unwatched.length === 0) {
+      onTabChange('ai');
+      return;
+    }
+    setSuggestion(unwatched[Math.floor(Math.random() * unwatched.length)]);
   };
+
+  // ESC: açık öneri penceresini kapat (global arama ESC'sini kendi yönetir).
+  useEffect(() => {
+    if (!suggestion) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSuggestion(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [suggestion]);
 
   const topbarTitle = activeTab === 'settings'
     ? 'Ayarlar'
     : navItems.find((item) => item.id === activeTab)?.label || 'Sinevia';
-
-  const xpLabel = levelInfo.nextLevelXp > 0
-    ? `${levelInfo.currentLevelXp} / ${levelInfo.nextLevelXp}`
-    : 'MAX';
 
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] bg-ink-950 font-sans text-ink-50 selection:bg-azure-500/30 selection:text-azure-200 overflow-hidden relative isolate transition-colors duration-500">
@@ -399,7 +794,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
       {/* MASAÜSTÜ SOL SIDEBAR — premium cam yüzey */}
       <aside
-        className="hidden md:flex flex-col w-[248px] shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
+        className="hidden md:flex flex-col w-56 shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
         style={{
           backgroundImage: SIDEBAR_BG,
           borderColor: 'var(--line, var(--border-dim))',
@@ -512,51 +907,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             <span>Ayarlar</span>
             {activeTab === 'settings' && <ActiveRail />}
           </button>
-
-          {/* Premium cam profil kartı (gerçek seviye/XP verisi) */}
-          <div
-            className="mt-1 p-3.5 rounded-2xl bg-ink-800/60 border border-ink-800/60 backdrop-blur-xl select-none transition-colors duration-500"
-            style={{ ...glassSurface, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.07)' }}
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className="w-11 h-11 rounded-[14px] grid place-items-center shrink-0 border"
-                style={{
-                  background: 'linear-gradient(140deg, rgba(255,255,255,.10), rgba(255,255,255,.02))',
-                  borderColor: 'color-mix(in srgb, var(--color-1) 50%, transparent)',
-                  boxShadow: '0 0 18px -6px color-mix(in srgb, var(--color-1) 60%, transparent), inset 0 1px 0 rgba(255,255,255,.12)',
-                }}
-              >
-                <Sini size={30} mood="idle" showGlow={false} />
-              </div>
-              <div className="min-w-0">
-                <b className="block text-[13px] font-black uppercase tracking-tight text-white truncate">{nickname}</b>
-                <span
-                  className="block text-[9.5px] font-bold uppercase tracking-[0.14em] truncate"
-                  style={{ color: 'var(--color-2)' }}
-                >
-                  {agentCode ? agentCode : `Seviye ${level}`}
-                </span>
-              </div>
-            </div>
-            <div className="mt-3">
-              <div className="flex justify-between text-[9px] font-bold uppercase tracking-[0.14em] text-ink-500 mb-1.5">
-                <span>XP</span>
-                <span>{xpLabel}</span>
-              </div>
-              <div className="relative h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,.07)', boxShadow: 'inset 0 1px 3px rgba(0,0,0,.6)' }}>
-                <div
-                  className="absolute inset-y-0 left-0 rounded-full"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, levelInfo.progress))}%`,
-                    backgroundImage: 'linear-gradient(90deg, color-mix(in srgb, var(--color-1) 60%, black), var(--color-1), var(--color-2))',
-                    boxShadow: '0 0 12px color-mix(in srgb, var(--color-1) 70%, transparent)',
-                    transition: 'width .5s ease',
-                  }}
-                />
-              </div>
-            </div>
-          </div>
         </div>
       </aside>
 
@@ -579,10 +929,11 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             </p>
           </div>
 
-          {/* Premium arama butonu: sayfa aramasına odaklanır ("/" kısayolu) */}
+          {/* Premium arama butonu: GLOBAL aramayı açar (tüm veriler + "/" kısayolu) */}
           <button
-            onClick={handleTopbarSearch}
-            className="group relative flex items-center gap-2.5 min-w-[240px] ml-auto px-4 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 backdrop-blur-md text-left transition-all duration-300 hover:-translate-y-[1px]"
+            onClick={openGlobalSearch}
+            aria-label="Global arama"
+            className="group relative flex items-center gap-2.5 min-w-0 flex-1 max-w-[380px] ml-auto px-4 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 backdrop-blur-md text-left transition-all duration-300 hover:-translate-y-[1px]"
             style={glassSurface}
           >
             <Search size={15} className="text-ink-400 group-hover:text-gold-400 transition-colors shrink-0" />
@@ -597,26 +948,28 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           </button>
 
           {/* Aksiyon butonları (premium buton sistemi) */}
+          {/* Katalog: Filmler sayfasına kısayol */}
           <button
-            onClick={() => setShowAddMovie(true)}
-            className="relative overflow-hidden group flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px"
+            onClick={() => onTabChange('movies')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-ink-50 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap backdrop-blur-md transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px shrink-0"
+            style={btnSecondaryStyle}
+          >
+            <Film size={15} /> Katalog
+          </button>
+
+          {/* Ne İzlesem: izlenmemiş bir filmden rastgele öneri (yoksa AI sayfası) */}
+          <button
+            onClick={handleWhatToWatch}
+            className="relative overflow-hidden group flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px shrink-0"
             style={btnPrimaryStyle}
           >
-            <Plus size={15} /> Film Ekle
+            <Dices size={15} /> Ne İzlesem
             <ButtonShimmer />
           </button>
 
           <button
-            onClick={() => setShowAddSeries(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-ink-50 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap backdrop-blur-md transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px"
-            style={btnSecondaryStyle}
-          >
-            <Plus size={15} /> Dizi Ekle
-          </button>
-
-          <button
             onClick={() => onTabChange('ai')}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 text-ink-400 hover:text-ink-100 hover:border-ink-700 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px]"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 text-ink-400 hover:text-ink-100 hover:border-ink-700 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px] shrink-0"
           >
             <Bot size={15} /> Sinevia AI'a Sor
           </button>
@@ -663,9 +1016,70 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         })}
       </nav>
 
+      {/* GLOBAL ARAMA (komut paleti): tüm verilerde gruplu sonuçlar */}
+      <GlobalSearch
+        open={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onNavigate={onTabChange}
+        data={profileData}
+      />
+
+      {/* "NE İZLESEM" ÖNERİ PENCERESİ — cam yüzey + kırmızı (tema) vurgu */}
+      {suggestion && (
+        <div
+          className="fixed inset-0 z-[215] flex items-center justify-center px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ne izlesem önerisi"
+        >
+          <div
+            className="absolute inset-0"
+            style={{ background: 'rgba(0,0,0,.62)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+            onClick={() => setSuggestion(null)}
+          />
+          <div className="relative w-full max-w-sm overflow-hidden border backdrop-blur-2xl" style={searchPanelStyle}>
+            <span
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px pointer-events-none"
+              style={{ background: `linear-gradient(90deg, transparent, ${SEARCH_ACCENT}, transparent)` }}
+            />
+            <div className="p-5">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: SEARCH_ACCENT }}>
+                <Dices size={14} /> Ne İzlesem
+              </div>
+              <h3 className="mt-3 text-xl font-black uppercase tracking-[-0.02em] text-ink-50">{suggestion.title}</h3>
+              <p className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-ink-500">
+                {[suggestion.year, Array.isArray(suggestion.genres) ? suggestion.genres.join(', ') : '']
+                  .filter(Boolean)
+                  .join(' · ') || 'İzlenmemiş film önerisi'}
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  onClick={() => { setSuggestion(null); onTabChange('movies'); }}
+                  className="flex-1 min-w-[120px] px-4 py-2.5 rounded-xl text-white font-extrabold text-[11px] tracking-[0.1em] uppercase transition-all duration-300 hover:-translate-y-[1px]"
+                  style={btnPrimaryStyle}
+                >
+                  Filmlerde Aç
+                </button>
+                <button
+                  onClick={handleWhatToWatch}
+                  className="px-4 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 text-ink-200 hover:text-white font-extrabold text-[11px] tracking-[0.1em] uppercase transition-colors"
+                >
+                  Başka Öner
+                </button>
+                <button
+                  onClick={() => setSuggestion(null)}
+                  className="px-4 py-2.5 rounded-xl text-ink-400 hover:text-white font-extrabold text-[11px] tracking-[0.1em] uppercase transition-colors"
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showWrapped && <WrappedModal onClose={() => setShowWrapped(false)} />}
-      {showAddMovie && <AddMovieModal onClose={() => setShowAddMovie(false)} />}
-      {showAddSeries && <AddSeriesModal onClose={() => setShowAddSeries(false)} />}
     </div>
   );
 }
