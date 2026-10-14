@@ -113,7 +113,7 @@ export default function ShortcutsPanel() {
             <AlertTriangle size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
               <p className="text-xs sm:text-sm text-amber-200 font-bold mb-0.5">
-                <span className="font-mono">{describeCombo(pending.combo)}</span> tuşu zaten kullanılıyor!
+                <span>{describeCombo(pending.combo)}</span> tuşu zaten kullanılıyor!
               </p>
               <p className="text-[11px] sm:text-xs text-amber-200/70">
                 Bu kombinasyon şu an <strong>"{pendingAction.label}"</strong> eyleminde. Onaylarsan{' '}
@@ -162,7 +162,7 @@ export default function ShortcutsPanel() {
                       <div className="text-[11px] text-ink-500 leading-snug">{action.description}</div>
                       {binding && binding !== action.defaultCombo && (
                         <div className="text-[10px] text-ink-600 mt-0.5">
-                          Varsayılan: <span className="font-mono">{describeCombo(action.defaultCombo)}</span>
+                          Varsayılan: <span className="font-semibold">{describeCombo(action.defaultCombo)}</span>
                         </div>
                       )}
                     </div>
@@ -175,7 +175,7 @@ export default function ShortcutsPanel() {
                       ) : (
                         <>
                           <kbd
-                            className={`px-2 py-1 rounded-lg border font-mono text-[11px] font-bold min-w-[3rem] text-center ${
+                            className={`px-2 py-1 rounded-lg border text-[11px] font-bold min-w-[3rem] text-center ${
                               binding
                                 ? 'bg-ink-900 border-ink-700 text-gold-300'
                                 : 'bg-ink-950 border-ink-800 text-ink-500'

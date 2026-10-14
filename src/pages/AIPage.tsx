@@ -278,7 +278,7 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
             <Bot className="w-5 h-5 md:w-6 md:h-6" />
           </div>
           <div>
-            <h1 className="ai-title text-base">Sinevia AI</h1>
+            <h1 className="ai-title text-2xl sm:text-3xl font-black uppercase tracking-tight">Sinevia AI</h1>
             <p className="ai-kicker"><Sparkles size={12} /> Kişisel Sinema Asistanın</p>
           </div>
         </div>

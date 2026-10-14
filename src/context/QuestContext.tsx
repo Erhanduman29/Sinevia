@@ -201,7 +201,7 @@ function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClai
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-3xl p-4 overflow-hidden select-none">
       
       {phase === 0 && (
-        <div className="text-emerald-500 font-mono text-base md:text-xl animate-pulse tracking-[0.2em] md:tracking-[0.3em] text-center leading-relaxed">
+        <div className="text-emerald-500 font-semibold text-base md:text-xl animate-pulse tracking-[0.2em] md:tracking-[0.3em] text-center leading-relaxed">
           &gt; SİNEVİA AĞINA BAĞLANILDI...<br/>
           &gt; İZLEME GEÇMİŞİ DOĞRULANIYOR...<br/>
           &gt; ŞARTLAR EŞLEŞTİ: <span className="text-white font-black drop-shadow-md">KONTRAT BAŞARILI</span><br/>

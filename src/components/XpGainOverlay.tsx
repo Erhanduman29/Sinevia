@@ -212,7 +212,7 @@ export default function XpGainOverlay() {
 
               {/* Alt Satır: Canlı Sayı Sayacı ve Yüzde */}
               <div className="flex items-center justify-between mt-2 text-[11px] font-bold">
-                <div className="flex items-center gap-1 text-ink-300 font-mono">
+                <div className="flex items-center gap-1 text-ink-300 tabular-nums">
                   <TrendingUp size={12} className="text-gold-400" />
                   <span className="text-ink-50 font-black">{animatedXp.toLocaleString('tr-TR')}</span>
                   <span className="text-ink-500">XP</span>

@@ -147,7 +147,6 @@ body[data-theme='paper-light'] .ai-root {
 /* ---------- BAŞLIK ---------- */
 .ai-title {
   font-weight: 900;
-  letter-spacing: 0.18em;
   text-transform: uppercase;
   line-height: 1.1;
   background: linear-gradient(100deg,
@@ -170,7 +169,6 @@ body[data-theme='paper-light'] .ai-root {
 }
 @media (min-width: 768px) {
   .ai-kicker { font-size: 0.75rem; }
-  .ai-title { font-size: 1.125rem; }
 }
 
 /* ---------- BUTONLAR ---------- */

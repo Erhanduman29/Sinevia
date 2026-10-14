@@ -147,7 +147,7 @@ export default function QuestBoard() {
             </p>
             <div className="bg-ink-950 border-2 border-red-500/40 px-8 py-4 rounded-2xl flex items-center gap-4 shadow-inner">
               <Timer className="text-red-500 animate-pulse" size={24} />
-              <span className="text-2xl sm:text-3xl font-mono font-black text-red-400 tracking-widest">{timeLeft}</span>
+              <span className="text-2xl sm:text-3xl font-black text-red-400 tracking-widest tabular-nums">{timeLeft}</span>
             </div>
           </div>
 
@@ -268,7 +268,7 @@ export default function QuestBoard() {
                   <Crosshair size={32} className="text-violet-400 animate-pulse" />
                 </div>
                 <h3 className="text-lg font-black text-violet-300 tracking-widest uppercase">Ağ Taranıyor...</h3>
-                <p className="text-[10px] text-ink-500 mt-2 font-mono uppercase tracking-widest">Uygun profilli kontratlar aranıyor</p>
+                <p className="text-[10px] text-ink-500 mt-2 font-semibold uppercase tracking-widest">Uygun profilli kontratlar aranıyor</p>
               </div>
             ) : (
               <div className="flex flex-col items-center animate-fade-in-up">
@@ -308,7 +308,7 @@ export default function QuestBoard() {
             </div>
           </div>
           <div className="flex-shrink-0 text-right">
-            <div className="text-2xl font-black text-gold-300 font-mono leading-none">{academyStep}<span className="text-ink-500 text-base">/{ACADEMY_QUESTS.length}</span></div>
+            <div className="text-2xl font-black text-gold-300 leading-none tabular-nums">{academyStep}<span className="text-ink-500 text-base">/{ACADEMY_QUESTS.length}</span></div>
             <div className="text-[9px] font-black uppercase tracking-widest text-ink-500 mt-1">Ders Tamam</div>
           </div>
         </div>

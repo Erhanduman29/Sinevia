@@ -214,7 +214,7 @@ export function renderChatMessageBubble({
                 {isClosed ? <Lock size={11} /> : <BarChart2 size={11} />}
                 {isClosed ? 'Anket Kapandı' : 'Canlı Anket'}
               </span>
-              <span className="text-[10px] font-mono text-ink-400">{totalVotes} Oy</span>
+              <span className="text-[10px] font-semibold text-ink-400 tabular-nums">{totalVotes} Oy</span>
             </div>
 
             {canManagePoll && onControlPoll && (
@@ -300,7 +300,7 @@ export function renderChatMessageBubble({
                           {isWinner && <span className="text-emerald-400 font-black">🏆</span>}
                           {opt.title}
                         </span>
-                        <span className={`text-xs font-black font-mono ${isWinner ? 'text-emerald-400' : 'text-gold-400'}`}>
+                        <span className={`text-xs font-black tabular-nums ${isWinner ? 'text-emerald-400' : 'text-gold-400'}`}>
                           %{pct}
                         </span>
                       </div>
@@ -1364,7 +1364,7 @@ export default function ChatHubModal({
                     placeholder="SNV-XXXX-XXXX"
                     value={newDirectCode}
                     onChange={e => setNewDirectCode(e.target.value)}
-                    className="w-full max-w-xs bg-ink-900 border border-ink-800 text-center rounded-xl px-4 py-3 text-white font-mono uppercase tracking-widest focus:border-azure-500 outline-none mb-4"
+                    className="w-full max-w-xs bg-ink-900 border border-ink-800 text-center rounded-xl px-4 py-3 text-white font-semibold uppercase tracking-widest focus:border-azure-500 outline-none mb-4"
                   />
                   <button
                     onClick={handleStartNewDirectChat}
@@ -1434,7 +1434,7 @@ export default function ChatHubModal({
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-bold text-white truncate">{f.nickname}</div>
-                                  <div className="text-[9px] text-ink-500 font-mono">{f.agent_id}</div>
+                                  <div className="text-[9px] text-ink-500 font-semibold">{f.agent_id}</div>
                                 </div>
                                 {isSelected && <Check size={16} className="text-indigo-400" />}
                               </div>
@@ -1491,7 +1491,7 @@ export default function ChatHubModal({
                               .join(', ')}
                           </div>
                         ) : (
-                          <div className="text-[10px] text-ink-500 font-mono flex items-center gap-1">
+                          <div className="text-[10px] text-ink-500 font-semibold flex items-center gap-1">
                             <CheckCircle2 size={10} /> Aktif Bağlantı
                           </div>
                         )}
@@ -1642,7 +1642,7 @@ export default function ChatHubModal({
                                   : profilesMap[hubActiveChat.created_by!]?.nickname}
                                 <Crown size={12} className="text-gold-400" />
                               </div>
-                              <div className="text-[10px] text-ink-500 font-mono">{hubActiveChat.created_by}</div>
+                              <div className="text-[10px] text-ink-500 font-semibold">{hubActiveChat.created_by}</div>
                             </div>
                           </div>
                         </div>
@@ -1662,7 +1662,7 @@ export default function ChatHubModal({
                                   <div className="text-sm font-bold text-white">
                                     {profilesMap[id]?.nickname || 'Bilinmeyen'}
                                   </div>
-                                  <div className="text-[10px] text-ink-500 font-mono">{id}</div>
+                                  <div className="text-[10px] text-ink-500 font-semibold">{id}</div>
                                 </div>
                               </div>
                               {hubActiveChat.created_by === myAgentId && (
@@ -1711,7 +1711,7 @@ export default function ChatHubModal({
                                 </div>
                                 <div>
                                   <div className="text-sm font-bold text-white">{f.nickname}</div>
-                                  <div className="text-[10px] text-ink-500 font-mono">{f.agent_id}</div>
+                                  <div className="text-[10px] text-ink-500 font-semibold">{f.agent_id}</div>
                                 </div>
                               </div>
                               <button

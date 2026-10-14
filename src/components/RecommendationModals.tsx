@@ -545,7 +545,7 @@ export default function RecommendationModals({
                       <span className="text-[10px] font-black text-violet-300 bg-violet-500/20 border border-violet-500/30 px-2.5 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
                         <Gift size={12} /> Özel Tavsiye Koleksiyonu
                       </span>
-                      <span className="text-xs font-mono text-ink-400 bg-ink-900 px-2.5 py-0.5 rounded-lg border border-ink-800">
+                      <span className="text-xs font-semibold text-ink-400 bg-ink-900 px-2.5 py-0.5 rounded-lg border border-ink-800 tabular-nums">
                         {ownedCount}/{listItems.length} Kütüphanende Mevcut
                       </span>
                     </div>
@@ -858,7 +858,7 @@ export default function RecommendationModals({
                             {timerInfo ? (
                               <div className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-xl text-xs font-bold">
                                 <Timer size={13} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
-                                <span className="font-mono">{timerInfo.formattedRemaining}</span>
+                                <span className="tabular-nums">{timerInfo.formattedRemaining}</span>
                                 <button type="button" onClick={() => togglePauseWatchingMovie(myMovie.id)} className="ml-1 text-amber-300 hover:text-white">
                                   {timerInfo.isPaused ? <Play size={12} className="fill-current" /> : <Pause size={12} />}
                                 </button>

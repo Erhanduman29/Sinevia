@@ -1090,7 +1090,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         <div className="bg-ink-950/85 border border-ink-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 space-y-1.5 sm:space-y-2 text-left">
                           <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-ink-400 border-b border-ink-800 pb-1.5">
                             <span>Eşleşen Kriterler & Kaynakları</span>
-                            <span className="text-emerald-400 font-mono">
+                            <span className="text-emerald-400 tabular-nums">
                               Toplam: %{currentResult.matchScore}
                             </span>
                           </div>
@@ -1130,7 +1130,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                                   </div>
 
                                   <div className="flex-shrink-0 text-right">
-                                    <span className="inline-block bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black font-mono text-[10px] sm:text-[11px] px-2 py-0.5 rounded-lg">
+                                    <span className="inline-block bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black text-[10px] sm:text-[11px] px-2 py-0.5 rounded-lg tabular-nums">
                                       +%{t.addedPct}
                                     </span>
                                   </div>

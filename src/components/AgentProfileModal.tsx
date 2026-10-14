@@ -474,7 +474,7 @@ export default function AgentProfileModal({
                   <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-azure-500/15 text-azure-300 border border-azure-500/30 flex items-center gap-1">
                     <ShieldAlert size={11} /> {getAgentRankTitle(profile?.level || 1)}
                   </span>
-                  <span className="text-[10px] font-mono text-ink-400 bg-ink-900/90 px-2 py-0.5 rounded-md border border-ink-800">
+                  <span className="text-[10px] font-semibold text-ink-400 bg-ink-900/90 px-2 py-0.5 rounded-md border border-ink-800">
                     {viewingProfileId}
                   </span>
                 </div>
@@ -545,7 +545,7 @@ export default function AgentProfileModal({
               <span className="text-xs sm:text-sm font-bold text-white truncate">{liveStatus.title}</span>
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              <span className="text-xs font-mono text-red-300 font-bold">
+              <span className="text-xs text-red-300 font-bold tabular-nums">
                 {liveStatus.elapsedMins} / {liveStatus.maxMins} dk
               </span>
               <div className="w-20 sm:w-28 h-1.5 bg-ink-950 rounded-full overflow-hidden border border-red-500/30 hidden sm:block">
@@ -712,7 +712,7 @@ export default function AgentProfileModal({
                     size={28}
                     className={`${stat.color} opacity-20 absolute right-2 top-2 group-hover:scale-110 transition-transform`}
                   />
-                  <div className={`text-2xl sm:text-3xl font-black ${stat.color} font-mono`}>{stat.val}</div>
+                  <div className={`text-2xl sm:text-3xl font-black ${stat.color} tabular-nums`}>{stat.val}</div>
                   <div className="text-[10px] font-black text-ink-300 uppercase tracking-wider mt-1">{stat.label}</div>
                 </div>
               ))}
@@ -751,7 +751,7 @@ export default function AgentProfileModal({
                         <div key={g.name}>
                           <div className="flex justify-between text-[11px] font-bold mb-1">
                             <span className="text-ink-200">{g.name}</span>
-                            <span className="text-violet-400 font-mono">{g.count} yapım</span>
+                            <span className="text-violet-400 tabular-nums">{g.count} yapım</span>
                           </div>
                           <div className="w-full h-1.5 bg-ink-950 rounded-full overflow-hidden">
                             <div
@@ -792,11 +792,11 @@ export default function AgentProfileModal({
                       return (
                         <div key={row.label}>
                           <div className="flex justify-between text-[11px] font-bold mb-1">
-                            <span className={row.myVal >= row.hisVal ? 'text-emerald-400 font-black font-mono' : 'text-ink-400 font-mono'}>
+                            <span className={row.myVal >= row.hisVal ? 'text-emerald-400 font-black tabular-nums' : 'text-ink-400 tabular-nums'}>
                               {row.myVal}
                             </span>
                             <span className="text-ink-300 text-[10px] uppercase tracking-wider">{row.label}</span>
-                            <span className={row.hisVal >= row.myVal ? 'text-azure-400 font-black font-mono' : 'text-ink-400 font-mono'}>
+                            <span className={row.hisVal >= row.myVal ? 'text-azure-400 font-black tabular-nums' : 'text-ink-400 tabular-nums'}>
                               {row.hisVal}
                             </span>
                           </div>
@@ -1344,7 +1344,7 @@ export default function AgentProfileModal({
                               {timerInfo ? (
                                 <div className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-xl text-xs font-bold w-full md:w-auto justify-center">
                                   <Timer size={13} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
-                                  <span className="font-mono">{timerInfo.formattedRemaining}</span>
+                                  <span className="tabular-nums">{timerInfo.formattedRemaining}</span>
                                   <button
                                     type="button"
                                     onClick={() => togglePauseWatchingMovie(myMovie.id)}

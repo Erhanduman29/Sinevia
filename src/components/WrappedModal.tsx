@@ -827,7 +827,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                     <span className="text-[10px] font-black uppercase text-azure-400 tracking-widest flex items-center gap-1"><ShieldAlert size={10} /> Sinevia Ajanı</span>
                     <span className="text-sm font-black text-white">{data.nickname}</span>
                   </div>
-                  <div className="text-[9px] font-mono text-ink-400 bg-white/5 px-2 py-1 rounded border border-white/10">
+                  <div className="text-[9px] font-semibold text-ink-400 bg-white/5 px-2 py-1 rounded border border-white/10">
                     {data.agentId}
                   </div>
                 </div>

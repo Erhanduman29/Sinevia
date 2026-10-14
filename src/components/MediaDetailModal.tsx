@@ -316,7 +316,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                         ) : timerInfo ? (
                           <div className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-3 py-2 rounded-xl text-xs font-bold">
                             <Timer size={14} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
-                            <span className="font-mono">{timerInfo.formattedRemaining}</span>
+                            <span className="tabular-nums">{timerInfo.formattedRemaining}</span>
                             <button
                               type="button"
                               onClick={() => togglePauseWatchingMovie(liveMovie.id)}

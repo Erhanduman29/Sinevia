@@ -449,7 +449,7 @@ export default function RatingModal({
             <div className="w-full space-y-2 pt-2.5 border-t border-ink-800/60">
               <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-bold text-ink-400 px-1">
                 <span>Puan Seçimi (1 - 10)</span>
-                <span className="text-gold-400 font-mono">Seçilen: {rating} / 10</span>
+                <span className="text-gold-400 tabular-nums">Seçilen: {rating} / 10</span>
               </div>
 
               <div className="grid grid-cols-5 sm:grid-cols-10 gap-1 sm:gap-1.5">
