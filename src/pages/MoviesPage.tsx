@@ -1502,7 +1502,7 @@ export default function MoviesPage() {
                             </div>
                           </div>
 
-                          <div className={`absolute inset-0 z-[2] bg-amber-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
+                          <div className={`absolute inset-0 z-[2] bg-gold-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`}>
                             <div className="w-8 h-8 rounded-full bg-amber-500 text-ink-950 flex items-center justify-center shadow-lg">
                               <Check size={18} strokeWidth={4} />
                             </div>
