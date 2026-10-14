@@ -532,10 +532,10 @@ export default function NetworkPage() {
               {data.nickname?.[0]?.toUpperCase() || 'U'}
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-white leading-tight group-hover:text-emerald-300 transition-colors">{data.nickname}</h1>
+              <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white leading-tight group-hover:text-emerald-300 transition-colors">{data.nickname}</h1>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-lg">Lvl {data.level}</span>
-                <span className="text-xs font-mono text-ink-300 px-2 py-0.5 bg-ink-900 rounded-lg border border-ink-800">{data.totalXp} XP</span>
+                <span className="text-xs text-ink-300 px-2 py-0.5 bg-ink-900 rounded-lg border border-ink-800">{data.totalXp} XP</span>
               </div>
             </div>
           </button>
@@ -586,7 +586,7 @@ export default function NetworkPage() {
             <Eye size={15} className="text-emerald-400" /> Profilim
           </button>
           <button onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }} className="flex-1 sm:flex-none flex items-center gap-2.5 bg-ink-900/50 hover:bg-ink-800 border border-ink-800 hover:border-emerald-500/40 px-4 py-3 min-h-11 sm:min-h-0 rounded-xl transition-all group justify-center">
-            <span className="font-mono text-emerald-400 text-sm font-black tracking-widest truncate">{data.agentId}</span>
+            <span className="text-emerald-400 text-sm font-black tracking-widest truncate">{data.agentId}</span>
             <Copy size={15} className="text-ink-500 group-hover:text-emerald-400 transition-colors shrink-0" />
           </button>
           <button onClick={() => setIsChatHubOpen(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-azure-600/20 hover:bg-azure-600/30 border border-azure-500/30 text-azure-400 px-5 py-3 min-h-11 sm:min-h-0 rounded-xl transition-all shadow-sm">
@@ -632,7 +632,7 @@ export default function NetworkPage() {
                     {liveWatchingList.length > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
                     <span className={`relative inline-flex rounded-full h-3 w-3 ${liveWatchingList.length > 0 ? 'bg-red-500' : 'bg-ink-600'}`}></span>
                   </span>
-                  <h3 className={`text-xs sm:text-sm font-black uppercase tracking-widest flex items-center gap-1.5 ${liveWatchingList.length > 0 ? 'text-red-400' : 'text-ink-400'}`}>
+                  <h3 className={`text-xs sm:text-sm font-bold uppercase tracking-widest flex items-center gap-1.5 ${liveWatchingList.length > 0 ? 'text-red-400' : 'text-ink-400'}`}>
                     <Radio size={15} /> Canlı Radar — Şu An İzleyenler ({liveWatchingList.length})
                   </h3>
                 </div>
@@ -666,7 +666,7 @@ export default function NetworkPage() {
                         </div>
                         <div className="text-xs sm:text-sm font-bold text-ink-100 truncate">{radar.title}</div>
                         <div className="mt-2">
-                          <div className="flex justify-between text-[10px] font-mono text-ink-400 mb-1">
+                          <div className="flex justify-between text-[10px] text-ink-400 mb-1">
                             <span>{radar.elapsedMins}. dk</span>
                             <span>{radar.maxMins} dk</span>
                           </div>
@@ -777,7 +777,7 @@ export default function NetworkPage() {
                         </div>
                         <div className="flex flex-col flex-1 min-w-0">
                           <span className="text-sm font-bold text-white leading-snug group-hover:text-emerald-300 break-words pr-1 line-clamp-2">{profile.nickname}</span>
-                          <span className="text-[9px] sm:text-[10px] text-ink-500 font-mono mt-1">{timeAgo(log.created_at)}</span>
+                          <span className="text-[9px] sm:text-[10px] text-ink-500 mt-1">{timeAgo(log.created_at)}</span>
                         </div>
                       </button>
 
@@ -829,7 +829,7 @@ export default function NetworkPage() {
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-violet-500/10 text-violet-400 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-violet-500/20 rotate-3 shadow-lg">
                   <Gift size={32} />
                 </div>
-                <h2 className="text-lg sm:text-2xl font-black text-white mb-2">Arkadaşlarına Özel Koleksiyon Gönder</h2>
+                <h2 className="text-lg sm:text-2xl font-extrabold uppercase tracking-tight text-white mb-2">Arkadaşlarına Özel Koleksiyon Gönder</h2>
                 <p className="text-xs sm:text-sm text-ink-400 mb-6 max-w-md mx-auto leading-relaxed">
                   En sevdiğin yapımları kendi puanların ve özel notunla birlikte seçerek arkadaşına tavsiye listesi olarak yolla.
                 </p>
@@ -843,7 +843,7 @@ export default function NetworkPage() {
             </div>
 
             <div>
-              <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-4 pl-2 flex items-center gap-2">
+              <h3 className="text-[11px] sm:text-xs font-bold text-ink-500 uppercase tracking-widest mb-4 pl-2 flex items-center gap-2">
                 <Inbox size={16} className="text-violet-400" /> Sana Gelen Listeler ({incomingLists.length})
               </h3>
               {incomingLists.length === 0 ? (
@@ -868,7 +868,7 @@ export default function NetworkPage() {
                               <div className="text-[11px] text-ink-400 flex items-center gap-1.5 flex-wrap">
                                 <span className="text-violet-400 font-bold">{p.nickname}</span> gönderdi
                                 <span className="text-ink-600">•</span>
-                                <span className="bg-ink-900 px-2 py-0.5 rounded text-ink-300 font-mono">{itemsArr.length} İçerik</span>
+                                <span className="bg-ink-900 px-2 py-0.5 rounded text-ink-300">{itemsArr.length} İçerik</span>
                               </div>
                             </div>
 
@@ -914,7 +914,7 @@ export default function NetworkPage() {
 
             {outgoingLists.length > 0 && (
               <div className="pt-6 border-t border-ink-800/60">
-                <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-4 pl-2 flex items-center gap-2">
+                <h3 className="text-[11px] sm:text-xs font-bold text-ink-500 uppercase tracking-widest mb-4 pl-2 flex items-center gap-2">
                   <Send size={16} className="text-ink-400" /> Senin Gönderdiklerin ({outgoingLists.length})
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1117,13 +1117,13 @@ export default function NetworkPage() {
                               </span>
                             </div>
                           </div>
-                          <div className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-xl bg-gradient-to-br ${theme.badgeBg} border border-ink-950 flex items-center justify-center font-mono font-black text-xs shadow-lg`}>
+                          <div className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-xl bg-gradient-to-br ${theme.badgeBg} border border-ink-950 flex items-center justify-center font-black text-xs shadow-lg`}>
                             #{rank}
                           </div>
                         </div>
 
                         <div className="flex items-center justify-center gap-1.5 max-w-full">
-                          <h3 className={`${rank === 1 ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'} font-black text-white group-hover:text-gold-300 transition-colors truncate`}>
+                          <h3 className={`${rank === 1 ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'} font-bold text-white group-hover:text-gold-300 transition-colors truncate`}>
                             {user.nickname}
                           </h3>
                           {isMe && (
@@ -1133,26 +1133,26 @@ export default function NetworkPage() {
                           )}
                         </div>
 
-                        <div className={`mt-2.5 px-4 py-1.5 rounded-xl border font-mono text-sm sm:text-base font-black ${theme.scoreColor} shadow-inner`}>
+                        <div className={`mt-2.5 px-4 py-1.5 rounded-xl border text-sm sm:text-base font-black ${theme.scoreColor} shadow-inner`}>
                           {getLeaderboardScoreText(user)}
                         </div>
 
                         {/* MİNİ İSTATİSTİK ŞERİDİ (GÜNCEL VE ÖNCEDEN FİLM EKLENDİ) */}
                         <div className="grid grid-cols-4 gap-1.5 w-full mt-4 pt-3 ntw-bt text-center">
                           <div className="ntw-row rounded-xl py-1.5 px-1 sm:px-2">
-                            <div className="text-[11px] sm:text-xs font-black text-emerald-400 font-mono">{user.movies_watched || 0}</div>
+                            <div className="text-[11px] sm:text-xs font-black text-emerald-400">{user.movies_watched || 0}</div>
                             <div className="ntw-mono text-[8px] sm:text-[9px] text-ink-500 font-bold uppercase">Güncel</div>
                           </div>
                           <div className="ntw-row rounded-xl py-1.5 px-1 sm:px-2">
-                            <div className="text-[11px] sm:text-xs font-black text-violet-400 font-mono">{user.past_movies_watched || 0}</div>
+                            <div className="text-[11px] sm:text-xs font-black text-violet-400">{user.past_movies_watched || 0}</div>
                             <div className="ntw-mono text-[8px] sm:text-[9px] text-ink-500 font-bold uppercase">Önceden</div>
                           </div>
                           <div className="ntw-row rounded-xl py-1.5 px-1 sm:px-2">
-                            <div className="text-[11px] sm:text-xs font-black text-azure-400 font-mono">{user.episodes_watched || 0}</div>
+                            <div className="text-[11px] sm:text-xs font-black text-azure-400">{user.episodes_watched || 0}</div>
                             <div className="ntw-mono text-[8px] sm:text-[9px] text-ink-500 font-bold uppercase">Bölüm</div>
                           </div>
                           <div className="ntw-row rounded-xl py-1.5 px-1 sm:px-2">
-                            <div className="text-[11px] sm:text-xs font-black text-gold-400 font-mono">{user.achievements_unlocked || 0}</div>
+                            <div className="text-[11px] sm:text-xs font-black text-gold-400">{user.achievements_unlocked || 0}</div>
                             <div className="ntw-mono text-[8px] sm:text-[9px] text-ink-500 font-bold uppercase">Başarım</div>
                           </div>
                         </div>
@@ -1183,9 +1183,9 @@ export default function NetworkPage() {
             {remainingLeaderboard.length > 0 && (
               <div className="ntw-card overflow-hidden">
                 <div className="grid grid-cols-12 gap-2 sm:gap-3 px-4 py-3 ntw-bb text-[10px] sm:text-xs font-black text-ink-500 uppercase tracking-widest">
-                  <div className="col-span-1 text-center ntw-mono">Sıra</div>
-                  <div className="col-span-8 sm:col-span-8 pl-2 ntw-mono">Ajan Adı</div>
-                  <div className="col-span-3 sm:col-span-3 text-right pr-2 ntw-mono">İstatistik</div>
+                  <div className="col-span-1 text-center ntw-mono font-semibold uppercase">Sıra</div>
+                  <div className="col-span-8 sm:col-span-8 pl-2 ntw-mono font-semibold uppercase">Ajan Adı</div>
+                  <div className="col-span-3 sm:col-span-3 text-right pr-2 ntw-mono font-semibold uppercase">İstatistik</div>
                 </div>
 
                 <div>
@@ -1242,7 +1242,7 @@ export default function NetworkPage() {
                           </div>
                         </div>
                         <div className="col-span-3 sm:col-span-3 text-right pr-2 min-w-0">
-                          <span className="text-xs sm:text-sm font-black text-white font-mono bg-ink-900 px-2 sm:px-3 py-1.5 rounded-xl border border-ink-800 shadow-inner inline-block max-w-full truncate align-middle">
+                          <span className="text-xs sm:text-sm font-black text-white bg-ink-900 px-2 sm:px-3 py-1.5 rounded-xl border border-ink-800 shadow-inner inline-block max-w-full truncate align-middle">
                             {getLeaderboardScoreText(user)}
                           </span>
                         </div>
@@ -1261,11 +1261,11 @@ export default function NetworkPage() {
         {activeTab === 'friends' && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-ink-950 border border-azure-500/20 rounded-3xl p-5 sm:p-6 shadow-sm">
-              <h2 className="text-xs sm:text-sm font-black text-azure-400 mb-4 flex items-center gap-2 uppercase tracking-widest"><UserPlus size={16} /> Yeni Ajan Ekle</h2>
+              <h2 className="text-base sm:text-lg font-extrabold text-azure-400 mb-4 flex items-center gap-2 uppercase tracking-widest"><UserPlus size={16} /> Yeni Ajan Ekle</h2>
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text" placeholder="SNV-XXXX-XXXX" value={friendCode} onChange={(e) => setFriendCode(e.target.value)}
-                  className="flex-1 bg-ink-900 border border-ink-800 rounded-xl px-4 py-3 text-sm sm:text-base text-white font-mono uppercase tracking-widest focus:border-azure-500 outline-none transition-all"
+                  className="flex-1 bg-ink-900 border border-ink-800 rounded-xl px-4 py-3 text-sm sm:text-base text-white uppercase tracking-widest focus:border-azure-500 outline-none transition-all"
                   onKeyDown={(e) => e.key === 'Enter' && handleSendRequest()}
                 />
                 <button onClick={handleSendRequest} className="bg-azure-600 hover:bg-azure-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-colors shadow-lg shadow-azure-500/20">İstek Gönder</button>
@@ -1276,7 +1276,7 @@ export default function NetworkPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {pendingIncoming.length > 0 && (
                   <div>
-                    <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-3 pl-2">Gelen İstekler</h3>
+                    <h3 className="text-[11px] sm:text-xs font-bold text-ink-500 uppercase tracking-widest mb-3 pl-2">Gelen İstekler</h3>
                     <div className="space-y-2">
                       {pendingIncoming.map((req: any) => {
                         const p = profilesMap[req.requester_id] || { nickname: 'Bilinmeyen', agent_id: req.requester_id };
@@ -1286,7 +1286,7 @@ export default function NetworkPage() {
                               <div className="w-10 h-10 rounded-xl bg-ink-800 flex items-center justify-center font-black text-white text-sm">{p.nickname?.[0]?.toUpperCase() || '?'}</div>
                               <div className="leading-tight">
                                 <div className="text-sm font-bold text-white mb-0.5">{p.nickname}</div>
-                                <div className="text-[10px] text-ink-500 font-mono">{p.agent_id}</div>
+                                <div className="text-[10px] text-ink-500">{p.agent_id}</div>
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -1301,7 +1301,7 @@ export default function NetworkPage() {
                 )}
                 {pendingOutgoing.length > 0 && (
                   <div>
-                    <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-3 pl-2">Giden İstekler</h3>
+                    <h3 className="text-[11px] sm:text-xs font-bold text-ink-500 uppercase tracking-widest mb-3 pl-2">Giden İstekler</h3>
                     <div className="space-y-2">
                       {pendingOutgoing.map((req: any) => {
                         const p = profilesMap[req.receiver_id] || { nickname: 'Bekleniyor...', agent_id: req.receiver_id };
@@ -1311,7 +1311,7 @@ export default function NetworkPage() {
                               <div className="w-10 h-10 rounded-xl bg-ink-900 flex items-center justify-center font-bold text-ink-500 text-sm">{p.nickname?.[0]?.toUpperCase() || '?'}</div>
                               <div className="leading-tight">
                                 <div className="text-sm font-bold text-ink-300 mb-0.5">{p.nickname}</div>
-                                <div className="text-[10px] text-ink-600 font-mono">{p.agent_id}</div>
+                                <div className="text-[10px] text-ink-600">{p.agent_id}</div>
                               </div>
                             </div>
                             <button onClick={() => handleRemove(req.id, true)} className="p-2 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center text-red-400/70 hover:text-red-400 transition-colors bg-red-500/5 rounded-xl" title="İptal Et"><X size={16} /></button>
@@ -1325,7 +1325,7 @@ export default function NetworkPage() {
             )}
 
             <div>
-              <h3 className="text-[11px] sm:text-xs font-black text-ink-500 uppercase tracking-widest mb-3 pl-2">Dost Meclisi ({friends.length})</h3>
+              <h3 className="text-[11px] sm:text-xs font-bold text-ink-500 uppercase tracking-widest mb-3 pl-2">Dost Meclisi ({friends.length})</h3>
               {friends.length === 0 ? (
                 <div className="ntw-card text-center py-10 border-dashed rounded-3xl">
                   <Users size={32} className="mx-auto mb-3 text-ink-700" />
@@ -1356,7 +1356,7 @@ export default function NetworkPage() {
                                   🔴 {liveStatus.title} ({liveStatus.elapsedMins}. dk)
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-ink-500 font-mono hidden sm:inline-block">Son: {timeAgo(f.last_seen)}</span>
+                                <span className="text-[10px] text-ink-500 hidden sm:inline-block">Son: {timeAgo(f.last_seen)}</span>
                               )}
                             </div>
                           </div>
@@ -1528,7 +1528,7 @@ export default function NetworkPage() {
                   <div className="w-6 h-6 rounded-md bg-ink-800 text-emerald-400 flex items-center justify-center text-[11px] font-black shrink-0">{profilesMap[selectedLog.agent_id]?.nickname?.[0]?.toUpperCase() || '?'}</div>
                   <span className="text-sm text-ink-300 font-bold truncate">{profilesMap[selectedLog.agent_id]?.nickname} <span className="font-normal text-ink-500">inceliyor</span></span>
                 </button>
-                <h2 className="text-2xl font-black text-white leading-tight mb-1.5 break-words">{selectedLog.item_title}</h2>
+                <h2 className="text-2xl font-extrabold uppercase tracking-tight text-white leading-tight mb-1.5 break-words">{selectedLog.item_title}</h2>
                 <div className="text-[11px] text-ink-500 uppercase tracking-widest font-bold">{selectedLog.item_type === 'series' ? 'Dizi' : 'Film'} • {timeAgo(selectedLog.created_at)}</div>
               </div>
 
@@ -1622,7 +1622,7 @@ export default function NetworkPage() {
             <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
               <UserPlus size={24} className="rotate-45" />
             </div>
-            <h3 className="text-lg font-black text-white mb-2">Ajanı Ağdan Çıkar</h3>
+            <h3 className="text-lg font-bold text-white mb-2">Ajanı Ağdan Çıkar</h3>
             <p className="text-sm text-ink-300 mb-6">Bu ajanı ağından çıkarmak istediğine emin misin? İrtibatınız tamamen kesilecek.</p>
             <div className="flex gap-3">
               <button onClick={() => setFriendToRemove(null)} className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors">İptal</button>

@@ -40,8 +40,8 @@ const GLASS_SHEEN =
 /** Cam yüzey: tema zemin rengi + premium ışık süpürmesi. */
 const glassSurface: React.CSSProperties = { backgroundImage: GLASS_SHEEN };
 
-/** Önizlemedeki mono etiketler (kbd, nav sayaç rozeti) için JetBrains Mono. */
-const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+/** Önizlemedeki mono etiketler (kbd, nav sayaç rozeti) için Archivo. */
+const MONO = "'Archivo', ui-sans-serif, sans-serif";
 
 /**
  * Yan bar zemini: önizlemedeki koyu cam (linear-gradient 180deg, %92→%96).

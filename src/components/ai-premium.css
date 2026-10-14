@@ -38,7 +38,7 @@
   --ai-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --ai-muted: var(--muted, color-mix(in srgb, var(--text-main, #f4f4f2) 62%, transparent));
   --ai-blob: var(--blob-1, color-mix(in srgb, var(--ai-a1) 18%, transparent));
-  --ai-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --ai-mono: 'Archivo', ui-sans-serif, sans-serif;
   --ai-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
@@ -322,10 +322,11 @@ body[data-theme='paper-light'] .ai-root {
   font-weight: 500;
 }
 
-/* mono zaman etiketi */
+/* zaman etiketi (Archivo caps) */
 .ai-time {
   font-family: var(--ai-mono);
   font-size: 9px;
+  font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ai-a2);
@@ -406,6 +407,7 @@ body[data-theme='paper-light'] .ai-root {
 .ai-card-year {
   font-family: var(--ai-mono);
   font-size: 9px;
+  font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--ai-a2);
   margin-bottom: 0.5rem;

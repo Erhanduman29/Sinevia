@@ -64,14 +64,14 @@ const ACHV_PREMIUM_CSS = `
   position:absolute; right:0; bottom:0; z-index:4;
   display:inline-flex; align-items:center; gap:5px;
   padding:5px 12px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Archivo',system-ui,sans-serif;
   color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.4);
   background:linear-gradient(135deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-deep, var(--color-3, #8e1220)) 130%);
   border-top-left-radius:14px;
   border-bottom-right-radius:var(--r, 16px);
   box-shadow:-6px -6px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35);
 }
-.achv-card .achv-body span{ font-family:'JetBrains Mono',monospace; }
+.achv-card .achv-body span{ font-family:'Archivo',system-ui,sans-serif; }
 .achv-track{
   position:relative; overflow:hidden;
   height:8px;
@@ -268,7 +268,7 @@ export default function AchievementsPage() {
 
       {/* ÜST BAŞLIK VE SEKME (TAB) SEÇİCİ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-xl md:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
+        <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
           <div
             className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center"
             style={{
@@ -693,7 +693,7 @@ export default function AchievementsPage() {
                           )}
                         </div>
 
-                        <h3 className={`mt-1.5 text-sm md:text-[15px] font-black tracking-tight leading-snug ${isLocked ? 'text-ink-300' : 'text-white'}`}>
+                        <h3 className={`mt-1.5 text-sm md:text-[15px] font-bold tracking-tight leading-snug ${isLocked ? 'text-ink-300' : 'text-white'}`}>
                           {displayName}
                         </h3>
                         <p className={`text-[11px] md:text-xs leading-relaxed mt-0.5 ${isLocked ? 'text-ink-500' : 'text-ink-300'}`}>

@@ -32,7 +32,7 @@ const PREMIUM_CELL =
 const PREMIUM_GLOW =
   'transition-all duration-300 hover:shadow-[var(--glow,0_0_0_1px_rgba(232,56,79,0.35),0_14px_38px_-14px_rgba(232,56,79,0.6))]';
 /* Büyük sayılar: mono, sıkı, tabular tipografi */
-const PREMIUM_NUM = 'font-mono font-black tracking-tight tabular-nums';
+const PREMIUM_NUM = 'font-black tracking-tight tabular-nums';
 /* İkon karo — premium cam + kırmızı ışık */
 const RED_TILE =
   'stats-tile bg-gradient-to-br from-red-500 to-red-700 border border-rose-400/40 flex items-center justify-center shadow-[0_6px_18px_-6px_rgba(232,56,79,0.85),inset_0_1px_0_rgba(255,255,255,0.35)]';
@@ -322,7 +322,7 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
     <div>
       {/* Başlık + görünüm seçici */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-        <h2 className="text-sm sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2.5">
+        <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
           <span className={`w-8 h-8 rounded-xl ${RED_TILE}`}>
             <Calendar size={16} className="text-white" />
           </span>
@@ -346,7 +346,7 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
 
       <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
         <p className="text-[11px] sm:text-xs text-ink-400 max-w-xl leading-relaxed">{meta.desc}</p>
-        <span className="text-[10px] font-mono font-black uppercase tracking-widest text-rose-300 bg-red-500/10 border border-red-500/30 px-2.5 py-1 rounded-lg">
+        <span className="text-[10px] font-black uppercase tracking-widest text-rose-300 bg-red-500/10 border border-red-500/30 px-2.5 py-1 rounded-lg">
           {meta.badge}
         </span>
       </div>
@@ -371,7 +371,7 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
             </div>
             <div className={`${PREMIUM_CELL} px-3 py-2`}>
               <div className="text-[9px] font-black uppercase tracking-widest text-ink-500">Zirve</div>
-              <div className="text-[11px] sm:text-xs font-mono font-black text-gold-300 leading-tight mt-1 truncate">{summary.peak}</div>
+              <div className="text-[11px] sm:text-xs font-black text-gold-300 leading-tight mt-1 truncate">{summary.peak}</div>
             </div>
           </div>
 
@@ -500,7 +500,7 @@ export default function StatsPage() {
       <style>{STATS_PREMIUM_CSS}</style>
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-ink-100 flex items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
             <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${RED_TILE}`}>
               <BarChart3 size={20} className="text-white" />
             </div>
@@ -518,7 +518,7 @@ export default function StatsPage() {
             <div className="inline-flex items-center gap-1.5 bg-ink-900/80 border border-ink-700/60 px-3 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold text-ink-300">
               <Sparkles size={12} className="text-gold-400" />
               <span className="hidden xs:inline">Kimlik:</span>
-              <span className={`${stats.ratingPersona.color} font-mono font-black`}>{stats.ratingPersona.label}</span>
+              <span className={`${stats.ratingPersona.color} font-black`}>{stats.ratingPersona.label}</span>
             </div>
           </div>
         </div>
@@ -647,7 +647,7 @@ export default function StatsPage() {
           <div className="absolute -right-10 -top-10 w-40 h-40 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="relative z-10 flex items-center justify-between flex-wrap gap-2 mb-3.5">
             <div>
-              <h2 className="text-sm sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2">
                 <span className={`w-7 h-7 rounded-lg ${RED_TILE}`}>
                   <Zap size={14} className="text-white" />
                 </span>
@@ -704,10 +704,10 @@ export default function StatsPage() {
                 <span>Hız Rekoru</span>
                 <Zap size={14} />
               </div>
-              <div className="text-xs sm:text-sm font-mono font-black text-white mt-1.5 truncate">
+              <div className="text-xs sm:text-sm font-black text-white mt-1.5 truncate">
                 {stats.fastestMovieRecord ? stats.fastestMovieRecord.title : 'Henüz Yok'}
               </div>
-              <div className="text-[10px] font-mono text-ink-400 mt-1 truncate">
+              <div className="text-[10px] text-ink-400 mt-1 truncate">
                 {stats.fastestMovieRecord
                   ? `${stats.fastestMovieRecord.runtime}➔${stats.fastestMovieRecord.actualRuntime} dk`
                   : 'Sayacı başlat!'}
@@ -726,7 +726,7 @@ export default function StatsPage() {
             <Film size={16} className="text-gold-400" />
           </div>
           <div className={`${PREMIUM_NUM} text-2xl sm:text-3xl text-ink-50 mt-1.5`}>{stats.movieCount}</div>
-          <div className="text-[11px] text-ink-400 mt-1">Ort: <strong className="font-mono text-gold-400">{stats.avgMovie.toFixed(1)}</strong></div>
+          <div className="text-[11px] text-ink-400 mt-1">Ort: <strong className="text-gold-400">{stats.avgMovie.toFixed(1)}</strong></div>
         </div>
 
         <div className={`${PREMIUM_PANEL} ${PREMIUM_GLOW} !p-3.5 sm:!p-4 flex flex-col justify-between`}>
@@ -735,7 +735,7 @@ export default function StatsPage() {
             <Tv size={16} className="text-rose-400" />
           </div>
           <div className={`${PREMIUM_NUM} text-2xl sm:text-3xl text-ink-50 mt-1.5`}>{stats.seriesCount}</div>
-          <div className="text-[11px] text-ink-400 mt-1">Ort: <strong className="font-mono text-rose-400">{stats.avgSeries.toFixed(1)}</strong> ({stats.uniqueSeriesCount} Dizi)</div>
+          <div className="text-[11px] text-ink-400 mt-1">Ort: <strong className="text-rose-400">{stats.avgSeries.toFixed(1)}</strong> ({stats.uniqueSeriesCount} Dizi)</div>
         </div>
 
         <div className={`${PREMIUM_PANEL} ${PREMIUM_GLOW} !p-3.5 sm:!p-4 flex flex-col justify-between`}>
@@ -753,7 +753,7 @@ export default function StatsPage() {
             <Award size={16} className="text-gold-400" />
           </div>
           <div className={`${PREMIUM_NUM} text-2xl sm:text-3xl text-ink-50 mt-1.5`}>{data.achievements.reduce((s, a) => s + a.unlockedTiers.length, 0)}</div>
-          <div className="text-[11px] text-ink-400 mt-1"><strong className="font-mono text-gold-400">{(data.totalXp || 0).toLocaleString()} XP</strong></div>
+          <div className="text-[11px] text-ink-400 mt-1"><strong className="text-gold-400">{(data.totalXp || 0).toLocaleString()} XP</strong></div>
         </div>
       </div>
 
@@ -770,12 +770,12 @@ export default function StatsPage() {
                   <div className={`${PREMIUM_NUM} text-xl sm:text-3xl text-ink-50 mt-0.5`}>{stats.remainingMovies} <span className="text-xs sm:text-sm font-bold text-ink-400">Film</span></div>
                 </div>
               </div>
-              <span className="text-[11px] font-mono font-black bg-ink-950 border border-ink-800 text-gold-400 px-2 py-1 rounded-lg flex-shrink-0">~{stats.remainingMoviesHours} Saat</span>
+              <span className="text-[11px] font-black bg-ink-950 border border-ink-800 text-gold-400 px-2 py-1 rounded-lg flex-shrink-0">~{stats.remainingMoviesHours} Saat</span>
             </div>
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-bold text-ink-400">
                 <span>Tamamlanma Oranı</span>
-                <span className="font-mono text-gold-400">%{stats.movieCompletionPct}</span>
+                <span className="text-gold-400">%{stats.movieCompletionPct}</span>
               </div>
               <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800">
                 <div className="h-full bg-gradient-to-r from-red-600 to-rose-400 rounded-full shadow-[0_0_12px_rgba(232,56,79,0.6)] transition-all duration-700" style={{ width: `${stats.movieCompletionPct}%` }} />
@@ -796,12 +796,12 @@ export default function StatsPage() {
                   </div>
                 </div>
               </div>
-              <span className="text-[11px] font-mono font-black bg-ink-950 border border-ink-800 text-rose-400 px-2 py-1 rounded-lg flex-shrink-0">~{stats.remainingEpisodesHours} Saat</span>
+              <span className="text-[11px] font-black bg-ink-950 border border-ink-800 text-rose-400 px-2 py-1 rounded-lg flex-shrink-0">~{stats.remainingEpisodesHours} Saat</span>
             </div>
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-bold text-ink-400">
                 <span>Tamamlanma Oranı</span>
-                <span className="font-mono text-rose-400">%{stats.seriesCompletionPct}</span>
+                <span className="text-rose-400">%{stats.seriesCompletionPct}</span>
               </div>
               <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800">
                 <div className="h-full bg-gradient-to-r from-rose-500 to-red-400 rounded-full shadow-[0_0_12px_rgba(255,107,122,0.6)] transition-all duration-700" style={{ width: `${stats.seriesCompletionPct}%` }} />
@@ -815,7 +815,7 @@ export default function StatsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           <div className={`${PREMIUM_PANEL} lg:col-span-7 flex flex-col justify-between`}>
             <div className="mb-3.5">
-              <h2 className="text-sm sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2"><Clock size={18} className="text-gold-400" /> İzleme Biyoritmi (Günün Saatleri)</h2>
+              <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2"><Clock size={18} className="text-gold-400" /> İzleme Biyoritmi (Günün Saatleri)</h2>
               <p className="text-xs text-ink-400 mt-0.5">Günün hangi zaman diliminde izlemeyi seviyorsun?</p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -835,13 +835,13 @@ export default function StatsPage() {
                     </div>
                     <div>
                       <div className="text-xs font-bold text-ink-200">{slot.label}</div>
-                      <div className="text-[10px] font-mono text-ink-500">{slot.hours}</div>
+                      <div className="text-[10px] text-ink-500">{slot.hours}</div>
                     </div>
                     <div className="mt-2 space-y-1">
                       <div className="h-1.5 w-full bg-ink-900 rounded-full overflow-hidden">
                         <div className={`h-full ${slot.bar} rounded-full shadow-[0_0_10px_rgba(232,56,79,0.45)]`} style={{ width: `${pct}%` }} />
                       </div>
-                      <div className="text-[10px] font-mono font-semibold text-ink-400 text-right">{slot.count} İzleme</div>
+                      <div className="text-[10px] font-semibold text-ink-400 text-right">{slot.count} İzleme</div>
                     </div>
                   </div>
                 );
@@ -852,10 +852,10 @@ export default function StatsPage() {
           <div className={`${PREMIUM_PANEL} lg:col-span-5 flex flex-col justify-between`}>
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h2 className="text-sm sm:text-base font-black tracking-tight text-ink-100 flex items-center gap-2"><Activity size={18} className="text-rose-400" /> Son 14 Günlük Tempo</h2>
+                <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2"><Activity size={18} className="text-rose-400" /> Son 14 Günlük Tempo</h2>
                 <p className="text-xs text-ink-400 mt-0.5">Son 2 haftadaki günlük aktivite nabzın</p>
               </div>
-              <span className="text-xs font-mono font-bold bg-ink-950 border border-ink-800 text-rose-400 px-2.5 py-1 rounded-lg">Bu Ay: {stats.thisMonthCount}</span>
+              <span className="text-xs font-bold bg-ink-950 border border-ink-800 text-rose-400 px-2.5 py-1 rounded-lg">Bu Ay: {stats.thisMonthCount}</span>
             </div>
             <div className="flex items-end justify-between gap-1.5 h-28 pt-4 px-1">
               {stats.last14Days.map((d) => {
@@ -868,7 +868,7 @@ export default function StatsPage() {
                 );
               })}
             </div>
-            <div className="flex justify-between text-[10px] font-mono font-semibold text-ink-500 border-t stats-hr border-ink-800/60 pt-2 mt-2">
+            <div className="flex justify-between text-[10px] font-semibold text-ink-500 border-t stats-hr border-ink-800/60 pt-2 mt-2">
               <span>{stats.last14Days[0]?.label}</span>
               <span>Bugün ({stats.last14Days[stats.last14Days.length - 1]?.count || 0} izleme)</span>
             </div>
@@ -879,11 +879,11 @@ export default function StatsPage() {
       <div className={PREMIUM_PANEL}>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3.5">
           <div>
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2"><Tag size={18} className="text-gold-400" /> Değerlendirme Başlıkları</h2>
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2"><Tag size={18} className="text-gold-400" /> Değerlendirme Başlıkları</h2>
             <p className="text-xs text-ink-400 mt-0.5">Puanlama sırasında seçtiğin başlıkların sıklığı ve ortalamaları</p>
           </div>
           {stats.totalTaggedItems > 0 && (
-            <span className="text-[11px] font-mono font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-2.5 py-1 rounded-full">{stats.totalTaggedItems} Yapım</span>
+            <span className="text-[11px] font-bold bg-gold-500/15 text-gold-300 border border-gold-500/30 px-2.5 py-1 rounded-full">{stats.totalTaggedItems} Yapım</span>
           )}
         </div>
         {stats.reviewTagStats.length === 0 ? (
@@ -898,7 +898,7 @@ export default function StatsPage() {
                 <div key={item.tag} className={`${PREMIUM_CELL} p-3 flex flex-col justify-between gap-2`}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs sm:text-sm font-black text-ink-100 truncate">{item.tag}</span>
-                    {item.avg > 0 && <span className={`text-xs font-mono px-2 py-0.5 rounded-md font-black flex-shrink-0 ${ratingBgClass(item.avg)}`}>Ort: {item.avg.toFixed(1)}</span>}
+                    {item.avg > 0 && <span className={`text-xs px-2 py-0.5 rounded-md font-black flex-shrink-0 ${ratingBgClass(item.avg)}`}>Ort: {item.avg.toFixed(1)}</span>}
                   </div>
                   <div className="space-y-1">
                     <div className="h-1.5 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800">
@@ -906,7 +906,7 @@ export default function StatsPage() {
                     </div>
                     <div className="flex justify-between text-[10px] font-bold text-ink-400">
                       <span>Kullanım</span>
-                      <span className="font-mono text-gold-400">{item.count} Kez</span>
+                      <span className="text-gold-400">{item.count} Kez</span>
                     </div>
                   </div>
                 </div>
@@ -919,40 +919,40 @@ export default function StatsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className={`${PREMIUM_PANEL} space-y-3`}>
           <div>
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2"><Trophy size={18} className="text-gold-400" /> Sinevia Rekorlar Kitabı</h2>
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2"><Trophy size={18} className="text-gold-400" /> Sinevia Rekorlar Kitabı</h2>
             <p className="text-xs text-ink-400 mt-0.5">Kütüphanendeki en dikkat çekici kişisel rekorların</p>
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             <div className={`${PREMIUM_CELL} p-3`}>
               <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-gold-400 uppercase"><Flame size={12} /> Yoğun Gün</div>
               <div className={`${PREMIUM_NUM} text-sm sm:text-lg text-ink-50 mt-1`}>{stats.busiestDay.count > 0 ? `${stats.busiestDay.count} Yapım` : 'Yok'}</div>
-              <div className="text-[10px] font-mono text-ink-400 mt-0.5 truncate">{stats.busiestDay.date}</div>
+              <div className="text-[10px] text-ink-400 mt-0.5 truncate">{stats.busiestDay.date}</div>
             </div>
             <div className={`${PREMIUM_CELL} p-3`}>
               <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-rose-400 uppercase"><Zap size={12} /> Seri Rekoru</div>
               <div className={`${PREMIUM_NUM} text-sm sm:text-lg text-ink-50 mt-1`}>{stats.maxStreakEver} Gün</div>
-              <div className="text-[10px] font-mono text-ink-400 mt-0.5">Aktif: {data.dailyStreak} gün</div>
+              <div className="text-[10px] text-ink-400 mt-0.5">Aktif: {data.dailyStreak} gün</div>
             </div>
             <div className={`${PREMIUM_CELL} p-3`}>
               <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-gold-400 uppercase"><Clock size={12} /> En Uzun Film</div>
-              <div className="text-xs sm:text-sm font-mono font-black text-ink-50 mt-1 truncate">{stats.longestMovie ? stats.longestMovie.title : 'Yok'}</div>
-              <div className="text-[10px] font-mono text-ink-400 mt-0.5">{stats.longestMovie ? `${stats.longestMovie.runtime} Dk` : '-'}</div>
+              <div className="text-xs sm:text-sm font-black text-ink-50 mt-1 truncate">{stats.longestMovie ? stats.longestMovie.title : 'Yok'}</div>
+              <div className="text-[10px] text-ink-400 mt-0.5">{stats.longestMovie ? `${stats.longestMovie.runtime} Dk` : '-'}</div>
             </div>
             <div className={`${PREMIUM_CELL} p-3`}>
               <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-rose-400 uppercase"><Tv size={12} /> Favori Dizi</div>
-              <div className="text-xs sm:text-sm font-mono font-black text-ink-50 mt-1 truncate">{stats.mostWatchedSeries ? stats.mostWatchedSeries.title : 'Yok'}</div>
-              <div className="text-[10px] font-mono text-ink-400 mt-0.5">{stats.mostWatchedSeries ? `${stats.mostWatchedSeries.count} Bölüm` : '-'}</div>
+              <div className="text-xs sm:text-sm font-black text-ink-50 mt-1 truncate">{stats.mostWatchedSeries ? stats.mostWatchedSeries.title : 'Yok'}</div>
+              <div className="text-[10px] text-ink-400 mt-0.5">{stats.mostWatchedSeries ? `${stats.mostWatchedSeries.count} Bölüm` : '-'}</div>
             </div>
           </div>
           <div className="bg-ink-950/50 border border-ink-800/60 rounded-xl p-3 flex items-center justify-between">
             <div className="flex items-center gap-2"><StickyNote size={15} className="text-rose-400" /><span className="text-xs font-bold text-ink-200">Eleştirmen Notların</span></div>
-            <span className="text-xs font-mono font-black text-rose-400">{stats.notesCount} Not ({stats.totalNoteWords} Kelime)</span>
+            <span className="text-xs font-black text-rose-400">{stats.notesCount} Not ({stats.totalNoteWords} Kelime)</span>
           </div>
         </div>
 
         <div className={PREMIUM_PANEL}>
           <div>
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2"><Globe size={18} className="text-rose-400" /> Dünya Sineması Pasaportu</h2>
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2"><Globe size={18} className="text-rose-400" /> Dünya Sineması Pasaportu</h2>
             <p className="text-xs text-ink-400 mt-0.5 mb-3.5">İzlediğin yapımların ülke sinemalarına göre dağılımı</p>
             {stats.topLanguages.length === 0 ? (
               <div className="text-center py-8 bg-ink-950/40 rounded-xl border border-ink-800/60">
@@ -966,10 +966,10 @@ export default function StatsPage() {
                       <span className="text-lg flex-shrink-0">{lang.flag}</span>
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-ink-100 truncate">{lang.name}</div>
-                        <div className="text-[10px] font-mono text-ink-400 font-semibold">{lang.count} Yapım</div>
+                        <div className="text-[10px] text-ink-400 font-semibold">{lang.count} Yapım</div>
                       </div>
                     </div>
-                    {lang.avg > 0 && <span className={`text-xs font-mono px-2 py-0.5 rounded-md font-black flex-shrink-0 ${ratingBgClass(lang.avg)}`}>{lang.avg.toFixed(1)}</span>}
+                    {lang.avg > 0 && <span className={`text-xs px-2 py-0.5 rounded-md font-black flex-shrink-0 ${ratingBgClass(lang.avg)}`}>{lang.avg.toFixed(1)}</span>}
                   </div>
                 ))}
               </div>
@@ -981,7 +981,7 @@ export default function StatsPage() {
       <div className={PREMIUM_PANEL}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2"><Crown size={18} className="text-gold-400" /> Yıldızlar Geçidi</h2>
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2"><Crown size={18} className="text-gold-400" /> Yıldızlar Geçidi</h2>
             <p className="text-xs text-ink-400 mt-0.5">En çok tercih ettiğin yönetmenler, oyuncular ve stüdyolar</p>
           </div>
           <div className="grid grid-cols-3 sm:flex bg-ink-950 rounded-xl p-1 border border-ink-800 w-full sm:w-fit gap-1">
@@ -1005,13 +1005,13 @@ export default function StatsPage() {
               {activeList.map((item, idx) => (
                 <div key={item.name} className={`${PREMIUM_CELL} p-3 flex items-center justify-between gap-3`}>
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-mono font-black text-xs flex-shrink-0 ${idx === 0 ? 'bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_6px_16px_-6px_rgba(232,56,79,0.85)]' : idx === 1 ? 'bg-slate-300 text-slate-900' : idx === 2 ? 'bg-red-900 text-white border border-red-700' : 'bg-ink-800 text-ink-300 border border-ink-700'}`}>#{idx + 1}</div>
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-black text-xs flex-shrink-0 ${idx === 0 ? 'bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_6px_16px_-6px_rgba(232,56,79,0.85)]' : idx === 1 ? 'bg-slate-300 text-slate-900' : idx === 2 ? 'bg-red-900 text-white border border-red-700' : 'bg-ink-800 text-ink-300 border border-ink-700'}`}>#{idx + 1}</div>
                     <div className="min-w-0">
                       <div className="text-xs sm:text-sm font-bold text-ink-100 truncate">{item.name}</div>
-                      <div className="text-[10px] sm:text-[11px] font-mono text-ink-400 font-medium">{item.count} Yapım</div>
+                      <div className="text-[10px] sm:text-[11px] text-ink-400 font-medium">{item.count} Yapım</div>
                     </div>
                   </div>
-                  {item.avg > 0 && <span className={`text-xs font-mono px-2 py-0.5 rounded-lg font-black flex-shrink-0 ${ratingBgClass(item.avg)}`}>{item.avg.toFixed(1)}</span>}
+                  {item.avg > 0 && <span className={`text-xs px-2 py-0.5 rounded-lg font-black flex-shrink-0 ${ratingBgClass(item.avg)}`}>{item.avg.toFixed(1)}</span>}
                 </div>
               ))}
             </div>
@@ -1022,7 +1022,7 @@ export default function StatsPage() {
       {stats.topRated.length > 0 && (
         <div className={PREMIUM_PANEL}>
           <div className="mb-3.5">
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2"><Star size={18} className="text-gold-400 fill-current" /> Şeref Kürsüsü</h2>
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2"><Star size={18} className="text-gold-400 fill-current" /> Şeref Kürsüsü</h2>
             <p className="text-xs text-ink-400 mt-0.5">En yüksek puan verdiğin yapımlar</p>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-2.5 sm:gap-3.5">
@@ -1033,12 +1033,12 @@ export default function StatsPage() {
                 <button key={h.id} type="button" onClick={() => openHistoryItemDetail(h)} className="group relative flex flex-col text-left bg-ink-950/70 border border-ink-800 hover:border-red-500/50 hover:shadow-[0_0_0_1px_rgba(232,56,79,0.35),0_16px_38px_-16px_rgba(232,56,79,0.6)] rounded-xl sm:rounded-2xl overflow-hidden shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
                   <div className="aspect-[2/3] w-full bg-ink-900 relative overflow-hidden">
                     {poster ? <img src={poster} alt={h.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" /> : <div className="w-full h-full flex items-center justify-center text-ink-600">{isMovie ? <Film size={24} /> : <Tv size={24} />}</div>}
-                    <div className="absolute top-1.5 left-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-gradient-to-br from-red-500 to-red-700 backdrop-blur-md border border-rose-300/30 flex items-center justify-center text-[10px] font-mono font-black text-white">#{i + 1}</div>
-                    {h.rating !== null && <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-lg text-[10px] sm:text-xs font-mono font-black shadow-md ${ratingBgClass(h.rating)}`}>{h.rating}</div>}
+                    <div className="absolute top-1.5 left-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-gradient-to-br from-red-500 to-red-700 backdrop-blur-md border border-rose-300/30 flex items-center justify-center text-[10px] font-black text-white">#{i + 1}</div>
+                    {h.rating !== null && <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-lg text-[10px] sm:text-xs font-black shadow-md ${ratingBgClass(h.rating)}`}>{h.rating}</div>}
                   </div>
                   <div className="p-2">
                     <div className="text-[11px] sm:text-xs font-bold text-ink-100 truncate group-hover:text-rose-300 transition-colors">{h.title}</div>
-                    <div className="text-[9px] sm:text-[10px] font-mono text-ink-400 mt-0.5 truncate">{h.season != null ? `S${h.season} B${h.episode}` : h.year || 'Film'}</div>
+                    <div className="text-[9px] sm:text-[10px] text-ink-400 mt-0.5 truncate">{h.season != null ? `S${h.season} B${h.episode}` : h.year || 'Film'}</div>
                   </div>
                 </button>
               );
@@ -1050,7 +1050,7 @@ export default function StatsPage() {
       {(stats.criteriaAverages.length > 0 || stats.decades.length > 0) && (
         <div className="grid md:grid-cols-2 gap-4">
           <div className={`${PREMIUM_PANEL} flex flex-col`}>
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 flex items-center gap-2 mb-1">
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2 mb-1">
               <Hexagon size={18} className="text-rose-400" /> Sinefil Karakter Radarı
             </h2>
             <p className="text-xs text-ink-400 mb-6">Puanladığın kriterlerin karakteristik analiz ağı</p>
@@ -1067,7 +1067,7 @@ export default function StatsPage() {
                     <div key={crit.id} className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-ink-100 flex items-center gap-1.5">{crit.name} <span className="text-[10px] text-ink-500 font-normal">({crit.count})</span></span>
-                        <span className={`px-2 py-0.5 rounded font-mono font-black text-[11px] ${ratingBgClass(crit.avg)}`}>{crit.avg.toFixed(1)}</span>
+                        <span className={`px-2 py-0.5 rounded font-black text-[11px] ${ratingBgClass(crit.avg)}`}>{crit.avg.toFixed(1)}</span>
                       </div>
                       <div className="h-2 w-full bg-ink-950 rounded-full overflow-hidden border border-ink-800">
                         <div className="h-full bg-gradient-to-r from-red-600 to-rose-400 rounded-full shadow-[0_0_10px_rgba(232,56,79,0.5)] transition-all duration-700" style={{ width: `${pct}%` }} />
@@ -1080,7 +1080,7 @@ export default function StatsPage() {
           </div>
 
           <div className={PREMIUM_PANEL}>
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 mb-1 flex items-center gap-2"><Compass size={18} className="text-gold-400" /> Dönemlere Göre Tercihlerin</h2>
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-1 flex items-center gap-2"><Compass size={18} className="text-gold-400" /> Dönemlere Göre Tercihlerin</h2>
             <p className="text-xs text-ink-400 mb-4">İzlediğin filmlerin çıkış yaptıkları on yıllara göre dağılımı</p>
             {stats.decades.length === 0 ? (
               <p className="text-xs text-ink-500 py-6 text-center">Henüz yeterli yıl verisi yok.</p>
@@ -1090,11 +1090,11 @@ export default function StatsPage() {
                   const pct = Math.max(10, (d.count / stats.maxDecadeCount) * 100);
                   return (
                     <div key={d.decade} className="flex items-center gap-2.5">
-                      <div className="w-14 text-xs font-mono font-black text-ink-200 flex-shrink-0">{d.decade}</div>
+                      <div className="w-14 text-xs font-black text-ink-200 flex-shrink-0">{d.decade}</div>
                       <div className="flex-1 h-6 bg-ink-950 rounded-lg overflow-hidden border border-ink-800/80">
-                        <div className="h-full bg-gradient-to-r from-red-700 to-rose-400 rounded-lg flex items-center justify-end pr-2 text-[11px] font-mono font-black text-white shadow-[0_0_12px_rgba(232,56,79,0.45)] transition-all duration-700" style={{ width: `${pct}%` }}>{d.count}</div>
+                        <div className="h-full bg-gradient-to-r from-red-700 to-rose-400 rounded-lg flex items-center justify-end pr-2 text-[11px] font-black text-white shadow-[0_0_12px_rgba(232,56,79,0.45)] transition-all duration-700" style={{ width: `${pct}%` }}>{d.count}</div>
                       </div>
-                      {d.avg > 0 && <span className={`text-xs font-mono px-2 py-0.5 rounded font-bold w-10 text-center flex-shrink-0 ${ratingBgClass(d.avg)}`}>{d.avg.toFixed(1)}</span>}
+                      {d.avg > 0 && <span className={`text-xs px-2 py-0.5 rounded font-bold w-10 text-center flex-shrink-0 ${ratingBgClass(d.avg)}`}>{d.avg.toFixed(1)}</span>}
                     </div>
                   );
                 })}
@@ -1105,7 +1105,7 @@ export default function StatsPage() {
       )}
 
       <div className={PREMIUM_PANEL}>
-        <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 mb-3.5 flex items-center gap-2"><Layers size={18} className="text-rose-400" /> En Sevdiğin Türler</h2>
+        <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-3.5 flex items-center gap-2"><Layers size={18} className="text-rose-400" /> En Sevdiğin Türler</h2>
         {genreAllSorted.length === 0 ? (
           <p className="text-sm text-ink-500">Henüz veri yok.</p>
         ) : (
@@ -1118,10 +1118,10 @@ export default function StatsPage() {
                   <div className="w-20 sm:w-24 text-xs sm:text-sm font-medium text-ink-300 flex-shrink-0 truncate">{genre}</div>
                   <div className="flex-1 h-6 sm:h-7 bg-ink-800/60 rounded-lg overflow-hidden relative group">
                     <div className={`h-full bg-gradient-to-r ${colorClass} rounded-lg flex items-center justify-end pr-2 transition-all duration-700 ease-out group-hover:brightness-110 group-hover:shadow-[0_0_14px_rgba(232,56,79,0.5)]`} style={{ width: `${Math.max(8, (val.count / maxGenreCount) * 100)}%` }}>
-                      <span className="text-[11px] sm:text-xs font-mono font-bold text-white drop-shadow">{val.count}</span>
+                      <span className="text-[11px] sm:text-xs font-bold text-white drop-shadow">{val.count}</span>
                     </div>
                   </div>
-                  {avg > 0 && <span className={`text-xs font-mono px-2 py-0.5 rounded font-bold flex-shrink-0 w-10 text-center ${ratingBgClass(avg)}`}>{avg.toFixed(1)}</span>}
+                  {avg > 0 && <span className={`text-xs px-2 py-0.5 rounded font-bold flex-shrink-0 w-10 text-center ${ratingBgClass(avg)}`}>{avg.toFixed(1)}</span>}
                 </div>
               );
             })}
@@ -1131,7 +1131,7 @@ export default function StatsPage() {
 
       <div className="grid md:grid-cols-3 gap-4">
         <div className={`${PREMIUM_PANEL} flex flex-col justify-between`}>
-          <h2 className="text-sm sm:text-base font-black tracking-tight text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-gold-400" /> Aylık İzleme</h2>
+          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-gold-400" /> Aylık İzleme</h2>
           {stats.monthly.length === 0 ? (
             <p className="text-sm text-ink-500">Henüz veri yok.</p>
           ) : (
@@ -1149,7 +1149,7 @@ export default function StatsPage() {
                         <div className="bg-gradient-to-t from-red-700 to-red-500 transition-all duration-700" style={{ height: `${moviePct}%` }} />
                         <div className="bg-gradient-to-t from-rose-600 to-rose-400 transition-all duration-700" style={{ height: `${100 - moviePct}%` }} />
                       </div>
-                      <div className="text-[11px] font-mono text-ink-500 font-medium">{monthName}</div>
+                      <div className="text-[11px] text-ink-500 font-medium">{monthName}</div>
                     </div>
                   );
                 })}
@@ -1163,7 +1163,7 @@ export default function StatsPage() {
         </div>
 
         <div className={`${PREMIUM_PANEL} flex flex-col justify-between`}>
-          <h2 className="text-sm sm:text-base font-black tracking-tight text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-rose-400" /> Haftalık Yoğunluk</h2>
+          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-rose-400" /> Haftalık Yoğunluk</h2>
           {data.history.length === 0 ? (
             <p className="text-sm text-ink-500">Henüz veri yok.</p>
           ) : (
@@ -1172,7 +1172,7 @@ export default function StatsPage() {
                 <div key={i} className="flex flex-col items-center gap-1.5 flex-1 group h-full justify-end">
                   <div className={`${PREMIUM_NUM} text-xs text-ink-300`}>{count}</div>
                   <div className="w-full max-w-[2rem] bg-gradient-to-t from-red-800 to-rose-400 rounded-t-md transition-all duration-700 group-hover:brightness-110 group-hover:shadow-[0_0_12px_rgba(232,56,79,0.5)]" style={{ height: `${(count / stats.maxDayOfWeek) * 80}%`, minHeight: count > 0 ? '6px' : '2px' }} />
-                  <div className="text-[11px] font-mono text-ink-500 font-medium">{dayNames[i]}</div>
+                  <div className="text-[11px] text-ink-500 font-medium">{dayNames[i]}</div>
                 </div>
               ))}
             </div>
@@ -1180,7 +1180,7 @@ export default function StatsPage() {
         </div>
 
         <div className={PREMIUM_PANEL}>
-          <h2 className="text-sm sm:text-base font-black tracking-tight text-ink-100 mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-gold-400" /> Puan Dağılımı</h2>
+          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-gold-400" /> Puan Dağılımı</h2>
           {stats.ratings.length === 0 ? (
             <p className="text-sm text-ink-500">Henüz puan verilmemiş.</p>
           ) : (
@@ -1189,7 +1189,7 @@ export default function StatsPage() {
                 const maxCount = Math.max(...stats.ratings.map(([, c]) => c));
                 return (
                   <div key={rating} className="flex items-center gap-2">
-                    <span className={`text-xs font-mono px-2 py-0.5 rounded font-bold flex-shrink-0 w-10 text-center ${ratingBgClass(rating)}`}>{rating}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded font-bold flex-shrink-0 w-10 text-center ${ratingBgClass(rating)}`}>{rating}</span>
                     <div className="flex-1 h-4 bg-ink-800/60 rounded overflow-hidden">
                       <div className="h-full bg-gradient-to-r from-red-700 to-rose-400 rounded shadow-[0_0_8px_rgba(232,56,79,0.4)] transition-all duration-700" style={{ width: `${(count / maxCount) * 100}%` }} />
                     </div>
@@ -1204,13 +1204,13 @@ export default function StatsPage() {
 
       {stats.collectionStats.length > 0 && (
         <div className={PREMIUM_PANEL}>
-          <h2 className="text-base sm:text-lg font-black tracking-tight text-ink-100 mb-3.5 flex items-center gap-2"><Layers size={18} className="text-gold-400" /> Koleksiyon İlerlemesi</h2>
+          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-3.5 flex items-center gap-2"><Layers size={18} className="text-gold-400" /> Koleksiyon İlerlemesi</h2>
           <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
             {stats.collectionStats.map((c) => (
               <div key={c.name} className="bg-ink-800/40 border border-ink-700/30 p-3.5 rounded-xl transition-colors duration-300">
                 <div className="flex justify-between text-xs sm:text-sm mb-1.5">
                   <span className="text-ink-200 font-bold truncate pr-2">{c.name}</span>
-                  <span className="font-mono text-ink-400 font-semibold flex-shrink-0">{c.watched} / {c.total} (%{Math.round(c.progress)})</span>
+                  <span className="text-ink-400 font-semibold flex-shrink-0">{c.watched} / {c.total} (%{Math.round(c.progress)})</span>
                 </div>
                 <div className="h-2 bg-ink-950 rounded-full overflow-hidden shadow-inner border border-ink-800">
                   <div className="h-full bg-gradient-to-r from-red-600 to-rose-400 rounded-full shadow-[0_0_12px_rgba(232,56,79,0.55)] transition-all duration-700 relative" style={{ width: `${c.progress}%` }}>

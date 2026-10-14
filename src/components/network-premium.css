@@ -31,7 +31,7 @@
   --ntw-a2: var(--red-hi, var(--color-2, #ff6b7a));
   --ntw-a3: var(--red-deep, var(--color-3, #8e1220));
   --ntw-muted: var(--muted, color-mix(in srgb, var(--text-main, #f4f4f2) 62%, transparent));
-  --ntw-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --ntw-mono: 'Archivo', ui-sans-serif, sans-serif;
   /* Çevrimiçi yeşil (preview .st.on) */
   --ntw-on: #67e39b;
   --ntw-on-soft: rgba(78, 203, 142, 0.5);

@@ -145,7 +145,7 @@ function CollapsibleSection({
         className="w-full flex items-center justify-between gap-2 p-4 sm:p-5 hover:bg-white/[.04] transition-colors text-left"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <h2 className="text-base sm:text-lg font-semibold text-ink-100 flex items-center gap-2 truncate">
+          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2 truncate">
             {icon}
             <span className="truncate">{title}</span>
           </h2>
@@ -486,7 +486,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 animate-fade-in pb-10">
-      <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
+      <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
         <div
           className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center"
           style={{ borderRadius: 'var(--r-sm, 10px)', background: PREMIUM_RED_GRAD, color: '#fff', boxShadow: '0 8px 22px -8px rgba(232, 56, 79, .7), inset 0 1px 0 rgba(255, 255, 255, .35)' }}
@@ -514,7 +514,7 @@ export default function SettingsPage() {
         </div>
         <div className="text-right flex-shrink-0">
           <div
-            className="text-lg font-black font-mono leading-none"
+            className="text-lg font-black leading-none"
             style={{ background: 'linear-gradient(100deg, var(--red-hi, #ff6b7a), #fff 70%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
           >
             {progress.completed.length + progress.academyDone.length}
@@ -609,14 +609,14 @@ export default function SettingsPage() {
                   <button onClick={() => copyToClipboard(data.agentId || '', 'Ağ Kodun')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
                     <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Ağ Kodun:</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-emerald-400 text-xs sm:text-sm font-bold">{data.agentId}</span>
+                      <span className="text-emerald-400 text-xs sm:text-sm font-bold">{data.agentId}</span>
                       <Copy size={12} className="text-ink-500 group-hover:text-emerald-400" />
                     </div>
                   </button>
                   <button onClick={() => copyToClipboard(data.recoveryKey || '', 'Kurtarma Anahtarın')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
                     <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Kurtarma Anahtarın:</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-red-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{data.recoveryKey}</span>
+                      <span className="text-red-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{data.recoveryKey}</span>
                       <Copy size={12} className="text-ink-500 group-hover:text-red-400" />
                     </div>
                   </button>
@@ -624,7 +624,7 @@ export default function SettingsPage() {
                     <button onClick={() => copyToClipboard(currentSecretToken, 'Güvenlik İmzan')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
                       <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Güvenlik İmzan:</span>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-amber-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{currentSecretToken}</span>
+                        <span className="text-amber-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{currentSecretToken}</span>
                         <Copy size={12} className="text-ink-500 group-hover:text-amber-400" />
                       </div>
                     </button>
@@ -673,14 +673,14 @@ export default function SettingsPage() {
                         value={transferBundleInput}
                         onChange={(e) => handleParseTransferCode(e.target.value)}
                         placeholder="SNV-TRANSFER-... ile başlayan kodu buraya yapıştır"
-                        className="w-full px-3 py-2 text-xs font-mono text-emerald-300 outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}
+                        className="w-full px-3 py-2 text-xs text-emerald-300 outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}
                       />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ Kodu (SNV-..)</label>
-                        <input type="text" value={recAgentId} onChange={(e) => setRecAgentId(e.target.value)} placeholder="SNV-XXXX-XXXX" className="w-full px-3 py-2 text-xs font-mono uppercase text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
+                        <input type="text" value={recAgentId} onChange={(e) => setRecAgentId(e.target.value)} placeholder="SNV-XXXX-XXXX" className="w-full px-3 py-2 text-xs uppercase text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ İsmin</label>
@@ -688,11 +688,11 @@ export default function SettingsPage() {
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Gizli Kurtarma Anahtarı</label>
-                        <input type="password" value={recKey} onChange={(e) => setRecKey(e.target.value)} placeholder="Kurtarma anahtarın..." className="w-full px-3 py-2 text-xs font-mono text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
+                        <input type="password" value={recKey} onChange={(e) => setRecKey(e.target.value)} placeholder="Kurtarma anahtarın..." className="w-full px-3 py-2 text-xs text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-amber-400/90 mb-1 uppercase tracking-wider">Güvenlik İmzan (sec_...)</label>
-                        <input type="password" value={recSecretToken} onChange={(e) => setRecSecretToken(e.target.value)} placeholder="Mesaj/Profil yetkisi için (sec_...)" className="w-full px-3 py-2 text-xs font-mono text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
+                        <input type="password" value={recSecretToken} onChange={(e) => setRecSecretToken(e.target.value)} placeholder="Mesaj/Profil yetkisi için (sec_...)" className="w-full px-3 py-2 text-xs text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
                       </div>
                     </div>
                     <div className="flex gap-2 mt-2">
@@ -825,9 +825,9 @@ export default function SettingsPage() {
             <div className="text-xs p-3 bg-ink-950 rounded-xl border border-ink-800 space-y-2 mb-3.5">
               <div className="leading-relaxed">
                 <span className="font-bold text-ink-300 block mb-1">Parametreler:</span>
-                <span className="text-gold-400 font-mono">{'{imdb}'}</span> : IMDB Kodu |{' '}
-                <span className="text-gold-400 font-mono">{'{title}'}</span> : Film Adı |{' '}
-                <span className="text-gold-400 font-mono">{'{year}'}</span> : Yıl
+                <span className="text-gold-400">{'{imdb}'}</span> : IMDB Kodu |{' '}
+                <span className="text-gold-400">{'{title}'}</span> : Film Adı |{' '}
+                <span className="text-gold-400">{'{year}'}</span> : Yıl
               </div>
               <div className="pt-2 border-t border-ink-800">
                 <span className="text-emerald-400 font-bold block mb-1">Otomatik İlk Sonuca Gitme Örneği:</span>
@@ -842,7 +842,7 @@ export default function SettingsPage() {
                 value={altTemplate}
                 onChange={(e) => setAltTemplate(e.target.value)}
                 placeholder="Örn: https://duckduckgo.com/?q=\site:hdfilmcehennemi.nl+{title}+{year}"
-                className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all text-xs sm:text-sm font-mono"
+                className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2.5 text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all text-xs sm:text-sm"
               />
               <button
                 onClick={() => updateAltWatchTemplate(altTemplate)}
@@ -1303,7 +1303,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2 mb-2">
                 <ThumbsUp size={14} className="text-emerald-400" />
                 <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Övgü Yorumları</span>
-                <span className="text-[10px] text-ink-500 font-mono">{positiveTags.length}</span>
+                <span className="text-[10px] text-ink-500">{positiveTags.length}</span>
               </div>
               {positiveTags.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -1318,7 +1318,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2 mb-2">
                 <ThumbsDown size={14} className="text-red-400" />
                 <span className="text-xs font-black uppercase tracking-wider text-red-400">Eleştiriler</span>
-                <span className="text-[10px] text-ink-500 font-mono">{negativeTags.length}</span>
+                <span className="text-[10px] text-ink-500">{negativeTags.length}</span>
               </div>
               {negativeTags.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5 sm:gap-2">

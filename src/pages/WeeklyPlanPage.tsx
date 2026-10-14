@@ -25,7 +25,7 @@ const WINDOW_SIZE = 8;
    görsel yüzeyler token fallback'li hale getirildi:
    · cam gün kartları (var(--glass, var(--bg-card)))
    · bugün / aktif gün: kırmızı kenarlık + glow (var(--red, var(--color-1, #e8384f)))
-   · mono (JetBrains) gün etiketleri + Archivo başlıklar
+   · mono gün etiketleri (Archivo caps) + Archivo başlıklar
    · ince ayraçlar (var(--line) / var(--line-2))
    plain-dark fallback ZORUNLU kalıplar: var(--r, 16px),
    var(--red, var(--color-1, #e8384f)), var(--glass, var(--bg-card)).
@@ -44,12 +44,12 @@ const WEEKLY_PREMIUM_CSS = `
   --wp-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8));
   --wp-glow:var(--glow,0 0 0 1px rgba(232,56,79,.35),0 8px 32px -8px rgba(232,56,79,.45));
   --wp-inset:inset 0 1px 0 rgba(255,255,255,.07);
-  --wp-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --wp-mono:'Archivo',ui-sans-serif,sans-serif;
   --wp-font:'Archivo',system-ui,-apple-system,sans-serif;
 }
 /* Archivo başlıklar */
 .wp-title{font-family:var(--wp-font);}
-/* JetBrains Mono etiketler */
+/* Archivo mono-etiketler (eski JetBrains Mono yerine) */
 .wp-mono{font-family:var(--wp-mono);}
 /* İnce ayraçlar */
 .wp-hr{border-color:var(--wp-line);}
@@ -230,12 +230,12 @@ export default function WeeklyPlanPage() {
 
         <div className="min-w-0 flex-1 flex flex-col justify-between pt-0.5">
           <div>
-            <div className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black font-mono tracking-wider mb-1 ${isMissed ? 'text-red-400' : 'text-gold-400'}`}>
+            <div className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black tracking-wider mb-1 ${isMissed ? 'text-red-400' : 'text-gold-400'}`}>
               <Clock size={10} /> {item.time} <ArrowRight size={10} className="text-ink-600 mx-0.5" /> {endTime}
             </div>
             <div className={`text-[11px] sm:text-xs font-black truncate leading-tight uppercase tracking-tight ${movie.watched ? 'text-ink-400 line-through' : 'text-white'}`}>{movie.title}</div>
             <div className="flex items-center gap-2 mt-1">
-              {movie.year && <span className="font-mono text-[9px] font-bold text-ink-400 bg-ink-950 px-1.5 py-0.5 rounded-md border border-ink-800/60">{movie.year}</span>}
+              {movie.year && <span className="text-[9px] font-bold text-ink-400 bg-ink-950 px-1.5 py-0.5 rounded-md border border-ink-800/60">{movie.year}</span>}
             </div>
           </div>
 
@@ -258,7 +258,7 @@ export default function WeeklyPlanPage() {
               </div>
             ) : timerInfo ? (
               <div className="flex items-center gap-1 flex-wrap">
-                <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-1.5 py-1 rounded-md text-[9px] sm:text-[10px] font-bold"><Timer size={10} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} /><span className="font-mono">{timerInfo.formattedRemaining}</span></div>
+                <div className="flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-1.5 py-1 rounded-md text-[9px] sm:text-[10px] font-bold"><Timer size={10} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} /><span className="tabular-nums">{timerInfo.formattedRemaining}</span></div>
                 <button onClick={() => togglePauseWatchingMovie(movie.id)} className="text-amber-300 hover:text-white p-1 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center bg-ink-800 hover:bg-ink-700 rounded-md">{timerInfo.isPaused ? <Play size={10} className="fill-current" /> : <Pause size={10} />}</button>
                 <button onClick={() => cancelWatchingMovie(movie.id)} className="text-red-400 hover:text-white p-1 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 rounded-md"><X size={10} /></button>
                 <button onClick={() => handleRequestRate(item, movie)} disabled={!timerInfo.canRateWithTimer} className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-black px-2 py-1 min-h-11 md:min-h-0 rounded-md transition-all ${timerInfo.canRateWithTimer ? 'bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-500 hover:brightness-110 hover:shadow-[0_8px_20px_-10px_var(--color-1)] text-ink-950' : 'bg-ink-800/60 text-ink-600 cursor-not-allowed'}`}>{timerInfo.canRateWithTimer ? <><Star size={10} className="fill-current" /> Puanla</> : <Lock size={10} />}</button>
@@ -301,7 +301,7 @@ export default function WeeklyPlanPage() {
           <div className="flex items-start justify-between gap-2 sm:gap-3 mb-1.5">
             <div className="min-w-0">
               <h4 className={`text-xs sm:text-base font-black leading-tight truncate uppercase tracking-tight ${movie.watched ? 'text-ink-400 line-through' : 'text-white'}`}>{movie.title}</h4>
-              <div className="flex items-center gap-2 mt-1 text-[9px] sm:text-[11px] font-mono">
+              <div className="flex items-center gap-2 mt-1 text-[9px] sm:text-[11px]">
                 {movie.year && <span className="font-bold text-ink-300 bg-ink-950 px-1.5 py-0.5 rounded border border-ink-800">{movie.year}</span>}
                 <span className="font-medium text-ink-400 flex items-center gap-1"><Clock size={10} className="text-gold-400" /> {endTime}</span>
               </div>
@@ -329,7 +329,7 @@ export default function WeeklyPlanPage() {
               <>
                 <div className="flex items-center gap-1 sm:gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold shadow-inner">
                   <Timer size={10} sm-size={12} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
-                  <span className="font-mono">{timerInfo.formattedRemaining}</span>
+                  <span className="tabular-nums">{timerInfo.formattedRemaining}</span>
                 </div>
                 <button onClick={() => togglePauseWatchingMovie(movie.id)} className="text-amber-300 hover:text-white p-1 sm:p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center bg-ink-800 hover:bg-ink-700 rounded-lg transition-colors border border-amber-500/20">
                   {timerInfo.isPaused ? <Play size={10} sm-size={12} className="fill-current" /> : <Pause size={10} sm-size={12} />}
@@ -368,22 +368,22 @@ export default function WeeklyPlanPage() {
       <style>{WEEKLY_PREMIUM_CSS}</style>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <h1 className="wp-title text-lg sm:text-2xl font-black text-white flex items-center gap-3 drop-shadow-md">
+        <h1 className="wp-title text-2xl sm:text-3xl font-black uppercase tracking-tight text-white flex items-center gap-3 drop-shadow-md">
           <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-gold-600 to-gold-700 border border-white/20 flex items-center justify-center shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.35)]">
             <CalendarClock size={18} sm-size={20} className="text-white" />
           </div>
           <div>
             <div className="leading-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-ink-200">Haftalık Planlayıcı</div>
-            <div className="font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.26em] text-ink-500 mt-1">maraton · haftalık ızgara</div>
+            <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.26em] text-ink-500 mt-1">maraton · haftalık ızgara</div>
           </div>
         </h1>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           <div data-tutorial="plan-view" className="flex bg-ink-950/80 p-1 rounded-xl border border-ink-800/80 shadow-inner w-full sm:w-auto backdrop-blur-xl">
-            <button onClick={() => setViewMode('list')} className={`flex-1 sm:w-28 flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] font-black uppercase tracking-[0.14em] font-mono transition-all ${viewMode === 'list' ? 'bg-gradient-to-r from-gold-600 to-gold-700 text-white shadow-[0_8px_20px_-8px_var(--color-1)]' : 'text-ink-500 hover:text-ink-200'}`}>
+            <button onClick={() => setViewMode('list')} className={`flex-1 sm:w-28 flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] font-black uppercase tracking-[0.14em] transition-all ${viewMode === 'list' ? 'bg-gradient-to-r from-gold-600 to-gold-700 text-white shadow-[0_8px_20px_-8px_var(--color-1)]' : 'text-ink-500 hover:text-ink-200'}`}>
               <LayoutList size={13} /> PANO
             </button>
-            <button onClick={() => setViewMode('timeline')} className={`flex-1 sm:w-28 flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] font-black uppercase tracking-[0.14em] font-mono transition-all ${viewMode === 'timeline' ? 'bg-gradient-to-r from-gold-600 to-gold-700 text-white shadow-[0_8px_20px_-8px_var(--color-1)]' : 'text-ink-500 hover:text-ink-200'}`}>
+            <button onClick={() => setViewMode('timeline')} className={`flex-1 sm:w-28 flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] font-black uppercase tracking-[0.14em] transition-all ${viewMode === 'timeline' ? 'bg-gradient-to-r from-gold-600 to-gold-700 text-white shadow-[0_8px_20px_-8px_var(--color-1)]' : 'text-ink-500 hover:text-ink-200'}`}>
               <Activity size={13} /> ÇİZELGE
             </button>
           </div>
@@ -403,20 +403,20 @@ export default function WeeklyPlanPage() {
               <circle cx="18" cy="18" r="16" fill="none" className="stroke-ink-800" strokeWidth="3" />
               <circle cx="18" cy="18" r="16" fill="none" className="stroke-[var(--color-1)] transition-all duration-1000 drop-shadow-[0_0_6px_var(--color-1)]" strokeWidth="3" strokeDasharray="100" strokeDashoffset={100 - stats.completionPct} strokeLinecap="round" />
             </svg>
-            <div className="absolute text-sm sm:text-lg font-black text-white font-mono">{stats.completionPct}<span className="text-[9px] sm:text-[10px] text-ink-500">%</span></div>
+            <div className="absolute text-sm sm:text-lg font-black text-white">{stats.completionPct}<span className="text-[9px] sm:text-[10px] text-ink-500">%</span></div>
           </div>
           <div className="relative z-10">
-            <div className="text-[9px] sm:text-[10px] font-black uppercase font-mono tracking-[0.18em] text-gold-400 flex items-center gap-1 mb-0.5"><Target size={12} /> Maraton İlerlemesi</div>
+            <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-gold-400 flex items-center gap-1 mb-0.5"><Target size={12} /> Maraton İlerlemesi</div>
             <div className="text-[11px] sm:text-xs font-medium text-ink-300">Bu haftaki planın <strong className="text-white">{stats.watchedCount}</strong> / {stats.total} görevini tamamladın.</div>
           </div>
         </div>
 
         <div className="wp-stat p-4 flex flex-col justify-center relative overflow-hidden">
-          <div className="text-[9px] sm:text-[10px] font-black uppercase font-mono tracking-[0.18em] text-azure-400 flex items-center gap-1 mb-1.5"><Zap size={12} /> Toplam Maraton Hacmi</div>
-          <div className="text-xl sm:text-2xl font-black font-mono text-white leading-none tracking-tight mb-2">
+          <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-azure-400 flex items-center gap-1 mb-1.5"><Zap size={12} /> Toplam Maraton Hacmi</div>
+          <div className="text-xl sm:text-2xl font-black text-white leading-none tracking-tight mb-2">
             {formatDuration(stats.totalMinutes)}
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] font-bold font-mono uppercase tracking-wider mt-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider mt-auto">
             <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 size={10} /> {formatDuration(stats.watchedMinutes)} izlendi</span>
             <span className="text-ink-600">•</span>
             <span className="text-gold-400 flex items-center gap-1"><Hourglass size={10} /> {formatDuration(stats.pendingMinutes)} kaldı</span>
@@ -425,8 +425,8 @@ export default function WeeklyPlanPage() {
 
         <div className="wp-stat p-4 flex items-center justify-between relative overflow-hidden">
            <div>
-            <div className="text-[9px] sm:text-[10px] font-black uppercase font-mono tracking-[0.18em] text-gold-400 flex items-center gap-1 mb-1"><Flame size={12} /> Kalan Seyir Yükü</div>
-            <div className="text-lg sm:text-xl font-black font-mono text-white">
+            <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-gold-400 flex items-center gap-1 mb-1"><Flame size={12} /> Kalan Seyir Yükü</div>
+            <div className="text-lg sm:text-xl font-black text-white">
               {stats.pendingCount} <span className="text-[11px] sm:text-xs text-ink-500 font-medium font-sans">Film</span>
             </div>
             {stats.pendingCount === 0 && stats.total > 0 ? (
@@ -457,7 +457,7 @@ export default function WeeklyPlanPage() {
                 </div>
                 <div className="text-xs sm:text-sm font-black text-white truncate drop-shadow-sm">{activeTimerMovie.title}</div>
                 <div className="text-[9px] sm:text-[10px] font-bold text-ink-300 mt-1 flex items-center gap-1.5 sm:gap-2">
-                  <span className="bg-emerald-950 px-1.5 py-0.5 rounded text-emerald-300 border border-emerald-500/30 font-mono">Kalan: {info.formattedRemaining}</span>
+                  <span className="bg-emerald-950 px-1.5 py-0.5 rounded text-emerald-300 border border-emerald-500/30">Kalan: {info.formattedRemaining}</span>
                   {/* TYPESCRIPT DÜZELTMESİ: runtime tanımsızsa varsayılan 115 kullan */}
                   <span className="opacity-60 flex items-center gap-1"><Clock size={10}/> {planItem.time} - {computeEndTime(planItem.time, activeTimerMovie.runtime || 115)}</span>
                 </div>
@@ -496,7 +496,7 @@ export default function WeeklyPlanPage() {
               >
                 {isDragOver && (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-ink-950/60 backdrop-blur-sm rounded-2xl pointer-events-none">
-                    <div className="bg-gold-500 text-white font-black px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-[0_0_24px_var(--color-1)] border border-white/20 font-mono text-[11px] uppercase tracking-[0.14em]">
+                    <div className="bg-gold-500 text-white font-black px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-[0_0_24px_var(--color-1)] border border-white/20 text-[11px] uppercase tracking-[0.14em]">
                       <CalendarPlus size={16} /> Buraya Planla
                     </div>
                   </div>
@@ -518,7 +518,7 @@ export default function WeeklyPlanPage() {
 
                 <div className="p-3 sm:p-4">
                   {items.length === 0 ? (
-                    <div className="wp-mono text-[10px] uppercase tracking-[0.2em] text-ink-600 text-center py-4 border border-dashed border-ink-800/60 rounded-xl">
+                    <div className="wp-mono font-semibold text-[10px] uppercase tracking-[0.2em] text-ink-600 text-center py-4 border border-dashed border-ink-800/60 rounded-xl">
                       Bu gün için planlanmış film yok.
                     </div>
                   ) : (
@@ -720,7 +720,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
       <div onClick={(e) => e.stopPropagation()} className="wp-glass w-full max-w-lg overflow-hidden flex flex-col max-h-[90svh] animate-fade-in-up">
         <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-gold-500/10 to-transparent relative">
           <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-gold-500 via-gold-500/40 to-transparent"></div>
-          <h3 className="wp-title text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
+          <h3 className="wp-title text-[13px] sm:text-sm font-bold text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
             <div className="w-6 h-6 rounded border border-gold-500/30 bg-gold-500/10 text-gold-400 flex items-center justify-center"><Sparkles size={12} /></div>
             Maraton Kurulumu
           </h3>
@@ -736,11 +736,11 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
               </div>
 
               <div className="flex gap-2">
-                <select value={collectionFilter} onChange={(e) => setCollectionFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold font-mono uppercase tracking-wider text-ink-300 focus:outline-none focus:border-gold-500/50 transition-colors">
+                <select value={collectionFilter} onChange={(e) => setCollectionFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-300 focus:outline-none focus:border-gold-500/50 transition-colors">
                   <option value="">Koleksiyon: Tümü</option>
                   {data.collections.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
                 </select>
-                <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold font-mono uppercase tracking-wider text-ink-300 focus:outline-none focus:border-gold-500/50 transition-colors">
+                <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-300 focus:outline-none focus:border-gold-500/50 transition-colors">
                   <option value="">Tür: Tümü</option>
                   {data.genres.map((g) => (<option key={g} value={g}>{g}</option>))}
                 </select>
@@ -788,11 +788,11 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
               <div className="flex gap-2.5 sm:gap-3 mb-4">
                 <div className="space-y-1.5 flex-1">
                   <label className="h-4 flex items-center wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1">Tarih</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
                 </div>
                 <div className="space-y-1.5 flex-1">
                   <label className="h-4 flex items-center wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
-                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
+                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
                 </div>
               </div>
 
@@ -820,7 +820,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
                              {isOverlapping ? <AlertCircle size={10} sm-size={12} className="text-red-400 flex-shrink-0 animate-pulse"/> : <Film size={10} sm-size={12} className="text-ink-500 flex-shrink-0"/>}
                              <span className={`text-[10px] sm:text-[11px] font-bold truncate ${isOverlapping ? 'text-red-300' : 'text-ink-200'}`}>{p.title}</span>
                            </div>
-                           <span className={`text-[8px] sm:text-[9px] font-black font-mono flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-gold-500/10 text-gold-400 border-gold-500/30'}`}>
+                           <span className={`text-[8px] sm:text-[9px] font-black flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-gold-500/10 text-gold-400 border-gold-500/30'}`}>
                              {p.time} - {pEnd}
                            </span>
                         </div>
@@ -843,15 +843,15 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
         </div>
 
         <div className="p-3 border-t border-ink-800/80 bg-ink-950/90 flex flex-col sm:flex-row items-center gap-2 backdrop-blur-md">
-          <button onClick={onClose} className="w-full sm:w-auto px-4 py-2.5 sm:py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold font-mono text-[11px] uppercase tracking-wider transition-colors">
+          <button onClick={onClose} className="w-full sm:w-auto px-4 py-2.5 sm:py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold text-[11px] uppercase tracking-wider transition-colors">
             Vazgeç
           </button>
           
           <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:flex-1">
-            <button disabled={!selectedMovie || !date || !time} onClick={() => handleConfirm(false)} className="w-full sm:flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-900 hover:bg-ink-800 text-gold-400 border border-gold-500/30 font-black font-mono text-[10px] sm:text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 flex items-center justify-center shadow-sm hover:shadow-[0_0_18px_-8px_var(--color-1)]">
+            <button disabled={!selectedMovie || !date || !time} onClick={() => handleConfirm(false)} className="w-full sm:flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-900 hover:bg-ink-800 text-gold-400 border border-gold-500/30 font-black text-[10px] sm:text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 flex items-center justify-center shadow-sm hover:shadow-[0_0_18px_-8px_var(--color-1)]">
               <Plus size={10} className="mr-1" /> Ekle & Devam
             </button>
-            <button disabled={!selectedMovie || !date || !time} onClick={() => handleConfirm(true)} className="w-full sm:flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-gradient-to-r from-gold-600 to-gold-700 text-white font-black font-mono text-[10px] sm:text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.3)] hover:shadow-[0_16px_36px_-10px_var(--color-1)] hover:-translate-y-0.5">
+            <button disabled={!selectedMovie || !date || !time} onClick={() => handleConfirm(true)} className="w-full sm:flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-gradient-to-r from-gold-600 to-gold-700 text-white font-black text-[10px] sm:text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.3)] hover:shadow-[0_16px_36px_-10px_var(--color-1)] hover:-translate-y-0.5">
               Kaydet & Kapat
             </button>
           </div>
@@ -899,7 +899,7 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
       <div onClick={(e) => e.stopPropagation()} className="wp-glass w-full max-w-lg overflow-hidden flex flex-col max-h-[90svh] animate-fade-in-up">
         <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-ink-800/80 bg-gradient-to-r from-gold-500/10 to-transparent relative">
           <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-gold-500 via-gold-500/40 to-transparent"></div>
-          <h3 className="wp-title text-[13px] sm:text-sm font-black text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
+          <h3 className="wp-title text-[13px] sm:text-sm font-bold text-white flex items-center gap-2 drop-shadow-md uppercase tracking-wide">
             <div className="w-6 h-6 rounded border border-gold-500/30 bg-gold-500/10 text-gold-400 flex items-center justify-center"><Edit2 size={12} /></div>
             Maratonu Düzenle / Taşı
           </h3>
@@ -920,11 +920,11 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
           <div className="flex gap-2.5 sm:gap-3 mb-4">
             <div className="space-y-1.5 flex-1">
               <label className="h-4 flex items-center wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1">Tarih</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
             </div>
             <div className="space-y-1.5 flex-1">
               <label className="h-4 flex items-center wp-mono text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] text-ink-400 ml-1 gap-1"><Clock size={10} /> Saat</label>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold font-mono text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-ink-950 border border-ink-800 rounded-xl px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] shadow-inner transition-all" />
             </div>
           </div>
 
@@ -952,7 +952,7 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
                          {isOverlapping ? <AlertCircle size={10} className="text-red-400 flex-shrink-0 animate-pulse"/> : <Film size={10} className="text-ink-500 flex-shrink-0"/>}
                          <span className={`text-[10px] sm:text-[11px] font-bold truncate ${isOverlapping ? 'text-red-300' : 'text-ink-200'}`}>{p.title}</span>
                        </div>
-                       <span className={`text-[8px] sm:text-[9px] font-black font-mono flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-gold-500/10 text-gold-400 border-gold-500/30'}`}>
+                       <span className={`text-[8px] sm:text-[9px] font-black flex-shrink-0 px-1.5 py-0.5 rounded border ${isOverlapping ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-gold-500/10 text-gold-400 border-gold-500/30'}`}>
                          {p.time} - {pEnd}
                        </span>
                     </div>
@@ -973,10 +973,10 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
         </div>
 
         <div className="p-3 border-t border-ink-800/80 bg-ink-950/90 flex items-center gap-2 backdrop-blur-md">
-          <button onClick={onClose} className="px-4 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold font-mono text-[11px] uppercase tracking-wider transition-colors">
+          <button onClick={onClose} className="px-4 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-ink-800 hover:bg-ink-700 text-ink-300 font-bold text-[11px] uppercase tracking-wider transition-colors">
             İptal
           </button>
-          <button disabled={!date || !time} onClick={handleConfirm} className="flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-gradient-to-r from-gold-600 to-gold-700 text-white font-black font-mono text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.3)] hover:shadow-[0_16px_36px_-10px_var(--color-1)] hover:-translate-y-0.5">
+          <button disabled={!date || !time} onClick={handleConfirm} className="flex-1 py-2.5 min-h-11 md:min-h-0 rounded-xl bg-gradient-to-r from-gold-600 to-gold-700 text-white font-black text-[11px] uppercase tracking-wider transition-all disabled:opacity-40 shadow-[0_10px_28px_-10px_var(--color-1),inset_0_1px_0_rgba(255,255,255,0.3)] hover:shadow-[0_16px_36px_-10px_var(--color-1)] hover:-translate-y-0.5">
             Değişiklikleri Kaydet
           </button>
         </div>

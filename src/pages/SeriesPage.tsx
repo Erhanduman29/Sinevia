@@ -42,7 +42,7 @@ const SERIES_PREMIUM_CSS = `
   --svp-shadow: var(--shadow, 0 24px 60px -24px rgba(0, 0, 0, .8));
   --svp-glow: var(--glow, 0 0 0 1px rgba(232, 56, 79, .35), 0 12px 34px -12px rgba(232, 56, 79, .55));
   --svp-inset: inset 0 1px 0 rgba(255, 255, 255, .07);
-  --svp-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --svp-mono: 'Archivo', ui-sans-serif, sans-serif;
 
   /* vurgu tonları (tekrar yerine geçmesin) */
   --svp-t08: color-mix(in srgb, var(--svp-a1) 8%, transparent);
@@ -933,7 +933,7 @@ export default function SeriesPage() {
       {/* ÜST BAŞLIK & AKSİYON BARI (mobil: sm: sabitlemeleri ≥768'i birebir korur) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-2.5">
         <div className="flex items-center justify-between">
-          <h1 className="svp-h1 text-lg sm:text-2xl flex items-center gap-2 sm:gap-2.5">
+          <h1 className="svp-h1 text-2xl sm:text-3xl flex items-center gap-2 sm:gap-2.5">
             <div className="svp-tile">
               <Tv size={20} />
             </div>

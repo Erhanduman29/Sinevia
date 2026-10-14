@@ -38,7 +38,7 @@ type ViewMode = 'timeline' | 'grid' | 'past';
 
 /* Premium tokenlar yalnızca premium-dark temasında tanımlı; plain-dark gibi
    diğer temalarda fallback taban değişkenlere düşer (var(--x, var(--y))). */
-const monoLabel = 'font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--red-hi,var(--color-1))]';
+const monoLabel = 'text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--red-hi,var(--color-1))]';
 
 const accent = 'var(--red, var(--color-1, #e8384f))';
 
@@ -284,7 +284,7 @@ export default function HistoryPage() {
             </div>
             <div>
               <div className={`${monoLabel} text-[color:var(--red-hi,var(--color-1))] mb-0.5`}>Kayıt Defteri</div>
-              <h1 className="text-xl sm:text-2xl font-black text-ink-100 uppercase tracking-tight leading-none">
+              <h1 className="text-2xl sm:text-3xl font-black text-ink-100 uppercase tracking-tight leading-none">
                 Sinema Günlüğü & Geçmiş
               </h1>
               <p className="hidden sm:block text-[11px] font-medium text-ink-400 mt-1">
@@ -293,7 +293,7 @@ export default function HistoryPage() {
             </div>
           </div>
           {data.history.length > 0 && (
-            <div className="flex items-center gap-2 font-mono">
+            <div className="flex items-center gap-2">
               <span className={`${monoLabel} text-ink-400`}>Arşiv</span>
               <span className="text-lg font-black text-ink-50 tabular-nums leading-none">
                 {String(data.history.length).padStart(3, '0')}
@@ -365,7 +365,7 @@ export default function HistoryPage() {
                 <SlidersHorizontal size={14} className="text-[color:var(--red-hi,var(--color-1))]" />
                 <span className="uppercase tracking-wider">Ara & Filtrele</span>
                 {activeFilterCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-[color:var(--red, var(--color-1, #e8384f))] text-white text-[10px] font-black font-mono tabular-nums">
+                  <span className="px-1.5 py-0.2 rounded-full bg-[color:var(--red, var(--color-1, #e8384f))] text-white text-[10px] font-black tabular-nums">
                     {activeFilterCount}
                   </span>
                 )}
@@ -462,7 +462,7 @@ export default function HistoryPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedTagFilter(null)}
-                    className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 min-h-9 sm:min-h-0 rounded-lg border transition-all font-mono ${
+                    className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 min-h-9 sm:min-h-0 rounded-lg border transition-all ${
                       selectedTagFilter === null
                         ? 'bg-[color:var(--red, var(--color-1, #e8384f))] text-white border-[color:var(--red, var(--color-1, #e8384f))]'
                         : 'bg-[color:var(--surface,var(--bg-surface))] text-ink-400 border-[color:var(--line-2,var(--border-dim))] hover:text-ink-200'
@@ -477,7 +477,7 @@ export default function HistoryPage() {
                         key={tag}
                         type="button"
                         onClick={() => setSelectedTagFilter(active ? null : tag)}
-                        className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 min-h-9 sm:min-h-0 rounded-lg border transition-all font-mono ${
+                        className={`flex-shrink-0 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 min-h-9 sm:min-h-0 rounded-lg border transition-all ${
                           active
                             ? 'bg-[color:var(--red, var(--color-1, #e8384f))] text-white border-[color:var(--red, var(--color-1, #e8384f))] shadow-[0_0_16px_-4px_var(--red, var(--color-1, #e8384f))]'
                             : 'bg-[color:var(--surface,var(--bg-surface))] text-ink-300 border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40'
@@ -573,7 +573,7 @@ export default function HistoryPage() {
                     </div>
                   )}
 
-                  <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border border-white/15 flex items-center gap-1 font-mono">
+                  <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border border-white/15 flex items-center gap-1">
                     {isMovie ? (
                       <><Film size={10} className="text-[color:var(--red-hi,var(--color-1))]" /> Film</>
                     ) : (
@@ -582,7 +582,7 @@ export default function HistoryPage() {
                   </div>
 
                   {item.rating !== null && (
-                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-xl text-xs font-black font-mono tabular-nums shadow-lg ${ratingBgClass(item.rating)}`}>
+                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-xl text-xs font-black tabular-nums shadow-lg ${ratingBgClass(item.rating)}`}>
                       ★ {item.rating}
                     </div>
                   )}
@@ -596,7 +596,7 @@ export default function HistoryPage() {
                       <span />
                     )}
                     {!isMovie && epsCount > 1 && (
-                      <span className="bg-azure-500/90 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow font-mono">
+                      <span className="bg-azure-500/90 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow">
                         {epsCount} Böl.
                       </span>
                     )}
@@ -605,13 +605,13 @@ export default function HistoryPage() {
 
                 <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
                   <div>
-                    <h3 className="font-black text-xs sm:text-sm text-ink-100 truncate group-hover:text-[color:var(--red-hi,var(--color-1))] transition-colors">
+                    <h3 className="font-bold text-xs sm:text-sm text-ink-100 truncate group-hover:text-[color:var(--red-hi,var(--color-1))] transition-colors">
                       {item.title}
                     </h3>
                     {item.reviewTags && item.reviewTags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {item.reviewTags.slice(0, 2).map((t) => (
-                          <span key={t} className="text-[9px] font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30 px-1.5 py-0.5 rounded truncate font-mono">
+                          <span key={t} className="text-[9px] font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30 px-1.5 py-0.5 rounded truncate">
                             {t}
                           </span>
                         ))}
@@ -624,7 +624,7 @@ export default function HistoryPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-ink-500 font-semibold mt-2 pt-1.5 border-t border-[color:var(--line,var(--border-dim))] font-mono">
+                  <div className="flex items-center justify-between text-[10px] text-ink-500 font-semibold mt-2 pt-1.5 border-t border-[color:var(--line,var(--border-dim))]">
                     <span className="tabular-nums">{formatDateShort(item.watchedAt)}</span>
                     <button
                       type="button"
@@ -654,7 +654,7 @@ export default function HistoryPage() {
                 <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-[color:var(--surface2,var(--bg-card))] border border-[color:var(--line-2,var(--border-dim))] px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg backdrop-blur-md shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))]">
                   <Calendar size={12} className="text-[color:var(--red-hi,var(--color-1))] flex-shrink-0" />
                   <span className={`${monoLabel} text-ink-100 truncate`}>{dateLabel}</span>
-                  <span className="text-[10px] font-mono font-bold tabular-nums text-[color:var(--red-hi,var(--color-1))] bg-[color:var(--blob-1,var(--color-1))] px-1.5 py-0.5 rounded ml-0.5 flex-shrink-0">
+                  <span className="text-[10px] font-bold tabular-nums text-[color:var(--red-hi,var(--color-1))] bg-[color:var(--blob-1,var(--color-1))] px-1.5 py-0.5 rounded ml-0.5 flex-shrink-0">
                     {String(items.length).padStart(2, '0')}
                   </span>
                 </div>
@@ -734,17 +734,17 @@ export default function HistoryPage() {
                                 <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[color:var(--blob-2,var(--color-2))] text-azure-300 border border-azure-500/30`}>
                                   <Tv size={10} /> Dizi
                                 </span>
-                                <span className="text-[11px] font-bold text-azure-300 bg-[color:var(--surface,var(--bg-surface))] border border-azure-500/30 px-2 py-0.5 rounded-lg font-mono">
+                                <span className="text-[11px] font-bold text-azure-300 bg-[color:var(--surface,var(--bg-surface))] border border-azure-500/30 px-2 py-0.5 rounded-lg">
                                   Son: S{item.season} B{item.episode}
                                 </span>
                               </div>
 
-                              <h3 className="text-base sm:text-xl font-black text-ink-50 truncate mt-1 uppercase tracking-tight">
+                              <h3 className="text-base sm:text-xl font-bold text-ink-50 truncate mt-1 uppercase tracking-tight">
                                 {item.title}
                               </h3>
 
                               <div className="flex items-center gap-2 flex-wrap text-[11px] sm:text-xs text-ink-300 mt-1 font-medium">
-                                {seriesData?.year && <span className="font-mono tabular-nums">{seriesData.year}</span>}
+                                {seriesData?.year && <span className="tabular-nums">{seriesData.year}</span>}
                                 {item.genres && item.genres.length > 0 && (
                                   <>
                                     <span className="text-ink-600">·</span>
@@ -753,7 +753,7 @@ export default function HistoryPage() {
                                 )}
                               </div>
 
-                              <div className="text-[11px] text-ink-400 mt-1.5 flex items-center gap-1 font-medium font-mono">
+                              <div className="text-[11px] text-ink-400 mt-1.5 flex items-center gap-1 font-medium">
                                 <Clock size={11} className="text-[color:var(--red-hi,var(--color-1))]" />
                                 <span className="tabular-nums">{formatDateTime(item.watchedAt)}</span>
                               </div>
@@ -763,19 +763,19 @@ export default function HistoryPage() {
                           <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-2.5 sm:pt-0 border-t border-[color:var(--line,var(--border-dim))] sm:border-0 flex-shrink-0">
                             <div className="flex items-center gap-1.5">
                               {item.rating !== null && (
-                                <div className={`px-3 py-1 rounded-xl font-black text-sm sm:text-base shadow-lg flex items-center gap-1 font-mono tabular-nums ${ratingBgClass(item.rating)}`}>
+                                <div className={`px-3 py-1 rounded-xl font-black text-sm sm:text-base shadow-lg flex items-center gap-1 tabular-nums ${ratingBgClass(item.rating)}`}>
                                   <StarIcon size={13} className="fill-current" />
                                   <span>{item.rating}</span>
                                 </div>
                               )}
                               {avgEpRating !== null && eps.length > 1 && (
-                                <div className="text-[11px] font-bold bg-[color:var(--surface,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] text-ink-300 px-2 py-1 rounded-xl font-mono tabular-nums">
+                                <div className="text-[11px] font-bold bg-[color:var(--surface,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] text-ink-300 px-2 py-1 rounded-xl tabular-nums">
                                   Ort: <strong className="text-azure-400">{avgEpRating}</strong>
                                 </div>
                               )}
                             </div>
 
-                            <div className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-wider text-azure-300 bg-[color:var(--blob-2,var(--color-2))] hover:bg-azure-500/25 border border-azure-500/30 px-2.5 py-1 rounded-xl transition-colors font-mono">
+                            <div className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-wider text-azure-300 bg-[color:var(--blob-2,var(--color-2))] hover:bg-azure-500/25 border border-azure-500/30 px-2.5 py-1 rounded-xl transition-colors">
                               <span>{eps.length} Bölüm</span>
                               {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                             </div>
@@ -800,16 +800,16 @@ export default function HistoryPage() {
                                           className="text-xs sm:text-sm font-black text-ink-100 hover:text-[color:var(--red-hi,var(--color-1))] transition-colors text-left flex items-center gap-1.5"
                                         >
                                           <span className="w-2 h-2 rounded-full bg-[color:var(--red, var(--color-1, #e8384f))]" />
-                                          <span className="font-mono">{ep.season}. Sezon {ep.episode}. Bölüm</span>
+                                          <span>{ep.season}. Sezon {ep.episode}. Bölüm</span>
                                         </button>
-                                        <div className="text-[10px] text-ink-500 mt-0.5 flex items-center gap-1 font-mono tabular-nums">
+                                        <div className="text-[10px] text-ink-500 mt-0.5 flex items-center gap-1 tabular-nums">
                                           <Clock size={10} /> {formatDateTime(ep.watchedAt)}
                                         </div>
                                       </div>
 
                                       <div className="flex items-center gap-1.5 flex-shrink-0">
                                         {ep.rating !== null && (
-                                          <span className={`text-xs px-2 py-0.5 rounded-lg font-black font-mono tabular-nums ${ratingBgClass(ep.rating)}`}>
+                                          <span className={`text-xs px-2 py-0.5 rounded-lg font-black tabular-nums ${ratingBgClass(ep.rating)}`}>
                                             ★ {ep.rating}
                                           </span>
                                         )}
@@ -825,7 +825,7 @@ export default function HistoryPage() {
                                     {ep.reviewTags && ep.reviewTags.length > 0 && (
                                       <div className="flex flex-wrap gap-1">
                                         {ep.reviewTags.map((t) => (
-                                          <span key={t} className="text-[10px] font-bold uppercase tracking-wider bg-[color:var(--blob-2,var(--color-2))] text-azure-300 border border-azure-500/30 px-2 py-0.5 rounded-md font-mono">
+                                          <span key={t} className="text-[10px] font-bold uppercase tracking-wider bg-[color:var(--blob-2,var(--color-2))] text-azure-300 border border-azure-500/30 px-2 py-0.5 rounded-md">
                                             {t}
                                           </span>
                                         ))}
@@ -919,13 +919,13 @@ function StatCell({
         {icon}
       </div>
       <div className="min-w-0">
-        <div className="font-mono text-lg sm:text-xl font-black text-ink-50 leading-none tabular-nums">
+        <div className="text-lg sm:text-xl font-black text-ink-50 leading-none tabular-nums">
           {value}
           {suffix && <span className="text-xs font-bold ml-1">{suffix}</span>}
         </div>
         <div className={`${monoLabel} text-ink-400 mt-1 truncate`}>{label}</div>
       </div>
-      <span className="absolute right-0 bottom-[-6px] font-mono font-black text-4xl text-[color:var(--ink,var(--text-main))] opacity-[0.04] select-none pointer-events-none">
+      <span className="absolute right-0 bottom-[-6px] font-black text-4xl text-[color:var(--ink,var(--text-main))] opacity-[0.04] select-none pointer-events-none">
         {value}
       </span>
     </div>
@@ -957,7 +957,7 @@ function ViewTab({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all truncate font-mono ${
+      className={`flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all truncate ${
         active ? activeCls : idleCls
       }`}
     >
@@ -981,7 +981,7 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1 px-2.5 py-1 min-h-11 sm:min-h-0 text-xs font-bold uppercase tracking-wider rounded-lg transition-all font-mono ${
+      className={`flex items-center gap-1 px-2.5 py-1 min-h-11 sm:min-h-0 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
         active
           ? 'bg-[color:var(--surface2,var(--bg-card))] text-[color:var(--red-hi,var(--color-1))]'
           : 'text-ink-400 hover:text-ink-200'
@@ -1008,7 +1008,7 @@ function ToggleChip({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-1 px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all font-mono ${
+      className={`flex items-center gap-1 px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${
         active
           ? 'bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border-[color:var(--red, var(--color-1, #e8384f))]/40'
           : 'bg-[color:var(--surface,var(--bg-surface))] text-ink-400 border-[color:var(--line-2,var(--border-dim))] hover:text-ink-200'
@@ -1034,7 +1034,7 @@ function SortChip({
   return (
     <button
       onClick={onClick}
-      className={`px-2.5 py-1 min-h-11 sm:min-h-0 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-1 font-mono ${
+      className={`px-2.5 py-1 min-h-11 sm:min-h-0 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-1 ${
         active ? 'bg-[color:var(--surface2,var(--bg-card))] text-ink-50 shadow-sm' : 'text-ink-400 hover:text-ink-200'
       }`}
     >
@@ -1116,11 +1116,11 @@ function MovieHistoryCard({
             </button>
 
             <div className="text-[11px] sm:text-xs text-ink-300 mt-1 flex items-center gap-1.5 flex-wrap font-medium">
-              {(movieData?.year || item.year) && <span className="font-mono tabular-nums">{movieData?.year || item.year}</span>}
+              {(movieData?.year || item.year) && <span className="tabular-nums">{movieData?.year || item.year}</span>}
               {movieData?.runtime && (
                 <>
                   <span className="text-ink-600">·</span>
-                  <span className="font-mono tabular-nums">{movieData.runtime} dk</span>
+                  <span className="tabular-nums">{movieData.runtime} dk</span>
                 </>
               )}
               {item.genres && item.genres.length > 0 && (
@@ -1131,7 +1131,7 @@ function MovieHistoryCard({
               )}
             </div>
 
-            <div className="text-[11px] text-ink-400 mt-1.5 flex items-center gap-1 font-medium font-mono">
+            <div className="text-[11px] text-ink-400 mt-1.5 flex items-center gap-1 font-medium">
               {isPast ? (
                 <>
                   <History size={11} className="text-violet-400" />
@@ -1148,7 +1148,7 @@ function MovieHistoryCard({
             {hasTags && (
               <div className="mt-2 flex flex-wrap items-center gap-1">
                 {item.reviewTags!.map((tag) => (
-                  <span key={tag} className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30 px-2 py-0.5 rounded-lg font-mono">
+                  <span key={tag} className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30 px-2 py-0.5 rounded-lg">
                     {tag}
                   </span>
                 ))}
@@ -1160,7 +1160,7 @@ function MovieHistoryCard({
                 {Object.entries(item.detailedRating!).map(([critId, score]) => {
                   const critName = criteriaList.find((c) => c.id === critId)?.name || critId;
                   return (
-                    <span key={critId} className="text-[10px] font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] text-ink-200 px-2 py-0.5 rounded-lg border border-[color:var(--line-2,var(--border-dim))] font-mono">
+                    <span key={critId} className="text-[10px] font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] text-ink-200 px-2 py-0.5 rounded-lg border border-[color:var(--line-2,var(--border-dim))]">
                       {critName}: <strong className="text-[color:var(--red-hi,var(--color-1))] tabular-nums">{score}</strong>
                     </span>
                   );
@@ -1186,7 +1186,7 @@ function MovieHistoryCard({
 
         <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-2.5 sm:pt-0 border-t border-[color:var(--line,var(--border-dim))] sm:border-0 flex-shrink-0">
           {item.rating !== null && (
-            <div className={`px-3 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg flex items-center gap-1 font-mono tabular-nums ${ratingBgClass(item.rating)}`}>
+            <div className={`px-3 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg flex items-center gap-1 tabular-nums ${ratingBgClass(item.rating)}`}>
               <StarIcon size={15} className="fill-current" />
               <span>{item.rating}</span>
             </div>
@@ -1196,14 +1196,14 @@ function MovieHistoryCard({
             <button
               type="button"
               onClick={onSelectDetail}
-              className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] text-ink-300 hover:text-white px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-colors font-mono"
+              className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] text-ink-300 hover:text-white px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-colors"
             >
               <Eye size={13} /> <span>Kart</span>
             </button>
             <button
               type="button"
               onClick={onEdit}
-              className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] text-ink-300 hover:text-[color:var(--red-hi,var(--color-1))] px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-colors font-mono"
+              className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] text-ink-300 hover:text-[color:var(--red-hi,var(--color-1))] px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-colors"
             >
               <Edit2 size={13} /> <span>Düzenle</span>
             </button>

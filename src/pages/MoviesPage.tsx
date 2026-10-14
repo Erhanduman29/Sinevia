@@ -490,7 +490,7 @@ export default function MoviesPage() {
     <div className="space-y-4 sm:space-y-5 mpx-root">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl sm:text-2xl font-bold text-ink-100 flex items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
             <div className="mpx-tile">
               <Projector size={20} />
             </div>
@@ -563,8 +563,8 @@ export default function MoviesPage() {
                   <span className="text-white truncate">• {activeTimerMovie.title}</span>
                 </div>
                 <div className="text-[11px] text-ink-300 mt-0.5 flex flex-wrap items-center gap-x-2">
-                  <span className="mpx-mono">Kalan: <strong className="text-emerald-300 font-mono">{info.formattedRemaining}</strong></span>
-                  <span className="mpx-mono">• Geçen: <strong>{info.elapsedMins}/{info.maxMins} dk</strong></span>
+                  <span className="mpx-mono font-semibold">Kalan: <strong className="text-emerald-300 tabular-nums">{info.formattedRemaining}</strong></span>
+                  <span className="mpx-mono font-semibold">• Geçen: <strong>{info.elapsedMins}/{info.maxMins} dk</strong></span>
                 </div>
               </div>
             </div>
@@ -1074,11 +1074,11 @@ export default function MoviesPage() {
           <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-md shadow-2xl p-4 sm:p-5 space-y-4 overflow-y-auto max-h-[85dvh]">
             <div className="flex items-center justify-between border-b border-ink-800 pb-3">
               <div className="min-w-0 pr-2">
-                <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <h3 className="text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
                   <FolderPlus size={16} className="text-gold-400 flex-shrink-0" />
                   <span className="truncate">Koleksiyona Ata</span>
                 </h3>
-                <p className="mpx-mono text-[11px] text-ink-400 truncate mt-0.5">{collectionTargetMovie.title}</p>
+                <p className="mpx-mono font-semibold text-[11px] text-ink-400 truncate mt-0.5">{collectionTargetMovie.title}</p>
               </div>
               <button onClick={() => setCollectionTargetMovie(null)} className="mpx-ibtn"><X size={17} /></button>
             </div>
@@ -1139,7 +1139,7 @@ export default function MoviesPage() {
             <div className="mpx-modal-bar p-4 flex items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-8 h-8 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0"><Send size={15} /></div>
-                <h2 className="text-sm font-black text-white truncate">Arkadaşına Film Tavsiyesi Gönder</h2>
+                <h2 className="text-sm font-extrabold uppercase tracking-tight text-white truncate">Arkadaşına Film Tavsiyesi Gönder</h2>
               </div>
               <button onClick={() => setShowSendModal(false)} className="mpx-ibtn shrink-0"><X size={17} /></button>
             </div>
@@ -1271,7 +1271,7 @@ export default function MoviesPage() {
             <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-4xl flex flex-col max-h-[88svh] animate-fade-in-up">
               <div className="mpx-modal-bar p-3.5 sm:p-4 flex items-center justify-between shrink-0">
                 <div className="min-w-0 pr-2">
-                  <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
                     {isTargetPast ? <History size={16} className="text-violet-400 flex-shrink-0" /> : <Boxes size={16} className="text-gold-400 flex-shrink-0" />}
                     <span className="truncate">{targetColName} İçin Çoklu Seç</span>
                   </h3>
@@ -1424,7 +1424,7 @@ export default function MoviesPage() {
             <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-4xl flex flex-col max-h-[88svh] animate-fade-in-up">
               <div className="mpx-modal-bar p-3.5 sm:p-4 flex items-center justify-between shrink-0">
                 <div className="min-w-0 pr-2">
-                  <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
                     <ArrowRightLeft size={16} className="text-amber-400 flex-shrink-0" />
                     <span className="truncate">Eskiden İzlenenler'den Toplu Taşı / Çıkar</span>
                   </h3>
@@ -1759,7 +1759,7 @@ function MovieRow({
             )}
           </div>
 
-          <div className="mpx-mono flex items-center gap-2 flex-wrap text-[10.5px] sm:text-[11px] text-ink-400 mb-1.5 md:mb-1">
+          <div className="mpx-mono font-semibold flex items-center gap-2 flex-wrap text-[10.5px] sm:text-[11px] text-ink-400 mb-1.5 md:mb-1">
             {movie.year && <span className="flex items-center gap-1"><Calendar size={10} /> {movie.year}</span>}
             {movie.runtime && <span className="flex items-center gap-1"><Clock size={10} /> {movie.runtime} dk</span>}
             {movie.watched && !movie.isPastWatch && movie.actualRuntime && movie.runtime && movie.actualRuntime < movie.runtime && (
@@ -1776,7 +1776,7 @@ function MovieRow({
               <div className="flex items-center gap-1 mr-1">
                 <span className={`mpx-rate ${ratingBgClass(movie.rating)}`}>{movie.rating}</span>
                 {!movie.isPastWatch && movie.watchedAt && (
-                  <span className="mpx-mono text-[9.5px] text-ink-500 hidden sm:inline">{formatDateShort(movie.watchedAt)}</span>
+                  <span className="mpx-mono font-semibold text-[9.5px] text-ink-500 hidden sm:inline">{formatDateShort(movie.watchedAt)}</span>
                 )}
               </div>
             )}
@@ -1828,7 +1828,7 @@ function MovieRow({
               {timerInfo ? (
                 <div className="mpx-timerpill w-full md:w-auto text-emerald-300">
                   <Timer size={11} className={timerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-emerald-400'} />
-                  <span className="font-mono">{timerInfo.formattedRemaining}</span>
+                  <span className="tabular-nums">{timerInfo.formattedRemaining}</span>
                   <button type="button" onClick={() => onTogglePause(movie.id)} title={timerInfo.isPaused ? 'Devam Et' : 'Duraklat'} className="mpx-ibtn text-amber-300 hover:text-white">
                     {timerInfo.isPaused ? <Play size={10} className="fill-current" /> : <Pause size={10} />}
                   </button>
