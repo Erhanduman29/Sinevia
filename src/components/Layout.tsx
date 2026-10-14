@@ -68,6 +68,19 @@ const activePillStyle: React.CSSProperties = {
     '0 6px 22px -8px color-mix(in srgb, var(--color-1) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.14)',
 };
 
+/** AKTİF (vurgu tonlu/kırmızı) pill üzerindeki YAZI → PARLAK BEYAZ.
+ *  Kural (kullanıcı): kırmızı zemin + sarı yazı yan yana GELMEZ —
+ *  text-gold-400 yerine --text-main zinciri (varsayılan premium temada
+ *  #f4f4f2 parlak beyaz; açık temalarda tema metin rengi; plain-dark'ta beyaz).
+ *  --on-color-1 BİLEREK kullanılmadı: o, DOLU vurgu butonu üzerindeki yazı
+ *  rengidir ve çoğu temada koyudur (#0a0a0e) — "parlak beyaz" isteğiyle ters.
+ *  bg-gold-500/20 (altın yıkama) inline backgroundColor ile nötrlenir; sınıf
+ *  metni DEĞİŞMEZ (layout testleri o stringi birebir sayar). */
+const ACTIVE_PILL_TEXT: React.CSSProperties = {
+  color: 'var(--text-main, #f4f4f2)',
+  backgroundColor: 'transparent',
+};
+
 /** Logodaki "VIA" gibi aksiyon metni: tema vurgu gradyanı + clip-text. */
 const accentTextStyle: React.CSSProperties = {
   backgroundImage: 'linear-gradient(135deg, var(--color-2), var(--color-1))',
@@ -1168,7 +1181,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                     ? 'bg-gold-500/20 text-gold-400 border'
                     : 'text-ink-400 hover:bg-ink-800/50 hover:text-white hover:translate-x-[3px] border border-transparent'
                 }`}
-                style={isActive ? activePillStyle : undefined}
+                style={isActive ? { ...activePillStyle, ...ACTIVE_PILL_TEXT } : undefined}
               >
                 <item.icon size={17} className={`transition-transform duration-300 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
                 <span>{item.label}</span>
@@ -1179,12 +1192,13 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                     className="ml-auto inline-flex items-center px-1.5 py-[3px] rounded-md text-[10px] font-bold leading-none"
                     style={{
                       fontFamily: MONO,
-                      color: isActive ? 'var(--color-2, #f5b942)' : 'var(--muted, #8a8a94)',
+                      // AKTİF pill kırmızı tonlu → rozet de beyaz (kırmızı+sarı yok).
+                      color: isActive ? 'var(--text-main, #f4f4f2)' : 'var(--muted, #8a8a94)',
                       background: isActive
-                        ? 'color-mix(in srgb, var(--color-2, #f5b942) 16%, transparent)'
+                        ? 'color-mix(in srgb, var(--text-main, #f4f4f2) 12%, transparent)'
                         : 'var(--surface, rgba(255,255,255,.05))',
                       border: `1px solid ${isActive
-                        ? 'color-mix(in srgb, var(--color-2, #f5b942) 34%, transparent)'
+                        ? 'color-mix(in srgb, var(--text-main, #f4f4f2) 30%, transparent)'
                         : 'var(--line, var(--border-dim, rgba(255,255,255,.10)))'}`,
                     }}
                   >
@@ -1238,7 +1252,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                 ? 'bg-gold-500/20 text-gold-400 border'
                 : 'text-ink-400 hover:bg-ink-800/50 hover:text-white hover:translate-x-[3px] border border-transparent'
             }`}
-            style={activeTab === 'settings' ? activePillStyle : undefined}
+            style={activeTab === 'settings' ? { ...activePillStyle, ...ACTIVE_PILL_TEXT } : undefined}
           >
             <Settings size={17} className={`transition-transform duration-300 shrink-0 ${activeTab === 'settings' ? 'scale-110' : 'group-hover:scale-110'}`} />
             <span>Ayarlar</span>
