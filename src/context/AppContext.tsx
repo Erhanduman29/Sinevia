@@ -865,7 +865,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         let parsedData: ExtendedAppData = { ...defaultData(), ...parsed, collections: migrated.collections, movies: migrated.movies, achievements: createInitialAchievements(parsed.achievements) };
         if (!parsedData.agentId) parsedData.agentId = generateAgentId(); if (!parsedData.nickname) parsedData.nickname = 'Yeni Üye'; if (!parsedData.recoveryKey) parsedData.recoveryKey = generateRecoveryKey();
         if (parsedData.aiChatHistory) parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= Date.now() - 3 * 86400000);
-        if (!parsedData.criteria) parsedData.criteria = defaultData().criteria; if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS; if (!parsedData.theme) parsedData.theme = 'premium-dark';
+        if (!parsedData.criteria) parsedData.criteria = defaultData().criteria; if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS; if (!parsedData.theme || parsedData.theme === 'default') parsedData.theme = 'premium-dark';
         if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) parsedData.weeklyPlan = [];
         if (parsedData.notificationsEnabled === undefined) parsedData.notificationsEnabled = false;
         if (parsedData.notifyMessages === undefined) parsedData.notifyMessages = true;
