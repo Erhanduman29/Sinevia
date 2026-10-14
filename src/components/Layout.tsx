@@ -455,10 +455,17 @@ function GlobalSearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
 
-  const groups: SearchGroup[] = query.trim()
-    ? buildSearchGroups(query, data)
-    : [{ id: 'pages', label: 'Bölümler', icon: LayoutDashboard, entries: pageEntries() }];
-  const flat: SearchEntry[] = groups.flatMap((g) => g.entries);
+  // Sonuçlar yalnızca (query, data) değişince yeniden hesaplanır: buildSearchGroups
+  // her tuş vuruşunda tüm kütüphaneyi normalize+AND ile taradığı için memo şart.
+  // (Sadece memoization — DOM yapısı ve görünür davranış birebir aynı.)
+  const groups: SearchGroup[] = useMemo(
+    () =>
+      query.trim()
+        ? buildSearchGroups(query, data)
+        : [{ id: 'pages', label: 'Bölümler', icon: LayoutDashboard, entries: pageEntries() }],
+    [query, data]
+  );
+  const flat: SearchEntry[] = useMemo(() => groups.flatMap((g) => g.entries), [groups]);
 
   // Açılınca input'a odaklan; kapanınca önceki odağı geri ver.
   useEffect(() => {
