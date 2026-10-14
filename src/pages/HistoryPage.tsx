@@ -388,20 +388,20 @@ export default function HistoryPage() {
           {/* AÇILIR/KAPANIR ARAMA VE FİLTRE MERKEZİ */}
           {isFilterPanelOpen && (
             <div className="bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] rounded-2xl p-3 sm:p-4 space-y-3 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] animate-fade-in">
-              <div className="relative">
-                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
+              <div className="relative group">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--muted,#9a9a96)] group-focus-within:text-[color:var(--red,var(--color-1,#e8384f))] transition-colors" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Yapım adı, başlık, tür veya inceleme notu ara..."
-                  className="w-full bg-[color:var(--surface,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] rounded-xl pl-9 pr-8 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-[color:var(--red, var(--color-1, #e8384f))]/60 focus:shadow-[0_0_0_3px_rgba(232,56,79,0.16)] transition-all"
+                  className="w-full h-11 bg-[color:var(--bg-surface,#12121a)] border border-[color:var(--line,var(--border-dim))] rounded-xl pl-9 pr-8 text-xs sm:text-sm text-[color:var(--text-main,#f4f4f2)] placeholder:text-[color:var(--muted,#9a9a96)] focus:outline-none focus:border-[color:var(--red,var(--color-1,#e8384f))] focus:ring-1 focus:ring-[color:var(--red,var(--color-1,#e8384f))] transition-all"
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => setSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white p-1 min-h-9 min-w-9 sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[color:var(--muted,#9a9a96)] hover:text-[color:var(--red,var(--color-1,#e8384f))] p-1 min-h-9 min-w-9 sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                   >
                     <X size={14} />
                   </button>

@@ -748,8 +748,8 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
           {!selectedMovie ? (
             <>
               <div className="relative group">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500 group-focus-within:text-gold-400 transition-colors" />
-                <input type="text" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="İzlenecek filmlerinde ara..." className="w-full bg-ink-950 border border-ink-800 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 text-xs sm:text-sm text-white placeholder-ink-500 focus:outline-none focus:border-gold-500/50 focus:ring-1 focus:ring-[var(--color-1)] transition-all shadow-inner" />
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--muted,#9a9a96)] group-focus-within:text-[color:var(--red,var(--color-1,#e8384f))] transition-colors" />
+                <input type="text" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="İzlenecek filmlerinde ara..." className="w-full h-11 bg-[color:var(--bg-surface,#12121a)] border border-[color:var(--line,var(--border-dim))] rounded-xl pl-9 pr-3 text-xs sm:text-sm text-[color:var(--text-main,#f4f4f2)] placeholder:text-[color:var(--muted,#9a9a96)] focus:outline-none focus:border-[color:var(--red,var(--color-1,#e8384f))] focus:ring-1 focus:ring-[color:var(--red,var(--color-1,#e8384f))] transition-all" />
               </div>
 
               <div className="flex gap-2">
