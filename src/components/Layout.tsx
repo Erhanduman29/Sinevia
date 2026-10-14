@@ -10,6 +10,8 @@ import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import PickModal from './PickModal';
 import BulkAddModal from './BulkAddModal';
 import RatingModal from './RatingModal';
+import MediaDetailModal from './MediaDetailModal';
+import type { DetailModalTarget } from './MediaDetailModal';
 import { getNextUnwatchedEpisode, normalize } from '../lib/utils';
 import { useTutorial } from '../context/TutorialContext';
 import Sini from '../tutorial/Sini';
@@ -148,6 +150,10 @@ interface SearchEntry {
   sub?: string;
   icon: LucideIcon;
   tab: TabId;
+  /** Film/dizi sonucu ise doğrudan kartı açar (sayfaya değil). */
+  media?: { type: 'movie' | 'series'; id: string };
+  /** Sonuç satırındaki poster küçük görseli (varsa). */
+  poster?: string;
 }
 
 interface SearchGroup {
@@ -186,18 +192,22 @@ function trLower(value: string): string {
   return value.toLocaleLowerCase('tr-TR');
 }
 
-/** Sorgudaki HER kelimenin (boşluğa göre bölünmüş, AND) metinde geçmesini sağlar. */
+/** Sorgudaki HER kelimenin (boşluğa göre bölünmüş, AND) metinde geçmesini sağlar.
+ *  normalize(): Türkçe karakter → ascii + tr-TR küçük harf + boşluk sadeleştirme;
+ *  hem sorgu hem metin aynı işlemden geçtiği için 'SAÇMA'/'sacma' gibi
+ *  yazım farkları ve İ/ı sorunları eşleşmeyi bozmaz. */
 function matchesAllTokens(query: string, haystack: string): boolean {
-  const hay = trLower(haystack);
-  const tokens = trLower(query).split(/\s+/).filter(Boolean);
+  const hay = normalize(haystack);
+  const tokens = normalize(query).split(/\s+/).filter(Boolean);
   if (!tokens.length) return false;
   return tokens.every((t) => hay.includes(t));
 }
 
 /** Sorguya göre gruplu arama sonuçlarını üretir.
- *  Her kelime ayrı ayrı aranır ("her kelimeyi alabilmeliyiz") ve
- *  sayfalardaki HER alan taranır: başlık, yıl, tür, kadro, yönetmen/yaratıcı,
- *  özet, not, süre, koleksiyon, etiketler, bölüm adları, açıklama vb. */
+ *  Her kelime ayrı ayrı AND olarak aranır ("her kelimeyi alabilmeliyiz") ve
+ *  SADECE sayfalarda GÖRÜNEN alanlar taranır: başlık, yıl, tür, kadro,
+ *  yönetmen/yaratıcı, not, etiketler, koleksiyon adı, bölüm adları.
+ *  Arkaplan verisi (overview/özet, runtime/süre) ARANMAZ. */
 function buildSearchGroups(query: string, data: any): SearchGroup[] {
   const q = query.trim();
   const groups: SearchGroup[] = [];
@@ -209,16 +219,24 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
   const collections: any[] = Array.isArray(data?.collections) ? data.collections : [];
   const colName = (id?: string | null) =>
     (id && collections.find((c) => c.id === id)?.name) || '';
-  const join = (arr: unknown) => (Array.isArray(arr) ? arr.join(' ') : '');
+  /** Arama yığını üretici: dizi → boşlukla birleşim, skaler (başlık/yıl/not)
+   *  → String, boş → ''. Böylece ayrı bir .concat() bloğuna gerek kalmaz. */
+  const join = (value: unknown) =>
+    Array.isArray(value)
+      ? value.join(' ')
+      : value === null || value === undefined
+        ? ''
+        : String(value);
 
+  // FİLM: yalnızca sayfalarda GÖRÜNEN alanlar aranır.
+  // (overview/summary ve runtime arama dışındadır — kullanıcı kuralı:
+  //  "sayfalarda gözüken her şeyi almalı, arka planda tutulanı almamalı".)
   const movieHits: SearchEntry[] = movies
     .filter((m) =>
       matchesAllTokens(
         q,
-        [m.title, m.year, m.genres, m.cast, m.directors, m.overview, m.note,
-          m.runtime, colName(m.collectionId), m.reviewTags].map(join).concat(
-          [m.title, m.year, m.overview, m.note, m.runtime, colName(m.collectionId)]
-        ).join(' ')
+        [m.title, m.year, m.genres, m.cast, m.directors, m.note,
+          m.reviewTags, colName(m.collectionId)].map(join).join(' ')
       )
     )
     .slice(0, 6)
@@ -228,17 +246,18 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
       sub: [m.year, Array.isArray(m.genres) ? m.genres.join(', ') : ''].filter(Boolean).join(' · '),
       icon: Film,
       tab: 'movies' as TabId,
+      media: { type: 'movie' as const, id: m.id },
+      poster: m.posterUrl,
     }));
   if (movieHits.length) groups.push({ id: 'movies', label: 'Filmler', icon: Film, entries: movieHits });
 
+  // DİZİ: görünür alanlar (özet hariç) + bölüm adları.
   const seriesHits: SearchEntry[] = series
     .filter((s) =>
       matchesAllTokens(
         q,
-        [s.title, s.year, s.genres, s.cast, s.creators, s.overview, s.note,
-          join((s.episodes || []).map((e: any) => e?.name || ''))].map(join).concat(
-          [s.title, s.year, s.overview, s.note]
-        ).join(' ')
+        [s.title, s.year, s.genres, s.cast, s.creators, s.note,
+          (s.episodes || []).map((e: any) => e?.name || '')].map(join).join(' ')
       )
     )
     .slice(0, 6)
@@ -248,6 +267,8 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
       sub: [s.year, Array.isArray(s.genres) ? s.genres.join(', ') : ''].filter(Boolean).join(' · '),
       icon: Tv,
       tab: 'series' as TabId,
+      media: { type: 'series' as const, id: s.id },
+      poster: s.posterUrl,
     }));
   if (seriesHits.length) groups.push({ id: 'series', label: 'Diziler', icon: Tv, entries: seriesHits });
 
@@ -272,9 +293,7 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     .filter((h) =>
       matchesAllTokens(
         q,
-        [h.title, h.year, h.note, h.reviewTags, h.season, h.episode].map(join).concat(
-          [h.title, h.year, h.note]
-        ).join(' ')
+        [h.title, h.year, h.note, h.reviewTags, h.season, h.episode].map(join).join(' ')
       )
     )
     .filter((h) => {
@@ -356,11 +375,14 @@ function GlobalSearch({
   open,
   onClose,
   onNavigate,
+  onSelectMedia,
   data,
 }: {
   open: boolean;
   onClose: () => void;
   onNavigate: (tab: TabId) => void;
+  /** Film/dizi sonucu seçildiğinde sayfaya değil KARTA gider. */
+  onSelectMedia: (m: { type: 'movie' | 'series'; id: string }) => void;
   data: any;
 }) {
   const [query, setQuery] = useState('');
@@ -413,6 +435,13 @@ function GlobalSearch({
 
   const select = (entry: SearchEntry | undefined) => {
     if (!entry) return;
+    // Film/dizi sonucu → sayfaya değil, doğrudan KARTA gider (onNavigate yok).
+    if (entry.media) {
+      onSelectMedia(entry.media);
+      onClose();
+      return;
+    }
+    // Kişi/koleksiyon/geçmiş/başarımlar/sayfa → eskisi gibi hedef sayfaya.
     onNavigate(entry.tab);
     onClose();
   };
@@ -452,15 +481,15 @@ function GlobalSearch({
           style={{ background: `linear-gradient(90deg, transparent, ${SEARCH_ACCENT}, transparent)` }}
         />
 
-        {/* Arama girişi */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b" style={{ borderColor: 'var(--line, var(--border-dim))' }}>
+        {/* Arama girişi — premium: kırmızı vurgulu lup + geniş satır */}
+        <div className="flex items-center gap-3 px-4 py-4 border-b" style={{ borderColor: 'var(--line, var(--border-dim))' }}>
           <Search size={18} className="shrink-0" style={{ color: SEARCH_ACCENT }} />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Film, dizi, geçmiş, kişi ara…"
+            placeholder="Film, dizi, kişi veya sayfa ara…"
             aria-label="Global arama girişi"
             className="flex-1 bg-transparent border-0 outline-none text-[15px] text-ink-50 placeholder:text-ink-500"
           />
@@ -487,7 +516,16 @@ function GlobalSearch({
                   style={{ color: 'var(--muted, #8a8a94)' }}
                 >
                   <group.icon size={12} style={{ color: SEARCH_ACCENT }} />
-                  {group.label}
+                  <span className="shrink-0">{group.label}</span>
+                  {/* İnce ayraç: grup etiketini sonuç satırlarından ayırır */}
+                  <span
+                    aria-hidden
+                    className="flex-1 h-px"
+                    style={{
+                      background:
+                        'linear-gradient(90deg, var(--line, var(--border-dim, rgba(255,255,255,.12))), transparent)',
+                    }}
+                  />
                 </div>
                 {group.entries.map((entry) => {
                   const index = flat.indexOf(entry);
@@ -498,25 +536,57 @@ function GlobalSearch({
                       type="button"
                       onMouseEnter={() => setActive(index)}
                       onClick={() => select(entry)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
+                      className="relative w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
                       style={
                         isActive
-                          ? { backgroundImage: `color-mix(in srgb, ${SEARCH_ACCENT} 15%, transparent)` }
+                          ? { backgroundImage: `color-mix(in srgb, ${SEARCH_ACCENT} 12%, transparent)` }
                           : undefined
                       }
                     >
-                      <span
-                        className="w-8 h-8 rounded-lg grid place-items-center shrink-0 border"
-                        style={{
-                          borderColor: isActive ? SEARCH_ACCENT : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
-                          color: isActive ? SEARCH_ACCENT : 'var(--muted, #8a8a94)',
-                        }}
-                      >
-                        <entry.icon size={15} />
-                      </span>
+                      {/* Aktif satır: sol kırmızı rail */}
+                      {isActive && (
+                        <span
+                          aria-hidden
+                          className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full"
+                          style={{ background: SEARCH_ACCENT, boxShadow: `0 0 10px ${SEARCH_ACCENT}` }}
+                        />
+                      )}
+                      {/* Film/dizi sonuçlarında poster küçük görseli; yoksa ikon kutusu */}
+                      {entry.poster ? (
+                        <img
+                          src={entry.poster}
+                          alt=""
+                          loading="lazy"
+                          className="w-7 h-10 rounded-md object-cover shrink-0 border"
+                          style={{
+                            borderColor: isActive
+                              ? SEARCH_ACCENT
+                              : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className="w-8 h-8 rounded-lg grid place-items-center shrink-0 border"
+                          style={{
+                            borderColor: isActive
+                              ? SEARCH_ACCENT
+                              : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
+                            color: isActive ? SEARCH_ACCENT : 'var(--muted, #8a8a94)',
+                          }}
+                        >
+                          <entry.icon size={15} />
+                        </span>
+                      )}
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13.5px] font-semibold text-ink-100 truncate">{entry.label}</span>
-                        {entry.sub && <span className="block text-[11px] text-ink-500 truncate">{entry.sub}</span>}
+                        {entry.sub && (
+                          <span
+                            className="block text-[11px] truncate"
+                            style={{ color: 'var(--muted, #8a8a94)' }}
+                          >
+                            {entry.sub}
+                          </span>
+                        )}
                       </span>
                       {isActive && <ArrowRight size={14} className="shrink-0" style={{ color: SEARCH_ACCENT }} />}
                     </button>
@@ -582,6 +652,8 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   const [showWrapped, setShowWrapped] = useState(false);
   // Global arama katmanı.
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  // Aramadan seçilen film/dizi KARTI (sayfaya değil karta gider).
+  const [searchDetail, setSearchDetail] = useState<DetailModalTarget | null>(null);
   // Üst bardaki Katalog / Ne İzlesem butonları ana sayfadakiyle AYNI pencereleri açar.
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
   const [showPick, setShowPick] = useState(false);
@@ -596,6 +668,17 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   useEffect(() => {
     setSearchCombo(describeCombo(loadBindings().focusSearch));
   }, []);
+
+  /** Global aramadan film/dizi seçilince: sayfaya değil, MEDYA KARTINA gider. */
+  const handleSearchSelectMedia = ({ type, id }: { type: 'movie' | 'series'; id: string }) => {
+    if (type === 'movie') {
+      const movie = (profileData.movies || []).find((m: any) => m?.id === id);
+      if (movie) setSearchDetail({ type: 'movie', data: movie });
+    } else {
+      const serie = (profileData.series || []).find((s: any) => s?.id === id);
+      if (serie) setSearchDetail({ type: 'series', data: serie });
+    }
+  };
 
   // Akıllı Alt Bar (Auto-Hide) State ve Referansları
   const [isNavVisible, setIsNavVisible] = useState(true);
@@ -1117,8 +1200,13 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         open={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onNavigate={onTabChange}
+        onSelectMedia={handleSearchSelectMedia}
         data={profileData}
       />
+      {/* Aramadan seçilen film/dizi kartı (arama kapandığı için katman çakışması olmaz) */}
+      {searchDetail && (
+        <MediaDetailModal target={searchDetail} onClose={() => setSearchDetail(null)} />
+      )}
 
       {/* ÜST BAR MODALLARI — ana sayfaydın AYNI pencereler */}
       {showBulkAdd && <BulkAddModal initialTab={showBulkAdd} onClose={() => setShowBulkAdd(false)} />}
