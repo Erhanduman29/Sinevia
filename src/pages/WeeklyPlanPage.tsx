@@ -126,10 +126,27 @@ export default function WeeklyPlanPage() {
 
   const activeTimerMovie = useMemo(() => data.movies.find((m) => !m.watched && m.startedAt) || null, [data.movies]);
 
+  // Sayaç tick'i: yalnız aktif geri sayım varken 1sn'de bir (timer barı birebir aynı).
+  // Boşta: yalnız dakika sınırında tazele — geçmiş-saat vurgusu (currentTimeStr) doğru kalsın,
+  // ama 60 render/dakika yerine 1 render/dakika.
   useEffect(() => {
-    const interval = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+    if (activeTimerMovie) {
+      setNowMs(Date.now());
+      const interval = setInterval(() => setNowMs(Date.now()), 1000);
+      return () => clearInterval(interval);
+    }
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      timeout = setTimeout(() => {
+        setNowMs(Date.now());
+        schedule();
+      }, 60000 - (Date.now() % 60000));
+    };
+    schedule();
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [activeTimerMovie]);
 
   const windowDays = useMemo(() => Array.from({ length: WINDOW_SIZE }, (_, i) => addDays(today, i - 1)), [today]);
   const windowStartStr = toDateStr(windowDays[0]);
