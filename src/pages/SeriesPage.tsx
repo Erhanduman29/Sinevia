@@ -927,13 +927,13 @@ export default function SeriesPage() {
   const totalOngoing = data.series.length - totalCompleted;
 
   return (
-    <div className="svp-root space-y-4 sm:space-y-5">
+    <div className="svp-root space-y-3 sm:space-y-5 overflow-x-clip sm:overflow-x-visible">
       <style>{SERIES_PREMIUM_CSS}</style>
 
-      {/* ÜST BAŞLIK & MOBİL UYUMLU AKSİYON BARI */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      {/* ÜST BAŞLIK & AKSİYON BARI (mobil: sm: sabitlemeleri ≥768'i birebir korur) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-2.5">
         <div className="flex items-center justify-between">
-          <h1 className="svp-h1 text-xl sm:text-2xl flex items-center gap-2.5">
+          <h1 className="svp-h1 text-lg sm:text-2xl flex items-center gap-2 sm:gap-2.5">
             <div className="svp-tile">
               <Tv size={20} />
             </div>
@@ -945,28 +945,28 @@ export default function SeriesPage() {
           {/* ARKADAŞA TAVSİYE (TEKLİ & TOPLU) */}
           <button
             onClick={() => openSendModal()}
-            className="svp-btn-s flex-1 sm:flex-none px-2.5 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
+            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-2.5 sm:px-3.5 py-2 sm:py-2.5 min-h-10 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
             title="Arkadaşına tekli veya çoklu dizi listesi öner"
           >
             <Send size={15} className="flex-shrink-0 svp-ic-a2" />
-            <span className="truncate">Tavsiye Et</span>
+            <span className="truncate min-w-0">Tavsiye Et</span>
           </button>
 
           <button
             onClick={handleSyncTMDBSeries}
             disabled={isSyncing}
-            className="svp-btn-s flex-1 sm:flex-none px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
+            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-10 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
           >
             <RefreshCw size={15} className={`flex-shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span className="truncate">{isSyncing ? 'Taranıyor...' : 'Eksikleri Bul'}</span>
+            <span className="truncate min-w-0">{isSyncing ? 'Taranıyor...' : 'Eksikleri Bul'}</span>
           </button>
 
           <button
             onClick={() => setShowPick(true)}
-            className="svp-btn-s flex-1 sm:flex-none px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-11 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
+            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-10 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
           >
             <Shuffle size={15} className="flex-shrink-0" />
-            <span className="truncate">Ne İzlesem</span>
+            <span className="truncate min-w-0">Ne İzlesem</span>
           </button>
 
           <button
@@ -982,23 +982,23 @@ export default function SeriesPage() {
       {/* SEKMELER & TIKLANINCA AÇILAN ARAMA/FİLTRELEME BARI */}
       {data.series.length > 0 && (
         <div className="space-y-2.5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
             <div className="svp-chipbar">
               <button
                 onClick={() => setWatchedFilter(null)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 truncate ${watchedFilter === null ? 'svp-tab-on' : ''}`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${watchedFilter === null ? 'svp-tab-on' : ''}`}
               >
                 Tümü <span className="svp-tab-n">({data.series.length})</span>
               </button>
               <button
                 onClick={() => setWatchedFilter(false)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 truncate ${watchedFilter === false ? 'svp-tab-on' : ''}`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${watchedFilter === false ? 'svp-tab-on' : ''}`}
               >
                 İzlenecek <span className="svp-tab-n">({totalOngoing})</span>
               </button>
               <button
                 onClick={() => setWatchedFilter(true)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-11 sm:min-h-0 truncate ${watchedFilter === true ? 'svp-tab-on' : ''}`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${watchedFilter === true ? 'svp-tab-on' : ''}`}
               >
                 Bitenler <span className="svp-tab-n">({totalCompleted})</span>
               </button>
@@ -1008,12 +1008,12 @@ export default function SeriesPage() {
               <button
                 type="button"
                 onClick={() => setIsFilterPanelOpen((prev) => !prev)}
-                className={`svp-btn-ghost flex-1 sm:flex-none px-3.5 py-2 min-h-11 sm:min-h-0 ${
+                className={`svp-btn-ghost flex-1 sm:flex-none min-w-0 px-3 sm:px-3.5 py-2 min-h-10 sm:min-h-0 ${
                   isFilterPanelOpen || activeFilterCount > 0 ? 'svp-chip-on' : ''
                 }`}
               >
                 <SlidersHorizontal size={14} />
-                <span>Ara &amp; Filtrele</span>
+                <span className="truncate min-w-0">Ara &amp; Filtrele</span>
                 {activeFilterCount > 0 && (
                   <span className="svp-tab-n">
                     {activeFilterCount}
@@ -1027,7 +1027,7 @@ export default function SeriesPage() {
                   type="button"
                   onClick={resetAllFilters}
                   title="Filtreleri sıfırla"
-                  className="svp-x p-2 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
+                  className="svp-x p-2 min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
                 >
                   <X size={14} />
                 </button>
@@ -1058,7 +1058,7 @@ export default function SeriesPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
                 <div className="svp-mono flex items-center gap-1 mr-1 flex-shrink-0">
                   <Filter size={12} /> Sırala:
                 </div>
@@ -1083,7 +1083,7 @@ export default function SeriesPage() {
               </div>
 
               {allGenres.length > 0 && (
-                <div className="svp-divider flex sm:flex-wrap gap-1.5 items-center overflow-x-auto hide-scrollbar pt-2 border-t">
+                <div className="svp-divider flex flex-wrap sm:flex-wrap gap-1.5 items-center overflow-x-auto hide-scrollbar pt-2 border-t">
                   <button
                     onClick={clearGenres}
                     className={`svp-chip ${selectedGenres.size === 0 ? 'svp-chip-on' : ''}`}
@@ -1111,7 +1111,7 @@ export default function SeriesPage() {
       )}
 
       {data.series.length === 0 ? (
-        <div className="svp-empty text-center py-16 px-6">
+        <div className="svp-empty text-center py-10 px-4 sm:py-16 sm:px-6">
           <div className="svp-empty-tile mx-auto mb-4">
             <Tv size={32} />
           </div>
@@ -1119,7 +1119,7 @@ export default function SeriesPage() {
           <p className="text-sm mt-1">Dizi ekleyerek başla!</p>
         </div>
       ) : sortedSeries.length === 0 ? (
-        <div className="svp-empty text-center py-12 px-6">
+        <div className="svp-empty text-center py-8 px-4 sm:py-12 sm:px-6">
           <Tv size={40} className="mx-auto mb-3 opacity-40" />
           <p className="svp-mono">{watchedFilter === true ? 'Tamamen bitirdiğin bir dizi yok.' : watchedFilter === false ? 'Bölümleri kalan (izlenecek) dizi yok.' : 'Aramaya uygun dizi bulunamadı.'}</p>
         </div>
@@ -1184,9 +1184,9 @@ export default function SeriesPage() {
               <div key={s.id} className="svp-card overflow-hidden flex flex-col sm:flex-row flex-wrap">
                 <div
                   onClick={() => toggleSeries(s.id)}
-                  className="svp-card-main flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 w-full cursor-pointer"
+                  className="svp-card-main flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-2.5 sm:p-4 w-full cursor-pointer"
                 >
-                  <div className="flex items-center gap-2.5 sm:gap-3 w-full min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0">
                     {isExpanded ? <ChevronDown size={17} className="svp-ic-a2 flex-shrink-0" /> : <ChevronRight size={17} className="svp-ic-muted flex-shrink-0" />}
 
                     <button
@@ -1250,7 +1250,8 @@ export default function SeriesPage() {
                   </div>
                 </div>
 
-                <div className="svp-side flex sm:flex-col items-center sm:items-stretch justify-between sm:justify-center gap-2 px-3 py-3 sm:p-4 border-t sm:border-t-0 sm:border-l w-full sm:w-auto sm:min-w-[210px] shrink-0">
+                {/* mobilde kolon yığın (istatistik → ilerleme → aksiyonlar); sm: masaüstü satır düzenine sabit */}
+                <div className="svp-side flex flex-col sm:flex-col items-stretch sm:items-stretch justify-between sm:justify-center gap-2 px-2.5 py-2.5 sm:p-4 border-t sm:border-t-0 sm:border-l w-full sm:w-auto sm:min-w-[210px] shrink-0">
                   <div className="flex items-center justify-between sm:justify-start gap-2">
                     <span className="svp-mono">
                       <span className="svp-ic-a2">{watchedCount}</span>/{s.episodes.length} bölüm
@@ -1262,7 +1263,7 @@ export default function SeriesPage() {
 
                   {/* BÖLÜM İLERLEME ALANI — yüzde etiketi + ince bar + kademe + hover detay */}
                   <div
-                    className="svp-prog flex-1 min-w-[90px]"
+                    className="svp-prog flex-1 min-w-0 sm:min-w-[90px]"
                     role="progressbar"
                     aria-valuenow={progressPct}
                     aria-valuemin={0}
@@ -1298,14 +1299,14 @@ export default function SeriesPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-center sm:justify-start gap-1.5">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         openSendModal(s);
                       }}
                       title="Arkadaşına Tavsiye Et"
-                      className="svp-act svp-act-send p-2.5 min-h-11 min-w-11 sm:p-2 sm:min-h-0 sm:min-w-0"
+                      className="svp-act svp-act-send p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
                       <Send size={15} />
                     </button>
@@ -1315,7 +1316,7 @@ export default function SeriesPage() {
                         setEditTarget(s);
                       }}
                       title="Düzenle"
-                      className="svp-act p-2.5 min-h-11 min-w-11 sm:p-2 sm:min-h-0 sm:min-w-0"
+                      className="svp-act p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
                       <Edit2 size={15} />
                     </button>
@@ -1325,7 +1326,7 @@ export default function SeriesPage() {
                         setDeleteTarget(s);
                       }}
                       title="Sil"
-                      className="svp-act svp-act-del p-2.5 min-h-11 min-w-11 sm:p-2 sm:min-h-0 sm:min-w-0"
+                      className="svp-act svp-act-del p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -1335,20 +1336,20 @@ export default function SeriesPage() {
                 {isExpanded && (
                   <div className="svp-seasons w-full basis-full border-t">
                     {seasons.length === 0 ? (
-                      <div className="p-4 text-center svp-mono">Henüz bölüm eklenmedi.</div>
+                      <div className="p-3 sm:p-4 text-center svp-mono">Henüz bölüm eklenmedi.</div>
                     ) : (
                       seasons.map((season) => {
                         const eps = s.episodes.filter((e) => e.season === season).sort((a, b) => a.episode - b.episode);
                         const seasonAllWatched = eps.length > 0 && eps.every((e) => e.watched);
                         return (
-                          <div key={season} className="svp-season-block p-3 sm:p-4 border-b last:border-0">
-                            <div className="svp-season mb-2.5 flex items-center gap-2">
+                          <div key={season} className="svp-season-block p-2.5 sm:p-4 border-b last:border-0">
+                            <div className="svp-season mb-2 sm:mb-2.5 flex items-center gap-2">
                               {season}. Sezon
                               {seasonAllWatched && (
                                 <span className="svp-done-tag"><Check size={10} /> Tamamlandı</span>
                               )}
                             </div>
-                            <div className="grid grid-cols-5 xs:grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1.5">
+                            <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1.5">
                               {eps.map((ep) => {
                                 const canWatch = canWatchEpisode(s.id, ep.id);
                                 return (
@@ -1636,7 +1637,7 @@ function EpisodeBox({
       onMouseLeave={() => setShowActions(false)}
     >
       {displayRating !== null && (
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 pointer-events-none">
+        <div className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 pointer-events-none">
           <span
             className={`svp-rate font-bold px-1.5 py-0.5 rounded-full ${ratingBgClass(displayRating)} ${
               episode.watched ? '' : 'svp-rate-kept'
@@ -1668,7 +1669,7 @@ function EpisodeBox({
           else onRate();
         }}
         disabled={episode.watched ? false : !canWatch}
-        className={`svp-ep min-h-11 md:min-h-0 ${
+        className={`svp-ep min-h-10 sm:min-h-11 md:min-h-0 ${
           episode.watched ? 'svp-ep-done' : canWatch ? 'svp-ep-ready' : 'svp-ep-lock'
         }`}
       >
