@@ -362,14 +362,12 @@ body[data-theme='paper-light'] .mpx-root {
 }
 
 /* ---------- CHIP'LER ---------- */
+/* Çerçevesiz/zeminsiz düz bar (dizi listesi .svp-chipbar gibi) */
 .mpx-chipbar {
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--r);
-  background: var(--mpx-glass);
-  border: 1px solid var(--mpx-line2);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-main, #f4f4f2) 7%, transparent);
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
   overflow-x: auto;
 }
 
