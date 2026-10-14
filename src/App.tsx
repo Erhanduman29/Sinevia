@@ -128,6 +128,14 @@ function AppContent() {
     };
   }, []);
 
+  // Arka plan durgunluğu (onaylı): sekme gizlenince animasyonları duraklat
+  useEffect(() => {
+    const sync = () => document.body.classList.toggle('anim-paused', document.hidden);
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => document.removeEventListener('visibilitychange', sync);
+  }, []);
+
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'home' && <HomePage />}

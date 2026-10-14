@@ -1289,3 +1289,6 @@ body[data-theme="premium-dark"] #main-scroll {
   .py-10 { padding-top: 1.25rem; padding-bottom: 1.25rem; }
 }
 
+
+/* Arka plan durgunluðu (onaylý): sekme gizlenince animasyonlar duraklar */
+body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after { animation-play-state: paused !important; }

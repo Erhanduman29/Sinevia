@@ -1011,8 +1011,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     
-    const interval = setInterval(() => syncToStorage(), 3500); 
-    return () => clearInterval(interval);
+    const syncTimer = setTimeout(() => syncToStorage(), 3500);
+    return () => clearTimeout(syncTimer);
   }, [data]);
 
   // CANLI DİNLEYİCİ (REALTIME DOWNLOAD)
