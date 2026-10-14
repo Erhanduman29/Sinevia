@@ -4,7 +4,7 @@ import {
   Film, Tv, History, Trophy, Settings, BarChart3, Bot,
   Menu, X, LayoutDashboard, Sparkles, CalendarClock, Users,
   Cloud, CloudOff, RefreshCw, Search, Dices, ArrowRight, CornerDownLeft,
-  Target, Medal
+  Target, Medal, SearchX
 } from 'lucide-react';
 import WrappedModal from './WrappedModal';
 import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
@@ -138,7 +138,19 @@ const SEARCH_ACCENT = 'var(--red, var(--color-1, #e8384f))';
 /** Yumuşak vurgu tonları — panel çerçevesi kırmızı değil; renk yalnızca
  *  GERİ BİLDİRİM anında (odak / aktif satır) alçak opaklıkla belirir. */
 const SEARCH_ACCENT_SOFT = `color-mix(in srgb, ${SEARCH_ACCENT} 55%, transparent)`;
-const SEARCH_ACCENT_TINT = `color-mix(in srgb, ${SEARCH_ACCENT} 7%, transparent)`;
+/** Aktif satır zemini: sola ağırlıklı yumuşak vurgu — düz dolgu değil, sakin. */
+const SEARCH_ACCENT_ROW = `linear-gradient(90deg, color-mix(in srgb, ${SEARCH_ACCENT} 10%, transparent), color-mix(in srgb, ${SEARCH_ACCENT} 3%, transparent) 52%, transparent 88%)`;
+/** Odakta input satırının altındaki yumuşak cam parıltısı (dikdörtgen ring değil). */
+const SEARCH_ACCENT_GLOW =
+  `0 18px 44px -30px color-mix(in srgb, ${SEARCH_ACCENT} 70%, transparent), 0 1px 0 color-mix(in srgb, ${SEARCH_ACCENT} 24%, transparent)`;
+
+/** Sonuç satırının SAĞINDAKİ minik tür/aksiyon etiketi:
+ *  medya → Film/Dizi, sayfa içi sekme/buton → Kısayol. */
+function rowTypeLabel(entry: SearchEntry): string | null {
+  if (entry.media) return entry.media.type === 'movie' ? 'Film' : 'Dizi';
+  if (entry.action) return 'Kısayol';
+  return null;
+}
 
 const searchPanelStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-card, #15151b)',
@@ -570,20 +582,44 @@ function GlobalSearch({
           }}
         />
 
-        {/* Arama girişi — sakin cam satır; vurgu sadece ODAKTA belirir */}
+        {/* Arama girişi — sakin cam satır; odakta TAM DİKDÖRTGEN ring yerine
+            yumuşak glow + sol/alt ince kırmızı aksan */}
         <div
-          className="flex items-center gap-3 px-4 py-4 border-b transition-colors duration-300"
+          className="relative flex items-center gap-3 px-4 py-4 border-b transition-all duration-300"
           style={{
-            borderColor: focused
-              ? `color-mix(in srgb, ${SEARCH_ACCENT} 32%, transparent)`
-              : 'var(--line, var(--border-dim))',
-            background: focused ? SEARCH_ACCENT_TINT : 'transparent',
+            borderColor: 'var(--line, var(--border-dim))',
+            boxShadow: focused ? SEARCH_ACCENT_GLOW : 'none',
+            backgroundImage: focused
+              ? `linear-gradient(180deg, transparent, color-mix(in srgb, ${SEARCH_ACCENT} 4%, transparent))`
+              : undefined,
           }}
         >
+          {/* Sol aksan: dikey ince kırmızı çizgi (sadece odakta görünür) */}
+          <span
+            aria-hidden
+            className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full transition-opacity duration-300"
+            style={{
+              background: `linear-gradient(180deg, ${SEARCH_ACCENT}, transparent)`,
+              opacity: focused ? 0.85 : 0,
+            }}
+          />
+          {/* Alt aksan: ikonun altında kısa kırmızı vurgu (sadece odakta) */}
+          <span
+            aria-hidden
+            className="absolute left-4 bottom-0 h-[2px] w-9 rounded-full transition-opacity duration-300"
+            style={{
+              background: `linear-gradient(90deg, ${SEARCH_ACCENT}, transparent)`,
+              opacity: focused ? 0.9 : 0,
+            }}
+          />
           <Search
             size={18}
             className="shrink-0 transition-colors duration-300"
-            style={{ color: focused ? SEARCH_ACCENT : 'var(--muted, #8a8a94)' }}
+            style={{
+              color: focused
+                ? `color-mix(in srgb, ${SEARCH_ACCENT} 68%, var(--muted, #8a8a94))`
+                : 'var(--muted, #8a8a94)',
+            }}
           />
           <input
             ref={inputRef}
@@ -594,11 +630,17 @@ function GlobalSearch({
             onBlur={() => setFocused(false)}
             placeholder="Film, dizi, kişi veya sayfa ara…"
             aria-label="Global arama girişi"
-            className="flex-1 bg-transparent border-0 outline-none text-[15px] text-ink-50 placeholder:text-ink-500"
+            className="flex-1 bg-transparent border-0 outline-none text-[15px] tracking-[0.01em] text-ink-50 placeholder:text-ink-500"
           />
+          {/* ESC rozeti: kibar, cam, sessiz */}
           <kbd
-            className="text-[10px] px-1.5 py-0.5 rounded-md border shrink-0"
-            style={{ fontFamily: MONO, borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #8a8a94)' }}
+            className="text-[9.5px] px-1.5 py-[3px] rounded-md border shrink-0 uppercase tracking-[0.1em]"
+            style={{
+              fontFamily: MONO,
+              borderColor: 'var(--line, var(--border-dim, rgba(255,255,255,.10)))',
+              color: 'var(--muted, #8a8a94)',
+              background: 'var(--surface, rgba(255,255,255,.04))',
+            }}
           >
             ESC
           </kbd>
@@ -608,14 +650,28 @@ function GlobalSearch({
         <div className="sv-search-results max-h-[52vh] overflow-y-auto custom-scrollbar py-1.5">
           {groups.length === 0 ? (
             <div className="px-4 py-12 text-center">
+              {/* İkon + ikili metin: sakin cam rozet, sırıtmayan vurgu */}
+              <span
+                aria-hidden
+                className="mx-auto mb-3 w-11 h-11 rounded-xl grid place-items-center border"
+                style={{
+                  borderColor: 'var(--line, var(--border-dim, rgba(255,255,255,.10)))',
+                  background: 'var(--surface, rgba(255,255,255,.04))',
+                  color: 'var(--muted, #8a8a94)',
+                }}
+              >
+                <SearchX size={20} />
+              </span>
               <p className="text-[13px] font-semibold text-ink-300">Sonuç bulunamadı</p>
-              <p className="mt-1 text-[11px] text-ink-500">Farklı bir film, dizi, kişi veya sayfa adı deneyin.</p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-ink-500">
+                Farklı bir film, dizi, kişi veya sayfa adı deneyin.
+              </p>
             </div>
           ) : (
             groups.map((group) => (
               <div key={group.id} className="mb-1">
                 <div
-                  className="flex items-center gap-2 px-4 pt-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.2em]"
+                  className="flex items-center gap-2.5 px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-[0.2em]"
                   style={{ color: 'var(--muted, #8a8a94)' }}
                 >
                   <group.icon size={12} style={{ color: SEARCH_ACCENT_SOFT }} />
@@ -642,7 +698,7 @@ function GlobalSearch({
                       className="relative w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
                       style={
                         isActive
-                          ? { backgroundImage: SEARCH_ACCENT_TINT }
+                          ? { backgroundImage: SEARCH_ACCENT_ROW }
                           : undefined
                       }
                     >
@@ -684,17 +740,38 @@ function GlobalSearch({
                         </span>
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[13.5px] font-semibold text-ink-100 truncate">{entry.label}</span>
+                        <span className="block text-[13.5px] font-semibold leading-tight text-ink-100 truncate">
+                          {entry.label}
+                        </span>
                         {entry.sub && (
                           <span
-                            className="block text-[11px] truncate"
+                            className="block text-[11px] leading-tight tracking-[0.01em] truncate"
                             style={{ color: 'var(--muted, #8a8a94)' }}
                           >
                             {entry.sub}
                           </span>
                         )}
                       </span>
-                      {isActive && <ArrowRight size={14} className="shrink-0" style={{ color: SEARCH_ACCENT_SOFT }} />}
+                      {/* Sağ ipucu: tür/aksiyon etiketi + ok — aktifte vurgulu,
+                          diğerinde sessiz (yer sabit, kayma olmaz) */}
+                      <span className="shrink-0 flex items-center gap-2">
+                        {rowTypeLabel(entry) && (
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-[0.16em]"
+                            style={{ color: 'var(--muted, #8a8a94)' }}
+                          >
+                            {rowTypeLabel(entry)}
+                          </span>
+                        )}
+                        <ArrowRight
+                          size={14}
+                          className="transition-opacity duration-200"
+                          style={{
+                            color: isActive ? SEARCH_ACCENT_SOFT : 'var(--muted, #8a8a94)',
+                            opacity: isActive ? 1 : 0.4,
+                          }}
+                        />
+                      </span>
                     </button>
                   );
                 })}
@@ -703,17 +780,23 @@ function GlobalSearch({
           )}
         </div>
 
-        {/* Alt bilgi satırı */}
+        {/* Alt ipuçları — ferah: sakin tipografi + ince dikey ayraç */}
         <div
-          className="flex items-center justify-between gap-2 px-4 py-2.5 border-t text-[10px] font-semibold uppercase tracking-[0.14em]"
+          className="flex items-center justify-between gap-3 px-4 py-3 border-t text-[10px] font-semibold uppercase tracking-[0.16em]"
           style={{ borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #8a8a94)' }}
         >
-          <span className="flex items-center gap-1.5">
-            <CornerDownLeft size={12} /> Seç
-            <span className="mx-1 opacity-40">·</span>
+          <span className="flex items-center gap-2.5">
+            <span className="flex items-center gap-1.5">
+              <CornerDownLeft size={12} /> Seç
+            </span>
+            <span
+              aria-hidden
+              className="w-px h-3"
+              style={{ background: 'var(--line, var(--border-dim, rgba(255,255,255,.12)))' }}
+            />
             <span>↑↓ Gezin</span>
           </span>
-          <span>{flat.length} sonuç</span>
+          <span style={{ fontFamily: MONO, letterSpacing: '0.08em' }}>{flat.length} sonuç</span>
         </div>
       </div>
     </div>
