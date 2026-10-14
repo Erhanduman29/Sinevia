@@ -1,16 +1,16 @@
-import { useState, useMemo, useEffect, useCallback, Fragment } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import * as Icons from 'lucide-react';
 import {
   Shuffle, Tv, Sparkles, Trophy, Star, Search,
   Clock, Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
-  ChevronRight, Target, Film, RefreshCw, User, Users, Lock,
+  ChevronRight, Target, Film, RefreshCw, Users, Lock,
   Timer, Play, Pause, X, Compass, ShieldAlert, Copy, Crown
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
-import { QUEST_DEFS, RARITY_STYLES } from '../lib/quests';
+import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
-import { ACHIEVEMENT_DEFS, TIER_COLORS } from '../lib/achievements';
+import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { getNextUnwatchedEpisode, formatDateShort, todayStr, normalize } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import PickModal from '../components/PickModal';
@@ -23,14 +23,7 @@ import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
 import { RANK_TIERS } from '../lib/rankTiers';
 
 // ============================================================
-// PREMIUM HOME STILLERİ (sinevia-premium.html kriteri)
-// Cam yüzeyler · kırmızı gradyan barlar · mono etiketler ·
-// hover kaldırılma + glow · ince ayraçlar · Archivo başlıklar.
-// Tüm renkler tema CSS değişkenlerine bağlıdır; premium-dark
-// tokenları önce gelir (--red/--red-hi/--red-deep, --glass,
-// --line-2, --r, --shadow, --glow), plain-dark gibi token
-// tanımsız temalar için zincirleme fallback:
-// --color-1/2/3 → sabit değer.
+// PREMIUM HOME STILLERİ
 // ============================================================
 const HOME_PREMIUM_CSS = `
 .hn-sec{display:flex;flex-direction:column;gap:16px}
@@ -40,7 +33,7 @@ const HOME_PREMIUM_CSS = `
 .hn-idx{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.18em;color:#fff;background:linear-gradient(135deg,var(--red,var(--color-1,#e8384f)),var(--red-deep,var(--color-3,#8e1220)));padding:5px 10px;border-radius:8px;box-shadow:0 4px 14px -4px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.3)}
 .hn-more{font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);background:none;border:0;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:4px;padding:4px 0}
 .hn-more:hover{color:var(--red-hi,var(--color-2,#ff6b7a));transform:translateX(3px)}
-.hp-hero,.hp-rec{
+.hp-rec{
   background:var(--glass,var(--bg-card,#1a1a24));
   border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));
   border-radius:var(--r-lg,22px);
@@ -53,91 +46,467 @@ const HOME_PREMIUM_CSS = `
   box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8)),inset 0 1px 0 rgba(255,255,255,.07);
 }
 
-/* ---------- 01 · AJAN KARTI (sakin · şık · stabil) ---------- */
-.hp-hero{overflow:hidden;display:flex;flex-direction:column;min-height:0}
-.hp-id{display:flex;align-items:center;gap:18px;padding:16px 22px;min-height:86px;flex-wrap:wrap}
-.hp-ava{position:relative;width:58px;height:58px;flex-shrink:0}
-.hp-ava svg{position:absolute;inset:0;width:58px;height:58px;transform:rotate(-90deg)}
-.hp-core{position:absolute;inset:6px;border-radius:50%;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));display:grid;place-items:center;font-size:21px;font-weight:800;color:var(--text-main,#f4f4f2)}
-.hp-core span{position:relative;z-index:1}
-.hp-core-ic{position:absolute;inset:0;margin:auto;width:28px;height:28px;opacity:.12;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hp-lv{position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);background:var(--bg-card,#1a1a24);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--text-main,#f4f4f2);font-size:8px;font-weight:800;letter-spacing:.1em;padding:2px 8px;text-transform:uppercase;white-space:nowrap;border-radius:99px}
-.hp-pid{flex:1;min-width:0}
-.hp-ptag{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a));overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.hp-pid h3{font-family:inherit;font-size:24px;font-weight:800;letter-spacing:-.02em;text-transform:uppercase;line-height:1.15;margin:5px 0 8px;color:var(--text-main,#f4f4f2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hp-prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.hp-code{display:inline-flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.04em;color:var(--muted,#9a9a96)}
-.hp-code b{color:var(--text-main,#f4f4f2);font-weight:600}
-.hp-copy{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:none;border:0;color:var(--muted,#9a9a96);cursor:pointer;transition:color .2s}
-.hp-copy:hover{color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hp-copy:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:2px}
-.hp-badge{display:inline-flex;align-items:center;gap:8px;cursor:pointer;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:none;padding:4px 12px 4px 5px;border-radius:10px;min-height:32px;transition:border-color .2s;font-family:inherit;color:inherit;text-align:left}
-.hp-badge:hover{border-color:var(--red,var(--color-1,#e8384f))}
-.hp-badge:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:2px}
-.hp-badge-ic{width:22px;height:22px;border-radius:7px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--red-hi,var(--color-2,#ff6b7a));display:grid;place-items:center;font-size:11px;flex-shrink:0}
-.hp-badge-ic.empty{color:var(--muted,#9a9a96)}
-.hp-badge-tx s{display:block;text-decoration:none;font-size:7px;font-weight:800;letter-spacing:.14em;color:var(--muted,#9a9a96);text-transform:uppercase}
-.hp-badge-tx b{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text-main,#f4f4f2);margin-top:1px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hp-xpool{text-align:right;flex-shrink:0;padding-left:8px}
-.hp-xpool s{display:block;text-decoration:none;font-size:8px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-xpool b{display:block;font-family:inherit;font-size:21px;font-weight:800;letter-spacing:-.02em;margin-top:3px;color:var(--text-main,#f4f4f2)}
-.hp-xpool span{display:block;font-size:10px;font-weight:500;color:var(--muted,#9a9a96);margin-top:3px;white-space:nowrap}
-.hp-xpool span i{font-style:normal;color:var(--text-main,#f4f4f2);font-weight:800}
-/* ---------- SERİ ŞERİDİ (sinematik üst bant · sade premium) ---------- */
-.hp-streakbar{display:flex;align-items:center;gap:16px;padding:13px 22px;background:var(--glass,var(--bg-surface,#12121a));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-left:2px solid var(--red,var(--color-1,#e8384f));border-radius:var(--r-lg,22px);min-height:64px;position:relative;overflow:hidden}
-.hp-streakbar::before{content:'';position:absolute;top:0;right:0;bottom:0;width:42%;background:linear-gradient(270deg,var(--blob-1,rgba(232,56,79,.10)),transparent);pointer-events:none}
-.hp-streakbar>*{position:relative;z-index:1}
-.hp-fire-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;color:var(--red,var(--color-1,#e8384f));background:var(--blob-1,rgba(232,56,79,.14));border:1px solid var(--red,var(--color-1,#e8384f))}
-.hp-streak-tx{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
-.hp-streak-lab{display:flex;align-items:center;gap:8px;font-size:8.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap}
-.hp-streak-lab::after{content:'';flex:0 0 24px;height:1px;background:var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
-.hp-streak-main{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;min-width:0}
-.hp-streak-num{display:flex;align-items:baseline;gap:5px;font-family:inherit;white-space:nowrap}
-.hp-streak-num b{font-size:26px;font-weight:900;letter-spacing:-.03em;line-height:1;color:var(--text-main,#f4f4f2)}
-.hp-streak-num em{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--red,var(--color-1,#e8384f))}
-.hp-streak-sub{font-size:11.5px;line-height:1.5;color:var(--muted,#9a9a96);min-width:0;padding-left:12px;border-left:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
-.hp-streak-sub b{color:var(--text-main,#f4f4f2);font-weight:700}
+/* ============================================================
+   01 · SİNEVİA KARTI (Geliştirilmiş Monolith Mimari)
+   ============================================================ */
+.snv-id-card{
+  position:relative;
+  border-radius:22px;
+  background:#0a0a0e;
+  border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 30px 80px -30px rgba(0,0,0,.95);
+  overflow:hidden;
+  isolation:isolate;
+}
+.snv-id-backdrop{
+  position:absolute;
+  inset:0;
+  z-index:-2;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  opacity:.11;
+  filter:grayscale(35%) contrast(115%);
+  pointer-events:none;
+}
+.snv-id-backdrop img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.snv-id-overlay{
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  background:
+    radial-gradient(700px 280px at 0% 0%, rgba(232,56,79,.14), transparent 70%),
+    linear-gradient(90deg, #0a0a0e 22%, rgba(10,10,14,.86) 65%, #0a0a0e 100%),
+    linear-gradient(180deg, rgba(10,10,14,.4) 0%, #0a0a0e 95%);
+  pointer-events:none;
+}
 
-/* ---------- XP HATTI (sv rakamı + net dolu bar) ---------- */
-.hp-xpline{display:flex;align-items:center;gap:18px;padding:0 22px 16px}
-.hp-lvbox{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;min-width:46px}
-.hp-lvbox s{display:block;text-decoration:none;font-size:7.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-lvbox b{display:block;font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1.1;color:var(--text-main,#f4f4f2)}
-.hp-xpmain{flex:1;min-width:0}
-.hp-xp-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}
-.hp-xp-lab{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hp-xp-lab i{font-style:normal;font-weight:800;color:var(--text-main,#f4f4f2)}
-.hp-xp-pct{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:var(--muted,#9a9a96);white-space:nowrap;flex-shrink:0}
-.hp-xp-track{height:10px;background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;position:relative;overflow:hidden}
-.hp-xp-fill{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:var(--red,var(--color-1,#e8384f));transition:width 1s ease}
+/* 1. KATMAN: ÜST KİMLİK + SAĞDA ROZET / SERİ / XP VİTRİNİ */
+.snv-id-main{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:32px;
+  padding:36px 42px 32px;
+  flex-wrap:wrap;
+}
+.snv-id-left{
+  display:flex;
+  align-items:center;
+  gap:26px;
+  min-width:0;
+  flex:1;
+}
+.snv-id-monogram{
+  position:relative;
+  width:92px;
+  height:92px;
+  flex-shrink:0;
+  display:grid;
+  place-items:center;
+}
+.snv-id-monogram svg{
+  position:absolute;
+  inset:0;
+  width:92px;
+  height:92px;
+  transform:rotate(-90deg);
+}
+.snv-id-letter{
+  width:76px;
+  height:76px;
+  border-radius:50%;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.09);
+  display:grid;
+  place-items:center;
+  font-size:32px;
+  font-weight:800;
+  color:#fff;
+  letter-spacing:-.03em;
+}
+.snv-id-lv-tag{
+  position:absolute;
+  bottom:-4px;
+  background:#14141c;
+  border:1px solid rgba(255,255,255,.2);
+  color:#fff;
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.12em;
+  padding:2.5px 10px;
+  border-radius:99px;
+}
 
-/* ---------- UNVAN YOLU (sade rütbe ilerlemesi) ---------- */
-.hp-path{display:flex;align-items:center;gap:14px;padding:12px 22px;border-top:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-path-lab{display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:8.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-path-track{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex:1;min-width:0}
-.hp-path-arrow{color:var(--line-2,var(--border-dim,rgba(244,244,242,.13)));flex-shrink:0}
-.hp-node{display:flex;align-items:baseline;gap:7px;min-height:26px;min-width:0;max-width:100%}
-.hp-node-tx{display:flex;align-items:baseline;gap:7px;min-width:0}
-.hp-node-tx b{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hp-node-tx span{font-size:8.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap;flex-shrink:0}
-.hp-node.done .hp-node-tx b{color:var(--text-main,#f4f4f2)}
-.hp-node.now .hp-node-tx b{color:var(--red-hi,var(--color-2,#ff6b7a));font-size:12.5px;font-weight:800;letter-spacing:.04em}
-.hp-node.now .hp-node-tx span{color:var(--red-hi,var(--color-2,#ff6b7a));font-weight:800}
-.hp-node.next .hp-node-tx b{color:var(--text-main,#f4f4f2)}
+.snv-id-titles{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+.snv-id-kicker{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+}
+.snv-id-kicker .sep{
+  color:rgba(255,255,255,.22);
+}
+.snv-id-code-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.09);
+  padding:3px 9px;
+  border-radius:6px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:10.5px;
+  letter-spacing:.1em;
+  color:var(--muted,#9a9a96);
+  cursor:pointer;
+  transition:.2s;
+}
+.snv-id-code-btn:hover{
+  color:#fff;
+  border-color:rgba(255,255,255,.25);
+}
+.snv-id-name{
+  font-family:inherit;
+  font-size:42px;
+  font-weight:900;
+  letter-spacing:-.035em;
+  line-height:1.02;
+  color:#fff;
+  margin:2px 0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.snv-id-submeta{
+  font-size:13px;
+  color:var(--muted,#9a9a96);
+  font-weight:500;
+  letter-spacing:.01em;
+}
 
-.hp-tiers{display:flex;align-items:center;gap:2px;flex-wrap:wrap;padding:10px 22px;border-top:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-tiers-lab{flex-shrink:0;margin-right:10px;font-size:8.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-tier{display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:4px 10px;border-radius:8px;border:0;background:none;font-family:inherit;color:inherit;cursor:pointer;transition:background-color .2s}
-.hp-tier:hover{background:var(--blob-3,rgba(244,244,242,.03))}
-.hp-tier:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:2px}
-.hp-tier i{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.hp-tier b{font-size:13px;font-weight:800;line-height:1;color:var(--text-main,#f4f4f2)}
-.hp-tier span{font-size:8px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96)}
-.hp-stats{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-stat{padding:11px 8px;min-height:52px;text-align:center;border-left:1px solid var(--line,rgba(244,244,242,.07))}
-.hp-stat:first-child{border-left:0}
-.hp-stat b{display:block;font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--text-main,#f4f4f2)}
-.hp-stat span{display:block;font-size:7.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:3px}
+/* Sağ Taraf: Büyük Rozet + Günlük Seri + Deneyim Puanı */
+.snv-id-right{
+  display:flex;
+  align-items:center;
+  gap:30px;
+  flex-shrink:0;
+}
+.snv-id-readout-divider{
+  width:1px;
+  height:58px;
+  background:rgba(255,255,255,.09);
+}
+
+/* Büyütülmüş Rozet Vitrin Bloğu (Serinin Yanında) */
+.snv-badge-showcase{
+  display:flex;
+  align-items:center;
+  gap:15px;
+  background:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+  border:1px solid rgba(255,255,255,.12);
+  padding:11px 18px 11px 12px;
+  border-radius:16px;
+  cursor:pointer;
+  transition:.24s cubic-bezier(.2,.7,.3,1);
+  text-align:left;
+  font-family:inherit;
+  color:inherit;
+}
+.snv-badge-showcase:hover{
+  border-color:var(--red,var(--color-1,#e8384f));
+  background:linear-gradient(135deg,rgba(232,56,79,.13),rgba(255,255,255,.025));
+  transform:translateY(-2px);
+  box-shadow:0 14px 30px -14px rgba(232,56,79,.5);
+}
+.snv-badge-emblem{
+  width:54px;
+  height:54px;
+  border-radius:14px;
+  background:radial-gradient(circle at 30% 25%,rgba(232,56,79,.24),rgba(10,10,14,.92));
+  border:1px solid rgba(232,56,79,.42);
+  display:grid;
+  place-items:center;
+  font-size:26px;
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+  flex-shrink:0;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+}
+.snv-badge-emblem.empty{
+  background:rgba(255,255,255,.03);
+  border:1px dashed rgba(255,255,255,.18);
+  color:var(--muted,#9a9a96);
+}
+.snv-badge-meta{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  min-width:0;
+}
+.snv-badge-kicker{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9.5px;
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+}
+.snv-badge-title{
+  font-size:15.5px;
+  font-weight:800;
+  letter-spacing:-.01em;
+  color:#fff;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:175px;
+}
+.snv-badge-sub{
+  font-size:11px;
+  color:var(--muted,#9a9a96);
+  font-weight:500;
+}
+
+.snv-id-readout{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+}
+.snv-id-readout-label{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9.5px;
+  font-weight:700;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--muted,#9a9a96);
+  margin-bottom:4px;
+}
+.snv-id-readout-label .flame{
+  color:#fb923c;
+}
+.snv-id-readout-val{
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+}
+.snv-id-readout-val b{
+  font-family:'JetBrains Mono',monospace;
+  font-size:38px;
+  font-weight:800;
+  letter-spacing:-.04em;
+  line-height:1;
+  color:#fff;
+}
+.snv-id-readout-val em{
+  font-style:normal;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+}
+.snv-id-readout-val em.warm{
+  color:#fb923c;
+}
+.snv-id-readout-sub{
+  font-size:11px;
+  color:var(--muted,#9a9a96);
+  margin-top:4px;
+}
+
+/* 2. KATMAN: LAZER XP İLERLEME ÇİZGİSİ (2px) */
+.snv-id-laser-wrap{
+  position:relative;
+  height:2px;
+  background:rgba(255,255,255,.07);
+  width:100%;
+}
+.snv-id-laser-fill{
+  position:absolute;
+  top:0;bottom:0;left:0;
+  background:linear-gradient(90deg,transparent,var(--red,var(--color-1,#e8384f)) 30%,var(--red-hi,var(--color-2,#ff6b7a)));
+  box-shadow:0 0 14px var(--red,var(--color-1,#e8384f));
+  transition:width 1s cubic-bezier(.2,.8,.2,1);
+}
+
+/* 3. KATMAN: ALT İSTATİSTİK + BÜYÜTÜLMÜŞ BAŞARIMLAR + GELİŞMİŞ UNVAN EVRİMİ */
+.snv-id-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:28px;
+  padding:22px 42px;
+  background:rgba(255,255,255,.015);
+  flex-wrap:wrap;
+}
+.snv-id-metrics{
+  display:flex;
+  align-items:center;
+  gap:32px;
+  flex-wrap:wrap;
+}
+.snv-id-mitem{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+}
+.snv-id-mitem b{
+  font-family:'JetBrains Mono',monospace;
+  font-size:22px;
+  font-weight:800;
+  letter-spacing:-.02em;
+  color:#fff;
+}
+.snv-id-mitem span{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--muted,#9a9a96);
+}
+
+.snv-id-right-foot{
+  display:flex;
+  align-items:center;
+  gap:24px;
+  flex-wrap:wrap;
+}
+
+/* Büyütülmüş Başarım Kademeleri */
+.snv-id-tiers{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.snv-id-tier{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:7px 12px;
+  border-radius:10px;
+  background:rgba(255,255,255,.025);
+  border:1px solid rgba(255,255,255,.07);
+  color:inherit;
+  font-family:inherit;
+  cursor:pointer;
+  transition:.2s;
+}
+.snv-id-tier:hover{
+  background:rgba(255,255,255,.07);
+  border-color:rgba(255,255,255,.18);
+  transform:translateY(-1px);
+}
+.snv-id-tier i{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+}
+.snv-id-tier b{
+  font-family:'JetBrains Mono',monospace;
+  font-size:15px;
+  font-weight:800;
+  color:#fff;
+  line-height:1;
+}
+.snv-id-tier span{
+  font-size:11.5px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#d4d4d8;
+}
+
+/* Geliştirilmiş Sonraki Unvan & Evrim Kartı */
+.snv-rank-evolution{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  min-width:270px;
+  padding:11px 16px;
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(232,56,79,.1),rgba(255,255,255,.02));
+  border:1px solid rgba(232,56,79,.3);
+}
+.snv-re-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.snv-re-tag{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+}
+.snv-re-rem{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  font-weight:700;
+  color:#fff;
+  background:rgba(232,56,79,.22);
+  border:1px solid rgba(232,56,79,.4);
+  padding:2px 8px;
+  border-radius:99px;
+}
+.snv-re-Flow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+}
+.snv-re-cur{
+  color:var(--muted,#9a9a96);
+  font-weight:600;
+}
+.snv-re-arrow{
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+  flex-shrink:0;
+}
+.snv-re-next{
+  color:#fff;
+  font-weight:800;
+  letter-spacing:-.01em;
+}
+.snv-re-bar{
+  height:4px;
+  border-radius:99px;
+  background:rgba(255,255,255,.08);
+  overflow:hidden;
+  position:relative;
+}
+.snv-re-bar i{
+  position:absolute;
+  inset:0 auto 0 0;
+  border-radius:99px;
+  background:linear-gradient(90deg,var(--red,var(--color-1,#e8384f)),var(--red-hi,var(--color-2,#ff6b7a)));
+  transition:width .8s ease;
+}
 
 /* ---------- HIZLI ERİŞİM + ZAMANLAYICI ---------- */
 .hn-action{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%}
@@ -169,17 +538,43 @@ const HOME_PREMIUM_CSS = `
 .hn-btn-ic{vertical-align:-2px}
 .hn-planned{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;padding:13px 22px;border-radius:13px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border:1px dashed var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
 
-/* ---------- 03 · GÜNÜN SİNEMA KARTI ---------- */
-.hn-spotlight{display:grid;grid-template-columns:280px minmax(0,1fr);overflow:hidden}
-.hn-sp-poster{border-right:1px solid var(--line,rgba(244,244,242,.07));min-height:400px;position:relative;overflow:hidden;background:radial-gradient(420px 320px at 70% 15%,var(--blob-1,rgba(232,56,79,.28)),transparent 60%),linear-gradient(155deg,#2A2118 0%,#161215 55%,#0A0A0D 100%);display:flex;align-items:flex-end;padding:26px;cursor:pointer;font-family:inherit;text-align:left;color:inherit}
+/* ---------- GÜNÜN SİNEMA KARTI (Sağa Genişletilmiş 340px Tam Afiş Penceresi) ---------- */
+.hn-spotlight{
+  display:grid;
+  grid-template-columns:340px minmax(0,1fr);
+  align-items:stretch;
+  overflow:hidden;
+}
+.hn-sp-poster{
+  border-right:1px solid var(--line,rgba(244,244,242,.08));
+  width:340px;
+  aspect-ratio:2/3;
+  position:relative;
+  overflow:hidden;
+  background:#09090d;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  padding:0;
+  font-family:inherit;
+  color:inherit;
+}
 .hn-sp-poster:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:-2px}
-.hn-sp-poster::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.55));pointer-events:none}
-.hn-sp-poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35}
-.hn-big-letter{position:absolute;inset:0;display:grid;place-items:center;font-size:190px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-.06em;user-select:none;pointer-events:none}
+.hn-sp-poster img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+  display:block;
+  opacity:1;
+  transition:transform .45s cubic-bezier(.2,.7,.3,1);
+}
+.hn-sp-poster:hover img{transform:scale(1.03)}
+.hn-big-letter{font-size:150px;font-weight:900;color:rgba(255,255,255,.12);letter-spacing:-.06em;user-select:none;pointer-events:none}
 .hn-filmbadge{position:absolute;top:0;left:0;z-index:2;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;padding:8px 14px;background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-radius:0 0 14px 0;box-shadow:0 6px 18px -6px var(--red,var(--color-1,#e8384f))}
-.hn-rate{position:absolute;top:16px;right:16px;z-index:2;font-weight:900;font-size:16px;background:rgba(10,10,13,.75);border:1px solid rgba(255,255,255,.18);padding:6px 12px;border-radius:12px;color:#fff;backdrop-filter:blur(10px);box-shadow:0 8px 22px -10px rgba(0,0,0,.9)}
-.hn-sp-poster .hn-pt{position:relative;z-index:2;font-family:inherit;font-size:26px;font-weight:900;text-transform:uppercase;letter-spacing:-.03em;line-height:1.05;text-shadow:0 4px 24px rgba(0,0,0,.8);color:var(--text-main,#f4f4f2);height:auto;margin:0;background:none;border-radius:0;box-shadow:none;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
-.hn-sp-body{padding:30px 34px;display:flex;flex-direction:column;gap:16px;min-width:0;overflow:hidden}
+.hn-rate{position:absolute;top:14px;right:14px;z-index:2;font-family:'JetBrains Mono',monospace;font-weight:900;font-size:15px;background:rgba(10,10,13,.85);border:1px solid rgba(255,255,255,.22);padding:6px 12px;border-radius:11px;color:#fff;backdrop-filter:blur(10px);box-shadow:0 8px 22px -10px rgba(0,0,0,.9)}
+.hn-sp-body{padding:34px 38px;display:flex;flex-direction:column;gap:18px;min-width:0;overflow:hidden}
 .hn-sp-kick{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.26em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
 .hn-sp-body h2{font-family:inherit;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-.035em;line-height:.98;margin:0;background:linear-gradient(100deg,#fff 35%,#9C9CA1);-webkit-background-clip:text;background-clip:text;color:transparent;overflow-wrap:anywhere;min-width:0}
 .hn-meta-chips{display:flex;gap:8px;flex-wrap:wrap;width:fit-content;max-width:100%;min-width:0}
@@ -188,7 +583,7 @@ const HOME_PREMIUM_CSS = `
 .hn-genre-row{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
 .hn-genre{font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:7px 14px;color:var(--muted,#9a9a96);border-radius:99px;transition:.2s;background:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hn-genre:first-child{color:var(--red-hi,var(--color-2,#ff6b7a));border-color:rgba(232,56,79,.5);background:rgba(232,56,79,.12)}
-.hn-gdesc{font-family:inherit;font-size:13.5px;line-height:1.75;color:var(--muted,#9a9a96);max-width:640px;margin:0;overflow-wrap:anywhere}
+.hn-gdesc{font-family:inherit;font-size:14px;line-height:1.75;color:var(--muted,#9a9a96);max-width:680px;margin:0;overflow-wrap:anywhere}
 .hn-gdesc b{color:var(--text-main,#f4f4f2);font-weight:700}
 .hn-gdesc-empty{font-style:italic}
 .hn-btnrow{display:flex;flex-wrap:wrap;gap:11px;margin-top:auto;padding-top:6px;min-width:0}
@@ -198,7 +593,7 @@ const HOME_PREMIUM_CSS = `
 .hn-link-chip:hover{color:var(--text-main,#f4f4f2);border-color:rgba(255,255,255,.3);transform:translateY(-2px)}
 .hn-link-logo{width:13px;height:13px;border-radius:3px;object-fit:cover}
 
-/* ---------- 04 · ARŞİV KISAYOLLARI ---------- */
+/* ---------- ARŞİV KISAYOLLARI ---------- */
 .hn-shortcuts{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
 .hn-sc{padding:26px 20px;text-align:center;position:relative;transition:.28s cubic-bezier(.2,.7,.3,1);cursor:pointer;font-family:inherit;color:inherit}
 .hn-sc:hover{transform:translateY(-6px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 28px 54px -20px rgba(0,0,0,.9),0 0 34px -12px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.1)}
@@ -208,11 +603,11 @@ const HOME_PREMIUM_CSS = `
 .hn-sc>span:last-child{font-size:9.5px;font-weight:700;letter-spacing:.18em;color:var(--muted,#9a9a96);text-transform:uppercase}
 .hn-sc.red b{color:var(--red-hi,var(--color-2,#ff6b7a));text-shadow:0 0 26px rgba(232,56,79,.6)}
 
-/* ---------- 05 · İZLEMEYE DEVAM ET ---------- */
+/* ---------- İZLEMEYE DEVAM ET ---------- */
 .hn-series-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .hn-scard{padding:20px;display:flex;gap:16px;transition:.28s cubic-bezier(.2,.7,.3,1)}
 .hn-scard:hover{transform:translateY(-6px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 30px 56px -22px rgba(0,0,0,.9),0 0 36px -14px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.1)}
-.hn-sposter{width:86px;flex-shrink:0;aspect-ratio:2/3;border-radius:12px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.12);background:linear-gradient(160deg,#221D2A,#0D0D11);display:flex;align-items:flex-end;padding:8px;box-shadow:0 10px 26px -12px rgba(0,0,0,.9);cursor:pointer;font-family:inherit;padding:0}
+.hn-sposter{width:86px;flex-shrink:0;aspect-ratio:2/3;border-radius:12px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.12);background:linear-gradient(160deg,#221D2A,#0D0D11);display:flex;align-items:flex-end;box-shadow:0 10px 26px -12px rgba(0,0,0,.9);cursor:pointer;font-family:inherit;padding:0}
 .hn-sposter img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .hn-sl{position:absolute;inset:0;display:grid;place-items:center;font-size:56px;font-weight:900;color:rgba(255,255,255,.07);pointer-events:none}
 .hn-ep{position:relative;z-index:1;margin:8px;color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.1em;padding:4px 8px;text-transform:uppercase;background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-radius:7px;box-shadow:0 4px 12px -4px var(--red,var(--color-1,#e8384f))}
@@ -227,7 +622,7 @@ const HOME_PREMIUM_CSS = `
 .hn-rate-btn{margin-top:15px;width:100%;padding:11px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;transition:.24s;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
 .hn-rate-btn:hover{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;color:#fff;box-shadow:0 10px 26px -8px var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
 
-/* ---------- 06 · ROZETLER + AĞ ---------- */
+/* ---------- ROZETLER + AĞ ---------- */
 .hn-duo{display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
 .hn-panel{padding:26px 28px}
 .hn-panel + .hn-panel{border-left:1px solid var(--line,rgba(244,244,242,.07))}
@@ -264,7 +659,7 @@ const HOME_PREMIUM_CSS = `
 .hn-net-more{margin-top:4px;width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--red-hi,var(--color-2,#ff6b7a));font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:.24s;display:flex;align-items:center;justify-content:center;gap:6px}
 .hn-net-more:hover{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;color:#fff;box-shadow:0 10px 26px -8px var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
 
-/* ---------- 07 · SON İZLENENLER (afişli yenileme v2) ---------- */
+/* ---------- SON İZLENENLER ---------- */
 .hp-recent{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
 .hp-rec{display:flex;flex-direction:column;padding:0;overflow:hidden;cursor:pointer;font-family:inherit;color:inherit;text-align:left;transition:.26s cubic-bezier(.2,.7,.3,1)}
 .hp-rec:hover{transform:translateY(-6px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 28px 52px -22px rgba(0,0,0,.9),0 0 30px -14px var(--red,var(--color-1,#e8384f))}
@@ -291,63 +686,48 @@ const HOME_PREMIUM_CSS = `
 .hn-bento-card p{font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);margin:0}
 
 /* ---------- RESPONSIVE ---------- */
+@media (max-width:1180px){
+  .snv-id-right{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)}
+  .snv-id-readout{align-items:flex-start}
+}
 @media (max-width:1080px){
-  .hp-xpool{text-align:left;width:100%;order:3;padding-left:0}
+  .snv-id-main{padding:28px;gap:24px}
+  .snv-id-footer{padding:18px 28px}
   .hp-recent{grid-template-columns:repeat(3,1fr)}
-  .hn-spotlight{grid-template-columns:minmax(0,1fr)}
-  .hn-sp-poster{min-height:240px;border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
+  .hn-spotlight{grid-template-columns:300px minmax(0,1fr)}
+  .hn-sp-poster{width:300px}
   .hn-series-grid,.hn-shortcuts{grid-template-columns:1fr}
   .hn-duo{grid-template-columns:1fr}
   .hn-panel + .hn-panel{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
 }
 @media (max-width:767px){
-  /* bölüm başlıkları — taşma yok, sarar */
   .hn-sec{gap:12px}
   .hn-sec-t{gap:10px;flex-wrap:wrap}
   .hn-sec-t .ln{min-width:16px}
   .hn-idx{padding:4px 8px;font-size:9px}
   .hn-more{padding:8px 4px}
-  /* butonlar — mobil dokunma hedefi + sığdırma */
   .hn-btn{padding:12px 14px;font-size:10.5px;letter-spacing:.08em;gap:5px;min-height:44px;justify-content:center}
   .hn-planned{padding:12px 14px;font-size:10.5px;letter-spacing:.08em}
-  /* ajankartı — küçültülmüş kimlik/xp/yol */
-  .hp-id{padding:14px 16px;gap:14px;min-height:0}
-  .hp-ava{width:52px;height:52px}
-  .hp-ava svg{width:52px;height:52px}
-  .hp-core{font-size:19px}
-  .hp-core-ic{width:24px;height:24px}
-  .hp-pid h3{font-size:20px;margin:4px 0 7px}
-  .hp-copy{width:32px;height:32px}
-  .hp-badge{min-height:36px}
-  .hp-badge-tx b{max-width:110px}
-  .hp-xpool{padding-left:0}
-  .hp-xpool b{font-size:19px}
-  .hp-xpline{padding:0 16px 14px;gap:14px}
-  .hp-lvbox b{font-size:23px}
-  .hp-path{padding:11px 16px;gap:12px}
-  .hp-path-track{gap:8px 10px}
-  .hp-tiers{padding:10px 16px}
-  .hp-tier{min-height:34px}
-  .hp-stat{min-height:48px;padding:9px 6px}
-  /* serişeridi */
-  .hp-streakbar{padding:10px 16px;gap:12px;min-height:0}
-  .hp-streak-num b{font-size:23px}
-  .hp-streak-sub{border-left:0;padding-left:0;flex:1 1 100%}
-  .hp-streak-lab::after{flex:0 0 14px}
-  /*geri sayım */
+  .snv-id-main{padding:22px 18px;gap:20px}
+  .snv-id-monogram{width:74px;height:74px}
+  .snv-id-monogram svg{width:74px;height:74px}
+  .snv-id-letter{width:60px;height:60px;font-size:24px}
+  .snv-id-name{font-size:28px}
+  .snv-id-readout-divider{display:none}
+  .snv-badge-showcase{width:100%}
+  .snv-id-readout-val b{font-size:28px}
+  .snv-id-footer{padding:18px;gap:18px}
+  .snv-id-metrics{gap:18px 24px}
+  .snv-rank-evolution{width:100%}
   .hn-timer{padding:14px;gap:12px}
   .hn-timer-ic{width:40px;height:40px;border-radius:12px}
   .hn-timer-tx{flex:1 1 100%;min-width:0}
   .hn-timer-btns{margin-left:0;width:100%}
   .hn-timer-btns .hn-btn{flex:1}
   .hn-timer-x{flex-shrink:0}
-  /* 03 · günün sineması */
-  .hn-sp-poster{min-height:210px;padding:18px}
-  .hn-big-letter{font-size:130px}
-  .hn-sp-poster .hn-pt{font-size:21px;-webkit-line-clamp:3}
-  .hn-rate{top:12px;right:12px;font-size:14px;padding:5px 10px}
-  .hn-filmbadge{font-size:8.5px;padding:6px 11px;letter-spacing:.16em}
-  .hn-sp-body{padding:20px 16px;gap:14px}
+  .hn-spotlight{grid-template-columns:minmax(0,1fr)}
+  .hn-sp-poster{width:100%;max-width:340px;margin:0 auto;border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
+  .hn-sp-body{padding:22px 18px;gap:14px}
   .hn-sp-body h2{font-size:26px}
   .hn-meta-chips span{font-size:9.5px;padding:6px 11px;letter-spacing:.08em}
   .hn-genre{font-size:9.5px;padding:6px 11px;letter-spacing:.12em}
@@ -355,18 +735,15 @@ const HOME_PREMIUM_CSS = `
   .hn-btnrow{gap:8px}
   .hn-btnrow .hn-btn{flex:1 1 auto}
   .hn-link-chip{font-size:9px;padding:7px 10px;letter-spacing:.08em}
-  /* 04 · arşiv kısayolları — 1 sütun yerine 2x2 */
   .hn-shortcuts{grid-template-columns:repeat(2,1fr);gap:10px}
   .hn-sc{padding:16px 10px}
   .hn-sci{width:38px;height:38px;border-radius:12px;margin-bottom:9px}
   .hn-sc b{font-size:26px}
   .hn-sc>span:last-child{font-size:8.5px;letter-spacing:.12em}
-  /* 05 · diziler */
   .hn-scard{padding:14px;gap:12px}
   .hn-sposter{width:72px}
   .hn-sinfo h4{font-size:14px}
   .hn-rate-btn{margin-top:12px;padding:10px}
-  /* 06 · rozetler + ağ */
   .hn-panel{padding:18px 16px}
   .hn-panel h3{font-size:13.5px;margin-bottom:14px;gap:8px}
   .hn-ach{padding:13px;margin-bottom:10px;border-radius:14px}
@@ -378,14 +755,12 @@ const HOME_PREMIUM_CSS = `
   .hn-agent{padding:11px 12px;gap:10px}
   .hn-aa{width:34px;height:34px;border-radius:10px;font-size:13px}
   .hn-agent-tx b{font-size:12px}
-  /* 07 · son izlenenler (afişler korunur, yalnız sığdırma) */
   .hp-recent{gap:10px}
   .hp-rec-tx{padding:10px 12px 12px}
   .hp-rec-tx b{font-size:12px}
   .hp-rec-ph b{font-size:40px}
   .hp-rec-kind{top:8px;left:8px;font-size:7px;padding:3px 7px}
   .hp-rec-rate{top:8px;right:8px;font-size:10px;padding:3px 7px}
-  /* bento · alt alan */
   .hn-bento-card{padding:20px 18px}
   .hn-bento-title{font-size:24px}
   .hn-bento-ic{width:40px;height:40px;border-radius:12px;margin-bottom:12px}
@@ -393,27 +768,9 @@ const HOME_PREMIUM_CSS = `
 }
 @media (max-width:640px){
   .hn-sec-t h2{font-size:15px}
-  .hp-stats{grid-template-columns:repeat(2,1fr)}
-  .hp-stat{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
-  .hp-stat:nth-child(-n+2){border-top:0}
   .hp-recent{grid-template-columns:repeat(2,1fr)}
-  .hp-id{padding:12px 14px;gap:12px;min-height:0}
-  .hp-pid h3{font-size:19px}
-  .hp-xpool b{font-size:19px}
-  .hp-xpline{padding:0 14px 12px;gap:12px}
-  .hp-xp-lab{font-size:8.5px}
-  .hp-lvbox{min-width:40px}
-  .hp-lvbox b{font-size:22px}
-  .hp-path{padding:10px 14px;gap:8px}
-  .hp-path-lab{width:100%}
-  .hp-node{min-height:24px}
-  .hp-streakbar{padding:10px 14px;min-height:0}
-  .hp-streak-num b{font-size:21px}
-  .hp-fire-ic{width:34px;height:34px;border-radius:11px}
-  .hp-tiers{padding:10px 14px}
-  .hn-sp-body h2{font-size:24px}
+  .hn-sp-body h2{font-size:23px}
   .hn-bento-title{font-size:22px}
-  .hn-big-letter{font-size:120px}
   .hn-sp-body{padding:18px 14px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -630,9 +987,8 @@ export default function HomePage() {
     return [...(data.history || [])]
       .filter((h) => !h.isPastWatch)
       .sort((a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime())
-      .slice(0, 5) // Maksimum 5 tane alıyoruz ki tek satıra sığsın
+      .slice(0, 5)
       .map((h) => {
-        // Geçmiş kaydı afiş taşımaz — ana kayıttan (film/dizi) posterUrl çözülür.
         const isMovie = h.kind === 'movie' || h.type === 'movie';
         const posterUrl = isMovie
           ? data.movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl
@@ -640,6 +996,22 @@ export default function HomePage() {
         return { h, isMovie, posterUrl: posterUrl || null };
       });
   }, [data.history, data.movies, data.series]);
+
+  // Ajan kartının arka planında çok hafif görünecek 4 afiş
+  const backdropPosters = useMemo(() => {
+    const urls: string[] = [];
+    for (const item of recentWatched) {
+      if (item.posterUrl && !urls.includes(item.posterUrl)) urls.push(item.posterUrl);
+      if (urls.length >= 4) break;
+    }
+    if (urls.length < 4) {
+      for (const m of data.movies) {
+        if (m.posterUrl && !urls.includes(m.posterUrl)) urls.push(m.posterUrl);
+        if (urls.length >= 4) break;
+      }
+    }
+    return urls;
+  }, [recentWatched, data.movies]);
 
   const [posterErrors, setPosterErrors] = useState<Record<string, boolean>>({});
 
@@ -653,21 +1025,18 @@ export default function HomePage() {
 
   const userPersona = RANK_TIERS[currentRankIndex];
   const nextRank = RANK_TIERS[currentRankIndex + 1] || null;
-  const PersonaIcon = userPersona.icon;
 
   const xpToNext = Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp);
 
-  // Unvan yolu: geçmiş kademe · aktif kademe · sonraki 2 kademe
-  const rankPath = RANK_TIERS.map((tier, idx) => ({ tier, idx }))
-    .filter(({ idx }) => idx >= currentRankIndex - 1 && idx <= currentRankIndex + 2)
-    .map(({ tier, idx }) => ({
-      tier,
-      isUnlocked: lvl.level >= tier.minLevel,
-      isCurrent: idx === currentRankIndex,
-      isNext: idx === currentRankIndex + 1,
-    }));
+  // Unvan evrimi ilerleme yüzdesi
+  const rankProgressPct = useMemo(() => {
+    if (!nextRank) return 100;
+    const span = Math.max(1, nextRank.minLevel - userPersona.minLevel);
+    const done = lvl.level - userPersona.minLevel + (lvl.progress / 100);
+    return Math.min(100, Math.max(6, Math.round((done / span) * 100)));
+  }, [nextRank, userPersona.minLevel, lvl.level, lvl.progress]);
 
-  const circleRadius = 46;
+  const circleRadius = 43;
   const circleCircumference = 2 * Math.PI * circleRadius;
   const circleOffset = circleCircumference - (Math.min(100, Math.max(0, lvl.progress)) / 100) * circleCircumference;
 
@@ -726,168 +1095,195 @@ export default function HomePage() {
 
   const activeBadgeDef = questState.activeBadgeId ? QUEST_DEFS.find(q => q.id === questState.activeBadgeId) : null;
 
+  // Bölüm numaralarının (01, 02, 03...) hatasız ilerlemesi için dinamik sayaç
+  let sectionCounter = 0;
+  const nextSectionIdx = () => String(++sectionCounter).padStart(2, '0');
+
   return (
     <div className="space-y-6 sm:space-y-8 animate-fade-in pb-10 max-w-[1400px] mx-auto">
       <style>{HOME_PREMIUM_CSS}</style>
 
       {/* =========================================================
-          SERİ ŞERİDİ (ajan kartından bağımsız, üst bant)
-          ========================================================= */}
-      <div className="hp-streakbar" data-tutorial="home-streak">
-        <span className="hp-fire-ic"><Flame size={19} /></span>
-        <span className="hp-streak-tx">
-          <span className="hp-streak-lab">Günlük Seri</span>
-          <span className="hp-streak-main">
-            <span className="hp-streak-num">
-              <b>{data.dailyStreak || 0}</b>
-              <em>Gün</em>
-            </span>
-            <span className="hp-streak-sub">
-              {data.dailyStreak > 0
-                ? <>Alevin sönmedi — bugün de izleyerek seriyi <b>bozmadan</b> taşı.</>
-                : <>Bugün bir yapım izleyerek seriyi <b>başlat</b>.</>}
-            </span>
-          </span>
-        </span>
-      </div>
-
-      {/* =========================================================
-          01 · AJAN KARTI (profil + seri/kademe birleşik kompakt)
+          01 · SİNEVİA KARTI (Geliştirilmiş Monolith Mimari)
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
-          <span className="hn-idx">01</span>
-          <h2>Ajan Kartı</h2>
+          <span className="hn-idx">{nextSectionIdx()}</span>
+          <h2>Sinevia Kartı</h2>
           <span className="ln" />
-          <button type="button" className="hn-more" onClick={() => navigateTo('achievements')}>Başarımlar <ChevronRight size={13} /></button>
+          <button type="button" className="hn-more" onClick={() => navigateTo('achievements')}>
+            Başarımlar <ChevronRight size={13} />
+          </button>
         </div>
 
-        <div className="hp-hero" data-tutorial="home-hero">
-          {/* KİMLİK + XP HAVUZU */}
-          <div className="hp-id">
-            <div className="hp-ava">
-              <svg viewBox="0 0 108 108" aria-hidden="true">
-                <circle cx="54" cy="54" r={circleRadius} fill="none" stroke="var(--line-2, rgba(244,244,242,.13))" strokeWidth="5" />
-                <circle cx="54" cy="54" r={circleRadius} fill="none" stroke={userPersona.strokeColor} strokeWidth="5" strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round" />
-              </svg>
-              <div className="hp-core">
-                <span>{data.nickname?.[0]?.toUpperCase() || 'U'}</span>
-                <PersonaIcon className="hp-core-ic" />
-              </div>
-              <div className="hp-lv">Sv. {lvl.level}</div>
-            </div>
-
-            <div className="hp-pid">
-              <div className="hp-ptag"><PersonaIcon size={12} /> {userPersona.title}</div>
-              <h3>{data.nickname}</h3>
-              <div className="hp-prow">
-                <span className="hp-code">AĞ KODU <b>{data.agentId}</b></span>
-                <button
-                  type="button"
-                  className="hp-copy"
-                  title="Kodu kopyala"
-                  onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }}
-                >
-                  <Copy size={13} />
-                </button>
-                {activeBadgeDef ? (
-                  <button
-                    type="button"
-                    className="hp-badge"
-                    onClick={() => navigateTo('achievements')}
-                    title={`${activeBadgeDef.title} (${activeBadgeDef.rarity})`}
-                  >
-                    <span className="hp-badge-ic">{activeBadgeDef.icon}</span>
-                    <span className="hp-badge-tx"><s>Aktif Rozet</s><b>{activeBadgeDef.title}</b></span>
-                  </button>
-                ) : (
-                  <button type="button" className="hp-badge" onClick={() => navigateTo('achievements')}>
-                    <span className="hp-badge-ic empty"><ShieldAlert size={14} /></span>
-                    <span className="hp-badge-tx"><s>Rozet Yuvası Boş</s><b>Kuşanmak için tıkla</b></span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="hp-xpool">
-              <s>Deneyim Puanı</s>
-              <b>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</b>
-              <span>Seviye <i>{lvl.level}</i> · {xpToNext.toLocaleString('tr-TR')} XP kaldı</span>
-            </div>
-          </div>
-
-          {/* XP HATTI (büyük sv + belirgin dolu bar) */}
-          <div className="hp-xpline">
-            <span className="hp-lvbox">
-              <s>Sv.</s>
-              <b>{lvl.level}</b>
-            </span>
-            <div className="hp-xpmain">
-              <div className="hp-xp-top">
-                <span className="hp-xp-lab">
-                  Sv. {lvl.level + 1} hedefine <i>{xpToNext.toLocaleString('tr-TR')}</i> XP kaldı
-                </span>
-                <span className="hp-xp-pct">%{Math.floor(lvl.progress)}</span>
-              </div>
-              <div className="hp-xp-track">
-                <div className="hp-xp-fill" style={{ width: `${Math.max(3, lvl.progress)}%` }} />
-              </div>
-            </div>
-          </div>
-
-          {/* UNVAN YOLU — öne çıkan rütbe ilerlemesi */}
-          <div className="hp-path">
-            <span className="hp-path-lab"><Crown size={13} /> Unvan Yolu</span>
-            <div className="hp-path-track">
-              {rankPath.map((node, i) => (
-                <Fragment key={node.tier.title}>
-                  {i > 0 && <ChevronRight size={13} className="hp-path-arrow" />}
-                  <div
-                    className={`hp-node${node.isUnlocked ? ' done' : ''}${node.isCurrent ? ' now' : ''}${node.isNext ? ' next' : ''}`}
-                    title={`Sv. ${node.tier.minLevel} — ${node.tier.title}`}
-                  >
-                    <div className="hp-node-tx">
-                      <b>{node.tier.title}</b>
-                      <span>
-                        {node.isCurrent
-                          ? 'Şimdi'
-                          : node.isNext && nextRank
-                            ? `+${nextRank.minLevel - lvl.level} Sv.`
-                            : `Sv. ${node.tier.minLevel}`}
-                      </span>
-                    </div>
-                  </div>
-                </Fragment>
+        <div className="snv-id-card" data-tutorial="home-hero">
+          {backdropPosters.length > 0 && (
+            <div className="snv-id-backdrop" aria-hidden="true">
+              {backdropPosters.map((url, i) => (
+                <img key={i} src={url} alt="" />
               ))}
             </div>
-          </div>
+          )}
+          <div className="snv-id-overlay" aria-hidden="true" />
 
-          {/* KADEMELER */}
-          <div className="hp-tiers">
-            <span className="hp-tiers-lab">Kademeler</span>
-            {([
-              ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
-              ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
-              ['gold', 'Altın', quickMetrics.tierCounts.gold],
-              ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
-              ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
-              ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
-            ] as const).map(([tier, label, count]) => (
-              <button key={tier} type="button" className="hp-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
-                <i style={{ background: TIER_INK[tier], color: TIER_INK[tier] }} />
-                <b>{count}</b>
-                <span>{label}</span>
+          {/* 1. ÜST KATMAN: SOLDA KİMLİK, SAĞDA BÜYÜK ROZET + SERİ + XP */}
+          <div className="snv-id-main">
+            <div className="snv-id-left">
+              <div className="snv-id-monogram">
+                <svg viewBox="0 0 92 92" aria-hidden="true">
+                  <circle cx="46" cy="46" r={circleRadius} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="2.5" />
+                  <circle cx="46" cy="46" r={circleRadius} fill="none" stroke={userPersona.strokeColor} strokeWidth="2.5" strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round" />
+                </svg>
+                <div className="snv-id-letter">
+                  {data.nickname?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <span className="snv-id-lv-tag">SV.{lvl.level}</span>
+              </div>
+
+              <div className="snv-id-titles">
+                <div className="snv-id-kicker">
+                  <span>{userPersona.title}</span>
+                  <span className="sep">/</span>
+                  <button
+                    type="button"
+                    className="snv-id-code-btn"
+                    title="Ağ kodunu kopyala"
+                    onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }}
+                  >
+                    {data.agentId} <Copy size={11} />
+                  </button>
+                </div>
+
+                <h1 className="snv-id-name">{data.nickname}</h1>
+
+                <div className="snv-id-submeta">
+                  <span>{userPersona.subtitle}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="snv-id-right">
+              {/* SERİNİN YANINA EKLENEN BÜYÜTÜLMÜŞ ROZET VİTRİNİ */}
+              <button
+                type="button"
+                className="snv-badge-showcase"
+                onClick={() => navigateTo('achievements')}
+                title={activeBadgeDef ? `${activeBadgeDef.title} (${activeBadgeDef.rarity})` : 'Koleksiyonundan bir rozet kuşan'}
+              >
+                <div className={`snv-badge-emblem${activeBadgeDef ? '' : ' empty'}`}>
+                  {activeBadgeDef ? activeBadgeDef.icon : <ShieldAlert size={22} />}
+                </div>
+                <div className="snv-badge-meta">
+                  <span className="snv-badge-kicker">
+                    {activeBadgeDef ? `Aktif Rozet · ${activeBadgeDef.rarity}` : 'Rozet Yuvası Boş'}
+                  </span>
+                  <b className="snv-badge-title">
+                    {activeBadgeDef ? activeBadgeDef.title : 'Rozet Kuşan'}
+                  </b>
+                  <span className="snv-badge-sub">
+                    {activeBadgeDef ? 'Değiştirmek için tıkla' : 'Koleksiyondan seç'}
+                  </span>
+                </div>
               </button>
-            ))}
+
+              <div className="snv-id-readout-divider" />
+
+              {/* GÜNLÜK SERİ */}
+              <div className="snv-id-readout" data-tutorial="home-streak">
+                <span className="snv-id-readout-label">
+                  <Flame size={12} className="flame" /> Günlük Seri
+                </span>
+                <div className="snv-id-readout-val">
+                  <b>{data.dailyStreak || 0}</b>
+                  <em className="warm">Gün</em>
+                </div>
+                <span className="snv-id-readout-sub">
+                  {data.dailyStreak > 0 ? 'Seri aktif devam ediyor' : 'Bugün bir yapım izle'}
+                </span>
+              </div>
+
+              <div className="snv-id-readout-divider" />
+
+              {/* DENEYİM PUANI */}
+              <div className="snv-id-readout">
+                <span className="snv-id-readout-label">Deneyim Puanı</span>
+                <div className="snv-id-readout-val">
+                  <b>{(data.totalXp || 0).toLocaleString('tr-TR')}</b>
+                  <em>XP</em>
+                </div>
+                <span className="snv-id-readout-sub">
+                  Sv. {lvl.level + 1} için {xpToNext.toLocaleString('tr-TR')} XP
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* STAT'LAR */}
-          <div className="hp-stats">
-            <div className="hp-stat"><b>{quickMetrics.watchedMoviesCount}</b><span>Film İzledi</span></div>
-            <div className="hp-stat"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span>Dizi Bitirdi</span></div>
-            <div className="hp-stat"><b>{quickMetrics.watchedEpsCount}</b><span>Bölüm İzledi</span></div>
-            <div className="hp-stat"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Rozet Açtı</span></div>
-            <div className="hp-stat"><b>{quickMetrics.questsCompleted}</b><span>Görev Bitti</span></div>
+          {/* 2. ORTA KATMAN: 2PX LAZER İLERLEME HATTI */}
+          <div className="snv-id-laser-wrap" title={`Seviye İlerlemesi: %${Math.floor(lvl.progress)}`}>
+            <div className="snv-id-laser-fill" style={{ width: `${Math.max(2, lvl.progress)}%` }} />
+          </div>
+
+          {/* 3. ALT KATMAN: İSTATİSTİKLER + BÜYÜTÜLMÜŞ BAŞARIMLAR + GELİŞMİŞ UNVAN EVRİMİ */}
+          <div className="snv-id-footer">
+            <div className="snv-id-metrics">
+              <div className="snv-id-mitem"><b>{quickMetrics.watchedMoviesCount}</b><span>Film</span></div>
+              <div className="snv-id-mitem"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span>Dizi</span></div>
+              <div className="snv-id-mitem"><b>{quickMetrics.watchedEpsCount}</b><span>Bölüm</span></div>
+              <div className="snv-id-mitem"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Rozet</span></div>
+              <div className="snv-id-mitem"><b>{quickMetrics.questsCompleted}</b><span>Görev</span></div>
+            </div>
+
+            <div className="snv-id-right-foot">
+              <div className="snv-id-tiers">
+                {([
+                  ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
+                  ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
+                  ['gold', 'Altın', quickMetrics.tierCounts.gold],
+                  ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
+                  ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
+                  ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
+                ] as const).map(([tier, label, count]) => (
+                  <button key={tier} type="button" className="snv-id-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
+                    <i style={{ background: TIER_INK[tier] }} />
+                    <b>{count}</b>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* GELİŞTİRİLMİŞ UNVAN EVRİM MODÜLÜ */}
+              {nextRank ? (
+                <div className="snv-rank-evolution">
+                  <div className="snv-re-top">
+                    <span className="snv-re-tag"><Crown size={11} /> Unvan Evrimi</span>
+                    <span className="snv-re-rem">
+                      Hedef Sv.{nextRank.minLevel} · {nextRank.minLevel - lvl.level} Sv. Kaldı
+                    </span>
+                  </div>
+                  <div className="snv-re-Flow">
+                    <span className="snv-re-cur">{userPersona.title}</span>
+                    <ChevronRight size={14} className="snv-re-arrow" />
+                    <span className="snv-re-next">{nextRank.title}</span>
+                  </div>
+                  <div className="snv-re-bar">
+                    <i style={{ width: `${rankProgressPct}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <div className="snv-rank-evolution">
+                  <div className="snv-re-top">
+                    <span className="snv-re-tag"><Crown size={11} /> Nihai Unvan</span>
+                    <span className="snv-re-rem">Maksimum Kademe</span>
+                  </div>
+                  <div className="snv-re-Flow">
+                    <span className="snv-re-next">{userPersona.title}</span>
+                  </div>
+                  <div className="snv-re-bar">
+                    <i style={{ width: '100%' }} />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -948,7 +1344,7 @@ export default function HomePage() {
       })()}
 
       {/* =========================================================
-          03 · GÜNÜN SİNEMA KARTI
+          02 · GÜNÜN SİNEMA KARTI (Sağa Doğru Genişletilmiş Tam Afiş Penceresi)
           ========================================================= */}
       {spotlightMovie && (() => {
         const isSpotlightTimerActive = activeTimerMovie?.id === spotlightMovie.id;
@@ -958,7 +1354,7 @@ export default function HomePage() {
         return (
           <section className="hn-sec">
             <div className="hn-sec-t">
-              <span className="hn-idx">03</span>
+              <span className="hn-idx">{nextSectionIdx()}</span>
               <h2>Günün Sinema Kartı</h2>
               <span className="ln" />
               {eligibleMovies.length > 1 && (
@@ -976,11 +1372,13 @@ export default function HomePage() {
                 tabIndex={0}
                 title="Sinema Kartını Gör"
               >
-                {spotlightMovie.posterUrl && <img src={spotlightMovie.posterUrl} alt="" />}
-                <span className="hn-big-letter" aria-hidden="true">{(spotlightMovie.title || 'S').charAt(0).toUpperCase()}</span>
+                {spotlightMovie.posterUrl ? (
+                  <img src={spotlightMovie.posterUrl} alt={spotlightMovie.title} />
+                ) : (
+                  <span className="hn-big-letter" aria-hidden="true">{(spotlightMovie.title || 'S').charAt(0).toUpperCase()}</span>
+                )}
                 <span className="hn-filmbadge">Sinema Kartı</span>
                 {spotlightMovie.rating != null && <span className="hn-rate">{spotlightMovie.rating}</span>}
-                <div className="hn-pt">{spotlightMovie.title}</div>
               </div>
 
               <div className="hn-sp-body">
@@ -1050,11 +1448,11 @@ export default function HomePage() {
       })()}
 
       {/* =========================================================
-          04 · ARŞİV KISAYOLLARI
+          ARŞİV KISAYOLLARI
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
-          <span className="hn-idx">04</span>
+          <span className="hn-idx">{nextSectionIdx()}</span>
           <h2>Arşiv Kısayolları</h2>
           <span className="ln" />
         </div>
@@ -1083,12 +1481,12 @@ export default function HomePage() {
       </section>
 
       {/* =========================================================
-          05 · İZLEMEYE DEVAM ET
+          İZLEMEYE DEVAM ET
           ========================================================= */}
       {ongoingSeries.length > 0 && (
         <section className="hn-sec">
           <div className="hn-sec-t">
-            <span className="hn-idx">05</span>
+            <span className="hn-idx">{nextSectionIdx()}</span>
             <h2>İzlemeye Devam Et — {ongoingSeries.length} Dizi</h2>
             <span className="ln" />
             <button type="button" className="hn-more" onClick={() => navigateTo('series')}>Tüm Diziler <ChevronRight size={13} /></button>
@@ -1124,11 +1522,11 @@ export default function HomePage() {
       )}
 
       {/* =========================================================
-          06 · ROZETLER + SİNEVİA AĞI
+          ROZETLER + SİNEVİA AĞI
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
-          <span className="hn-idx">06</span>
+          <span className="hn-idx">{nextSectionIdx()}</span>
           <h2>Rozetler &amp; Sinevia Ağı</h2>
           <span className="ln" />
         </div>
@@ -1207,12 +1605,12 @@ export default function HomePage() {
       </section>
 
       {/* =========================================================
-          07 · SON İZLENENLER
+          SON İZLENENLER
           ========================================================= */}
       {recentWatched.length > 0 && (
         <section className="hn-sec">
           <div className="hn-sec-t">
-            <span className="hn-idx">07</span>
+            <span className="hn-idx">{nextSectionIdx()}</span>
             <h2>Son İzlenenler</h2>
             <span className="ln" />
             <button type="button" className="hn-more" onClick={() => navigateTo('history')}>Geçmiş <ChevronRight size={13} /></button>
