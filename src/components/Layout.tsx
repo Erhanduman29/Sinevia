@@ -1071,7 +1071,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
       {/* MASAÜSTÜ SOL SIDEBAR — premium cam yüzey */}
       <aside
-        className="hidden md:flex flex-col w-52 shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
+        className="hidden md:flex flex-col w-56 shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
         style={{
           backgroundImage: SIDEBAR_BG,
           borderColor: 'var(--line, var(--border-dim))',
@@ -1114,37 +1114,34 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                 key={item.id}
                 onClick={() => onTabChange(item.id as TabId)}
                 data-tutorial={`nav-${item.id}`}
-                className={`relative w-full flex items-start gap-3 px-3.5 py-[11px] rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
+                className={`relative w-full flex items-center gap-3 px-3.5 py-[11px] rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
                   isActive
                     ? 'bg-gold-500/20 text-gold-400 border'
                     : 'text-ink-400 hover:bg-ink-800/50 hover:text-white hover:translate-x-[3px] border border-transparent'
                 }`}
                 style={isActive ? activePillStyle : undefined}
               >
-                <item.icon size={17} className={`mt-[1px] transition-transform duration-300 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
-                {/* DİZİLİM: ikon + etiket üst satır (leading ikonla eşit),
-                    sayaç rozeti AYNI satırda değil — etiketin ALTINDA ayrı,
-                    ferah bir satırda (mobil bara dokunulmaz, md+ sidebar). */}
-                <span className="min-w-0 flex-1 flex flex-col items-start gap-1.5">
-                  <span className="block leading-[17px]">{item.label}</span>
-                  {(navCounts[item.id as TabId] ?? 0) > 0 && (
-                    <span
-                      className="inline-flex items-center px-1.5 py-[3px] rounded-md text-[10px] font-bold leading-none"
-                      style={{
-                        fontFamily: MONO,
-                        color: isActive ? 'var(--color-2, #f5b942)' : 'var(--muted, #8a8a94)',
-                        background: isActive
-                          ? 'color-mix(in srgb, var(--color-2, #f5b942) 16%, transparent)'
-                          : 'var(--surface, rgba(255,255,255,.05))',
-                        border: `1px solid ${isActive
-                          ? 'color-mix(in srgb, var(--color-2, #f5b942) 34%, transparent)'
-                          : 'var(--line, var(--border-dim, rgba(255,255,255,.10)))'}`,
-                      }}
-                    >
-                      {navCounts[item.id as TabId]}
-                    </span>
-                  )}
-                </span>
+                <item.icon size={17} className={`transition-transform duration-300 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                <span>{item.label}</span>
+                {/* DİZİLİM: TEK SATIR — ikon + etiket yan yana (items-center),
+                    sayaç rozeti SAĞA sabit (ml-auto), etiketin SAĞINDA (alta değil). */}
+                {(navCounts[item.id as TabId] ?? 0) > 0 && (
+                  <span
+                    className="ml-auto inline-flex items-center px-1.5 py-[3px] rounded-md text-[10px] font-bold leading-none"
+                    style={{
+                      fontFamily: MONO,
+                      color: isActive ? 'var(--color-2, #f5b942)' : 'var(--muted, #8a8a94)',
+                      background: isActive
+                        ? 'color-mix(in srgb, var(--color-2, #f5b942) 16%, transparent)'
+                        : 'var(--surface, rgba(255,255,255,.05))',
+                      border: `1px solid ${isActive
+                        ? 'color-mix(in srgb, var(--color-2, #f5b942) 34%, transparent)'
+                        : 'var(--line, var(--border-dim, rgba(255,255,255,.10)))'}`,
+                    }}
+                  >
+                    {navCounts[item.id as TabId]}
+                  </span>
+                )}
                 {isActive && <ActiveRail />}
               </button>
             );
