@@ -664,14 +664,14 @@ export default function MoviesPage() {
 
         {isFilterPanelOpen && (
           <div className="mpx-card mpx-hair p-3 sm:p-4 space-y-3 animate-fade-in">
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
+            <div className="relative mpx-search-field">
+              <Search size={15} className="mpx-search-ico absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Film veya koleksiyon adı ara..."
-                className="mpx-input has-icon"
+                className="mpx-input has-icon mpx-search"
               />
               {search && (
                 <button
@@ -1313,14 +1313,14 @@ export default function MoviesPage() {
               )}
 
               <div className="p-3 border-b border-ink-800 bg-ink-950/40 flex items-center gap-2 shrink-0">
-                <div className="relative flex-1">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
+                <div className="relative flex-1 mpx-search-field">
+                  <Search size={14} className="mpx-search-ico absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
                   <input
                     type="text"
                     value={collectionSearch}
                     onChange={(e) => setCollectionSearch(e.target.value)}
                     placeholder="Listendeki filmlerde ara..."
-                    className="mpx-input has-icon"
+                    className="mpx-input has-icon mpx-search"
                   />
                 </div>
                 {modalSelectableMovies.length > 0 && (
@@ -1436,14 +1436,14 @@ export default function MoviesPage() {
               </div>
 
               <div className="p-3 border-b border-ink-800 bg-ink-950/40 flex items-center gap-2 shrink-0">
-                <div className="relative flex-1">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
+                <div className="relative flex-1 mpx-search-field">
+                  <Search size={14} className="mpx-search-ico absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
                   <input
                     type="text"
                     value={pastMoveSearch}
                     onChange={(e) => setPastMoveSearch(e.target.value)}
                     placeholder="Filmlerde ara..."
-                    className="mpx-input has-icon"
+                    className="mpx-input has-icon mpx-search"
                   />
                 </div>
                 {filteredPastMoviesForMove.length > 0 && (
