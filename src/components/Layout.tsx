@@ -140,9 +140,6 @@ const SEARCH_ACCENT = 'var(--red, var(--color-1, #e8384f))';
 const SEARCH_ACCENT_SOFT = `color-mix(in srgb, ${SEARCH_ACCENT} 55%, transparent)`;
 /** Aktif satır zemini: sola ağırlıklı yumuşak vurgu — düz dolgu değil, sakin. */
 const SEARCH_ACCENT_ROW = `linear-gradient(90deg, color-mix(in srgb, ${SEARCH_ACCENT} 10%, transparent), color-mix(in srgb, ${SEARCH_ACCENT} 3%, transparent) 52%, transparent 88%)`;
-/** Odakta input satırının altındaki yumuşak cam parıltısı (dikdörtgen ring değil). */
-const SEARCH_ACCENT_GLOW =
-  `0 18px 44px -30px color-mix(in srgb, ${SEARCH_ACCENT} 70%, transparent), 0 1px 0 color-mix(in srgb, ${SEARCH_ACCENT} 24%, transparent)`;
 
 /** Sonuç satırının SAĞINDAKİ minik tür/aksiyon etiketi:
  *  medya → Film/Dizi, sayfa içi sekme/buton → Kısayol. */
@@ -462,8 +459,6 @@ function GlobalSearch({
 }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
-  // Odak durumu: kırmızı vurgu yalnızca kullanıcı giriş yaptığında belirir.
-  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
 
@@ -487,7 +482,6 @@ function GlobalSearch({
       : null);
     setQuery('');
     setActive(0);
-    setFocused(false);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const t = setTimeout(() => inputRef.current?.focus(), 0);
@@ -582,52 +576,17 @@ function GlobalSearch({
           }}
         />
 
-        {/* Arama girişi — sakin cam satır; odakta TAM DİKDÖRTGEN ring yerine
-            yumuşak glow + sol/alt ince kırmızı aksan */}
+        {/* Arama girişi — sakin cam satır; renksiz, sade (kullanıcı talebi) */}
         <div
-          className="relative flex items-center gap-3 px-4 py-4 border-b transition-all duration-300"
-          style={{
-            borderColor: 'var(--line, var(--border-dim))',
-            boxShadow: focused ? SEARCH_ACCENT_GLOW : 'none',
-            backgroundImage: focused
-              ? `linear-gradient(180deg, transparent, color-mix(in srgb, ${SEARCH_ACCENT} 4%, transparent))`
-              : undefined,
-          }}
+          className="relative flex items-center gap-3 px-4 py-4 border-b"
+          style={{ borderColor: 'var(--line, var(--border-dim))' }}
         >
-          {/* Sol aksan: dikey ince kırmızı çizgi (sadece odakta görünür) */}
-          <span
-            aria-hidden
-            className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full transition-opacity duration-300"
-            style={{
-              background: `linear-gradient(180deg, ${SEARCH_ACCENT}, transparent)`,
-              opacity: focused ? 0.85 : 0,
-            }}
-          />
-          {/* Alt aksan: ikonun altında kısa kırmızı vurgu (sadece odakta) */}
-          <span
-            aria-hidden
-            className="absolute left-4 bottom-0 h-[2px] w-9 rounded-full transition-opacity duration-300"
-            style={{
-              background: `linear-gradient(90deg, ${SEARCH_ACCENT}, transparent)`,
-              opacity: focused ? 0.9 : 0,
-            }}
-          />
-          <Search
-            size={18}
-            className="shrink-0 transition-colors duration-300"
-            style={{
-              color: focused
-                ? `color-mix(in srgb, ${SEARCH_ACCENT} 68%, var(--muted, #8a8a94))`
-                : 'var(--muted, #8a8a94)',
-            }}
-          />
+          <Search size={18} className="shrink-0" style={{ color: 'var(--muted, #8a8a94)' }} />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
             placeholder="Film, dizi, kişi veya sayfa ara…"
             aria-label="Global arama girişi"
             className="flex-1 bg-transparent border-0 outline-none text-[15px] tracking-[0.01em] text-ink-50 placeholder:text-ink-500"
