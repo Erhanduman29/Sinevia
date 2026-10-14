@@ -37,9 +37,9 @@ describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
   test('tam 17 tema sunulmalı ve id’leri benzersiz olmalı', () => {
     const ids = getThemeIds();
     expect(ids).toEqual([
-      'default', 'light', 'cyberpunk', 'blood', 'matrix', 'ocean',
+      'premium-dark', 'default', 'light', 'cyberpunk', 'blood', 'matrix', 'ocean',
       'dracula', 'nord', 'solarized-dark', 'monokai', 'paper-light', 'retro-amber',
-      'premium-dark', 'plain-dark', 'solo-crimson', 'duo-sunset', 'quad-festival',
+      'plain-dark', 'solo-crimson', 'duo-sunset', 'quad-festival',
     ]);
     expect(new Set(ids).size).toBe(17);
   });

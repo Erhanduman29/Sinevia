@@ -246,6 +246,7 @@ export default function SettingsPage() {
   const negativeTags = reviewTagsList.filter((t) => !isPositiveTag(t, data.tagSentiments));
 
   const THEMES = [
+    { id: 'premium-dark', name: 'Premium Koyu', desc: 'Cam Yüzeyler & Kırmızı Vurgu', icon: Flame, previewBg: '#000000', textMode: 'dark', colors: ['#e8384f', '#ff6b7a', '#8e1220'] },
     { id: 'default', name: 'Karanlık (Orijinal)', desc: 'Kehribar, Safir & Mor', icon: Moon, previewBg: '#000000', textMode: 'dark', colors: ['#f59e0b', '#0ea5e9', '#8b5cf6'] },
     { id: 'light', name: 'Aydınlık (Ferah)', desc: 'Amber, Mavi & Pembe', icon: Sun, previewBg: '#f1f5f9', textMode: 'light', colors: ['#f59e0b', '#3b82f6', '#ec4899'] },
     { id: 'cyberpunk', name: 'Cyberpunk', desc: 'Neon Pembe, Mavi & Sarı', icon: Sparkles, previewBg: '#070312', textMode: 'dark', colors: ['#ec4899', '#06b6d4', '#eab308'] },
@@ -258,7 +259,6 @@ export default function SettingsPage() {
     { id: 'monokai', name: 'Monokai Neon', desc: 'Sıcak Yeşil, Pembe & Mavi', icon: Code, previewBg: '#1c1c16', textMode: 'dark', colors: ['#f92672', '#a6e22e', '#66d9ef'] },
     { id: 'paper-light', name: 'Kâğıt Sepya', desc: 'Sepya, Mürekkep Mavi & Bordo', icon: FileText, previewBg: '#efe9dc', textMode: 'light', colors: ['#b45309', '#1d4ed8', '#be123c'] },
     { id: 'retro-amber', name: 'Retro Amber CRT', desc: 'Amber, Turuncu & Soluk Sarı', icon: Terminal, previewBg: '#0d0801', textMode: 'dark', colors: ['#ffab00', '#ff7a00', '#ffe082'] },
-    { id: 'premium-dark', name: 'Premium Koyu', desc: 'Cam Yüzeyler & Kırmızı Vurgu', icon: Flame, previewBg: '#000000', textMode: 'dark', colors: ['#e8384f', '#ff6b7a', '#8e1220'] },
     { id: 'plain-dark', name: 'Sade Koyu', desc: 'Simsiyah Zemin & Beyaz Vurgu', icon: Moon, previewBg: '#000000', textMode: 'dark', colors: ['#ffffff', '#fbfbfb', '#f3f3f4'] },
     { id: 'solo-crimson', name: 'Tek Renk Kızıl', desc: 'Tek Renk · Sadece Kızılın Tonları', icon: Droplet, previewBg: '#12060a', textMode: 'dark', colors: ['#ef4444', '#dc2626', '#b91c1c'] },
     { id: 'duo-sunset', name: 'Çift Renk Gün Batımı', desc: 'Çift Renk · Turuncu & Mor', icon: Palette, previewBg: '#16101d', textMode: 'dark', colors: ['#fb923c', '#a78bfa', '#7c3aed'] },
