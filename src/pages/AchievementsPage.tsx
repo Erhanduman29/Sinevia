@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as Icons from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS, TIER_COLORS, TIER_ORDER } from '../lib/achievements';
@@ -138,6 +138,29 @@ export default function AchievementsPage() {
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [search, setSearch] = useState('');
+
+  // GLOBAL ARAMA DEEP-LINK (anahtar: sinevia_search_action).
+  // Arama panelinden "Görev Panosu" / "Kupa Kasası" seçildiğinde Layout bu
+  // anahtarı yazar; sayfa mount OLURKEN okuyup doğrudan ilgili SEKMEYE geçer
+  // ve anahtarı siler (Aynı kalıp: MoviesPage → sinevia_focus_media_title).
+  // Sadece okuma: sekme butonları / QuestBoard JSX'ine dokunulmadı.
+  useEffect(() => {
+    const applySearchAction = () => {
+      try {
+        const action = sessionStorage.getItem('sinevia_search_action');
+        if (!action) return;
+        sessionStorage.removeItem('sinevia_search_action');
+        if (action === 'quests') setActiveTab('quests');
+        else if (action === 'trophies') setActiveTab('trophies');
+      } catch {
+        /* sessionStorage kapalıysa normal açılış */
+      }
+    };
+    applySearchAction();
+    // Sayfa zaten açıksa mount tekrarlanmaz; Layout bu eventi de yayınlar.
+    window.addEventListener('sinevia-search-action', applySearchAction);
+    return () => window.removeEventListener('sinevia-search-action', applySearchAction);
+  }, []);
 
   const lvl = levelFromXp(data.totalXp || 0);
   const progressMap = new Map((data.achievements || []).map((a) => [a.achievementId, a]));

@@ -3,7 +3,8 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Film, Tv, History, Trophy, Settings, BarChart3, Bot,
   Menu, X, LayoutDashboard, Sparkles, CalendarClock, Users,
-  Cloud, CloudOff, RefreshCw, Search, Dices, ArrowRight, CornerDownLeft
+  Cloud, CloudOff, RefreshCw, Search, Dices, ArrowRight, CornerDownLeft,
+  Target, Medal
 } from 'lucide-react';
 import WrappedModal from './WrappedModal';
 import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
@@ -134,6 +135,10 @@ function ActiveRail() {
 // zinciri devreye girer: var(--glass, var(--bg-card)), var(--red, var(--color-1)).
 // ---------------------------------------------------------------------------
 const SEARCH_ACCENT = 'var(--red, var(--color-1, #e8384f))';
+/** Yumuşak vurgu tonları — panel çerçevesi kırmızı değil; renk yalnızca
+ *  GERİ BİLDİRİM anında (odak / aktif satır) alçak opaklıkla belirir. */
+const SEARCH_ACCENT_SOFT = `color-mix(in srgb, ${SEARCH_ACCENT} 55%, transparent)`;
+const SEARCH_ACCENT_TINT = `color-mix(in srgb, ${SEARCH_ACCENT} 7%, transparent)`;
 
 const searchPanelStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-card, #15151b)',
@@ -141,7 +146,9 @@ const searchPanelStyle: React.CSSProperties = {
     'var(--glass, linear-gradient(155deg, rgba(255,255,255,.06), rgba(255,255,255,.02)))',
   borderColor: 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
   borderRadius: 'var(--r, 16px)',
-  boxShadow: '0 30px 90px -30px rgba(0,0,0,.92), inset 0 1px 0 rgba(255,255,255,.08)',
+  // Derin yumuşak gölge + hafif iç cam parıltısı (ince kenar vurgusu).
+  boxShadow:
+    '0 40px 110px -36px rgba(0,0,0,.95), 0 2px 10px -6px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.09)',
 };
 
 interface SearchEntry {
@@ -154,6 +161,9 @@ interface SearchEntry {
   media?: { type: 'movie' | 'series'; id: string };
   /** Sonuç satırındaki poster küçük görseli (varsa). */
   poster?: string;
+  /** Sayfa İÇİ sekme/buton deep-link'i: seçilince sessionStorage'a yazılır ve
+   *  hedef sayfa mount olurken okuyup kendi sekmesine geçer. */
+  action?: string;
 }
 
 interface SearchGroup {
@@ -187,6 +197,43 @@ function pageEntries(): SearchEntry[] {
   }));
 }
 
+// ---------------------------------------------------------------------------
+// SAYFA İÇİ SEKME / BUTON KISAYOLLARI (deep-link)
+// Kullanıcı: "görevler yazınca başarımlar sayfasındaki görevler kısmına gitmeli,
+// bunun gibi sayfa içindeki ek sekmeler, butonları ekle."
+// Seçilince sessionStorage('sinevia_search_action') = action yazılır; hedef
+// sayfa mount olurken bu anahtarı okuyup ilgili SEKMESİNE geçer ve siler.
+// keywords: normalize() edilerek AND token'larıyla karşılaştırılır.
+// ---------------------------------------------------------------------------
+const SEARCH_ACTIONS: {
+  key: string;
+  label: string;
+  sub: string;
+  icon: LucideIcon;
+  tab: TabId;
+  action: string;
+  keywords: string;
+}[] = [
+  {
+    key: 'action-quests',
+    label: 'Görev Panosu',
+    sub: 'Başarımlar sayfası · Görevler sekmesi',
+    icon: Target,
+    tab: 'achievements',
+    action: 'quests',
+    keywords: 'görev görevler gorev gorevler görev panosu gorev panosu quest quests',
+  },
+  {
+    key: 'action-trophies',
+    label: 'Kupa Kasası',
+    sub: 'Başarımlar sayfası · Kupalar sekmesi',
+    icon: Medal,
+    tab: 'achievements',
+    action: 'trophies',
+    keywords: 'kupa kupalar kupa kasası kupa kasasi trophy trophies',
+  },
+];
+
 /** Türkçe-duyarlı küçük harfe çevirir (İ/ı sorunlarını önler). */
 function trLower(value: string): string {
   return value.toLocaleLowerCase('tr-TR');
@@ -212,6 +259,22 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
   const q = query.trim();
   const groups: SearchGroup[] = [];
   if (!q) return groups;
+
+  // SAYFA İÇİ SEKME/BUTON KISAYOLLARI — listenin en başında: "görevler" gibi
+  // bir sorguda Enter doğrudan hedef sekmeye gitsin (grup/mantık aynen korunur).
+  const actionHits: SearchEntry[] = SEARCH_ACTIONS.filter((a) =>
+    matchesAllTokens(q, a.keywords)
+  ).map((a) => ({
+    key: a.key,
+    label: a.label,
+    sub: a.sub,
+    icon: a.icon,
+    tab: a.tab,
+    action: a.action,
+  }));
+  if (actionHits.length) {
+    groups.push({ id: 'actions', label: 'Sayfa İçi', icon: LayoutDashboard, entries: actionHits });
+  }
 
   const movies: any[] = Array.isArray(data?.movies) ? data.movies : [];
   const series: any[] = Array.isArray(data?.series) ? data.series : [];
@@ -387,6 +450,8 @@ function GlobalSearch({
 }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  // Odak durumu: kırmızı vurgu yalnızca kullanıcı giriş yaptığında belirir.
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
 
@@ -403,6 +468,7 @@ function GlobalSearch({
       : null);
     setQuery('');
     setActive(0);
+    setFocused(false);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const t = setTimeout(() => inputRef.current?.focus(), 0);
@@ -441,6 +507,19 @@ function GlobalSearch({
       onClose();
       return;
     }
+    // Sayfa İÇİ sekme/buton (deep-link) → hedef sayfa mount'ta anahtarı okur.
+    if (entry.action) {
+      try {
+        sessionStorage.setItem('sinevia_search_action', entry.action);
+      } catch {
+        /* gizli mod / kota: anahtar yazılamazsa sayfa normal sekmesinde açılır */
+      }
+      // Sayfa zaten açıksa mount tekrarlanmaz → o yüzden event de duyurulur.
+      window.dispatchEvent(new Event('sinevia-search-action'));
+      onNavigate(entry.tab);
+      onClose();
+      return;
+    }
     // Kişi/koleksiyon/geçmiş/başarımlar/sayfa → eskisi gibi hedef sayfaya.
     onNavigate(entry.tab);
     onClose();
@@ -474,21 +553,38 @@ function GlobalSearch({
       />
 
       <div className="relative w-full max-w-xl overflow-hidden border backdrop-blur-2xl" style={searchPanelStyle}>
-        {/* Üst saç teli (kırmızı vurgu) */}
+        {/* Üst saç teli — tek ince nötr cam kenar (kırmızı çerçeve kaldırıldı) */}
         <span
           aria-hidden
           className="absolute inset-x-0 top-0 h-px pointer-events-none"
-          style={{ background: `linear-gradient(90deg, transparent, ${SEARCH_ACCENT}, transparent)` }}
+          style={{
+            background:
+              'linear-gradient(90deg, transparent, rgba(255,255,255,.34) 30%, rgba(255,255,255,.16) 62%, transparent)',
+          }}
         />
 
-        {/* Arama girişi — premium: kırmızı vurgulu lup + geniş satır */}
-        <div className="flex items-center gap-3 px-4 py-4 border-b" style={{ borderColor: 'var(--line, var(--border-dim))' }}>
-          <Search size={18} className="shrink-0" style={{ color: SEARCH_ACCENT }} />
+        {/* Arama girişi — sakin cam satır; vurgu sadece ODAKTA belirir */}
+        <div
+          className="flex items-center gap-3 px-4 py-4 border-b transition-colors duration-300"
+          style={{
+            borderColor: focused
+              ? `color-mix(in srgb, ${SEARCH_ACCENT} 32%, transparent)`
+              : 'var(--line, var(--border-dim))',
+            background: focused ? SEARCH_ACCENT_TINT : 'transparent',
+          }}
+        >
+          <Search
+            size={18}
+            className="shrink-0 transition-colors duration-300"
+            style={{ color: focused ? SEARCH_ACCENT : 'var(--muted, #8a8a94)' }}
+          />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             placeholder="Film, dizi, kişi veya sayfa ara…"
             aria-label="Global arama girişi"
             className="flex-1 bg-transparent border-0 outline-none text-[15px] text-ink-50 placeholder:text-ink-500"
@@ -515,7 +611,7 @@ function GlobalSearch({
                   className="flex items-center gap-2 px-4 pt-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.2em]"
                   style={{ color: 'var(--muted, #8a8a94)' }}
                 >
-                  <group.icon size={12} style={{ color: SEARCH_ACCENT }} />
+                  <group.icon size={12} style={{ color: SEARCH_ACCENT_SOFT }} />
                   <span className="shrink-0">{group.label}</span>
                   {/* İnce ayraç: grup etiketini sonuç satırlarından ayırır */}
                   <span
@@ -539,16 +635,19 @@ function GlobalSearch({
                       className="relative w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
                       style={
                         isActive
-                          ? { backgroundImage: `color-mix(in srgb, ${SEARCH_ACCENT} 12%, transparent)` }
+                          ? { backgroundImage: SEARCH_ACCENT_TINT }
                           : undefined
                       }
                     >
-                      {/* Aktif satır: sol kırmızı rail */}
+                      {/* Aktif satır: sol yumuşak kırmızı ray (ince, gölgesiz, zarif) */}
                       {isActive && (
                         <span
                           aria-hidden
-                          className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full"
-                          style={{ background: SEARCH_ACCENT, boxShadow: `0 0 10px ${SEARCH_ACCENT}` }}
+                          className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full"
+                          style={{
+                            background: `linear-gradient(180deg, ${SEARCH_ACCENT}, transparent)`,
+                            opacity: 0.9,
+                          }}
                         />
                       )}
                       {/* Film/dizi sonuçlarında poster küçük görseli; yoksa ikon kutusu */}
@@ -560,7 +659,7 @@ function GlobalSearch({
                           className="w-7 h-10 rounded-md object-cover shrink-0 border"
                           style={{
                             borderColor: isActive
-                              ? SEARCH_ACCENT
+                              ? SEARCH_ACCENT_SOFT
                               : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
                           }}
                         />
@@ -569,9 +668,9 @@ function GlobalSearch({
                           className="w-8 h-8 rounded-lg grid place-items-center shrink-0 border"
                           style={{
                             borderColor: isActive
-                              ? SEARCH_ACCENT
+                              ? SEARCH_ACCENT_SOFT
                               : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
-                            color: isActive ? SEARCH_ACCENT : 'var(--muted, #8a8a94)',
+                            color: isActive ? SEARCH_ACCENT_SOFT : 'var(--muted, #8a8a94)',
                           }}
                         >
                           <entry.icon size={15} />
@@ -588,7 +687,7 @@ function GlobalSearch({
                           </span>
                         )}
                       </span>
-                      {isActive && <ArrowRight size={14} className="shrink-0" style={{ color: SEARCH_ACCENT }} />}
+                      {isActive && <ArrowRight size={14} className="shrink-0" style={{ color: SEARCH_ACCENT_SOFT }} />}
                     </button>
                   );
                 })}
@@ -972,7 +1071,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
       {/* MASAÜSTÜ SOL SIDEBAR — premium cam yüzey */}
       <aside
-        className="hidden md:flex flex-col w-48 shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
+        className="hidden md:flex flex-col w-52 shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
         style={{
           backgroundImage: SIDEBAR_BG,
           borderColor: 'var(--line, var(--border-dim))',
@@ -1015,23 +1114,37 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
                 key={item.id}
                 onClick={() => onTabChange(item.id as TabId)}
                 data-tutorial={`nav-${item.id}`}
-                className={`relative w-full flex items-center gap-3 px-3.5 py-[11px] rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
+                className={`relative w-full flex items-start gap-3 px-3.5 py-[11px] rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
                   isActive
                     ? 'bg-gold-500/20 text-gold-400 border'
                     : 'text-ink-400 hover:bg-ink-800/50 hover:text-white hover:translate-x-[3px] border border-transparent'
                 }`}
                 style={isActive ? activePillStyle : undefined}
               >
-                <item.icon size={17} className={`transition-transform duration-300 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
-                <span>{item.label}</span>
-                {(navCounts[item.id as TabId] ?? 0) > 0 && (
-                  <span
-                    className={`ml-auto text-[10px] font-bold ${isActive ? '' : 'text-ink-500'}`}
-                    style={{ fontFamily: MONO, color: isActive ? 'var(--color-2)' : undefined }}
-                  >
-                    {navCounts[item.id as TabId]}
-                  </span>
-                )}
+                <item.icon size={17} className={`mt-[1px] transition-transform duration-300 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                {/* DİZİLİM: ikon + etiket üst satır (leading ikonla eşit),
+                    sayaç rozeti AYNI satırda değil — etiketin ALTINDA ayrı,
+                    ferah bir satırda (mobil bara dokunulmaz, md+ sidebar). */}
+                <span className="min-w-0 flex-1 flex flex-col items-start gap-1.5">
+                  <span className="block leading-[17px]">{item.label}</span>
+                  {(navCounts[item.id as TabId] ?? 0) > 0 && (
+                    <span
+                      className="inline-flex items-center px-1.5 py-[3px] rounded-md text-[10px] font-bold leading-none"
+                      style={{
+                        fontFamily: MONO,
+                        color: isActive ? 'var(--color-2, #f5b942)' : 'var(--muted, #8a8a94)',
+                        background: isActive
+                          ? 'color-mix(in srgb, var(--color-2, #f5b942) 16%, transparent)'
+                          : 'var(--surface, rgba(255,255,255,.05))',
+                        border: `1px solid ${isActive
+                          ? 'color-mix(in srgb, var(--color-2, #f5b942) 34%, transparent)'
+                          : 'var(--line, var(--border-dim, rgba(255,255,255,.10)))'}`,
+                      }}
+                    >
+                      {navCounts[item.id as TabId]}
+                    </span>
+                  )}
+                </span>
                 {isActive && <ActiveRail />}
               </button>
             );
