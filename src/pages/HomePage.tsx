@@ -83,13 +83,19 @@ const HOME_PREMIUM_CSS = `
 .hp-xpool b{display:block;font-family:inherit;font-size:21px;font-weight:800;letter-spacing:-.02em;margin-top:3px;color:var(--text-main,#f4f4f2)}
 .hp-xpool span{display:block;font-size:10px;font-weight:500;color:var(--muted,#9a9a96);margin-top:3px;white-space:nowrap}
 .hp-xpool span i{font-style:normal;color:var(--text-main,#f4f4f2);font-weight:800}
-/* ---------- SERİ ŞERİDİ (ajan kartından bağımsız üst bant) ---------- */
-.hp-streakbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 20px;background:var(--glass,var(--bg-card,#1a1a24));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:var(--r-lg,22px);min-height:52px}
-.hp-fire-ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex-shrink:0;color:var(--red,var(--color-1,#e8384f));background:var(--bg-surface,#12121a);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
-.hp-streak-num{display:flex;align-items:baseline;gap:6px;font-family:inherit;white-space:nowrap}
-.hp-streak-num b{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--text-main,#f4f4f2)}
-.hp-streak-num em{font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hp-streak-sub{font-size:11px;line-height:1.5;color:var(--muted,#9a9a96);min-width:0}
+/* ---------- SERİ ŞERİDİ (sinematik üst bant · sade premium) ---------- */
+.hp-streakbar{display:flex;align-items:center;gap:16px;padding:13px 22px;background:var(--glass,var(--bg-surface,#12121a));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-left:2px solid var(--red,var(--color-1,#e8384f));border-radius:var(--r-lg,22px);min-height:64px;position:relative;overflow:hidden}
+.hp-streakbar::before{content:'';position:absolute;top:0;right:0;bottom:0;width:42%;background:linear-gradient(270deg,var(--blob-1,rgba(232,56,79,.10)),transparent);pointer-events:none}
+.hp-streakbar>*{position:relative;z-index:1}
+.hp-fire-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;color:var(--red,var(--color-1,#e8384f));background:var(--blob-1,rgba(232,56,79,.14));border:1px solid var(--red,var(--color-1,#e8384f))}
+.hp-streak-tx{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.hp-streak-lab{display:flex;align-items:center;gap:8px;font-size:8.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--muted,#9a9a96);white-space:nowrap}
+.hp-streak-lab::after{content:'';flex:0 0 24px;height:1px;background:var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
+.hp-streak-main{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;min-width:0}
+.hp-streak-num{display:flex;align-items:baseline;gap:5px;font-family:inherit;white-space:nowrap}
+.hp-streak-num b{font-size:26px;font-weight:900;letter-spacing:-.03em;line-height:1;color:var(--text-main,#f4f4f2)}
+.hp-streak-num em{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--red,var(--color-1,#e8384f))}
+.hp-streak-sub{font-size:11.5px;line-height:1.5;color:var(--muted,#9a9a96);min-width:0;padding-left:12px;border-left:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
 .hp-streak-sub b{color:var(--text-main,#f4f4f2);font-weight:700}
 
 /* ---------- XP HATTI (sv rakamı + net dolu bar) ---------- */
@@ -164,7 +170,7 @@ const HOME_PREMIUM_CSS = `
 .hn-planned{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;padding:13px 22px;border-radius:13px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border:1px dashed var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
 
 /* ---------- 03 · GÜNÜN SİNEMA KARTI ---------- */
-.hn-spotlight{display:grid;grid-template-columns:280px 1fr;overflow:hidden}
+.hn-spotlight{display:grid;grid-template-columns:280px minmax(0,1fr);overflow:hidden}
 .hn-sp-poster{border-right:1px solid var(--line,rgba(244,244,242,.07));min-height:400px;position:relative;overflow:hidden;background:radial-gradient(420px 320px at 70% 15%,var(--blob-1,rgba(232,56,79,.28)),transparent 60%),linear-gradient(155deg,#2A2118 0%,#161215 55%,#0A0A0D 100%);display:flex;align-items:flex-end;padding:26px;cursor:pointer;font-family:inherit;text-align:left;color:inherit}
 .hn-sp-poster:focus-visible{outline:2px solid var(--red,var(--color-1,#e8384f));outline-offset:-2px}
 .hn-sp-poster::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.55));pointer-events:none}
@@ -172,20 +178,21 @@ const HOME_PREMIUM_CSS = `
 .hn-big-letter{position:absolute;inset:0;display:grid;place-items:center;font-size:190px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-.06em;user-select:none;pointer-events:none}
 .hn-filmbadge{position:absolute;top:0;left:0;z-index:2;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;padding:8px 14px;background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-radius:0 0 14px 0;box-shadow:0 6px 18px -6px var(--red,var(--color-1,#e8384f))}
 .hn-rate{position:absolute;top:16px;right:16px;z-index:2;font-weight:900;font-size:16px;background:rgba(10,10,13,.75);border:1px solid rgba(255,255,255,.18);padding:6px 12px;border-radius:12px;color:#fff;backdrop-filter:blur(10px);box-shadow:0 8px 22px -10px rgba(0,0,0,.9)}
-.hn-pt{position:relative;z-index:2;font-family:inherit;font-size:26px;font-weight:900;text-transform:uppercase;letter-spacing:-.03em;line-height:1.02;text-shadow:0 4px 24px rgba(0,0,0,.8);color:#fff}
-.hn-sp-body{padding:30px 34px;display:flex;flex-direction:column;gap:16px}
+.hn-sp-poster .hn-pt{position:relative;z-index:2;font-family:inherit;font-size:26px;font-weight:900;text-transform:uppercase;letter-spacing:-.03em;line-height:1.05;text-shadow:0 4px 24px rgba(0,0,0,.8);color:var(--text-main,#f4f4f2);height:auto;margin:0;background:none;border-radius:0;box-shadow:none;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+.hn-sp-body{padding:30px 34px;display:flex;flex-direction:column;gap:16px;min-width:0;overflow:hidden}
 .hn-sp-kick{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.26em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
-.hn-sp-body h2{font-family:inherit;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-.035em;line-height:.98;margin:0;background:linear-gradient(100deg,#fff 35%,#9C9CA1);-webkit-background-clip:text;background-clip:text;color:transparent}
-.hn-meta-chips{display:flex;gap:8px;flex-wrap:wrap;width:fit-content}
-.hn-meta-chips span{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:8px 14px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px}
+.hn-sp-body h2{font-family:inherit;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-.035em;line-height:.98;margin:0;background:linear-gradient(100deg,#fff 35%,#9C9CA1);-webkit-background-clip:text;background-clip:text;color:transparent;overflow-wrap:anywhere;min-width:0}
+.hn-meta-chips{display:flex;gap:8px;flex-wrap:wrap;width:fit-content;max-width:100%;min-width:0}
+.hn-meta-chips span{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:8px 14px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hn-meta-chips span b{color:var(--text-main,#f4f4f2)}
-.hn-genre-row{display:flex;gap:8px;flex-wrap:wrap}
-.hn-genre{font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:7px 14px;color:var(--muted,#9a9a96);border-radius:99px;transition:.2s;background:none}
+.hn-genre-row{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
+.hn-genre{font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:7px 14px;color:var(--muted,#9a9a96);border-radius:99px;transition:.2s;background:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hn-genre:first-child{color:var(--red-hi,var(--color-2,#ff6b7a));border-color:rgba(232,56,79,.5);background:rgba(232,56,79,.12)}
-.hn-gdesc{font-family:inherit;font-size:13.5px;line-height:1.75;color:var(--muted,#9a9a96);max-width:640px;margin:0}
+.hn-gdesc{font-family:inherit;font-size:13.5px;line-height:1.75;color:var(--muted,#9a9a96);max-width:640px;margin:0;overflow-wrap:anywhere}
 .hn-gdesc b{color:var(--text-main,#f4f4f2);font-weight:700}
 .hn-gdesc-empty{font-style:italic}
-.hn-btnrow{display:flex;flex-wrap:wrap;gap:11px;margin-top:auto;padding-top:6px}
+.hn-btnrow{display:flex;flex-wrap:wrap;gap:11px;margin-top:auto;padding-top:6px;min-width:0}
+.hn-btnrow .hn-btn{max-width:100%}
 .hn-links{display:flex;gap:8px;flex-wrap:wrap}
 .hn-link-chip{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:8px 13px;border-radius:99px;transition:.2s;text-decoration:none}
 .hn-link-chip:hover{color:var(--text-main,#f4f4f2);border-color:rgba(255,255,255,.3);transform:translateY(-2px)}
@@ -287,7 +294,7 @@ const HOME_PREMIUM_CSS = `
 @media (max-width:1080px){
   .hp-xpool{text-align:left;width:100%;order:3;padding-left:0}
   .hp-recent{grid-template-columns:repeat(3,1fr)}
-  .hn-spotlight{grid-template-columns:1fr}
+  .hn-spotlight{grid-template-columns:minmax(0,1fr)}
   .hn-sp-poster{min-height:240px;border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
   .hn-series-grid,.hn-shortcuts{grid-template-columns:1fr}
   .hn-duo{grid-template-columns:1fr}
@@ -323,7 +330,10 @@ const HOME_PREMIUM_CSS = `
   .hp-tier{min-height:34px}
   .hp-stat{min-height:48px;padding:9px 6px}
   /* serişeridi */
-  .hp-streakbar{padding:10px 16px;gap:12px}
+  .hp-streakbar{padding:10px 16px;gap:12px;min-height:0}
+  .hp-streak-num b{font-size:23px}
+  .hp-streak-sub{border-left:0;padding-left:0;flex:1 1 100%}
+  .hp-streak-lab::after{flex:0 0 14px}
   /*geri sayım */
   .hn-timer{padding:14px;gap:12px}
   .hn-timer-ic{width:40px;height:40px;border-radius:12px}
@@ -334,7 +344,7 @@ const HOME_PREMIUM_CSS = `
   /* 03 · günün sineması */
   .hn-sp-poster{min-height:210px;padding:18px}
   .hn-big-letter{font-size:130px}
-  .hn-pt{font-size:21px}
+  .hn-sp-poster .hn-pt{font-size:21px;-webkit-line-clamp:3}
   .hn-rate{top:12px;right:12px;font-size:14px;padding:5px 10px}
   .hn-filmbadge{font-size:8.5px;padding:6px 11px;letter-spacing:.16em}
   .hn-sp-body{padding:20px 16px;gap:14px}
@@ -398,6 +408,8 @@ const HOME_PREMIUM_CSS = `
   .hp-path-lab{width:100%}
   .hp-node{min-height:24px}
   .hp-streakbar{padding:10px 14px;min-height:0}
+  .hp-streak-num b{font-size:21px}
+  .hp-fire-ic{width:34px;height:34px;border-radius:11px}
   .hp-tiers{padding:10px 14px}
   .hn-sp-body h2{font-size:24px}
   .hn-bento-title{font-size:22px}
@@ -722,15 +734,20 @@ export default function HomePage() {
           SERİ ŞERİDİ (ajan kartından bağımsız, üst bant)
           ========================================================= */}
       <div className="hp-streakbar" data-tutorial="home-streak">
-        <span className="hp-fire-ic"><Flame size={18} /></span>
-        <span className="hp-streak-num">
-          <b>{data.dailyStreak || 0}</b>
-          <em>Gün Seri</em>
-        </span>
-        <span className="hp-streak-sub">
-          {data.dailyStreak > 0
-            ? <>Alevin sönmedi — bugün de izleyerek seriyi <b>bozmadan</b> taşı.</>
-            : <>Bugün bir yapım izleyerek seriyi <b>başlat</b>.</>}
+        <span className="hp-fire-ic"><Flame size={19} /></span>
+        <span className="hp-streak-tx">
+          <span className="hp-streak-lab">Günlük Seri</span>
+          <span className="hp-streak-main">
+            <span className="hp-streak-num">
+              <b>{data.dailyStreak || 0}</b>
+              <em>Gün</em>
+            </span>
+            <span className="hp-streak-sub">
+              {data.dailyStreak > 0
+                ? <>Alevin sönmedi — bugün de izleyerek seriyi <b>bozmadan</b> taşı.</>
+                : <>Bugün bir yapım izleyerek seriyi <b>başlat</b>.</>}
+            </span>
+          </span>
         </span>
       </div>
 
