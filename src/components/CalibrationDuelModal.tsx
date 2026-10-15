@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Crown,
+  Dices,
   Film,
   Gauge,
   SkipForward,
@@ -20,15 +21,18 @@ import type { Movie } from '../types';
 /**
  * KÖR KALİBRASYON DÜELLO MODALI (Zevk Kalibrasyonu — Mod 2)
  *
- * pickDuelPair() ile sıradaki eşleşme seçilir; kullanıcı ← / → ile kazananı
- * seçer, ↓/Boşluk ile atlar. resolveDuel() reducer'ı Elo güncellemesini
- * (calibratedScore, duelCount/duelWins, toplam +XP: her düello +10 XP ve
- * 5'li seride +50) kendi halleder — bu bileşen yalnızca arayüzü gösterir.
+ * pickDuelPair() ile sıradaki eşleşme seçilir; kullanıcı ← / → ile (veya
+ * afiş kartlarına dokunarak) kazananı seçer, ↓/Boşluk ile atlar. resolveDuel()
+ * reducer'ı Elo güncellemesini (calibratedScore, duelCount/duelWins) halleder.
  * 5 düello tamamlanınca modal kapanır ve toast yayınlanır.
  *
- * Klavye: useShortcuts "close" (ESC) eylemini taşır (modal açıkken de çalışır);
- * ok/boşluk tuşları kısayol listesinde tanımlı olmadığı için modalın kendi
- * keydown dinleyicisi bunları yakalar (metin girişi odaktayken etkisizdir).
+ * Tasarım: masaüstünde sinematik VS ekranı (büyük afişler, tıklanabilir kart),
+ * mobilde kompakt tek-satır meta. 5'lik tur ilerlemesi modalın en üstünde
+ * ince bar olarak taşınır.
+ *
+ * Klavye: useShortcuts "close" (ESC) eylemini taşır; ok/boşluk tuşları
+ * modalın kendi keydown dinleyicisinde yakalanır (metin girişi odaktayken
+ * etkisizdir).
  *
  * Renkler sabit DEĞİL — var() fallback zincirleri (tema motoru uyumlu).
  */
@@ -42,6 +46,9 @@ const ON_RED = 'var(--on-color-1, #0a0a0e)';
 const GLASS = 'var(--glass, rgba(255, 255, 255, 0.05))';
 /** Nötr cam ikinci ton (karşılaştırma çubuğunda B tarafı). */
 const GLASS_TEXT = `color-mix(in srgb, ${TEXT} 35%, transparent)`;
+/** Afiş üzerinde okunurluk perdesi (siyah → saydam dikey degrade). */
+const POSTER_SCRIM =
+  'linear-gradient(to top, rgba(8, 8, 12, 0.96) 0%, rgba(8, 8, 12, 0.55) 32%, rgba(8, 8, 12, 0.08) 62%, transparent 100%)';
 
 /** Tur uzunluğu: 5 düello → kapanış + toast. */
 const ROUNDS = 5;
@@ -67,18 +74,37 @@ interface CalibrationDuelModalProps {
   onClose: () => void;
 }
 
-/** VS kartı: poster + ad + yıl + rating + duelCount rozeti + kalibre puan. */
-function DuelSide({ movie }: { movie: Movie }) {
+/**
+ * VS kartı — sinematik afiş paneli.
+ * Tüm kart kazanan seçimine tıklanabilir (hover'da afiş hafif büyür,
+ * kenarlık aksan rengine döner); alt şeritte kalibre puan + düello sayısı.
+ */
+function DuelSide({
+  movie,
+  side,
+  disabled,
+  onPick,
+}: {
+  movie: Movie;
+  side: 'a' | 'b';
+  disabled: boolean;
+  onPick: () => void;
+}) {
   const calibrated =
     movie.calibratedScore ?? (typeof movie.rating === 'number' ? movie.rating : null);
   return (
-    <div
+    <button
+      type="button"
+      onClick={onPick}
+      disabled={disabled}
+      title={`Kazanan: ${movie.title} (${side === 'a' ? '←' : '→'})`}
       style={{ background: GLASS, borderColor: LINE }}
-      className="border rounded-2xl p-2.5 sm:p-3 flex flex-col items-center gap-2 text-center min-w-0"
+      className="group relative w-full min-w-0 max-w-[300px] lg:max-w-[340px] mx-auto rounded-2xl overflow-hidden border text-left transition-all duration-200 hover:border-[color:var(--red,#e8384f)] hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60 disabled:hover:translate-y-0"
     >
+      {/* AFİŞ */}
       <div
-        style={{ borderColor: LINE }}
-        className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden border shrink-0"
+        style={{ background: SURFACE }}
+        className="relative w-full aspect-[2/3] overflow-hidden"
       >
         {movie.posterUrl ? (
           <img
@@ -87,57 +113,100 @@ function DuelSide({ movie }: { movie: Movie }) {
             src={movie.posterUrl}
             alt={movie.title}
             onError={handleImgFallback}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
           />
         ) : (
           <div
-            style={{ color: MUTED, background: SURFACE }}
-            className="w-full h-full grid place-items-center"
+            style={{ color: MUTED }}
+            className="absolute inset-0 grid place-items-center"
           >
-            <Film size={20} />
+            <Film size={34} strokeWidth={1.5} />
           </div>
         )}
-      </div>
 
-      <div className="min-w-0 w-full">
-        <div
-          style={{ color: TEXT }}
-          className="text-[11px] sm:text-xs font-black leading-tight line-clamp-2"
-        >
-          {movie.title}
-        </div>
-        <div style={{ color: MUTED }} className="text-[10px] font-bold mt-0.5">
-          {movie.year || '—'}
-        </div>
-      </div>
+        {/* Okunurluk perdesi */}
+        <div className="absolute inset-0" style={{ background: POSTER_SCRIM }} />
 
-      <div className="flex items-center gap-1.5 flex-wrap justify-center">
+        {/* Puan rozeti — afişin sol üstünde */}
         <span
           style={{ background: RED, color: ON_RED }}
-          className="text-[10px] font-black px-1.5 py-0.5 rounded-md flex items-center gap-1 tabular-nums"
+          className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 text-[11px] sm:text-sm font-black px-2 py-1 rounded-lg flex items-center gap-1 tabular-nums shadow-lg"
         >
-          <Star size={9} fill="currentColor" /> {movie.rating ?? '—'}
+          <Star size={11} fill="currentColor" /> {movie.rating ?? '—'}
         </span>
+
+        {/* Kazanan yön ipucu — afişin sağ üstünde (sadece hover) */}
         <span
-          style={{ borderColor: LINE, color: MUTED }}
-          className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border flex items-center gap-1 tabular-nums"
-          title="Bu filmin girdiği düello sayısı"
+          style={{ background: 'rgba(8, 8, 12, 0.72)', color: TEXT, borderColor: LINE }}
+          className="hidden sm:flex absolute top-3 right-3 items-center gap-1 text-[10px] font-black px-2 py-1 rounded-lg border opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         >
-          <Swords size={9} /> {movie.duelCount || 0} düello
+          {side === 'a' ? <ArrowLeft size={11} /> : <ArrowRight size={11} />}
+          Kazandı
         </span>
+
+        {/* Başlık — perde üzerinde */}
+        <div className="absolute bottom-0 inset-x-0 p-2.5 sm:p-3.5">
+          <div
+            style={{ color: TEXT }}
+            className="text-[13px] sm:text-lg lg:text-xl font-black leading-tight line-clamp-2 drop-shadow"
+          >
+            {movie.title}
+          </div>
+          <div
+            style={{ color: 'color-mix(in srgb, var(--text-main, #f4f4f2) 60%, transparent)' }}
+            className="text-[10px] sm:text-xs font-bold mt-0.5 tabular-nums"
+          >
+            {movie.year || '—'}
+          </div>
+        </div>
       </div>
 
-      <div style={{ color: MUTED }} className="text-[10px] font-bold">
-        Kalibre{' '}
-        <span style={{ color: TEXT }} className="font-black tabular-nums">
-          {calibrated != null ? calibrated.toFixed(2) : '—'}
+      {/* META ŞERİDİ */}
+      <div
+        style={{ borderColor: LINE }}
+        className="flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-2 sm:py-2.5 border-t"
+      >
+        <span style={{ color: MUTED }} className="text-[10px] sm:text-[11px] font-bold">
+          Kalibre{' '}
+          <span style={{ color: TEXT }} className="font-black tabular-nums">
+            {calibrated != null ? calibrated.toFixed(2) : '—'}
+          </span>
+        </span>
+        <span
+          style={{ color: MUTED }}
+          className="text-[9.5px] sm:text-[10px] font-bold tabular-nums flex items-center gap-1"
+          title="Bu filmin girdiği düello sayısı"
+        >
+          <Swords size={10} /> {movie.duelCount || 0} düello
         </span>
       </div>
+    </button>
+  );
+}
+
+/** VS amblemi: ince çizgiler + merkez rozet. */
+function VsEmblem({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 px-1 py-2">
+      <div style={{ background: LINE }} className="hidden sm:block w-px flex-1 min-h-6" />
+      <div
+        style={{ background: RED, color: ON_RED, boxShadow: '0 8px 28px rgba(232, 56, 79, 0.35)' }}
+        className="w-11 h-11 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-black text-sm sm:text-lg tracking-tight shrink-0"
+      >
+        VS
+      </div>
+      <div style={{ background: LINE }} className="hidden sm:block w-px flex-1 min-h-6" />
+      <span
+        style={{ color: MUTED }}
+        className="text-[8.5px] sm:text-[9px] font-black uppercase tracking-widest text-center leading-tight max-w-[74px] sm:max-w-[86px]"
+      >
+        {label}
+      </span>
     </div>
   );
 }
 
-/** Klavye ipucu tuşu. */
+/** Klavye ipucu tuşu (masaüstü). */
 function KeyCap({ children }: { children: React.ReactNode }) {
   return (
     <kbd
@@ -214,7 +283,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
         newScore: loserNew,
       },
     });
-    // Reducer: Elo + duelCount/duelWins + toplam +XP (10; 5'li seride +50).
+    // Reducer: Elo + duelCount/duelWins.
     resolveDuel(winner.id, loser.id, 'movie');
   };
 
@@ -275,88 +344,89 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center p-2.5 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[95] flex items-center justify-center p-2 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{ background: SURFACE, borderColor: LINE, color: TEXT }}
-        className="relative w-full max-w-2xl border rounded-3xl sm:rounded-[2rem] overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-[90svh] sm:max-h-[92dvh] animate-fade-in-up"
+        className="relative w-full max-w-xl sm:max-w-4xl lg:max-w-5xl border rounded-2xl sm:rounded-[1.75rem] overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.9)] flex flex-col max-h-[94svh] sm:max-h-[92dvh] animate-fade-in-up"
       >
-        {/* ÜST BAŞLIK + 5'LİK TUR İLERLEMESİ */}
+        {/* TUR İLERLEMESİ — en üstte ince bar */}
+        <div style={{ background: LINE }} className="absolute top-0 inset-x-0 h-[3px] z-20">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${phase === 'duel' ? ((round + (reveal ? 1 : 0)) / ROUNDS) * 100 : 0}%`,
+              background: RED,
+            }}
+          />
+        </div>
+
+        {/* ÜST BAŞLIK */}
         <div
           style={{ borderColor: LINE }}
-          className="relative z-10 flex items-start justify-between gap-3 px-4 pt-3.5 pb-3 sm:px-6 sm:pt-5 sm:pb-4 border-b shrink-0"
+          className="relative z-10 flex items-center justify-between gap-3 px-3.5 pt-4 pb-3 sm:px-7 sm:pt-5 sm:pb-4 border-b shrink-0"
         >
-          <div className="min-w-0 pr-2">
+          <div className="min-w-0">
             <div
               style={{ color: RED }}
-              className="inline-flex items-center gap-1.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-1"
+              className="inline-flex items-center gap-1.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-0.5"
             >
-              <Swords size={12} /> Kör Kalibrasyon &amp; Elo
+              <Swords size={12} /> Kör Kalibrasyon
             </div>
             <h2
               style={{ color: TEXT }}
-              className="text-base sm:text-xl font-black uppercase tracking-tight truncate"
+              className="text-lg sm:text-2xl font-black uppercase tracking-tight truncate leading-none"
             >
-              Zevk Kalibrasyonu
+              Düelloya Başla
             </h2>
-            <p style={{ color: MUTED }} className="text-[11px] sm:text-xs mt-0.5 leading-snug">
-              İki filmi kör seç — Elo motoru kalibre puanlarını dengeler.
-            </p>
           </div>
 
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            <span
-              style={{ color: MUTED }}
-              className="text-[11px] font-black tabular-nums uppercase tracking-wider"
-            >
-              {round} / {ROUNDS} düello
-            </span>
-            <div className="flex gap-1">
-              {Array.from({ length: ROUNDS }, (_, i) => (
-                <span
-                  key={i}
-                  className="h-1.5 w-5 sm:w-6 rounded-full transition-all duration-500"
-                  style={{ background: i < round ? RED : LINE }}
-                />
-              ))}
-            </div>
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+            {phase === 'duel' && (
+              <span
+                style={{ color: MUTED }}
+                className="text-[10px] sm:text-xs font-black tabular-nums uppercase tracking-wider"
+              >
+                {round} / {ROUNDS}
+              </span>
+            )}
             <button
               onClick={onClose}
               title="Kapat"
               style={{ background: GLASS, borderColor: LINE, color: MUTED }}
-              className="mt-0.5 w-9 h-9 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center transition-all hover:opacity-80"
+              className="w-9 h-9 sm:w-9 sm:h-9 rounded-full border flex items-center justify-center transition-all hover:opacity-75"
             >
-              <X size={16} />
+              <X size={17} />
             </button>
           </div>
         </div>
 
         {/* İÇERİK */}
-        <div className="relative z-10 flex-1 overflow-y-auto p-3.5 sm:p-6 custom-scrollbar">
+        <div className="relative z-10 flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar">
           {reveal ? (
             /* ---------- TUR SONU: animasyonlu ±delta ---------- */
-            <div className="animate-fade-in-up space-y-3 py-1">
+            <div className="animate-fade-in-up space-y-4 py-2 sm:py-4">
               <div className="text-center">
                 <div
                   style={{ color: RED }}
-                  className="text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-1.5"
+                  className="text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] flex items-center justify-center gap-1.5"
                 >
-                  <Crown size={12} /> Tur Sonucu
+                  <Crown size={13} /> Tur Sonucu
                 </div>
                 <div
                   style={{ color: TEXT }}
-                  className="text-3xl sm:text-4xl font-black tabular-nums tracking-tight mt-1"
+                  className="text-4xl sm:text-6xl font-black tabular-nums tracking-tight mt-1.5"
                 >
                   ±{reveal.delta.toFixed(2)}
                 </div>
-                <div style={{ color: MUTED }} className="text-[11px] font-bold mt-0.5">
+                <div style={{ color: MUTED }} className="text-[11px] sm:text-xs font-bold mt-1">
                   Elo güncellemesi uygulandı
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5 max-w-lg mx-auto">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 max-w-2xl mx-auto">
                 {[reveal.winner, reveal.loser].map((item, idx) => {
                   const won = idx === 0;
                   return (
@@ -364,47 +434,69 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                       key={`${item.id}-${won ? 'w' : 'l'}`}
                       style={{
                         background: won
-                          ? `color-mix(in srgb, ${RED} 14%, transparent)`
+                          ? `color-mix(in srgb, ${RED} 12%, transparent)`
                           : GLASS,
                         borderColor: won
                           ? `color-mix(in srgb, ${RED} 45%, transparent)`
                           : LINE,
                       }}
-                      className="border rounded-2xl p-3 text-left animate-fade-in-up"
+                      className="border rounded-2xl p-2.5 sm:p-4 flex items-center gap-2.5 sm:gap-3.5 animate-fade-in-up min-w-0"
                     >
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <span
-                          style={{ color: won ? RED : MUTED }}
-                          className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1"
-                        >
-                          {won ? (
-                            <>
-                              <Crown size={11} /> Kazanan
-                            </>
-                          ) : (
-                            'Kaybeden'
-                          )}
-                        </span>
-                        <span
-                          style={{ color: won ? RED : MUTED }}
-                          className="text-sm font-black tabular-nums"
-                        >
-                          {won ? '+' : '−'}
-                          {reveal.delta.toFixed(2)}
-                        </span>
-                      </div>
+                      {/* Küçük afiş */}
                       <div
-                        style={{ color: TEXT }}
-                        className="text-xs font-black truncate"
-                        title={item.title}
+                        style={{ background: SURFACE, borderColor: LINE }}
+                        className="w-11 sm:w-16 aspect-[2/3] rounded-lg overflow-hidden border shrink-0"
                       >
-                        {item.title}
+                        {item.posterUrl ? (
+                          <img
+                            src={item.posterUrl}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            style={{ color: MUTED }}
+                            className="w-full h-full grid place-items-center"
+                          >
+                            <Film size={16} />
+                          </div>
+                        )}
                       </div>
-                      <div
-                        style={{ color: MUTED }}
-                        className="text-[10px] font-bold tabular-nums mt-0.5"
-                      >
-                        {item.oldScore.toFixed(2)} → {item.newScore.toFixed(2)}
+                      <div className="min-w-0">
+                        <div className="flex items-center justify-between gap-1.5 mb-1">
+                          <span
+                            style={{ color: won ? RED : MUTED }}
+                            className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center gap-1"
+                          >
+                            {won ? (
+                              <>
+                                <Crown size={11} /> Kazanan
+                              </>
+                            ) : (
+                              'Kaybeden'
+                            )}
+                          </span>
+                          <span
+                            style={{ color: won ? RED : MUTED }}
+                            className="text-xs sm:text-sm font-black tabular-nums"
+                          >
+                            {won ? '+' : '−'}
+                            {reveal.delta.toFixed(2)}
+                          </span>
+                        </div>
+                        <div
+                          style={{ color: TEXT }}
+                          className="text-[11px] sm:text-sm font-black truncate"
+                          title={item.title}
+                        >
+                          {item.title}
+                        </div>
+                        <div
+                          style={{ color: MUTED }}
+                          className="text-[10px] sm:text-[11px] font-bold tabular-nums mt-0.5"
+                        >
+                          {item.oldScore.toFixed(2)} → {item.newScore.toFixed(2)}
+                        </div>
                       </div>
                     </div>
                   );
@@ -413,17 +505,21 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
             </div>
           ) : phase === 'setup' ? (
             /* ---------- AÇILIŞ: FİLTRE PENCERESİ ---------- */
-            <div className="space-y-4 animate-fade-in-up">
+            <div className="space-y-4 sm:space-y-5 max-w-lg mx-auto animate-fade-in-up">
               <div className="text-center">
                 <div
                   style={{ color: RED }}
-                  className="text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-1.5"
+                  className="text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] flex items-center justify-center gap-1.5"
                 >
-                  <Swords size={12} /> Düello Filtresi
+                  <Swords size={13} /> Düello Filtresi
                 </div>
-                <p style={{ color: MUTED }} className="text-[11px] sm:text-xs mt-1 leading-relaxed max-w-md mx-auto">
-                  Düellolara hangi filmlerle gireceğini seç. Eşleşmeler yalnızca aynı puanlı
-                  (veya <strong>±0.5</strong> puan aralığındaki) filmler arasından yapılır.
+                <p
+                  style={{ color: MUTED }}
+                  className="text-[11px] sm:text-sm mt-1.5 leading-relaxed"
+                >
+                  Düellolara hangi filmlerle gireceğini seç. Eşleşmeler yalnızca aynı
+                  puanlı (veya <strong style={{ color: TEXT }}>±0.5</strong> puan
+                  aralığındaki) filmler arasından yapılır.
                 </p>
               </div>
 
@@ -433,25 +529,28 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                 onClick={() => setRandomMode((v) => !v)}
                 style={{
                   background: randomMode
-                    ? `color-mix(in srgb, ${RED} 16%, transparent)`
+                    ? `color-mix(in srgb, ${RED} 14%, transparent)`
                     : GLASS,
                   borderColor: randomMode
                     ? `color-mix(in srgb, ${RED} 45%, transparent)`
                     : LINE,
                   color: randomMode ? RED : MUTED,
                 }}
-                className="w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl border text-left transition-all"
+                className="w-full flex items-center justify-between gap-3 px-3.5 sm:px-4 py-3 sm:py-3.5 rounded-xl border text-left transition-all"
               >
-                <span className="min-w-0">
-                  <span className="block text-xs font-black uppercase tracking-wider">
-                    🎲 Rastgele Eşleşme
-                  </span>
-                  <span className="block text-[10.5px] font-bold opacity-75 mt-0.5">
-                    Aynı puan bandındaki adaylardan rastgele ikili seç
+                <span className="min-w-0 flex items-center gap-2.5">
+                  <Dices size={18} className="shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block text-[11px] sm:text-xs font-black uppercase tracking-wider">
+                      Rastgele Eşleşme
+                    </span>
+                    <span className="block text-[10px] sm:text-[11px] font-bold opacity-75 mt-0.5">
+                      Aynı puan bandındaki adaylardan rastgele ikili seç
+                    </span>
                   </span>
                 </span>
                 <span
-                  className="shrink-0 text-[10px] font-black px-2 py-1 rounded-lg border"
+                  className="shrink-0 text-[9.5px] sm:text-[10px] font-black px-2 py-1 rounded-lg border tabular-nums"
                   style={{
                     background: randomMode ? RED : 'transparent',
                     color: randomMode ? ON_RED : MUTED,
@@ -466,7 +565,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
               <div>
                 <div
                   style={{ color: MUTED }}
-                  className="text-[9.5px] font-black uppercase tracking-widest mb-2"
+                  className="text-[9.5px] sm:text-[10px] font-black uppercase tracking-widest mb-2"
                 >
                   Türler {selectedGenres.length > 0 && `(${selectedGenres.length} seçili)`}
                 </div>
@@ -484,7 +583,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                         borderColor: selectedGenres.length === 0 ? RED : LINE,
                         color: selectedGenres.length === 0 ? ON_RED : MUTED,
                       }}
-                      className="px-2.5 py-1.5 rounded-lg border text-[11px] font-black transition-all"
+                      className="px-3 py-1.5 rounded-lg border text-[11px] font-black transition-all"
                     >
                       Tümü
                     </button>
@@ -497,14 +596,14 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                           onClick={() => toggleGenre(g)}
                           style={{
                             background: on
-                              ? `color-mix(in srgb, ${RED} 16%, transparent)`
+                              ? `color-mix(in srgb, ${RED} 14%, transparent)`
                               : GLASS,
                             borderColor: on
                               ? `color-mix(in srgb, ${RED} 45%, transparent)`
                               : LINE,
                             color: on ? RED : MUTED,
                           }}
-                          className="px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all"
+                          className="px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all"
                         >
                           {g}
                         </button>
@@ -520,7 +619,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                 onClick={() => setPhase('duel')}
                 disabled={allGenres.length === 0}
                 style={{ background: RED, color: ON_RED, borderColor: RED }}
-                className="w-full py-3.5 min-h-12 rounded-xl border font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                className="w-full py-3.5 sm:py-4 min-h-12 rounded-xl border font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 <Swords size={16} /> Düelloya Başla
               </button>
@@ -531,31 +630,30 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
             </div>
           ) : pair ? (
             /* ---------- VS EKRANI ---------- */
-            <div className="space-y-4">
-              <div className="grid grid-cols-[1fr_auto_1fr] gap-2 sm:gap-3 items-stretch">
-                <DuelSide movie={pair.a} />
-                <div className="flex flex-col items-center justify-center gap-1.5 px-0.5">
-                  <div
-                    style={{ background: RED, color: ON_RED }}
-                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-black text-sm sm:text-base shadow-lg"
-                  >
-                    VS
-                  </div>
-                  <span
-                    style={{ color: MUTED }}
-                    className="text-[8.5px] sm:text-[9px] font-black uppercase tracking-widest text-center leading-tight max-w-[70px]"
-                  >
-                    {pair.mode === 'target' ? 'Anlık Eşleşme' : 'En Yakın Eşleşme'}
-                  </span>
-                </div>
-                <DuelSide movie={pair.b} />
+            <div className="space-y-3 sm:space-y-5">
+              <div className="grid grid-cols-[1fr_auto_1fr] gap-1.5 sm:gap-5 items-center">
+                <DuelSide
+                  movie={pair.a}
+                  side="a"
+                  disabled={Boolean(reveal)}
+                  onPick={() => pickWinner('a')}
+                />
+                <VsEmblem
+                  label={pair.mode === 'target' ? 'Anlık Eşleşme' : 'En Yakın Eşleşme'}
+                />
+                <DuelSide
+                  movie={pair.b}
+                  side="b"
+                  disabled={Boolean(reveal)}
+                  onPick={() => pickWinner('b')}
+                />
               </div>
 
               {/* PUAN KARŞILAŞTIRMA ÇUBUĞU */}
-              <div>
+              <div className="max-w-2xl mx-auto w-full">
                 <div
                   style={{ color: MUTED }}
-                  className="flex items-center justify-between text-[9.5px] font-black uppercase tracking-widest mb-1.5"
+                  className="flex items-center justify-between text-[9.5px] sm:text-[10px] font-black uppercase tracking-widest mb-1.5"
                 >
                   <span className="tabular-nums">Puan {aRating || '—'}</span>
                   <span>Karşılaştırma</span>
@@ -563,7 +661,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                 </div>
                 <div
                   style={{ background: LINE }}
-                  className="h-2.5 w-full rounded-full overflow-hidden flex"
+                  className="h-1.5 sm:h-2 w-full rounded-full overflow-hidden flex"
                 >
                   <div
                     className="h-full transition-all duration-500"
@@ -577,54 +675,49 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
               </div>
 
               {/* AKSİYONLAR */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 max-w-2xl mx-auto w-full">
                 <button
                   type="button"
                   onClick={() => pickWinner('a')}
                   disabled={Boolean(reveal)}
                   style={{ background: RED, color: ON_RED, borderColor: RED }}
-                  className="py-3 min-h-11 rounded-xl border font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-50"
+                  className="py-3 min-h-11 rounded-xl border font-black text-[11px] sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-50"
                   title="Kazanan: Sol film (←)"
                 >
-                  <ArrowLeft size={15} /> Sol Kazandı
+                  <ArrowLeft size={15} /> <span className="hidden sm:inline">Sol Kazandı</span>
+                  <span className="sm:hidden">Sol</span>
                 </button>
                 <button
                   type="button"
                   onClick={skipPair}
                   disabled={Boolean(reveal)}
                   style={{ background: GLASS, borderColor: LINE, color: MUTED }}
-                  className="py-3 min-h-11 rounded-xl border font-bold text-[11px] flex flex-col items-center justify-center gap-0.5 transition-all hover:opacity-80 active:scale-[0.98] disabled:opacity-50"
+                  className="py-3 min-h-11 rounded-xl border font-bold text-[10px] sm:text-[11px] flex flex-col items-center justify-center gap-0.5 transition-all hover:opacity-80 active:scale-[0.98] disabled:opacity-50"
                   title="Bu eşleşmeyi atla (↓ veya Boşluk)"
                 >
                   <span className="flex items-center gap-1">
                     <SkipForward size={12} /> Atla
                   </span>
-                  <span className="text-[9px] tracking-wider">↓ / Boşluk</span>
+                  <span className="hidden sm:block text-[9px] tracking-wider">↓ / Boşluk</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => pickWinner('b')}
                   disabled={Boolean(reveal)}
                   style={{ background: RED, color: ON_RED, borderColor: RED }}
-                  className="py-3 min-h-11 rounded-xl border font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-50"
+                  className="py-3 min-h-11 rounded-xl border font-black text-[11px] sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-50"
                   title="Kazanan: Sağ film (→)"
                 >
-                  Sağ Kazandı <ArrowRight size={15} />
+                  <span className="hidden sm:inline">Sağ Kazandı</span>
+                  <span className="sm:hidden">Sağ</span> <ArrowRight size={15} />
                 </button>
               </div>
             </div>
           ) : (
             /* ---------- BOŞ DURUM ---------- */
             <div className="text-center py-10 px-4">
-              <Gauge
-                size={36}
-                style={{ color: MUTED }}
-                className="mx-auto mb-3"
-              />
-              <p
-                style={{ color: TEXT }}
-                className="text-sm font-black uppercase tracking-widest"
-              >
+              <Gauge size={36} style={{ color: MUTED }} className="mx-auto mb-3" />
+              <p style={{ color: TEXT }} className="text-sm font-black uppercase tracking-widest">
                 Uygun düello adayı yok
               </p>
               <p style={{ color: MUTED }} className="text-xs mt-1.5 leading-relaxed max-w-sm mx-auto">
@@ -647,14 +740,14 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
           )}
         </div>
 
-        {/* ALT: KLAVYE İPUÇLARI */}
+        {/* ALT: KLAVYE İPUÇLARI (masaüstü) + KAPAT */}
         <div
           style={{ borderColor: LINE, background: SURFACE }}
-          className="relative z-10 px-4 py-3 sm:px-6 border-t flex items-center justify-between gap-3 shrink-0"
+          className="relative z-10 px-3.5 py-2.5 sm:px-7 sm:py-3.5 border-t flex items-center justify-between gap-3 shrink-0"
         >
           <div
             style={{ color: MUTED }}
-            className="flex items-center gap-2 sm:gap-3 flex-wrap text-[9.5px] font-black uppercase tracking-widest"
+            className="hidden sm:flex items-center gap-3 text-[9.5px] font-black uppercase tracking-widest"
           >
             <span className="flex items-center gap-1">
               <KeyCap>←</KeyCap> Sol kazanan
@@ -667,6 +760,12 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
               <KeyCap>Boşluk</KeyCap> Atla
             </span>
           </div>
+          <span
+            style={{ color: MUTED }}
+            className="sm:hidden text-[10px] font-bold"
+          >
+            Afişe dokunarak kazananı seç
+          </span>
           <button
             type="button"
             onClick={onClose}
