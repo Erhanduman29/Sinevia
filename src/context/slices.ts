@@ -1,5 +1,15 @@
 import { createContext, useContext } from 'react';
-import type { ExtendedAppData } from './AppContext';
+import type { ExtendedAppData, AppContextValue } from './AppContext';
+
+/** Aksiyonlar (aksiyonlar) — state alanları hariç tüm context değeri. */
+export type ActionsSlice = Omit<
+  AppContextValue,
+  | 'data' | 'syncStatus' | 'isQuestCelebrating' | 'toasts' | 'achievementToasts'
+  | 'levelUpData' | 'seasonCompleteData' | 'xpGainData' | 'weeklyPlan'
+>;
+
+export const ActionsContext = createContext<ActionsSlice | null>(null);
+export const useActions = () => useSlice(ActionsContext, 'useActions');
 
 /**
  * State Slicing — re-render izolasyonu katmanı (opt-in).

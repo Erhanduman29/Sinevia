@@ -7,8 +7,8 @@ import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
 import { supabase } from '../lib/supabase';
 import { idbGet, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded } from '../lib/storageService';
-import { LibraryContext, GamificationContext, SettingsContext, TimerContext } from './slices';
-import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice } from './slices';
+import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
+import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, ActionsSlice } from './slices';
 
 const STORAGE_KEY = 'sinevia-v1';
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
@@ -844,7 +844,7 @@ export interface AchievementToastItem { id: string; achievementName: string; tie
 interface LevelUpData { newLevel: number; }
 interface SeasonCompleteData { seriesTitle: string; season: number; }
 
-interface AppContextValue {
+export interface AppContextValue {
   data: ExtendedAppData;
   syncStatus: 'syncing' | 'synced' | 'error'; // YENİ: Eşitleme Durum Sinyali
   isQuestCelebrating: boolean; setIsQuestCelebrating: (val: boolean) => void; 
@@ -1458,14 +1458,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeTimerMovie: data.movies.find((m) => !m.watched && m.startedAt) || null,
   }), [data.movies]);
 
+  // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
+  // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
+  const value: AppContextValue = {
+    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements
+  };
+
+  // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
+  const actionDeps = [
+    setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase,
+    addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer,
+    watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes,
+    watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode,
+    addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
+    editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue,
+    exportData, importData, resetData, exportShareList, importShareList,
+    showToast, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, updateAIHistory,
+    addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme,
+    addPlanItem, deletePlanItem, updatePlanItem, grantXp,
+    toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification,
+    forceXpSync, syncAchievements,
+  ];
+  const actionsValue = useMemo<ActionsSlice>(() => {
+    const { data: _d, syncStatus: _ss, isQuestCelebrating: _iqc, toasts: _t, achievementToasts: _at, levelUpData: _lud, seasonCompleteData: _scd, xpGainData: _xgd, weeklyPlan: _wp, ...rest } = value;
+    return rest;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sadece aksiyon ref'leri; state değişimi cache'i bozmaz
+  }, actionDeps);
+
   return (
     <LibraryContext.Provider value={librarySlice}>
       <GamificationContext.Provider value={gamificationSlice}>
         <SettingsContext.Provider value={settingsSlice}>
           <TimerContext.Provider value={timerSlice}>
-            <AppContext.Provider value={{ data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements }}>
-              {children}
-            </AppContext.Provider>
+            <ActionsContext.Provider value={actionsValue}>
+              <AppContext.Provider value={value}>
+                {children}
+              </AppContext.Provider>
+            </ActionsContext.Provider>
           </TimerContext.Provider>
         </SettingsContext.Provider>
       </GamificationContext.Provider>
