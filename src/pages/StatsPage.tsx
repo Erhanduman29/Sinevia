@@ -4,7 +4,8 @@ import {
   Hourglass, Activity, User, Users, Building2, Crown, Sparkles,
   Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useLibrary, useGamification, useSettings } from '../context/slices';
+import type { ExtendedAppData } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import MediaDetailModal from '../components/MediaDetailModal';
@@ -454,23 +455,25 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
 }
 
 export default function StatsPage() {
-  const { data } = useApp();
+  const { movies, series, collections, history } = useLibrary();
+  const { achievements, totalXp, dailyStreak } = useGamification();
+  const { criteria } = useSettings();
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
   const [peopleTab, setPeopleTab] = useState<'directors' | 'cast' | 'studios'>('directors');
   const [showWrapped, setShowWrapped] = useState(false);
   const [statsMode, setStatsMode] = useState<StatsScopeMode>('current');
 
   const currentMoviesCount = useMemo(
-    () => countWatchedCurrentMovies(data.movies),
-    [data.movies]
+    () => countWatchedCurrentMovies(movies),
+    [movies]
   );
   const pastMoviesCount = useMemo(
-    () => countPastMovies(data.movies),
-    [data.movies]
+    () => countPastMovies(movies),
+    [movies]
   );
 
   // YENİ: TASARIMI KORUYUP, YÜZLERCE SATIRI TEK FONKSİYONA ÇAĞIRIYORUZ!
-  const stats = useMemo(() => calculateStats(data, statsMode), [data, statsMode]);
+  const stats = useMemo(() => calculateStats({ movies, series, history, collections, criteria } as unknown as ExtendedAppData, statsMode), [movies, series, history, collections, criteria, statsMode]);
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
@@ -482,7 +485,7 @@ export default function StatsPage() {
 
   const openHistoryItemDetail = (h: WatchHistoryItem) => {
     if (h.kind === 'movie' || h.type === 'movie') {
-      const found = data.movies.find((m) => m.id === (h.itemId || h.id));
+      const found = movies.find((m) => m.id === (h.itemId || h.id));
       const fallback = found || {
         id: h.itemId || h.id, title: h.title, year: h.year || '', genres: h.genres || [], collectionId: null,
         watched: true, isPastWatch: h.isPastWatch, rating: h.rating, detailedRating: h.detailedRating, reviewTags: h.reviewTags, note: h.note, watchedAt: h.watchedAt, addedAt: h.watchedAt,
@@ -490,7 +493,7 @@ export default function StatsPage() {
       setDetailTarget({ type: 'movie', data: fallback, historyItem: h });
     } else {
       const sid = h.seriesId || h.itemId || h.id;
-      const found = data.series.find((s) => s.id === sid);
+      const found = series.find((s) => s.id === sid);
       const fallback = found || { id: sid, title: h.title, year: h.year, genres: h.genres || [], episodes: [], addedAt: h.watchedAt } as any;
       setDetailTarget({ type: 'series', data: fallback, historyItem: h });
     }
@@ -753,8 +756,8 @@ export default function StatsPage() {
             <span className="text-[11px] sm:text-xs font-bold text-ink-400 uppercase tracking-wider">Kazanılan Kupa</span>
             <Award size={16} className="text-gold-400" />
           </div>
-          <div className={`${PREMIUM_NUM} text-2xl sm:text-3xl text-ink-50 mt-1.5`}>{data.achievements.reduce((s, a) => s + a.unlockedTiers.length, 0)}</div>
-          <div className="text-[11px] text-ink-400 mt-1"><strong className="text-gold-400">{(data.totalXp || 0).toLocaleString()} XP</strong></div>
+          <div className={`${PREMIUM_NUM} text-2xl sm:text-3xl text-ink-50 mt-1.5`}>{achievements.reduce((s, a) => s + a.unlockedTiers.length, 0)}</div>
+          <div className="text-[11px] text-ink-400 mt-1"><strong className="text-gold-400">{(totalXp || 0).toLocaleString()} XP</strong></div>
         </div>
       </div>
 
@@ -932,7 +935,7 @@ export default function StatsPage() {
             <div className={`${PREMIUM_CELL} p-3`}>
               <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-rose-400 uppercase"><Zap size={12} /> Seri Rekoru</div>
               <div className={`${PREMIUM_NUM} text-sm sm:text-lg text-ink-50 mt-1`}>{stats.maxStreakEver} Gün</div>
-              <div className="text-[10px] text-ink-400 mt-0.5">Aktif: {data.dailyStreak} gün</div>
+              <div className="text-[10px] text-ink-400 mt-0.5">Aktif: {dailyStreak} gün</div>
             </div>
             <div className={`${PREMIUM_CELL} p-3`}>
               <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-gold-400 uppercase"><Clock size={12} /> En Uzun Film</div>
@@ -1029,7 +1032,7 @@ export default function StatsPage() {
           <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-2.5 sm:gap-3.5">
             {stats.topRated.map((h, i) => {
               const isMovie = h.kind === 'movie' || h.type === 'movie';
-              const poster = isMovie ? data.movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl : data.series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.posterUrl;
+              const poster = isMovie ? movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl : series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.posterUrl;
               return (
                 <button key={h.id} type="button" onClick={() => openHistoryItemDetail(h)} className="group relative flex flex-col text-left bg-ink-950/70 border border-ink-800 hover:border-red-500/50 hover:shadow-[0_0_0_1px_rgba(232,56,79,0.35),0_16px_38px_-16px_rgba(232,56,79,0.6)] rounded-xl sm:rounded-2xl overflow-hidden shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
                   <div className="aspect-[2/3] w-full bg-ink-900 relative overflow-hidden">
@@ -1165,7 +1168,7 @@ export default function StatsPage() {
 
         <div className={`${PREMIUM_PANEL} flex flex-col justify-between`}>
           <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-rose-400" /> Haftalık Yoğunluk</h2>
-          {data.history.length === 0 ? (
+          {history.length === 0 ? (
             <p className="text-sm text-ink-500">Henüz veri yok.</p>
           ) : (
             <div className="flex flex-1 items-end justify-between gap-2 h-40 pt-4">
