@@ -375,13 +375,19 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
   { id: 'scale_master', name: 'Terazi Ustası', description: 'Kör puan düellosunu {threshold} kez tamamla ve puanlarını kalibre et.', icon: 'Scale', hidden: false, secret: false, category: 'Özel', tiers: [
     { threshold: 1, xp: 40, tier: 'bronze', name: 'Çırak Kalibratör' },
     { threshold: 50, xp: 150, tier: 'silver', name: 'Dengeli Ölçek' },
-    { threshold: 100, xp: 400, tier: 'gold', name: 'Terazi Ustası' }
+    { threshold: 100, xp: 400, tier: 'gold', name: 'Terazi Ustası' },
+    { threshold: 250, xp: 800, tier: 'platinum', name: 'Platin Kalibrasyon' },
+    { threshold: 500, xp: 1500, tier: 'emerald', name: 'Zümrüt Terazi' },
+    { threshold: 1000, xp: 3000, tier: 'diamond', name: 'Sonsuz Kalibrasyon' }
   ]},
   // --- GİZLİ BAŞARIM (kör düello zaferleri; gizli) ---
   { id: 'secret_duelist', name: 'Kör Şampiyon', description: 'Kör düellolarda toplam {threshold} zafer kazan.', icon: 'Gavel', hidden: true, secret: true, category: 'Gizli', tiers: [
     { threshold: 1, xp: 30, tier: 'bronze', name: 'İlk Zafer' },
     { threshold: 10, xp: 150, tier: 'silver', name: 'Kör Şampiyon' },
-    { threshold: 50, xp: 400, tier: 'gold', name: 'Gözler Kapalı Usta' }
+    { threshold: 50, xp: 400, tier: 'gold', name: 'Gözler Kapalı Usta' },
+    { threshold: 100, xp: 800, tier: 'platinum', name: 'Kör İmparator' },
+    { threshold: 250, xp: 1500, tier: 'emerald', name: 'Zümrüt Gözler' },
+    { threshold: 500, xp: 3000, tier: 'diamond', name: 'Efsanevi Kör' }
   ]},
   // --- GİZLİ BAŞARIM (tüm tutorialer bitince açılır; elmas) ---
   { id: 'tutorial_explorer', name: 'Sinevia Kâşifi', description: 'Uygulamanın her köşesini gezdin, her tutoriali tamamladın.', icon: 'Compass', hidden: true, secret: true, category: 'Özel', tiers: [
