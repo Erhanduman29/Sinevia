@@ -112,3 +112,84 @@ export function buildYearMonthMap(history: WatchHistoryItem[]): Map<string, numb
   }
   return map;
 }
+
+// ============================================================================
+// DİZİ + GEÇMİŞ FİLTRE SEÇİCİLERİ — SeriesPage / HistoryPage (Madde 4)
+// ============================================================================
+
+export type SeriesSortMode = 'az' | 'recent' | 'rating';
+
+/**
+ * Dizi filtresi + sıralaması: tamamlanma durumu, türler (AND), arama, sıralama.
+ * watchedFilter: null=filtre yok, true=sadece tamamlanan, false=sadece devam eden.
+ */
+export function filterAndSortSeries(
+  series: Series[],
+  watchedFilter: boolean | null,
+  selectedGenres: ReadonlySet<string>,
+  search: string,
+  sortMode: SeriesSortMode
+): Series[] {
+  let list = series;
+  if (watchedFilter !== null) {
+    list = list.filter((s) => {
+      const isCompleted = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
+      return watchedFilter ? isCompleted : !isCompleted;
+    });
+  }
+  if (selectedGenres.size > 0) list = list.filter((s) => Array.from(selectedGenres).every((g) => s.genres.includes(g)));
+  if (search.trim()) {
+    const q = search.toLocaleLowerCase('tr-TR');
+    list = list.filter((s) => s.title.toLocaleLowerCase('tr-TR').includes(q));
+  }
+  return [...list].sort((a, b) => {
+    if (sortMode === 'az') return a.title.localeCompare(b.title, 'tr');
+    if (sortMode === 'recent') return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
+    const ratedA = a.episodes.filter((e) => e.rating !== null);
+    const ratedB = b.episodes.filter((e) => e.rating !== null);
+    const avgA = ratedA.length > 0 ? ratedA.reduce((s, e) => s + (e.rating || 0), 0) / ratedA.length : -1;
+    const avgB = ratedB.length > 0 ? ratedB.reduce((s, e) => s + (e.rating || 0), 0) / ratedB.length : -1;
+    return avgB - avgA;
+  });
+}
+
+export type HistorySortMode = 'newest' | 'oldest' | 'rating';
+export type HistoryFilterType = 'all' | 'movie' | 'series';
+export type HistoryViewMode = 'timeline' | 'grid' | 'past';
+
+/** Geçmiş filtresi + sıralaması: tür, notlu, yüksek puanlı, etiket, arama, sıralama. */
+export function filterAndSortHistory(
+  base: WatchHistoryItem[],
+  viewMode: HistoryViewMode,
+  filterType: HistoryFilterType,
+  onlyWithNotes: boolean,
+  onlyHighRated: boolean,
+  selectedTagFilter: string | null,
+  search: string,
+  sortMode: HistorySortMode
+): WatchHistoryItem[] {
+  let items = [...base];
+  if (viewMode !== 'past' && filterType !== 'all') {
+    items = items.filter((h) => h.kind === filterType || h.type === filterType);
+  }
+  if (onlyWithNotes) items = items.filter((h) => h.note && h.note.trim().length > 0);
+  if (onlyHighRated) items = items.filter((h) => h.rating !== null && h.rating >= 8.5);
+  if (selectedTagFilter) items = items.filter((h) => h.reviewTags && h.reviewTags.includes(selectedTagFilter));
+  if (search.trim()) {
+    const q = search.toLocaleLowerCase('tr-TR');
+    items = items.filter(
+      (h) =>
+        h.title.toLocaleLowerCase('tr-TR').includes(q) ||
+        (h.note && h.note.toLocaleLowerCase('tr-TR').includes(q)) ||
+        (h.genres && h.genres.some((g) => g.toLocaleLowerCase('tr-TR').includes(q))) ||
+        (h.reviewTags && h.reviewTags.some((t) => t.toLocaleLowerCase('tr-TR').includes(q)))
+    );
+  }
+  items.sort((a, b) => {
+    if (sortMode === 'newest') return new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime();
+    if (sortMode === 'oldest') return new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime();
+    if (sortMode === 'rating') return (b.rating ?? -1) - (a.rating ?? -1);
+    return 0;
+  });
+  return items;
+}

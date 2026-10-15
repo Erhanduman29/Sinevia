@@ -10,7 +10,8 @@ import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppCon
 import { useActions, useLibrary, useSettings } from '../context/slices';
 import { ratingBgClass, formatDateShort, normalize, uid } from '../lib/utils';
 import { searchTMDB } from '../lib/tmdb';
-import { filterAndSortMovies, countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
+import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
+import { useFilteredMovies } from '../lib/selectorHooks';
 import { supabase } from '../lib/supabase';
 import AddMovieModal from '../components/AddMovieModal';
 import RatingModal from '../components/RatingModal';
@@ -208,10 +209,6 @@ export default function MoviesPage() {
   const activeFilterCount = (search.trim() !== '' ? 1 : 0) + selectedGenres.size + (sortMode !== 'added' ? 1 : 0);
 
   const resetAllFilters = () => { setSearch(''); setSelectedGenres(new Set()); setSortMode('added'); };
-
-  // Filtre + sıralama mantığı artık saf selectors.filterAndSortMovies'da (tek kaynak, memoize dostu).
-  const sortMovies = (movies: Movie[]): Movie[] =>
-    filterAndSortMovies(movies, watchedFilter as WatchedFilterMode, selectedGenres, search, sortMode as SortMode);
 
   const baseBottomListMovies = useMemo(() => {
     if (watchedFilter === 'past') return libMovies.filter((m) => m.watched && m.isPastWatch);
@@ -443,10 +440,7 @@ export default function MoviesPage() {
     return libMovies.filter(m => m.title.toLowerCase().includes(q));
   }, [libMovies, sendMovieSearch]);
 
-  const sortedBottomMovies = useMemo(
-    () => sortMovies(baseBottomListMovies),
-    [baseBottomListMovies, watchedFilter, selectedGenres, search, sortMode]
-  );
+  const sortedBottomMovies = useFilteredMovies(baseBottomListMovies, watchedFilter, selectedGenres, search, sortMode);
   const totalUnwatched = useMemo(() => libMovies.filter((m) => !m.watched).length, [libMovies]);
   const totalWatched = useMemo(() => countWatchedCurrentMovies(libMovies), [libMovies]);
   const totalPastWatched = useMemo(() => countPastMovies(libMovies), [libMovies]);

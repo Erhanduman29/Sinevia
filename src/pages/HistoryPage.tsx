@@ -29,6 +29,7 @@ import MediaDetailModal from '../components/MediaDetailModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { WatchHistoryItem, Movie, Series } from '../types';
 import { handleImgFallback } from '../lib/selectors';
+import { useFilteredHistory } from '../lib/selectorHooks';
 
 type SortMode = 'newest' | 'oldest' | 'rating';
 type FilterType = 'all' | 'movie' | 'series';
@@ -121,51 +122,9 @@ export default function HistoryPage() {
     return { total, movies, episodes, withNotes, uniqueDays, avgRating };
   }, [regularHistory]);
 
-  const processedItems = useMemo(() => {
-    let items = [...activeBaseHistory];
-
-    if (viewMode !== 'past' && filterType !== 'all') {
-      items = items.filter((h) => h.kind === filterType || h.type === filterType);
-    }
-
-    if (onlyWithNotes) {
-      items = items.filter((h) => h.note && h.note.trim().length > 0);
-    }
-
-    if (onlyHighRated) {
-      items = items.filter((h) => h.rating !== null && h.rating >= 8.5);
-    }
-
-    if (selectedTagFilter) {
-      items = items.filter((h) => h.reviewTags && h.reviewTags.includes(selectedTagFilter));
-    }
-
-    if (search.trim()) {
-      const q = search.toLocaleLowerCase('tr-TR');
-      items = items.filter(
-        (h) =>
-          h.title.toLocaleLowerCase('tr-TR').includes(q) ||
-          (h.note && h.note.toLocaleLowerCase('tr-TR').includes(q)) ||
-          (h.genres && h.genres.some((g) => g.toLocaleLowerCase('tr-TR').includes(q))) ||
-          (h.reviewTags && h.reviewTags.some((t) => t.toLocaleLowerCase('tr-TR').includes(q)))
-      );
-    }
-
-    items.sort((a, b) => {
-      if (sortMode === 'newest')
-        return new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime();
-      if (sortMode === 'oldest')
-        return new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime();
-      if (sortMode === 'rating') {
-        const ra = a.rating ?? -1;
-        const rb = b.rating ?? -1;
-        return rb - ra;
-      }
-      return 0;
-    });
-
-    return items;
-  }, [activeBaseHistory, viewMode, search, sortMode, filterType, onlyWithNotes, onlyHighRated, selectedTagFilter]);
+  const processedItems = useFilteredHistory(
+    activeBaseHistory, viewMode, filterType, onlyWithNotes, onlyHighRated, selectedTagFilter, search, sortMode
+  );
 
   const seriesGroups = new Map<string, WatchHistoryItem[]>();
   processedItems

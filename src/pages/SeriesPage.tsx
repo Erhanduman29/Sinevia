@@ -7,6 +7,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, getNextUnwatchedEpisode, uid } from '../lib/utils';
 import { searchTMDBSeries } from '../lib/tmdb';
+import { useFilteredSeries } from '../lib/selectorHooks';
 import { supabase } from '../lib/supabase';
 import AddSeriesModal from '../components/AddSeriesModal';
 import RatingModal from '../components/RatingModal';
@@ -818,26 +819,7 @@ export default function SeriesPage() {
 
   const resetAllFilters = () => { setSearch(''); setSelectedGenres(new Set()); setSortMode('az'); };
 
-  const sortedSeries = useMemo(() => {
-    let list = data.series;
-
-    if (watchedFilter !== null) {
-      list = list.filter((s) => {
-        const isCompleted = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
-        return watchedFilter ? isCompleted : !isCompleted;
-      });
-    }
-    if (selectedGenres.size > 0) { list = list.filter((s) => Array.from(selectedGenres).every((g) => s.genres.includes(g))); }
-    if (search.trim()) { const q = search.toLocaleLowerCase('tr-TR'); list = list.filter((s) => s.title.toLocaleLowerCase('tr-TR').includes(q)); }
-
-    return [...list].sort((a, b) => {
-      if (sortMode === 'az') return a.title.localeCompare(b.title, 'tr');
-      if (sortMode === 'recent') return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
-      const avgA = a.episodes.filter((e) => e.rating !== null).length > 0 ? a.episodes.reduce((sum, e) => sum + (e.rating || 0), 0) / a.episodes.filter((e) => e.rating !== null).length : -1;
-      const avgB = b.episodes.filter((e) => e.rating !== null).length > 0 ? b.episodes.reduce((sum, e) => sum + (e.rating || 0), 0) / b.episodes.filter((e) => e.rating !== null).length : -1;
-      return avgB - avgA;
-    });
-  }, [data.series, watchedFilter, selectedGenres, sortMode, search]);
+  const sortedSeries = useFilteredSeries(data.series, watchedFilter, selectedGenres, search, sortMode);
 
   const toggleSeries = (id: string) => {
     setExpandedSeries((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });

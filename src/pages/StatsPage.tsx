@@ -5,7 +5,7 @@ import {
   Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon
 } from 'lucide-react';
 import { useLibrary, useGamification, useSettings } from '../context/slices';
-import type { ExtendedAppData } from '../context/AppContext';
+import { useComputedStats } from '../lib/selectorHooks';
 import { ratingBgClass } from '../lib/utils';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import MediaDetailModal from '../components/MediaDetailModal';
@@ -14,7 +14,7 @@ import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { WatchHistoryItem } from '../types';
 
 // YENİ: ZEKİ MOTORUMUZU ÇAĞIRIYORUZ
-import { calculateStats, StatsScopeMode } from '../lib/statsLogic';
+import type { StatsScopeMode } from '../lib/statsLogic';
 
 /* ══════════════════════════════════════════════════════════════
    PREMIUM TASARIM JETONLARI (sinevia-premium.html ile uyumlu)
@@ -473,7 +473,7 @@ export default function StatsPage() {
   );
 
   // YENİ: TASARIMI KORUYUP, YÜZLERCE SATIRI TEK FONKSİYONA ÇAĞIRIYORUZ!
-  const stats = useMemo(() => calculateStats({ movies, series, history, collections, criteria } as unknown as ExtendedAppData, statsMode), [movies, series, history, collections, criteria, statsMode]);
+  const stats = useComputedStats(movies, series, criteria, history, collections, statsMode);
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
