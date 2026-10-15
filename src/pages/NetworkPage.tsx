@@ -8,7 +8,7 @@ import {
 import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
 import type { ShowcaseItem } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { uid } from '../lib/utils';
+import { uid, ratingBgClass } from '../lib/utils';
 import AgentProfileModal from '../components/AgentProfileModal';
 import ShowcaseEditorModal from '../components/ShowcaseEditorModal';
 import ChatHubModal, { renderChatMessageBubble } from '../components/ChatHubModal';
@@ -252,7 +252,7 @@ export default function NetworkPage() {
       setFriends(acceptedFriends); setPendingIncoming(incoming); setPendingOutgoing(outgoing);
 
       if (acceptedIds.size > 0) {
-        const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(60);
+        const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(200);
         setFeed(logsData || []);
       } else { setFeed([]); }
 
@@ -430,20 +430,36 @@ export default function NetworkPage() {
   }, [data.movies, data.agentId, data.nickname, friends, profilesMap, radarTick]);
 
   // AKIŞ AKILLI FİLTRELEME VE AĞIN GÜNDEMİ (TRENDING) HESAPLAMASI
-  const filteredFeed = useMemo(() => {
+  // GÖRÜNÜRLÜK SINIRI: akışta yalnızca son 7 gün + kişi başına en fazla 20 öğe.
+  // Feed sunucudan yeni→eski geliyor; ilk N sayımı sırayı koruyarak
+  // her arkadaşın en yeni 20 kaydını bırakır, eskisini eler.
+  const boundedFeed = useMemo(() => {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const perAgentCount: Record<string, number> = {};
     return feed.filter((log: any) => {
+      const t = new Date(log.created_at).getTime();
+      if (!Number.isFinite(t) || t < cutoff) return false;
+      const seen = perAgentCount[log.agent_id] || 0;
+      if (seen >= 20) return false;
+      perAgentCount[log.agent_id] = seen + 1;
+      return true;
+    });
+  }, [feed]);
+
+  const filteredFeed = useMemo(() => {
+    return boundedFeed.filter((log: any) => {
       if (feedFilter === 'masterpieces') return Number(log.rating || 0) >= 8;
       if (feedFilter === 'notes') return Boolean(log.note && String(log.note).trim().length > 0);
       if (feedFilter === 'movies') return log.item_type === 'movie';
       if (feedFilter === 'series') return log.item_type === 'series';
       return true;
     });
-  }, [feed, feedFilter]);
+  }, [boundedFeed, feedFilter]);
 
   const trendingFeedItem = useMemo(() => {
-    if (feed.length === 0) return null;
+    if (boundedFeed.length === 0) return null;
     const counts: Record<string, { count: number; totalRating: number; ratedCount: number; sampleLog: any; cleanTitle: string }> = {};
-    feed.forEach((log: any) => {
+    boundedFeed.forEach((log: any) => {
       const cleanTitle = (log.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim();
       const key = cleanTitle.toLowerCase();
       if (!key) return;
@@ -468,7 +484,7 @@ export default function NetworkPage() {
       ...top,
       avgRating: top.ratedCount > 0 ? Number((top.totalRating / top.ratedCount).toFixed(1)) : null,
     };
-  }, [feed]);
+  }, [boundedFeed]);
 
   // LİDERLİK TABLOSU SIRALAMASI VE KAPSAM FİLTRESİ
   const sortedLeaderboard = useMemo(() => {
@@ -701,8 +717,8 @@ export default function NetworkPage() {
                         <Flame size={12} /> Ağın Gündemi
                       </span>
                       {trendingFeedItem.avgRating && (
-                        <span className="text-[10px] font-black bg-gold-500/20 text-gold-300 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                          <Star size={9} className="fill-gold-300" /> Ort. {trendingFeedItem.avgRating}
+                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 tabular-nums shadow ${ratingBgClass(trendingFeedItem.avgRating)}`}>
+                          <Star size={9} className="fill-current" /> Ort. {trendingFeedItem.avgRating}
                         </span>
                       )}
                     </div>
@@ -757,7 +773,7 @@ export default function NetworkPage() {
               <div className="ntw-card text-center py-20 border-dashed rounded-3xl">
                 <Activity size={40} className="mx-auto text-ink-800 mb-4" />
                 <p className="text-sm text-ink-500 font-bold uppercase tracking-widest">
-                  {feed.length === 0 ? 'Akış Bomboş' : 'Bu Filtreye Uygun Aktivite Yok'}
+                  {boundedFeed.length === 0 ? 'Akış Bomboş' : 'Bu Filtreye Uygun Aktivite Yok'}
                 </p>
               </div>
             ) : (
@@ -800,8 +816,8 @@ export default function NetworkPage() {
                         )}
 
                         {log.rating && (
-                          <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 bg-ink-950/90 text-gold-400 text-xs sm:text-sm font-black px-2 py-1 rounded-lg border border-gold-500/30 backdrop-blur-sm flex items-center gap-1 shadow-lg">
-                            <Star size={12} className="fill-gold-400" /> {log.rating}
+                          <div className={`absolute bottom-2 right-2 sm:bottom-3 sm:right-3 text-xs sm:text-sm font-black tabular-nums px-2 py-1 rounded-lg flex items-center gap-1 shadow-lg ${ratingBgClass(log.rating)}`}>
+                            <Star size={12} className="fill-current" /> {log.rating}
                           </div>
                         )}
                       </button>
@@ -1536,8 +1552,8 @@ export default function NetworkPage() {
                 {(selectedLog.rating || (selectedLog.review_tags && selectedLog.review_tags.length > 0)) && (
                   <div className="flex flex-wrap items-center gap-2 mb-5">
                     {selectedLog.rating && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gold-500/10 text-gold-400 rounded-lg border border-gold-500/20 font-black text-sm">
-                        <Star size={16} className="fill-gold-400" /> {selectedLog.rating}/10
+                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-black text-sm tabular-nums shadow-lg ${ratingBgClass(selectedLog.rating)}`}>
+                        <Star size={16} className="fill-current" /> {selectedLog.rating}/10
                       </div>
                     )}
                     {selectedLog.review_tags?.map((tag: string) => (
