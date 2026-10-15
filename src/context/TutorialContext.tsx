@@ -114,11 +114,14 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   }, [progress]);
 
   // Tamamlanan birim artınca gizli başarımı yeniden değerlendir
-  const prevUnits = useRef<{ c: number; a: number }>({ c: 0, a: 0 });
+  const prevUnits = useRef<{ c: number; a: number } | null>(null);
   const syncAchievements = app.syncAchievements;
   useEffect(() => {
     const c = progress.completed.length;
     const a = progress.academyDone.length;
+    // İlk koşum gerçek değerleri referans alır: mount anında (her açılışta) gereksiz
+    // SYNC_ACHIEVEMENTS → applyAchievements → seviye yeniden hesabı tetiklenmez.
+    if (prevUnits.current === null) { prevUnits.current = { c, a }; return; }
     if (c > prevUnits.current.c || a > prevUnits.current.a) {
       syncAchievements();
     }

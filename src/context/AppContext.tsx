@@ -653,7 +653,9 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       ...defaultData(),
       ...(action.data as any)
     });
-    return { ...syncedFromCloud, pendingLevelUp: undefined };
+    // Bulut uzlaşması ne kutlama üretir ne de eski bulut bildirim kuyruğunu içeri alır;
+    // bu sadece yerel (genuine) kuyruk korunur.
+    return { ...syncedFromCloud, pendingLevelUp: undefined, pendingToasts: state.pendingToasts || [] };
   }
 
   if (action.type === 'HYDRATE_FROM_IDB') {
@@ -1275,6 +1277,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const queue = data.pendingToasts || []; if (queue.length === 0 || levelUpData || isProcessingToastRef.current || isQuestCelebrating) return;
+    // Açılış uzlaşma penceresindeki kuyruk (bayat bulut/hidrasyon kaynaklı) GÖSTERİLMEZ, sessizce tüketilir.
+    if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CONSUME_NEXT_TOAST' }); return; }
     isProcessingToastRef.current = true; const nextAchievement = queue[0], remainingCount = queue.length - 1; const comboText = remainingCount > 0 ? ` (+${remainingCount} Sırada)` : '';
     showAchievementToast({ achievementName: `${nextAchievement.name}${comboText}`, tier: nextAchievement.tier, icon: nextAchievement.icon, description: nextAchievement.description });
     import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound()); dispatch({ type: 'CONSUME_NEXT_TOAST' });
