@@ -578,6 +578,18 @@ export default function StatsPage() {
         .slice(0, 10),
     [movies]
   );
+  const duelWinners = useMemo(
+    () =>
+      movies
+        .filter((m) => (m.duelWins || 0) > 0)
+        .sort((a, b) => {
+          const wd = (b.duelWins || 0) - (a.duelWins || 0);
+          if (wd !== 0) return wd;
+          return (a.title || '').localeCompare(b.title || '', 'tr');
+        })
+        .slice(0, 10),
+    [movies]
+  );
   const inflation = useMemo(() => {
     const both = movies.filter(
       (m) => typeof m.rating === 'number' && typeof m.calibratedScore === 'number'
@@ -1404,9 +1416,9 @@ export default function StatsPage() {
               borderColor: 'var(--red, var(--color-1, #e8384f))',
             }}
             className="px-4 py-2.5 min-h-11 rounded-xl border font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-transform active:scale-[0.98] shadow-[0_12px_30px_-12px_rgba(232,56,79,0.9)] shrink-0"
-            title="5'li tur halinde kör düello — her düello +XP"
+            title="5'li tur halinde kör düello — eşleşmeler ±0.5 puan aralığından seçilir"
           >
-            <Swords size={14} /> Zevk Kalibrasyonu Başlat
+            <Swords size={14} /> Düelloya Başla
           </button>
         </div>
 
@@ -1470,6 +1482,43 @@ export default function StatsPage() {
                 })}
               </div>
             )}
+
+            {/* (a2) EN ÇOK DÜELLO KAZANMA */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
+                  <Swords size={13} className="text-gold-400" /> En Çok Düello Kazananlar
+                </h3>
+                <span className="text-[10px] font-bold bg-ink-950 border border-ink-800 text-ink-400 px-2 py-0.5 rounded-full shrink-0">
+                  duelWins
+                </span>
+              </div>
+              {duelWinners.length === 0 ? (
+                <p className="text-xs text-ink-500 py-5 text-center">Henüz düello kazanmadın.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {duelWinners.map((m, idx) => (
+                    <div key={m.id} className="flex items-center gap-2.5">
+                      <span className={`${PREMIUM_NUM} text-[11px] text-ink-500 w-5 text-right flex-shrink-0`}>
+                        {idx + 1}
+                      </span>
+                      <span className="text-xs font-bold text-ink-100 truncate flex-1 min-w-0" title={m.title}>
+                        {m.title}
+                      </span>
+                      <span className="text-[11px] font-black text-gold-400 flex-shrink-0 tabular-nums">
+                        {m.duelWins} 🏆
+                      </span>
+                      <span className="text-[10px] font-bold text-ink-500 tabular-nums flex-shrink-0 hidden sm:block">
+                        {m.duelCount || 0} düello
+                      </span>
+                      <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 w-9 text-center ${ratingBgClass(m.rating ?? 0)}`}>
+                        {m.rating}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* (b) PUAN ENFLASYONU ANALİZİ */}

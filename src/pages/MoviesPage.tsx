@@ -673,7 +673,7 @@ export default function MoviesPage() {
               className={`mpx-chip ${watchedFilter === 'graveyard' ? 'on' : ''}`}
               title="Yarım bırakılan filmler (Sinematik Otopsi)"
             >
-              <span>🪦 Yarım Bırakılanlar (Mezarlık) ({totalAbandoned})</span>
+              <span>🪦 Mezarlık ({totalAbandoned})</span>
             </button>
           </div>
 
@@ -1067,7 +1067,7 @@ export default function MoviesPage() {
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="mpx-sec-title">
             {watchedFilter === 'graveyard'
-              ? '🪦 Yarım Bırakılanlar (Mezarlık)'
+              ? '🪦 Mezarlık'
               : watchedFilter === 'past'
               ? 'Daha Önce İzlenen Filmler'
               : 'Bağımsız Filmler'}

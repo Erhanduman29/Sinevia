@@ -157,11 +157,32 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
   /** Kullanıcının atlattığı adaylar (b tarafı) — eşleşme çeşitliliği için. */
   const [excluded, setExcluded] = useState<string[]>([]);
   const [reveal, setReveal] = useState<RevealState | null>(null);
+  /** Açılışta filtre penceresi gösterilir; düello "Başla" ile başlar. */
+  const [phase, setPhase] = useState<'setup' | 'duel'>('setup');
+  /** Seçilen türler (boş = tüm türler). */
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  /** Rastgele mod: eşit puan bandında rastgele ikili seçer. */
+  const [randomMode, setRandomMode] = useState(false);
+
+  /** Düello havuzundaki (izlenmiş + puanlı + abandoned olmayan) filmlerin türleri. */
+  const allGenres = useMemo(() => {
+    const set = new Set<string>();
+    movies
+      .filter((m) => m.watched && typeof m.rating === 'number' && !m.abandoned)
+      .forEach((m) => (m.genres || []).forEach((g) => set.add(g)));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'tr'));
+  }, [movies]);
+
+  const toggleGenre = (g: string) =>
+    setSelectedGenres((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
 
   const pair = useMemo(() => {
     const pool = excluded.length > 0 ? movies.filter((m) => !excluded.includes(m.id)) : movies;
-    return pickDuelPair(pool);
-  }, [movies, excluded]);
+    return pickDuelPair(pool, undefined, {
+      genres: selectedGenres.length > 0 ? selectedGenres : undefined,
+      random: randomMode,
+    });
+  }, [movies, excluded, selectedGenres, randomMode]);
 
   // ESC — useShortcuts'ın "close" eylemi (modal açıkken de tetiklenir).
   useShortcuts({ close: () => onClose() });
@@ -223,6 +244,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
   //  listesinde olmadığından modal kendi dinleyicisini kurar — core'a dokunmadan.)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (phase !== 'duel') return;
       if (e.defaultPrevented || e.repeat) return;
       if (isTypingTarget(e.target)) return;
       // Odaklı butonda Boşluk doğal tıklamayı tetikler — çift aksiyonu engelle.
@@ -388,6 +410,124 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                   );
                 })}
               </div>
+            </div>
+          ) : phase === 'setup' ? (
+            /* ---------- AÇILIŞ: FİLTRE PENCERESİ ---------- */
+            <div className="space-y-4 animate-fade-in-up">
+              <div className="text-center">
+                <div
+                  style={{ color: RED }}
+                  className="text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-1.5"
+                >
+                  <Swords size={12} /> Düello Filtresi
+                </div>
+                <p style={{ color: MUTED }} className="text-[11px] sm:text-xs mt-1 leading-relaxed max-w-md mx-auto">
+                  Düellolara hangi filmlerle gireceğini seç. Eşleşmeler yalnızca aynı puanlı
+                  (veya <strong>±0.5</strong> puan aralığındaki) filmler arasından yapılır.
+                </p>
+              </div>
+
+              {/* RASTGELE MOD */}
+              <button
+                type="button"
+                onClick={() => setRandomMode((v) => !v)}
+                style={{
+                  background: randomMode
+                    ? `color-mix(in srgb, ${RED} 16%, transparent)`
+                    : GLASS,
+                  borderColor: randomMode
+                    ? `color-mix(in srgb, ${RED} 45%, transparent)`
+                    : LINE,
+                  color: randomMode ? RED : MUTED,
+                }}
+                className="w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl border text-left transition-all"
+              >
+                <span className="min-w-0">
+                  <span className="block text-xs font-black uppercase tracking-wider">
+                    🎲 Rastgele Eşleşme
+                  </span>
+                  <span className="block text-[10.5px] font-bold opacity-75 mt-0.5">
+                    Aynı puan bandındaki adaylardan rastgele ikili seç
+                  </span>
+                </span>
+                <span
+                  className="shrink-0 text-[10px] font-black px-2 py-1 rounded-lg border"
+                  style={{
+                    background: randomMode ? RED : 'transparent',
+                    color: randomMode ? ON_RED : MUTED,
+                    borderColor: randomMode ? RED : LINE,
+                  }}
+                >
+                  {randomMode ? 'AÇIK' : 'KAPALI'}
+                </span>
+              </button>
+
+              {/* TÜR FİLTRESİ */}
+              <div>
+                <div
+                  style={{ color: MUTED }}
+                  className="text-[9.5px] font-black uppercase tracking-widest mb-2"
+                >
+                  Türler {selectedGenres.length > 0 && `(${selectedGenres.length} seçili)`}
+                </div>
+                {allGenres.length === 0 ? (
+                  <p style={{ color: MUTED }} className="text-xs py-3 text-center">
+                    Düello havuzunda film yok — önce izleyip puanla.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGenres([])}
+                      style={{
+                        background: selectedGenres.length === 0 ? RED : GLASS,
+                        borderColor: selectedGenres.length === 0 ? RED : LINE,
+                        color: selectedGenres.length === 0 ? ON_RED : MUTED,
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg border text-[11px] font-black transition-all"
+                    >
+                      Tümü
+                    </button>
+                    {allGenres.map((g) => {
+                      const on = selectedGenres.includes(g);
+                      return (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => toggleGenre(g)}
+                          style={{
+                            background: on
+                              ? `color-mix(in srgb, ${RED} 16%, transparent)`
+                              : GLASS,
+                            borderColor: on
+                              ? `color-mix(in srgb, ${RED} 45%, transparent)`
+                              : LINE,
+                            color: on ? RED : MUTED,
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all"
+                        >
+                          {g}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* BAŞLA */}
+              <button
+                type="button"
+                onClick={() => setPhase('duel')}
+                disabled={allGenres.length === 0}
+                style={{ background: RED, color: ON_RED, borderColor: RED }}
+                className="w-full py-3.5 min-h-12 rounded-xl border font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                <Swords size={16} /> Düelloya Başla
+              </button>
+              <p style={{ color: MUTED }} className="text-[10px] text-center leading-relaxed">
+                Eşleşme bulunamazsa (±0.5 puan bandında film yoksa) düello boş durumu gösterir.
+                5 düello tamamlanınca modal kapanır.
+              </p>
             </div>
           ) : pair ? (
             /* ---------- VS EKRANI ---------- */
