@@ -6,6 +6,7 @@ import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
 import { supabase } from '../lib/supabase';
+import { idbGet, idbSet, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded } from '../lib/storageService';
 
 const STORAGE_KEY = 'sinevia-v1';
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
@@ -333,6 +334,7 @@ type Action =
   | { type: 'SET_MOVIE_COLLECTION'; id: string; collectionId: string | null }
   | { type: 'SET_MOVIE_PAST_QUEUE'; id: string; inPastQueue: boolean }
   | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'MERGE_SHARED_LIST'; movies: Movie[]; series: Series[]; collections: Collection[]; genres: string[] }
+  | { type: 'HYDRATE_FROM_IDB'; data: ExtendedAppData }
   | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
   | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'SYNC_ACHIEVEMENTS' }
   | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }
@@ -647,6 +649,20 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     });
   }
 
+  if (action.type === 'HYDRATE_FROM_IDB') {
+    // IndexedDB'den gelen ana kütüphane verisini uygula. Mevcut state'teki kimlik/ayar
+    // tercihleri koru (eğer IDB'de yoksa), achievements'ları yeniden uygula. Saf bir birleşim.
+    const merged: ExtendedAppData = {
+      ...defaultData(),
+      ...(action.data as any),
+      agentId: action.data.agentId || state.agentId,
+      nickname: action.data.nickname || state.nickname,
+      recoveryKey: action.data.recoveryKey || state.recoveryKey,
+      theme: action.data.theme || state.theme,
+    };
+    return applyAchievements(merged);
+  }
+
   if (action.type === 'RECOVER_IDENTITY') {
     return { ...state, agentId: action.agentId, recoveryKey: action.recoveryKey, nickname: action.nickname };
   }
@@ -891,6 +907,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toastsRef = useRef<ToastItem[]>([]); const achievementToastsRef = useRef<AchievementToastItem[]>([]); const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const isProcessingToastRef = useRef(false); const [queueTick, setQueueTick] = useState(0);
   
   const lastSyncedStorageHash = useRef<string>(getCleanHashString(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}'), readSyncExtras()));
+  // En güncel reducer durumuna ref üzerinden erişim (localStorage artık sadece küçük bir anlık görüntü tutuyor).
+  const dataRef = useRef(data); dataRef.current = data;
 
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => { toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return toastsRef.current; }, []);
   const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
@@ -898,7 +916,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [xpGainData, setXpGainData] = useState<{ gained: number; oldTotal: number; newTotal: number } | null>(null);
 
   useEffect(() => { document.body.setAttribute('data-theme', !data.theme ? 'premium-dark' : data.theme); }, [data.theme]);
-  useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {} }, [data]);
+
+  // KALICILIK — IndexedDB ana depo + localStorage boot anlık görüntüsü.
+  // mount'ta bir kez: localStorage→IDB göçü yap, sonra IDB'den tam veriyi hidrate et.
+  const didHydrateRef = useRef(false);
+  useEffect(() => {
+    if (didHydrateRef.current) return;
+    didHydrateRef.current = true;
+    (async () => {
+      // 1) Göç: localStorage'da hâlâ tam kayıt varsa ve IDB boşsa, IDB'ye taşı.
+      const migratedOk = await migrateToIdbIfNeeded(STORAGE_KEY);
+      // 2) IDB'den tam veriyi oku ve hidrate et (reducer init'i sadece snapshot okumuş olabilir).
+      const full = await idbGet<ExtendedAppData>(STORAGE_KEY);
+      if (full && (full.movies?.length || full.series?.length || full.history?.length)) {
+        dispatch({ type: 'HYDRATE_FROM_IDB', data: full });
+      }
+      void migratedOk;
+    })();
+  }, []);
+
+  // YAZMA — veri her değiştiğinde IDB'ye asenkron kuyrukla yaz + localStorage'a küçük anlık görüntü bırak.
+  useEffect(() => {
+    writeQueue.set(STORAGE_KEY, data, 200);
+    writeBootSnapshot(data as unknown as Record<string, unknown>);
+  }, [data]);
 
   // AÇILIŞ KONTROLÜ (BOOT CHECK)
   useEffect(() => {
@@ -1227,7 +1268,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setTimeout(() => {
-      const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); const updatedSeries = state.series?.find((s: any) => s.id === seriesId);
+      const updatedSeries = dataRef.current.series?.find((s: any) => s.id === seriesId);
       if (updatedSeries) { if (updatedSeries.episodes.filter((e: any) => e.season === ep.season).every((e: any) => e.watched)) setSeasonCompleteData({ seriesTitle: updatedSeries.title, season: ep.season });
       if (updatedSeries.episodes.every((e: any) => e.watched)) { dispatch({ type: 'COMPLETE_SERIES', id: seriesId, title: updatedSeries.title }); showToast(`${updatedSeries.title} tamamlandı!`, 'success'); } }
     }, 200);
