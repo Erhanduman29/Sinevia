@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useReducer, useCallback, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useReducer, useCallback, useRef, useState, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion, WatchProvider, WeeklyPlanItem } from '../types';
 import { normalize, uid, todayStr, daysBetween } from '../lib/utils';
@@ -6,7 +6,9 @@ import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
 import { supabase } from '../lib/supabase';
-import { idbGet, idbSet, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded } from '../lib/storageService';
+import { idbGet, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded } from '../lib/storageService';
+import { LibraryContext, GamificationContext, SettingsContext, TimerContext } from './slices';
+import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice } from './slices';
 
 const STORAGE_KEY = 'sinevia-v1';
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
@@ -1337,10 +1339,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SYNC_ACHIEVEMENTS' });
   }, []);
 
+  // State Slicing — yoğun sayfaların re-render izolasyonu için memo'lu dilimler (opt-in).
+  const librarySlice = useMemo<LibrarySlice>(() => ({
+    movies: data.movies, series: data.series, collections: data.collections,
+    history: data.history, genres: data.genres,
+  }), [data.movies, data.series, data.collections, data.history, data.genres]);
+
+  const gamificationSlice = useMemo<GamificationSlice>(() => ({
+    xp: data.xp, level: data.level, totalXp: data.totalXp, dailyStreak: data.dailyStreak,
+    achievements: data.achievements, showcase: data.showcase,
+  }), [data.xp, data.level, data.totalXp, data.dailyStreak, data.achievements, data.showcase]);
+
+  const settingsSlice = useMemo<SettingsSlice>(() => ({
+    theme: data.theme || 'premium-dark', criteria: data.criteria, reviewTags: data.reviewTags,
+    weeklyPlan: data.weeklyPlan || [], notificationsEnabled: !!data.notificationsEnabled,
+    shareWatchedInFeed: data.shareWatchedInFeed !== false, sharePastWatchedInFeed: data.sharePastWatchedInFeed !== false,
+    showLockedNames: !!data.showLockedNames, altWatchTemplate: data.altWatchTemplate || '',
+  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.altWatchTemplate]);
+
+  // Global tik YOK — sadece aktif timer filmini verir (seyrek değişir); sayfalar kendi
+  // yerel nowMs tik'lerini tutmaya devam eder (HomePage dahil — kullanıcıya ait dosya).
+  const timerSlice = useMemo<TimerSlice>(() => ({
+    activeTimerMovie: data.movies.find((m) => !m.watched && m.startedAt) || null,
+  }), [data.movies]);
+
   return (
-    <AppContext.Provider value={{ data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements }}>
-      {children}
-    </AppContext.Provider>
+    <LibraryContext.Provider value={librarySlice}>
+      <GamificationContext.Provider value={gamificationSlice}>
+        <SettingsContext.Provider value={settingsSlice}>
+          <TimerContext.Provider value={timerSlice}>
+            <AppContext.Provider value={{ data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements }}>
+              {children}
+            </AppContext.Provider>
+          </TimerContext.Provider>
+        </SettingsContext.Provider>
+      </GamificationContext.Provider>
+    </LibraryContext.Provider>
   );
 }
 
