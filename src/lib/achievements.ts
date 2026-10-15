@@ -365,6 +365,18 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     { threshold: 100, xp: 500, tier: 'emerald', name: 'Zamanın Ötesindeki Eleştirmen' },
     { threshold: 250, xp: 1000, tier: 'diamond', name: 'Tarih Yazan' }
   ]},
+  // --- SİNEMATİK OTOPSİ (YARIM BIRAKILAN FİLMLER) ---
+  { id: 'ruthless_critic', name: 'Acımasız Eleştirmen', description: 'Film süresinin yarısından önce terk edip otopsisini tamamladığın {threshold} film.', icon: 'Skull', hidden: false, secret: false, category: 'Özel', tiers: [
+    { threshold: 1, xp: 25, tier: 'bronze', name: 'İlk Otopsi' },
+    { threshold: 3, xp: 50, tier: 'silver', name: 'Mezar Kazıcı' },
+    { threshold: 5, xp: 100, tier: 'gold', name: 'Acımasız Eleştirmen' }
+  ]},
+  // --- KÖR KALİBRASYON (PUAN DÜELLOLARI) ---
+  { id: 'scale_master', name: 'Terazi Ustası', description: 'Kör puan düellosunu {threshold} kez tamamla ve puanlarını kalibre et.', icon: 'Scale', hidden: false, secret: false, category: 'Özel', tiers: [
+    { threshold: 10, xp: 40, tier: 'bronze', name: 'Çırak Kalibratör' },
+    { threshold: 50, xp: 150, tier: 'silver', name: 'Dengeli Ölçek' },
+    { threshold: 100, xp: 400, tier: 'gold', name: 'Terazi Ustası' }
+  ]},
   // --- GİZLİ BAŞARIM (tüm tutorialer bitince açılır; elmas) ---
   { id: 'tutorial_explorer', name: 'Sinevia Kâşifi', description: 'Uygulamanın her köşesini gezdin, her tutoriali tamamladın.', icon: 'Compass', hidden: true, secret: true, category: 'Özel', tiers: [
     { threshold: TUTORIAL_TOTAL_UNITS, xp: 200, tier: 'diamond', name: 'Sinevia Kâşifi' }

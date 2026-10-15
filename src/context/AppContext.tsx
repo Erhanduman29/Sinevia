@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useReducer, useCallback, useRef, useState, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion, WatchProvider, WeeklyPlanItem } from '../types';
+import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion, WatchProvider, WeeklyPlanItem, ExternalActionTemplate, AbandonedProgress } from '../types';
 import { normalize, uid, todayStr, daysBetween, withRetry, enqueueLogOp, dequeueLogOp, readLogQueue } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
+import { calculateEloDelta } from '../lib/calibrationEngine';
+import { rewriteLegacyTemplate } from '../lib/actionBridge';
 import { supabase } from '../lib/supabase';
 import { idbGet, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded } from '../lib/storageService';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
@@ -187,6 +189,7 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
     showLockedNames: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
+    externalActions: [], bonusXp: 0, totalDuelsCompleted: 0,
     weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true, sharePastWatchedInFeed: true,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
     showcase: [],
@@ -304,6 +307,10 @@ function synchronizeXPAndLevel(state: ExtendedAppData, isSilent = false): Extend
     }
   } catch {}
 
+  // Kalıcı bonus XP (terk ödülü, düello ödülleri vb.) — recalc'e dahil edilir;
+  // böylece sonraki her applyAchievements totalXp'yi bu değerle eşitler (XP kaybolmaz).
+  recalculatedXp += state.bonusXp || 0;
+
   const correctedLevelInfo = levelFromXp(recalculatedXp);
   const oldLevel = state.level || 1; 
   
@@ -319,6 +326,20 @@ function synchronizeXPAndLevel(state: ExtendedAppData, isSilent = false): Extend
   }
 
   return newState;
+}
+
+/**
+ * Kör kalibrasyon senkronu: yeni rating'e göre calibratedScore türetir.
+ * - Daha önce düelloya girmemişse (duelCount=0) kalibre puan = rating.
+ * - Girdiyse kullanıcının puanı değişince BİÇİM bozulmaz: eski sapma
+ *   (calibrated − rating) korunarak yeni rating'e eklenir.
+ */
+function syncCalibratedRating(oldRating: number | null, oldCalibrated: number | undefined, duelCount: number, newRating: number): number {
+  const clamp = (n: number) => Math.min(10, Math.max(1, n));
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  if (!duelCount || oldCalibrated == null) return r2(clamp(newRating));
+  const deviation = oldCalibrated - (oldRating ?? oldCalibrated);
+  return r2(clamp(newRating + deviation));
 }
 
 type Action =
@@ -356,7 +377,12 @@ type Action =
   | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean }
   | { type: 'SET_SHOWCASE'; showcase: ShowcaseItem[] }
   | { type: 'FORCE_XP_SYNC' }
-  | { type: 'SYNC_FROM_CLOUD_STORAGE'; data: ExtendedAppData; questData?: any }; 
+  | { type: 'SYNC_FROM_CLOUD_STORAGE'; data: ExtendedAppData; questData?: any }
+  | { type: 'ABANDON_MEDIA'; mediaType: 'movie' | 'series'; id: string; abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }
+  | { type: 'REVIVE_MEDIA'; mediaType: 'movie' | 'series'; id: string }
+  | { type: 'RESOLVE_DUEL'; winnerId: string; loserId: string; mediaType?: 'movie' | 'series' }
+  | { type: 'APPLY_CALIBRATION_SUGGESTION'; id: string; newRating: number }
+  | { type: 'SET_EXTERNAL_ACTIONS'; actions: ExternalActionTemplate[] }; 
 
 const FIXED_BUGGED_ACHIEVEMENTS = new Set(['selective_critic', 'weekend_cinema', 'loyalty_test', 'break_taker', 'lost_colony', 'final_phobia', 'ghost_viewer', 'secret_critic']);
 
@@ -596,6 +622,8 @@ export function applyAchievements(state: ExtendedAppData): ExtendedAppData {
       case 'past_watcher': currentVal = pastWatchedMovies.length; break;
       case 'past_masterpiece': currentVal = pastWatchedMovies.filter((m) => m.rating === 10).length; break;
       case 'past_critic': currentVal = pastWatchedMovies.filter((m) => m.rating !== null && m.note && m.note.trim().length > 0).length; break;
+      case 'ruthless_critic': currentVal = state.movies.filter((m) => m.abandoned && (m.runtime || 0) > 0 && m.abandonedProgress?.unit !== 'episode' && (m.abandonedProgress?.value ?? 0) <= (m.runtime || 0) / 2).length; break;
+      case 'scale_master': currentVal = state.totalDuelsCompleted || 0; break;
       case 'tutorial_explorer': currentVal = readTutorialUnitCount(); break;
     }
 
@@ -721,12 +749,87 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'TOGGLE_SPECIFIC_NOTIFICATION') return { ...state, [action.key]: action.enabled };
   if (action.type === 'SET_NICKNAME') return { ...state, nickname: action.nickname };
   if (action.type === 'SET_SHOWCASE') return { ...state, showcase: action.showcase.slice(0, 4) };
+  if (action.type === 'SET_EXTERNAL_ACTIONS') return { ...state, externalActions: action.actions };
 
   let nextState = { ...state };
   switch (action.type) {
     case 'GRANT_XP': {
       const newTotalXp = state.totalXp + action.xp, oldLevel = levelFromXp(state.totalXp).level, levelData = levelFromXp(newTotalXp);
       return { ...state, totalXp: newTotalXp, xp: levelData.currentLevelXp, level: levelData.level, pendingXpGain: { gained: action.xp, oldTotal: state.totalXp, newTotal: newTotalXp }, pendingLevelUp: levelData.level > oldLevel ? { newLevel: levelData.level } : state.pendingLevelUp };
+    }
+    case 'ABANDON_MEDIA': {
+      const nowIso = action.abandonedAt || new Date().toISOString();
+      if (action.mediaType === 'movie') {
+        nextState.movies = state.movies.map((m) => {
+          if (m.id !== action.id) return m;
+          let progress = action.progress;
+          if (!progress) {
+            // Otomatik ilerleme: aktif sayaç çalıştıysa geçen dakika, yoksa 0.
+            let elapsed = 0;
+            if (m.startedAt) {
+              const t = new Date(m.startedAt).getTime();
+              if (!isNaN(t)) elapsed = Math.max(0, Math.round((Date.now() - t) / 60000));
+            }
+            const runtime = m.runtime || 0;
+            progress = { unit: 'minute', value: runtime > 0 ? Math.min(elapsed, runtime) : elapsed };
+          }
+          return { ...m, abandoned: true, abandonedAt: nowIso, abandonedProgress: progress, autopsyReasons: action.reasons, autopsyNote: action.note, startedAt: null };
+        });
+      } else {
+        nextState.series = state.series.map((s) => (s.id === action.id
+          ? { ...s, abandoned: true, abandonedAt: nowIso, abandonedProgress: action.progress, autopsyReasons: action.reasons, autopsyNote: action.note }
+          : s));
+      }
+      nextState.bonusXp = (state.bonusXp || 0) + 25;
+      const oldTotalAbandon = state.totalXp || 0;
+      nextState.pendingXpGain = { gained: 25, oldTotal: oldTotalAbandon, newTotal: oldTotalAbandon + 25 };
+      break;
+    }
+    case 'REVIVE_MEDIA': {
+      if (action.mediaType === 'movie') {
+        nextState.movies = state.movies.map((m) => {
+          if (m.id !== action.id) return m;
+          const { abandoned: _a, abandonedAt: _b, abandonedProgress: _c, autopsyReasons: _d, autopsyNote: _e, ...rest } = m;
+          return rest;
+        });
+      } else {
+        nextState.series = state.series.map((s) => {
+          if (s.id !== action.id) return s;
+          const { abandoned: _a, abandonedAt: _b, abandonedProgress: _c, autopsyReasons: _d, autopsyNote: _e, ...rest } = s;
+          return rest;
+        });
+      }
+      break;
+    }
+    case 'RESOLVE_DUEL': {
+      if (action.mediaType === 'series') break; // Düello motoru film puanları içindir.
+      const winner = state.movies.find((m) => m.id === action.winnerId);
+      const loser = state.movies.find((m) => m.id === action.loserId);
+      if (!winner || !loser) break;
+      const wOld = winner.calibratedScore ?? winner.rating ?? 5;
+      const lOld = loser.calibratedScore ?? loser.rating ?? 5;
+      const { winnerNew, loserNew } = calculateEloDelta(wOld, lOld);
+      nextState.movies = state.movies.map((m) => {
+        if (m.id === winner.id) return { ...m, calibratedScore: winnerNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1 };
+        if (m.id === loser.id) return { ...m, calibratedScore: loserNew, duelCount: (m.duelCount || 0) + 1 };
+        return m;
+      });
+      const newTotalDuels = (state.totalDuelsCompleted || 0) + 1;
+      nextState.totalDuelsCompleted = newTotalDuels;
+      // +10 XP; her 5. düelloda ek +50 seri ödülü.
+      const duelXp = 10 + (newTotalDuels % 5 === 0 ? 50 : 0);
+      nextState.bonusXp = (state.bonusXp || 0) + duelXp;
+      const oldTotalDuel = state.totalXp || 0;
+      nextState.pendingXpGain = { gained: duelXp, oldTotal: oldTotalDuel, newTotal: oldTotalDuel + duelXp };
+      break;
+    }
+    case 'APPLY_CALIBRATION_SUGGESTION': {
+      nextState.movies = state.movies.map((m) =>
+        m.id === action.id && m.rating != null
+          ? { ...m, rating: action.newRating, calibratedScore: action.newRating }
+          : m
+      );
+      break;
     }
     case 'MERGE_SHARED_LIST':
       nextState.genres = addNewGenres(state.genres, action.genres);
@@ -746,7 +849,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'WATCH_MOVIE':
       nextState.movies = state.movies.map((m) =>
         m.id === action.id
-          ? { ...m, watched: true, inPastQueue: false, isPastWatch: Boolean(action.isPastWatch), rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt, actualRuntime: action.actualRuntime }
+          ? { ...m, watched: true, inPastQueue: false, isPastWatch: Boolean(action.isPastWatch), rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt, actualRuntime: action.actualRuntime }
           : m
       );
       nextState.history = [action.historyItem, ...state.history];
@@ -765,7 +868,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       nextState.history = state.history.map((h) => (h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: (h.kind === 'movie' || h.type === 'movie') ? Boolean(updatedIsPast) : h.isPastWatch } : h));
       const targetId = hItem.itemId || hItem.id;
       if (hItem.kind === 'movie' || hItem.type === 'movie') {
-        nextState.movies = state.movies.map((m) => (m.id === targetId ? { ...m, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: Boolean(updatedIsPast) } : m));
+        nextState.movies = state.movies.map((m) => (m.id === targetId ? { ...m, rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: Boolean(updatedIsPast) } : m));
       } else {
         nextState.series = state.series.map((s) => ({ ...s, episodes: s.episodes.map((e) => (e.id === targetId ? { ...e, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note } : e)) }));
       }
@@ -882,6 +985,13 @@ export interface AppContextValue {
   updateShowcase: (items: ShowcaseItem[]) => void;
   forceXpSync: () => void;
   syncAchievements: () => void;
+  /** Sinematik Otopsi: film/diziyi yarım bırak (otopi +25 XP). */
+  abandonMedia: (mediaType: 'movie' | 'series', id: string, opts?: { abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }) => void;
+  reviveMedia: (mediaType: 'movie' | 'series', id: string) => void;
+  /** Kör kalibrasyon düellosunu çöz (kazanan/kaybeden film kimlikleri). */
+  resolveDuel: (winnerId: string, loserId: string, mediaType?: 'movie' | 'series') => void;
+  applyCalibrationSuggestion: (id: string, newRating: number) => void;
+  setExternalActions: (actions: ExternalActionTemplate[]) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -907,6 +1017,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (parsedData.notifyFriendRequests === undefined) parsedData.notifyFriendRequests = true;
         if (parsedData.notifyLists === undefined) parsedData.notifyLists = true;
         if (!Array.isArray(parsedData.showcase)) parsedData.showcase = [];
+        // Hızlı Aksiyon Köprüsü göçü: eski tekli altWatchTemplate, externalActions
+        // listesinin ilk (primary) şablonu olarak taşınır — eski "Alternatif İzle"
+        // davranışı kaybolmaz, kullanıcı yeni listeyi düzenleyebilir.
+        if (!Array.isArray(parsedData.externalActions)) parsedData.externalActions = [];
+        if (parsedData.externalActions.length === 0 && parsedData.altWatchTemplate) {
+          parsedData.externalActions = [{ id: 'legacy-alt-izle', label: 'Alternatif İzle', urlTemplate: rewriteLegacyTemplate(parsedData.altWatchTemplate), icon: 'ExternalLink', targetScope: 'all', isPrimary: true }];
+        }
         
         parsedData = synchronizeXPAndLevel(parsedData, true);
         return parsedData;
@@ -1333,6 +1450,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const updateShowcase = useCallback((showcase: ShowcaseItem[]) => { dispatch({ type: 'SET_SHOWCASE', showcase }); showToast('Profil vitrinin güncellendi!', 'success'); }, [showToast]);
 
+  // Sinematik Otopsi (DNF) — yarım bırakma ve geri diriltme.
+  const abandonMedia = useCallback((mediaType: 'movie' | 'series', id: string, opts?: { abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }) => {
+    dispatch({ type: 'ABANDON_MEDIA', mediaType, id, abandonedAt: opts?.abandonedAt, progress: opts?.progress, reasons: opts?.reasons, note: opts?.note });
+    showToast('🪦 Otopsi kaydedildi — "Yarım Bırakılanlar" mezarlığına eklendi (+25 XP)', 'success');
+  }, [showToast]);
+  const reviveMedia = useCallback((mediaType: 'movie' | 'series', id: string) => {
+    dispatch({ type: 'REVIVE_MEDIA', mediaType, id });
+    showToast('⏱️ Operasyon devam ediyor — otopsi geri alındı', 'info');
+  }, [showToast]);
+  // Kör kalibrasyon düellosu (sonuç modal içinde gösterilir — ekstra bildirim yok).
+  const resolveDuel = useCallback((winnerId: string, loserId: string, mediaType?: 'movie' | 'series') => {
+    dispatch({ type: 'RESOLVE_DUEL', winnerId, loserId, mediaType });
+  }, []);
+  const applyCalibrationSuggestion = useCallback((id: string, newRating: number) => {
+    dispatch({ type: 'APPLY_CALIBRATION_SUGGESTION', id, newRating });
+    showToast('⚖️ Puan kalibre edildi', 'success');
+  }, [showToast]);
+  const setExternalActions = useCallback((actions: ExternalActionTemplate[]) => {
+    dispatch({ type: 'SET_EXTERNAL_ACTIONS', actions });
+  }, []);
+
   const addMovie = useCallback((title: string, year: string, genres: string[], collectionId: string | null, runtime?: number, posterUrl?: string | null, overview?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData): boolean => {
     if (data.movies.some((m) => normalize(m.title) === normalize(title))) { showToast('Bu film zaten listede var!', 'warning'); return false; }
     dispatch({ type: 'ADD_MOVIE', movie: { id: uid(), title: title.trim(), year: year.trim(), genres, collectionId, inPastQueue: Boolean(extra?.inPastQueue), runtime, posterUrl: posterUrl || undefined, overview: overview || undefined, tmdbId, imdbId, watchProviders, directors: extra?.directors, cast: extra?.cast, studios: extra?.studios, keywords: extra?.keywords, originalLanguage: extra?.originalLanguage, watched: false, isPastWatch: false, rating: null, note: '', watchedAt: null, startedAt: null, actualRuntime: null, addedAt: new Date().toISOString() } }); showToast('Film eklendi'); return true;
@@ -1489,8 +1627,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     weeklyPlan: data.weeklyPlan || [], notificationsEnabled: !!data.notificationsEnabled,
     shareWatchedInFeed: data.shareWatchedInFeed !== false, sharePastWatchedInFeed: data.sharePastWatchedInFeed !== false,
     showLockedNames: !!data.showLockedNames, altWatchTemplate: data.altWatchTemplate || '',
+    externalActions: data.externalActions || [],
     agentId: data.agentId || '',
-  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.altWatchTemplate, data.agentId]);
+  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.altWatchTemplate, data.externalActions, data.agentId]);
 
   // Global tik YOK — sadece aktif timer filmini verir (seyrek değişir); sayfalar kendi
   // yerel nowMs tik'lerini tutmaya devam eder (HomePage dahil — kullanıcıya ait dosya).
@@ -1501,7 +1640,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements
+    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
@@ -1518,6 +1657,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addPlanItem, deletePlanItem, updatePlanItem, grantXp,
     toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification,
     forceXpSync, syncAchievements,
+    abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions,
   ];
   const actionsValue = useMemo<ActionsSlice>(() => {
     const { data: _d, syncStatus: _ss, isQuestCelebrating: _iqc, toasts: _t, achievementToasts: _at, levelUpData: _lud, seasonCompleteData: _scd, xpGainData: _xgd, weeklyPlan: _wp, ...rest } = value;

@@ -12,6 +12,25 @@ export interface RatingCriterion {
   genres: string[];
 }
 
+/** Yarım bırakma ilerlemesi (Sinematik Otopsi / DNF). */
+export interface AbandonedProgress {
+  unit: 'minute' | 'episode';
+  value: number;
+  season?: number;
+}
+
+/** Hızlı aksiyon köprüsü şablonu (Çoklu Hızlı Aksiyon Köprüsü). */
+export interface ExternalActionTemplate {
+  id: string;
+  label: string;
+  /** Placeholder'lar: {title} {title_slug} {title_plus} {year} {imdbId} {tmdbId} */
+  urlTemplate: string;
+  /** Lucide ikon adı (örn. ExternalLink, Play, Search). */
+  icon: string;
+  targetScope: 'all' | 'movie' | 'series';
+  isPrimary?: boolean;
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -22,6 +41,16 @@ export interface Movie {
   runtime?: number;
   startedAt?: string | null;
   actualRuntime?: number | null;
+  /** Sinematik Otopsi: yarım bırakılan film. */
+  abandoned?: boolean;
+  abandonedAt?: string | null;
+  abandonedProgress?: AbandonedProgress;
+  autopsyReasons?: string[];
+  autopsyNote?: string;
+  /** Kör kalibrasyon: düello ile düzeltilen puan (rating'ten bağımsız sapma korunur). */
+  calibratedScore?: number;
+  duelCount?: number;
+  duelWins?: number;
   posterUrl?: string;
   overview?: string;
   tmdbId?: number;
@@ -73,6 +102,16 @@ export interface Series {
   studios?: string[];
   originalLanguage?: string;
   addedAt: string;
+  /** Sinematik Otopsi: yarım bırakılan dizi. */
+  abandoned?: boolean;
+  abandonedAt?: string | null;
+  abandonedProgress?: AbandonedProgress;
+  autopsyReasons?: string[];
+  autopsyNote?: string;
+  /** Kör kalibrasyon (dizilerde film gibi puanlanabilir ep yok — alan opsiyonel). */
+  calibratedScore?: number;
+  duelCount?: number;
+  duelWins?: number;
 }
 
 export interface Collection {
@@ -100,6 +139,8 @@ export interface WatchHistoryItem {
   year?: string;
   season?: number;
   episode?: number;
+  /** DNF işareti: bu kayıt "yarım bırakma" otopsisinden geliyorsa true. */
+  abandoned?: boolean;
 }
 
 export interface AchievementProgress {
@@ -143,6 +184,12 @@ export interface AppData {
   showLockedNames?: boolean;
   altWatchTemplate?: string;
   weeklyPlan?: WeeklyPlanItem[];
+  /** Çoklu hızlı aksiyon köprüsü şablonları (varsa altWatchTemplate'i temsil eder). */
+  externalActions?: ExternalActionTemplate[];
+  /** Kör kalibrasyon: tamamlanan düello sayısı (Terazi Ustası başarımı için). */
+  totalDuelsCompleted?: number;
+  /** Kalıcı bonus XP (başarı/görev ödülleri; synchronizeXPAndLevel recalc'ine dahildir). */
+  bonusXp?: number;
   pendingToasts?: {
     achievementId: string;
     tier: string;

@@ -52,6 +52,8 @@ export interface SettingsSlice {
   sharePastWatchedInFeed: boolean;
   showLockedNames: boolean;
   altWatchTemplate: string;
+  /** Hızlı aksiyon köprüsü şablonları (SettingsPage yönetimi + kart butonları). */
+  externalActions: NonNullable<ExtendedAppData['externalActions']>;
   /** Kimlik (seyrek değişir) — ağ paylaşımları için gerekli. */
   agentId: string;
 }
