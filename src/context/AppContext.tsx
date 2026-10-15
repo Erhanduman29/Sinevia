@@ -911,6 +911,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const lastSyncedStorageHash = useRef<string>(getCleanHashString(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}'), readSyncExtras()));
   // En güncel reducer durumuna ref üzerinden erişim (localStorage artık sadece küçük bir anlık görüntü tutuyor).
   const dataRef = useRef(data); dataRef.current = data;
+  // Yerel verinin son değişiklik zamanı — buluta yazmadan önce sürüm karşılaştırması için (Madde 3).
+  // Başlangıçta son gerçek düzenleme zamanından okunur; hidrate/indirme senkronları bunu BUMPLAMAZ
+  // (yoksa eski yerel veri "en yeni" görünür ve bulutu ezerdi).
+  const localLastModifiedRef = useRef<number>((() => {
+    try {
+      const saved = Number(localStorage.getItem('sinevia_last_modified') || 0);
+      // Anahtar henüz yoksa (bu güncellemeyi ilk gören kullanıcılar): yerel otorite kabul edilir,
+      // yoksa cloudTime > 0+2000 şartı her şeyi "daha yeni" yapıp yerel veriyi çekerdi (veri kaybı).
+      if (!saved) { const now = Date.now(); localStorage.setItem('sinevia_last_modified', String(now)); return now; }
+      return saved;
+    } catch { return Date.now(); }
+  })());
+  const lmSkipBumpRef = useRef(false);
 
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => { toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return toastsRef.current; }, []);
   const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
@@ -931,6 +944,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // 2) IDB'den tam veriyi oku ve hidrate et (reducer init'i sadece snapshot okumuş olabilir).
       const full = await idbGet<ExtendedAppData>(STORAGE_KEY);
       if (full && (full.movies?.length || full.series?.length || full.history?.length)) {
+        lmSkipBumpRef.current = true; // hidrate senkronu gerçek yerel düzenleme DEĞİLDİR
         dispatch({ type: 'HYDRATE_FROM_IDB', data: full });
       }
       void migratedOk;
@@ -939,14 +953,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // YAZMA — veri her değiştiğinde IDB'ye asenkron kuyrukla yaz + localStorage'a küçük anlık görüntü bırak.
   useEffect(() => {
+    // lastModified bump: sadece gerçek yerel değişiklikte (hidrate/indirme senkronunda değil).
+    if (lmSkipBumpRef.current) {
+      lmSkipBumpRef.current = false;
+    } else {
+      const now = Date.now();
+      localLastModifiedRef.current = now;
+      try { localStorage.setItem('sinevia_last_modified', String(now)); } catch { /* kota */ }
+    }
     writeQueue.set(STORAGE_KEY, data, 200);
     writeBootSnapshot(data as unknown as Record<string, unknown>);
     // Sekme gizlenince / kapanınca bekleyen yazımı anında uygula (veri kaybını önle).
     const flushWrites = () => { writeQueue.flush(); writeBootSnapshot(data as unknown as Record<string, unknown>); };
     const onVisibility = () => { if (document.visibilityState === 'hidden') flushWrites(); };
     window.addEventListener('pagehide', flushWrites);
+    window.addEventListener('beforeunload', flushWrites);
     document.addEventListener('visibilitychange', onVisibility);
-    return () => { window.removeEventListener('pagehide', flushWrites); document.removeEventListener('visibilitychange', onVisibility); };
+    return () => { window.removeEventListener('pagehide', flushWrites); window.removeEventListener('beforeunload', flushWrites); document.removeEventListener('visibilitychange', onVisibility); };
   }, [data]);
 
   // AÇILIŞ KONTROLÜ (BOOT CHECK)
@@ -989,6 +1012,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               updatedLocalData.lastCloudSync = cloudTime;
               localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLocalData));
 
+              lmSkipBumpRef.current = true; // bulut senkronu gerçek yerel düzenleme DEĞİLDİR
               dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
               showToast('Yokluğunda yapılan güncellemeler eşitlendi!', 'info');
             }
@@ -1034,6 +1058,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const jsonData = getCleanHashString(data, currentQuestState, readSyncExtras());
         
         if (lastSyncedStorageHash.current === jsonData) return;
+
+        // SÜRÜM KONTROLÜ (Madde 3) — bulut daha yeniyse eski yerel veri YENİ veriyi ezmesin.
+        // Yerel lastModified (son yerel değişiklik) ile buluttaki last_cloud_sync karşılaştırılır.
+        // Bulut daha yeniyse yükleme iptal edilir ve bulut verisi çekilir (race condition önlenir).
+        let cloudTime = 0;
+        try {
+          const { data: prof } = await supabase.from('profiles').select('last_cloud_sync').eq('agent_id', data.agentId).maybeSingle();
+          cloudTime = Number(prof?.last_cloud_sync || 0);
+        } catch { cloudTime = 0; }
+        const localLM = localLastModifiedRef.current || 0;
+        if (cloudTime > localLM + 2000) {
+          setSyncStatus('syncing');
+          try {
+            const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
+            const response = await fetch(`${urlData.publicUrl}?t=${cloudTime}`, { cache: 'no-store' });
+            if (response.ok) {
+              const incomingJson = JSON.parse(await response.text());
+              const coreData = incomingJson.core || incomingJson;
+              const questData = incomingJson.quests;
+              applyIncomingExtras(incomingJson);
+              lastSyncedStorageHash.current = getCleanHashString(coreData, questData, pickIncomingExtras(incomingJson));
+              coreData.lastCloudSync = cloudTime;
+              const snap = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+              snap.lastCloudSync = cloudTime;
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+              lmSkipBumpRef.current = true; // sürüm kontrolü sonucu çekilen bulut senkronu
+              dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
+            }
+          } catch { /* çekilemediyse bu tur yükleme yok, sonraki turda tekrar denenir */ }
+          setSyncStatus('synced');
+          return;
+        }
 
         setSyncStatus('syncing');
 
@@ -1094,8 +1150,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const flushSync = () => { clearTimeout(syncTimer); syncToStorage(); };
     const onVis = () => { if (document.visibilityState === 'hidden') flushSync(); };
     window.addEventListener('pagehide', flushSync);
+    window.addEventListener('beforeunload', flushSync);
     document.addEventListener('visibilitychange', onVis);
-    return () => { clearTimeout(syncTimer); window.removeEventListener('pagehide', flushSync); document.removeEventListener('visibilitychange', onVis); };
+    return () => { clearTimeout(syncTimer); window.removeEventListener('pagehide', flushSync); window.removeEventListener('beforeunload', flushSync); document.removeEventListener('visibilitychange', onVis); };
   }, [data]);
 
   // CANLI DİNLEYİCİ (REALTIME DOWNLOAD)
@@ -1131,6 +1188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 updatedLocalData.lastCloudSync = incomingTime;
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLocalData));
 
+                lmSkipBumpRef.current = true; // realtime indirmesi gerçek yerel düzenleme DEĞİLDİR
                 dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
                 setSyncStatus('synced');
               } else {
@@ -1224,6 +1282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         coreData.recoveryKey = recoveryKey;
         coreData.nickname = nickname;
         
+        lmSkipBumpRef.current = true; // kurtarma/kimlik indirmesi gerçek yerel düzenleme DEĞİLDİR
         dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData, questData });
         showToast('Kimlik ve Tüm Kütüphane başarıyla eşitlendi!', 'success');
         return;
