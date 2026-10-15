@@ -32,6 +32,9 @@ export function isPositiveTag(tag: string, sentiments?: Record<string, 'positive
 
 export const DISPLAY_DURATION_MS = 4000;
 const QUEUE_STEP_DURATION_MS = 4300;
+// Açılış uzlaşma penceresi: hidrate/bulut senkronu yeniden hesaplamalarının seviye
+// "kutlaması" üretmesi yasak (her yenilemede sahte seviye atlama animasyonu engeli).
+const BOOT_RECONCILE_WINDOW_MS = 5000;
 
 export interface AIMessage { id: string; sender: 'user' | 'ai'; text: string; timestamp: number; actionItems?: any[]; }
 interface MovieExtraData { keywords?: string[]; directors?: string[]; cast?: string[]; studios?: string[]; originalLanguage?: string; inPastQueue?: boolean; }
@@ -645,10 +648,12 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     if (action.questData) {
       localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(action.questData));
     }
-    return applyAchievements({
+    // Bulut uzlaşması seviye kutlaması tetiklememeli (açılışta sahte "Seviye X" animasyonu engeli).
+    const syncedFromCloud = applyAchievements({
       ...defaultData(),
       ...(action.data as any)
     });
+    return { ...syncedFromCloud, pendingLevelUp: undefined };
   }
 
   if (action.type === 'HYDRATE_FROM_IDB') {
@@ -662,7 +667,9 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       recoveryKey: action.data.recoveryKey || state.recoveryKey,
       theme: action.data.theme || state.theme,
     };
-    return applyAchievements(merged);
+    // Hidrasyon uzlaşması da kutlama üretmemeli (gerçek seviye atlama sadece oyun içindedir).
+    const hydrated = applyAchievements(merged);
+    return { ...hydrated, pendingLevelUp: undefined };
   }
 
   if (action.type === 'RECOVER_IDENTITY') {
@@ -924,10 +931,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { return Date.now(); }
   })());
   const lmSkipBumpRef = useRef(false);
+  // Görülen son bulut sürümü (last_cloud_sync). Sürüm kapısı buna bakar: sadece HENÜZ
+  // görülmemiş bulut sürümü çekilir. (Eski kapı localLastModified ile karşılaştırıyordu;
+  // yükleyici cloudTime'ı edit'ten ~3.5sn sonra yazdığı için koşul kalıcı doğru olup her
+  // senkron tam JSON çekiyordu → her açılışta/senkronda 20-30MB indirme döngüsü.)
+  const lastSeenCloudTimeRef = useRef<number>((() => {
+    try {
+      const saved = Number(localStorage.getItem('sinevia_last_cloud_seen') || 0);
+      if (saved) return saved;
+      return Number(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').lastCloudSync || 0);
+    } catch { return 0; }
+  })());
 
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => { toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return toastsRef.current; }, []);
   const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
   const [levelUpData, setLevelUpData] = useReducer((_s: any, a: any) => a, null); const [seasonCompleteData, setSeasonCompleteData] = useReducer((_s: any, a: any) => a, null);
+  const bootStartRef = useRef(Date.now()); // boot uzlaşma penceresi başlangıcı
   const [xpGainData, setXpGainData] = useState<{ gained: number; oldTotal: number; newTotal: number } | null>(null);
 
   useEffect(() => { document.body.setAttribute('data-theme', !data.theme ? 'premium-dark' : data.theme); }, [data.theme]);
@@ -989,10 +1008,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (profile && profile.last_cloud_sync) {
           const cloudTime = Number(profile.last_cloud_sync);
-          const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-          const localTime = localData.lastCloudSync || 0;
+          // Kapı: sadece henüz görülmemiş bulut sürümü çekilir (bayat snapshot.lastCloudSync
+          // ezikleri her açılışta tam JSON çektirmesin).
 
-          if (cloudTime > localTime + 2000) { 
+          if (cloudTime > lastSeenCloudTimeRef.current + 2000) { 
             const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
             const fetchUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
 
@@ -1011,6 +1030,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const updatedLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
               updatedLocalData.lastCloudSync = cloudTime;
               localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLocalData));
+              // Bu bulut sürümü artık görüldü — sonraki açılışta tekrar çekilmesin.
+              lastSeenCloudTimeRef.current = cloudTime;
+              try { localStorage.setItem('sinevia_last_cloud_seen', String(cloudTime)); } catch { /* kota */ }
 
               lmSkipBumpRef.current = true; // bulut senkronu gerçek yerel düzenleme DEĞİLDİR
               dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
@@ -1060,15 +1082,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (lastSyncedStorageHash.current === jsonData) return;
 
         // SÜRÜM KONTROLÜ (Madde 3) — bulut daha yeniyse eski yerel veri YENİ veriyi ezmesin.
-        // Yerel lastModified (son yerel değişiklik) ile buluttaki last_cloud_sync karşılaştırılır.
-        // Bulut daha yeniyse yükleme iptal edilir ve bulut verisi çekilir (race condition önlenir).
+        // Kapı: cloudTime henüz GÖRÜLMEMİŞ bir bulut sürümü mü? (localLastModified karşılaştırması
+        // kaldırıldı: yükleyici damgası hep edit+3.5sn olduğundan koşul kalıcı doğru geliyor,
+        // her senkron tam JSON çektirip yüklemeleri engelliyordu → 20-30MB + pull döngüsü.)
         let cloudTime = 0;
         try {
           const { data: prof } = await supabase.from('profiles').select('last_cloud_sync').eq('agent_id', data.agentId).maybeSingle();
           cloudTime = Number(prof?.last_cloud_sync || 0);
         } catch { cloudTime = 0; }
-        const localLM = localLastModifiedRef.current || 0;
-        if (cloudTime > localLM + 2000) {
+        if (cloudTime > lastSeenCloudTimeRef.current + 2000) {
           setSyncStatus('syncing');
           try {
             const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
@@ -1083,6 +1105,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const snap = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
               snap.lastCloudSync = cloudTime;
               localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+              // Bu bulut sürümü artık görüldü — tekrar tekrar çekilmesin.
+              lastSeenCloudTimeRef.current = cloudTime;
+              try { localStorage.setItem('sinevia_last_cloud_seen', String(cloudTime)); } catch { /* kota */ }
               lmSkipBumpRef.current = true; // sürüm kontrolü sonucu çekilen bulut senkronu
               dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
             }
@@ -1137,6 +1162,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
         localData.lastCloudSync = newSyncTime;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+        // Yüklediğimiz sürüm artık "görüldü" — kendimizin yüklediğimizi geri çekmeyelim.
+        lastSeenCloudTimeRef.current = newSyncTime;
+        try { localStorage.setItem('sinevia_last_cloud_seen', String(newSyncTime)); } catch { /* kota */ }
 
         lastSyncedStorageHash.current = jsonData;
         setSyncStatus('synced');
@@ -1163,10 +1191,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `agent_id=eq.${data.agentId}` }, async (payload) => {
         if (payload.new && payload.new.last_cloud_sync) {
           const incomingTime = Number(payload.new.last_cloud_sync);
-          const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-          const currentLocalTime = localData.lastCloudSync || 0;
-
-          if (incomingTime > currentLocalTime + 2000) { 
+          // Kapı: henüz görülmemiş bir bulut sürümü mü? (Kendi yüklememizin yankısı veya bayat
+          // snapshot.lastCloudSync değeri tam JSON'u gereksiz indirmesin → MB şişirmesin.)
+          if (incomingTime > lastSeenCloudTimeRef.current + 2000) { 
             setSyncStatus('syncing');
             const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
             const fetchUrl = `${urlData.publicUrl}?t=${incomingTime}`;
@@ -1187,6 +1214,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 const updatedLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
                 updatedLocalData.lastCloudSync = incomingTime;
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLocalData));
+                // Bu bulut sürümü artık görüldü — tekrar indirilmesin.
+                lastSeenCloudTimeRef.current = incomingTime;
+                try { localStorage.setItem('sinevia_last_cloud_seen', String(incomingTime)); } catch { /* kota */ }
 
                 lmSkipBumpRef.current = true; // realtime indirmesi gerçek yerel düzenleme DEĞİLDİR
                 dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
@@ -1235,7 +1265,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (xpTimerRef.current) clearTimeout(xpTimerRef.current); setXpGainData(data.pendingXpGain);
       xpTimerRef.current = setTimeout(() => { setXpGainData(null); xpTimerRef.current = null; }, DISPLAY_DURATION_MS); dispatch({ type: 'CLEAR_XP_GAIN' });
     }
-    if (data.pendingLevelUp) { setLevelUpData(data.pendingLevelUp); import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound()); dispatch({ type: 'CLEAR_LEVELUP' }); }
+    if (data.pendingLevelUp) {
+      // Açılış uzlaşma penceresi içindeki "artış" hidrate/bulut senkronu yeniden hesaplamasıdır,
+      // gerçek kutlama değildir → sadece temizle, gösterme.
+      if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CLEAR_LEVELUP' }); }
+      else { setLevelUpData(data.pendingLevelUp); import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound()); dispatch({ type: 'CLEAR_LEVELUP' }); }
+    }
   }, [data.pendingXpGain, data.pendingLevelUp]);
 
   useEffect(() => {
