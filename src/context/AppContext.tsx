@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useReducer, useCallback, useRef, useState, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion, WatchProvider, WeeklyPlanItem } from '../types';
-import { normalize, uid, todayStr, daysBetween } from '../lib/utils';
+import { normalize, uid, todayStr, daysBetween, withRetry, enqueueLogOp, dequeueLogOp, readLogQueue } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
@@ -941,6 +941,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     writeQueue.set(STORAGE_KEY, data, 200);
     writeBootSnapshot(data as unknown as Record<string, unknown>);
+    // Sekme gizlenince / kapanınca bekleyen yazımı anında uygula (veri kaybını önle).
+    const flushWrites = () => { writeQueue.flush(); writeBootSnapshot(data as unknown as Record<string, unknown>); };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flushWrites(); };
+    window.addEventListener('pagehide', flushWrites);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { window.removeEventListener('pagehide', flushWrites); document.removeEventListener('visibilitychange', onVisibility); };
   }, [data]);
 
   // AÇILIŞ KONTROLÜ (BOOT CHECK)
@@ -995,6 +1001,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     performStartupCheck();
+  }, [data.agentId]);
+
+  // ÇEVRİMDIŞI KUYRUK — bağlantı geri geldiğinde bekleyen network_logs satırlarını sırayla gönder.
+  const logQueueFiredRef = useRef(false);
+  useEffect(() => {
+    const flushLogQueue = async () => {
+      const q = readLogQueue();
+      if (!q.length) return;
+      for (const op of q) {
+        try {
+          await withRetry(() => supabase.from('network_logs').insert([op.row]).then(({ error }: { error: any }) => { if (error) throw error; }), 2, 300);
+          dequeueLogOp(op.id);
+        } catch { break; /* hâlâ çevrimdışı — kuyrukta kal, sonraki denemede tekrar */ }
+      }
+    };
+    // Mount'ta bir kez dene.
+    if (!logQueueFiredRef.current) { logQueueFiredRef.current = true; flushLogQueue(); }
+    // Ağ durumu çevrimiçi olunca tekrar dene.
+    const onOnline = () => flushLogQueue();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
   }, [data.agentId]);
 
   // YÜKLEYİCİ (UPLOAD)
@@ -1063,7 +1090,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     
     const syncTimer = setTimeout(() => syncToStorage(), 3500);
-    return () => clearTimeout(syncTimer);
+    // Bekleyen (3.5sn süresi dolmamış) senkron varsa sekme gizlenirken/kapanırken anında tetikle.
+    const flushSync = () => { clearTimeout(syncTimer); syncToStorage(); };
+    const onVis = () => { if (document.visibilityState === 'hidden') flushSync(); };
+    window.addEventListener('pagehide', flushSync);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearTimeout(syncTimer); window.removeEventListener('pagehide', flushSync); document.removeEventListener('visibilitychange', onVis); };
   }, [data]);
 
   // CANLI DİNLEYİCİ (REALTIME DOWNLOAD)
@@ -1235,11 +1267,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'WATCH_MOVIE', id, rating, detailedRating, reviewTags, note, watchedAt: now, actualRuntime, isPastWatch: finalIsPastWatch, historyItem: { id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title, rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: finalIsPastWatch, startedAt: finalIsPastWatch ? null : (movie.startedAt || null), actualRuntime, originalRuntime: info.maxMins, genres: movie.genres, year: movie.year } });
     
     if (!finalIsPastWatch && data.shareWatchedInFeed !== false) {
-      supabase.from('network_logs').insert([{
+      const row = {
         id: uid(), agent_id: data.agentId, action_type: 'watched', item_id: movie.id, item_type: 'movie',
         item_title: movie.title, item_poster: movie.posterUrl || null, rating: rating, note: note || '',
         genres: movie.genres, review_tags: reviewTags || [], is_spoiler: isSpoiler, created_at: now
-      }]).then(({ error }: { error: any }) => { if (error) console.error(error); });
+      };
+      withRetry(() => supabase.from('network_logs').insert([row]).then(({ error }: { error: any }) => { if (error) throw error; }))
+        .catch(() => { enqueueLogOp({ id: row.id, kind: 'insert', row, createdAt: Date.now() }); });
     }
     if (finalIsPastWatch) showToast(`"${movie.title}" puanlandı ve Geçmiş'e eklendi`, 'info'); else if (movie.startedAt && actualRuntime < info.maxMins) showToast(`Film ${actualRuntime} dk'da bitti! (${info.maxMins - actualRuntime} dk kazandın ⚡)`, 'success');
   }, [data.movies, data.agentId, data.shareWatchedInFeed, showToast]);
@@ -1262,11 +1296,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'WATCH_EPISODE', seriesId, episodeId, rating, detailedRating, reviewTags, note, watchedAt: now, historyItem: { id: uid(), itemId: ep.id, seriesId: series.id, kind: 'series', type: 'series', title: series.title, rating, detailedRating, reviewTags, note, watchedAt: now, genres: series.genres, season: ep.season, episode: ep.episode } });
     
     if (data.shareWatchedInFeed !== false) {
-      supabase.from('network_logs').insert([{
+      const row = {
         id: uid(), agent_id: data.agentId, action_type: 'watched', item_id: ep.id, item_type: 'series',
         item_title: `${series.title} (S${ep.season} B${ep.episode})`, item_poster: series.posterUrl || null,
         rating: rating, note: note || '', genres: series.genres, review_tags: reviewTags || [], is_spoiler: isSpoiler, created_at: now
-      }]).then(({ error }: { error: any }) => { if (error) console.error(error); });
+      };
+      withRetry(() => supabase.from('network_logs').insert([row]).then(({ error }: { error: any }) => { if (error) throw error; }))
+        .catch(() => { enqueueLogOp({ id: row.id, kind: 'insert', row, createdAt: Date.now() }); });
     }
 
     setTimeout(() => {

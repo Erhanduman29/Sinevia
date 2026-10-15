@@ -69,3 +69,57 @@ export function getNextUnwatchedEpisode<T extends { watched: boolean; season: nu
   const sorted = [...episodes].sort((a, b) => a.season - b.season || a.episode - b.episode);
   return sorted.find((e) => !e.watched) || null;
 }
+
+// ============================================================================
+// AĞ YARDIMCILARI — çevrimdışı dayanıklılık için (Aşama 3)
+// ============================================================================
+
+/** Basit üstel geri çekilme (exponential backoff) ile yeniden deneme sarmalayıcısı. */
+export async function withRetry<T>(fn: () => PromiseLike<T>, attempts = 3, baseMs = 400): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, baseMs * Math.pow(2, i)));
+    }
+  }
+  throw lastErr;
+}
+
+export interface QueuedLogOp {
+  id: string;
+  kind: 'insert';
+  row: Record<string, unknown>;
+  createdAt: number;
+}
+
+const LOG_QUEUE_KEY = 'sinevia.networkLogQueue.v1';
+
+/** Bekleyen (çevrimdışı) network_logs satırlarını oku. localStorage küçük veriler için yeterli. */
+export function readLogQueue(): QueuedLogOp[] {
+  try {
+    const raw = localStorage.getItem(LOG_QUEUE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Kuyruğa bir gönderim opsiyonu ekle (idempotent: aynı id tekrar eklenmez). */
+export function enqueueLogOp(op: QueuedLogOp): QueuedLogOp[] {
+  const q = readLogQueue();
+  if (!q.some((x) => x.id === op.id)) q.push(op);
+  try { localStorage.setItem(LOG_QUEUE_KEY, JSON.stringify(q)); } catch { /* kota */ }
+  return q;
+}
+
+/** Bir gönderim başarılı olunca kuyruktan çıkar. */
+export function dequeueLogOp(id: string): QueuedLogOp[] {
+  const q = readLogQueue().filter((x) => x.id !== id);
+  try { localStorage.setItem(LOG_QUEUE_KEY, JSON.stringify(q)); } catch { /* kota */ }
+  return q;
+}
