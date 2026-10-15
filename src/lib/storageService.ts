@@ -131,7 +131,7 @@ class WriteQueue {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private flushing = false;
 
-  set(key: string, value: unknown, delayMs = 200): void {
+  set(key: string, value: unknown, delayMs = 250): void {
     this.pending.set(key, value);
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), delayMs);

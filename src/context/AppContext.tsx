@@ -961,7 +961,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localLastModifiedRef.current = now;
       try { localStorage.setItem('sinevia_last_modified', String(now)); } catch { /* kota */ }
     }
-    writeQueue.set(STORAGE_KEY, data, 200);
+    writeQueue.set(STORAGE_KEY, data, 250);
     writeBootSnapshot(data as unknown as Record<string, unknown>);
     // Sekme gizlenince / kapanınca bekleyen yazımı anında uygula (veri kaybını önle).
     const flushWrites = () => { writeQueue.flush(); writeBootSnapshot(data as unknown as Record<string, unknown>); };
