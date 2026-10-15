@@ -134,19 +134,24 @@ export default function RatingModal({
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        draftKey,
-        JSON.stringify({
-          rating,
-          note: isSpoiler ? `[spoiler] ${note}` : note, // Taslağa kaydederken spoiler etiketini ekle
-          selectedTags,
-          showCriteria,
-          critScores,
-          isPastWatch,
-        })
-      );
-    } catch {}
+    // Taslak kaydı DEBOUNCE: her tuşta localStorage yazımı ana thread'i
+    // blokluyordu (yavaş cihazda harf kaybına yol açıyordu) — 400ms bekle.
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            rating,
+            note: isSpoiler ? `[spoiler] ${note}` : note, // Taslağa kaydederken spoiler etiketini ekle
+            selectedTags,
+            showCriteria,
+            critScores,
+            isPastWatch,
+          })
+        );
+      } catch {}
+    }, 400);
+    return () => clearTimeout(t);
   }, [draftKey, rating, note, isSpoiler, selectedTags, showCriteria, critScores, isPastWatch]);
 
   const handleResetDraft = () => {

@@ -49,6 +49,7 @@ export interface ExtendedAppData extends AppData {
   reviewTags: string[];
   tagSentiments?: Record<string, 'positive' | 'negative'>;
   notificationsEnabled?: boolean;
+  shareWatchedInFeed?: boolean;
   notifyMessages?: boolean;
   notifyFriendRequests?: boolean;
   notifyLists?: boolean;
@@ -179,7 +180,7 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
     showLockedNames: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
-    weeklyPlan: [], notificationsEnabled: false,
+    weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
     showcase: [],
     lastCloudSync: Date.now()
@@ -340,6 +341,7 @@ type Action =
   | { type: 'DELETE_PLAN_ITEM'; id: string }
   | { type: 'UPDATE_PLAN_ITEM'; id: string; date: string; time: string }
   | { type: 'TOGGLE_NOTIFICATIONS'; enabled: boolean }
+  | { type: 'TOGGLE_SHARE_WATCHED'; enabled: boolean }
   | { type: 'SET_NICKNAME'; nickname: string }
   | { type: 'RECOVER_IDENTITY'; agentId: string; recoveryKey: string; nickname: string }
   | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean }
@@ -685,6 +687,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'UPDATE_ALT_TEMPLATE') return { ...state, altWatchTemplate: action.template };
   if (action.type === 'SET_THEME') return { ...state, theme: action.theme };
   if (action.type === 'TOGGLE_NOTIFICATIONS') return { ...state, notificationsEnabled: action.enabled };
+  if (action.type === 'TOGGLE_SHARE_WATCHED') return { ...state, shareWatchedInFeed: action.enabled };
   if (action.type === 'TOGGLE_SPECIFIC_NOTIFICATION') return { ...state, [action.key]: action.enabled };
   if (action.type === 'SET_NICKNAME') return { ...state, nickname: action.nickname };
   if (action.type === 'SET_SHOWCASE') return { ...state, showcase: action.showcase.slice(0, 4) };
@@ -844,7 +847,7 @@ interface AppContextValue {
   updateAIHistory: (messages: AIMessage[]) => void; addCriterion: (criterion: RatingCriterion) => void; editCriterion: (id: string, criterion: RatingCriterion) => void; deleteCriterion: (id: string) => void;
   updateAltWatchTemplate: (template: string) => void; updateTheme: (theme: string) => void;
   weeklyPlan: WeeklyPlanItem[]; addPlanItem: (movie: Movie, date: string, time: string) => boolean; deletePlanItem: (id: string) => void; updatePlanItem: (id: string, date: string, time: string) => boolean;
-  grantXp: (xp: number) => void; toggleNotifications: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
+  grantXp: (xp: number) => void; toggleNotifications: (enabled: boolean) => void; toggleShareWatched: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
   setNickname: (nickname: string) => void; recoverIdentity: (agentId: string, recoveryKey: string, nickname: string) => void;
   updateShowcase: (items: ShowcaseItem[]) => void;
   forceXpSync: () => void;
@@ -868,6 +871,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!parsedData.criteria) parsedData.criteria = defaultData().criteria; if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS; if (!parsedData.theme || parsedData.theme === 'default') parsedData.theme = 'premium-dark';
         if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) parsedData.weeklyPlan = [];
         if (parsedData.notificationsEnabled === undefined) parsedData.notificationsEnabled = false;
+        if (parsedData.shareWatchedInFeed == null) parsedData.shareWatchedInFeed = true;
         if (parsedData.notifyMessages === undefined) parsedData.notifyMessages = true;
         if (parsedData.notifyFriendRequests === undefined) parsedData.notifyFriendRequests = true;
         if (parsedData.notifyLists === undefined) parsedData.notifyLists = true;
@@ -1108,6 +1112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => { const id = uid(); setToasts({ type: 'add', toast: { id, message, type } }); setTimeout(() => setToasts({ type: 'remove', id }), 2800); }, []);
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
   const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []);
+  const toggleShareWatched = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_SHARE_WATCHED', enabled }), []);
   const toggleSpecificNotification = useCallback((key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => dispatch({ type: 'TOGGLE_SPECIFIC_NOTIFICATION', key, enabled }), []);
   const setNickname = useCallback((nickname: string) => { dispatch({ type: 'SET_NICKNAME', nickname }); showToast('Kullanıcı adı güncellendi!', 'success'); }, [showToast]);
   
@@ -1175,7 +1180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     dispatch({ type: 'WATCH_MOVIE', id, rating, detailedRating, reviewTags, note, watchedAt: now, actualRuntime, isPastWatch: finalIsPastWatch, historyItem: { id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title, rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: finalIsPastWatch, startedAt: finalIsPastWatch ? null : (movie.startedAt || null), actualRuntime, originalRuntime: info.maxMins, genres: movie.genres, year: movie.year } });
     
-    if (!finalIsPastWatch) {
+    if (!finalIsPastWatch && data.shareWatchedInFeed !== false) {
       supabase.from('network_logs').insert([{
         id: uid(), agent_id: data.agentId, action_type: 'watched', item_id: movie.id, item_type: 'movie',
         item_title: movie.title, item_poster: movie.posterUrl || null, rating: rating, note: note || '',
@@ -1183,7 +1188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }]).then(({ error }: { error: any }) => { if (error) console.error(error); });
     }
     if (finalIsPastWatch) showToast(`"${movie.title}" puanlandı ve Geçmiş'e eklendi`, 'info'); else if (movie.startedAt && actualRuntime < info.maxMins) showToast(`Film ${actualRuntime} dk'da bitti! (${info.maxMins - actualRuntime} dk kazandın ⚡)`, 'success');
-  }, [data.movies, data.agentId, showToast]);
+  }, [data.movies, data.agentId, data.shareWatchedInFeed, showToast]);
 
   const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => { dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags, isPastWatch }); showToast('Puan güncellendi'); }, [showToast]);
 
@@ -1202,18 +1207,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     dispatch({ type: 'WATCH_EPISODE', seriesId, episodeId, rating, detailedRating, reviewTags, note, watchedAt: now, historyItem: { id: uid(), itemId: ep.id, seriesId: series.id, kind: 'series', type: 'series', title: series.title, rating, detailedRating, reviewTags, note, watchedAt: now, genres: series.genres, season: ep.season, episode: ep.episode } });
     
-    supabase.from('network_logs').insert([{
-      id: uid(), agent_id: data.agentId, action_type: 'watched', item_id: ep.id, item_type: 'series',
-      item_title: `${series.title} (S${ep.season} B${ep.episode})`, item_poster: series.posterUrl || null,
-      rating: rating, note: note || '', genres: series.genres, review_tags: reviewTags || [], is_spoiler: isSpoiler, created_at: now
-    }]).then(({ error }: { error: any }) => { if (error) console.error(error); });
+    if (data.shareWatchedInFeed !== false) {
+      supabase.from('network_logs').insert([{
+        id: uid(), agent_id: data.agentId, action_type: 'watched', item_id: ep.id, item_type: 'series',
+        item_title: `${series.title} (S${ep.season} B${ep.episode})`, item_poster: series.posterUrl || null,
+        rating: rating, note: note || '', genres: series.genres, review_tags: reviewTags || [], is_spoiler: isSpoiler, created_at: now
+      }]).then(({ error }: { error: any }) => { if (error) console.error(error); });
+    }
 
     setTimeout(() => {
       const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); const updatedSeries = state.series?.find((s: any) => s.id === seriesId);
       if (updatedSeries) { if (updatedSeries.episodes.filter((e: any) => e.season === ep.season).every((e: any) => e.watched)) setSeasonCompleteData({ seriesTitle: updatedSeries.title, season: ep.season });
       if (updatedSeries.episodes.every((e: any) => e.watched)) { dispatch({ type: 'COMPLETE_SERIES', id: seriesId, title: updatedSeries.title }); showToast(`${updatedSeries.title} tamamlandı!`, 'success'); } }
     }, 200);
-  }, [data.series, data.agentId, showToast]);
+  }, [data.series, data.agentId, data.shareWatchedInFeed, showToast]);
 
   const deleteMovie = useCallback((id: string) => dispatch({ type: 'DELETE_MOVIE', id }), []);
   const unwatchMovie = useCallback((id: string) => dispatch({ type: 'UNWATCH_MOVIE', id }), []);
@@ -1279,7 +1286,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AppContext.Provider value={{ data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleSpecificNotification, forceXpSync, syncAchievements }}>
+    <AppContext.Provider value={{ data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSpecificNotification, forceXpSync, syncAchievements }}>
       {children}
     </AppContext.Provider>
   );

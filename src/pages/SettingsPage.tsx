@@ -174,7 +174,7 @@ export default function SettingsPage() {
     data, addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData,
     toggleLockedNames, addCriterion, editCriterion,
-    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleSpecificNotification, showToast,
+    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSpecificNotification, showToast,
     setNickname, recoverIdentity
   } = useApp();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
@@ -630,6 +630,30 @@ export default function SettingsPage() {
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div className="p-4 flex items-center justify-between gap-4" style={premiumRowStyle}>
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-1">İzlenenler Akışta Görünsün</h3>
+                  <p className="text-xs text-ink-400">Kapattığında izlediklerin arkadaşlarının Sinevia Ağı akışına düşmez; geçmişin, notların ve puanların senin profilinde kalır.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const next = data.shareWatchedInFeed === false;
+                    toggleShareWatched(next);
+                    showToast(next ? 'İzlenenlerin artık akışta görünüyor.' : 'İzlenenlerin akışta paylaşılmıyor.', 'info');
+                  }}
+                  role="switch"
+                  aria-checked={data.shareWatchedInFeed !== false}
+                  aria-label="İzlenenlerin akışta görünmesi"
+                  className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
+                  style={switchTrackStyle(data.shareWatchedInFeed !== false)}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.shareWatchedInFeed !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                    style={SWITCH_KNOB_STYLE}
+                  />
+                </button>
               </div>
 
               <div className="rounded-[var(--r,16px)] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-white/[.09]" style={{ background: 'linear-gradient(120deg, rgba(232, 56, 79, .12), transparent 80%)' }}>

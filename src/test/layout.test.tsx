@@ -30,7 +30,7 @@ describe('LAYOUT SMOKE TESTLERİ', () => {
     mocks.tutorialCtx.activeTutorial = null;
   });
 
-  test('marka adı ve 9 masaüstü + 5 mobil menü öğesi render edilmeli', () => {
+  test('marka adı ve 9 masaüstü + 6 mobil menü öğesi render edilmeli', () => {
     const html = renderLayout('home');
 
     expect(html).toContain('SINEVIA');
@@ -38,9 +38,10 @@ describe('LAYOUT SMOKE TESTLERİ', () => {
     ['Ana Sayfa', 'Filmler', 'Diziler', 'Sinevia Ağı', 'Haftalık Plan', 'Geçmiş', 'Başarımlar', 'İstatistik', 'AI Asistan']
       .forEach((label) => expect(html, `menü etiketi eksik: ${label}`).toContain(label));
 
-    // data-tutorial="nav-<id>" bağlantıları: 9 sidebar + 5 alt bar = 14
+    // data-tutorial="nav-<id>" bağlantıları: 9 sidebar + 6 alt bar = 15
+    // (kullanıcı mobil alt bara "Ayarlar" ekledi — 6. sekme, en sağda)
     const navLinks = html.match(/data-tutorial="nav-(home|movies|series|network|plan|history|achievements|stats|ai|settings)"/g) || [];
-    expect(navLinks).toHaveLength(14);
+    expect(navLinks).toHaveLength(15);
   });
 
   test('aktif sekme altın renk vurgusu almalı, diğer sekmeler almamalı', () => {
