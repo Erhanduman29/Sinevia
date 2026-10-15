@@ -42,7 +42,14 @@ function sortCalibratedMovies(list: Movie[]): Movie[] {
   const scored: Movie[] = [];
   const rest: Movie[] = [];
   list.forEach((m) => (rank(m) === null ? rest : scored).push(m));
-  scored.sort((a, b) => (rank(b) as number) - (rank(a) as number));
+  scored.sort((a, b) => {
+    const d = (rank(b) as number) - (rank(a) as number);
+    if (d !== 0) return d;
+    // 10 puan gibi eşit kalibrepuanlarda: düello kazancı (duelWins) yüksek olan üstte.
+    const wd = (b.duelWins || 0) - (a.duelWins || 0);
+    if (wd !== 0) return wd;
+    return (a.title || '').localeCompare(b.title || '', 'tr');
+  });
   return [...scored, ...rest];
 }
 

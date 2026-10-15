@@ -570,7 +570,10 @@ export default function StatsPage() {
         .sort((a, b) => {
           const diff =
             (b.calibratedScore ?? b.rating ?? 0) - (a.calibratedScore ?? a.rating ?? 0);
-          return diff !== 0 ? diff : (a.title || '').localeCompare(b.title || '', 'tr');
+          if (diff !== 0) return diff;
+          // 10 puanlı filmlerde: düello kazancı fazla olan üst sıralansın.
+          const wd = (b.duelWins || 0) - (a.duelWins || 0);
+          return wd !== 0 ? wd : (a.title || '').localeCompare(b.title || '', 'tr');
         })
         .slice(0, 10),
     [movies]

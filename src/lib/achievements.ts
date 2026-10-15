@@ -373,7 +373,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
   ]},
   // --- KÖR KALİBRASYON (PUAN DÜELLOLARI) ---
   { id: 'scale_master', name: 'Terazi Ustası', description: 'Kör puan düellosunu {threshold} kez tamamla ve puanlarını kalibre et.', icon: 'Scale', hidden: false, secret: false, category: 'Özel', tiers: [
-    { threshold: 10, xp: 40, tier: 'bronze', name: 'Çırak Kalibratör' },
+    { threshold: 1, xp: 40, tier: 'bronze', name: 'Çırak Kalibratör' },
     { threshold: 50, xp: 150, tier: 'silver', name: 'Dengeli Ölçek' },
     { threshold: 100, xp: 400, tier: 'gold', name: 'Terazi Ustası' }
   ]},

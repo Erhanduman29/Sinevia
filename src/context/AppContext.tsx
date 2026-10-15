@@ -400,7 +400,18 @@ function readTutorialUnitCount(): number {
   }
 }
 
-export function applyAchievements(state: ExtendedAppData): ExtendedAppData {
+/**
+ * Puan (rating) değerine BAĞLI başarımlar: bir yapımın puanı değiştirildiğinde
+ * (10 → 1 gibi) bu başarımların yeni kilitleri yeniden açılamaz. Örn. filmi 10
+ * verip "10 puan verme" başarımını aldıktan sonra 1'e çevirmek "1 puan verme"
+ * başarımını kazandırmaz. İlk puan ataması (WATCH_MOVIE) normal yoldan geçer.
+ */
+const RATING_SCOPED_ACHIEVEMENTS = new Set([
+  'perfect_rating', 'high_rating', 'low_rating', 'hater', 'polarization',
+  'selective_critic', 'secret_perfectionist', 'past_masterpiece',
+]);
+
+export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnlocks?: boolean }): ExtendedAppData {
   const unlocked: { achievementId: string; tier: string; xp: number; name: string; icon: string; description: string }[] = [];
 
   const allValidHistory = [...(state.history || [])].filter((h) => {
@@ -641,6 +652,8 @@ export function applyAchievements(state: ExtendedAppData): ExtendedAppData {
     for (const tier of def.tiers) {
       if (currentVal >= tier.threshold) {
         if (!prog.unlockedTiers.includes(tier.tier)) {
+          // Puan değişim aksiyonlarında puan-bağılı yeni kilit açılmaz (ilerleme `current` güncellenir).
+          if (opts?.skipRatingUnlocks && RATING_SCOPED_ACHIEVEMENTS.has(def.id)) continue;
           prog.unlockedTiers.push(tier.tier);
           if (!prog.tierDates) prog.tierDates = {};
           prog.tierDates[tier.tier] = new Date().toISOString();
@@ -752,6 +765,9 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'SET_EXTERNAL_ACTIONS') return { ...state, externalActions: action.actions };
 
   let nextState = { ...state };
+  // UPDATE_HISTORY_RATING / APPLY_CALIBRATION_SUGGESTION: puan değişiminde
+  // puan-bağılı başarımların yeni kilitleri açılamaz (tail'de bu flag okunur).
+  let skipRatingUnlocks = false;
   switch (action.type) {
     case 'GRANT_XP': {
       const newTotalXp = state.totalXp + action.xp, oldLevel = levelFromXp(state.totalXp).level, levelData = levelFromXp(newTotalXp);
@@ -814,16 +830,12 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
         if (m.id === loser.id) return { ...m, calibratedScore: loserNew, duelCount: (m.duelCount || 0) + 1 };
         return m;
       });
-      const newTotalDuels = (state.totalDuelsCompleted || 0) + 1;
-      nextState.totalDuelsCompleted = newTotalDuels;
-      // +10 XP; her 5. düelloda ek +50 seri ödülü.
-      const duelXp = 10 + (newTotalDuels % 5 === 0 ? 50 : 0);
-      nextState.bonusXp = (state.bonusXp || 0) + duelXp;
-      const oldTotalDuel = state.totalXp || 0;
-      nextState.pendingXpGain = { gained: duelXp, oldTotal: oldTotalDuel, newTotal: oldTotalDuel + duelXp };
+      // XP YOK: düelloda XP kazanılmaz; ödül yalnızca "Terazi Ustası" başarımlarından gelir.
+      nextState.totalDuelsCompleted = (state.totalDuelsCompleted || 0) + 1;
       break;
     }
     case 'APPLY_CALIBRATION_SUGGESTION': {
+      skipRatingUnlocks = true; // kalibre önerisiyle puan değişir → puan-bağılı kilit açılamaz
       nextState.movies = state.movies.map((m) =>
         m.id === action.id && m.rating != null
           ? { ...m, rating: action.newRating, calibratedScore: action.newRating }
@@ -863,6 +875,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, watched: false, isPastWatch: false, rating: null, detailedRating: undefined, reviewTags: undefined, note: '', watchedAt: null, startedAt: null, actualRuntime: null } : m));
       nextState.history = state.history.filter((h) => h.itemId !== action.id && h.id !== action.id); break;
     case 'UPDATE_HISTORY_RATING': {
+      skipRatingUnlocks = true; // puan düzenleme → puan-bağılı yeni kilit açılamaz
       const hItem = state.history.find((h) => h.id === action.historyId); if (!hItem) break;
       const updatedIsPast = action.isPastWatch !== undefined ? action.isPastWatch : hItem.isPastWatch;
       nextState.history = state.history.map((h) => (h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: (h.kind === 'movie' || h.type === 'movie') ? Boolean(updatedIsPast) : h.isPastWatch } : h));
@@ -948,7 +961,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'DELETE_PLAN_ITEM': nextState.weeklyPlan = (state.weeklyPlan || []).filter((p) => p.id !== action.id); break;
     case 'UPDATE_PLAN_ITEM': nextState.weeklyPlan = (state.weeklyPlan || []).map((p) => p.id === action.id ? { ...p, date: action.date, time: action.time } : p); break;
   }
-  return applyAchievements(nextState);
+  return applyAchievements(nextState, skipRatingUnlocks ? { skipRatingUnlocks: true } : undefined);
 }
 
 export interface ToastItem { id: string; message: string; type: 'success' | 'warning' | 'error' | 'info'; }
@@ -1381,6 +1394,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (data.pendingXpGain) {
+      // Açılış uzlaşma penceresindeki XP kazancı hidrate/bulut senkronu yeniden hesaplamasıdır,
+      // gerçek ödül değil → sadece temizle, gösterme (kutlama benzeri sahte animasyonu önle).
+      if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CLEAR_XP_GAIN' }); return; }
       if (xpTimerRef.current) clearTimeout(xpTimerRef.current); setXpGainData(data.pendingXpGain);
       xpTimerRef.current = setTimeout(() => { setXpGainData(null); xpTimerRef.current = null; }, DISPLAY_DURATION_MS); dispatch({ type: 'CLEAR_XP_GAIN' });
     }

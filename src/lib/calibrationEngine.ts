@@ -60,18 +60,25 @@ function commonGenreCount(a: Movie, b: Movie): number {
 /**
  * Sıradaki düello eşleşmesini seçer.
  * - `targetMovieId` verilirse (Mod 1 — Anlık Kalibrasyon): hedef filmin puanına
- *   en yakın (±0.5 penceresi tercihen), ortak tür avantajlı film.
- * - Verilmezse (Mod 2 — Zevk Kalibrasyonu): puan farkı <= 0.6 olan ve en az
- *   düelloya girmiş (duelCount en düşük) ikili.
- * Uygun aday yoksa (havuzda <2 film) null döner.
+ *   en yakın (±0.5 penceresi), ortak tür avantajlı film.
+ * - Verilmezse (Mod 2 — Filmleri Karşılaştır): puan farkı <= 0.5 olan (aynı puanlı
+ *   ikiliye öncelik), en az düelloya girmiş (duelCount en düşük) ikili.
+ * - `opts.genres` verilirse sadece o tür(lere) sahip filmler havuza girer.
+ * - `opts.random` ise eşleşmeler arasından rastgele seçilir.
+ * Düello YALNIZCA aynı puanlı veya ±0.5 farkla mümkündür; fallback yoktur.
  */
 export function pickDuelPair(
   movies: Movie[],
-  targetMovieId?: string
+  targetMovieId?: string,
+  opts?: { genres?: string[]; random?: boolean }
 ): DuelPair | null {
-  const pool = movies.filter(
+  let pool = movies.filter(
     (m) => m.watched && m.rating != null && !m.abandoned
   );
+  if (opts?.genres && opts.genres.length > 0) {
+    const gs = new Set(opts.genres);
+    pool = pool.filter((m) => (m.genres || []).some((g) => gs.has(g)));
+  }
   if (pool.length < 2) return null;
 
   if (targetMovieId) {
@@ -88,47 +95,42 @@ export function pickDuelPair(
     });
     const best = sorted[0];
     if (!best) return null;
+    // Kural: düello yalnızca aynı puanlı veya ±0.5 farkla mümkün.
+    if (Math.abs((best.rating as number) - targetRating) > 0.5) return null;
     return { a: target, b: best, mode: 'target' };
   }
 
-  // Mod 2: aday ikililer — puan farkı <= 0.6, en düşük duelCount önce.
+  // Mod 2: ±0.5 penceresindeki aday ikililer — aynı puan önce, sonra en az duelCount.
   let bestPair: DuelPair | null = null;
   let bestKey: { gap: number; duels: number; genre: number } | null = null;
+  const candidates: DuelPair[] = [];
   for (let i = 0; i < pool.length; i++) {
     for (let j = i + 1; j < pool.length; j++) {
       const a = pool[i], b = pool[j];
       const gap = Math.abs((a.rating as number) - (b.rating as number));
-      if (gap > 0.6) continue;
+      if (gap > 0.5) continue;
+      const pair: DuelPair = { a, b, mode: 'closest' };
+      candidates.push(pair);
       const duels = (a.duelCount || 0) + (b.duelCount || 0);
       const genre = commonGenreCount(a, b);
       const key = { gap: round2(gap), duels, genre };
       const better =
         !bestKey ||
-        key.duels < bestKey.duels ||
-        (key.duels === bestKey.duels &&
-          (key.genre > bestKey.genre ||
-            (key.genre === bestKey.genre && key.gap < bestKey.gap)));
+        key.gap < bestKey.gap ||                       // aynı/en yakın puan önce
+        (key.gap === bestKey.gap &&
+          (key.duels < bestKey.duels ||                 // en az düelloya girmiş
+            (key.duels === bestKey.duels && key.genre > bestKey.genre))); // ortak tür
       if (better) {
         bestKey = key;
-        bestPair = { a, b, mode: 'closest' };
+        bestPair = pair;
       }
     }
   }
-  if (bestPair) return bestPair;
-
-  // Sıkı eşik tutmazsa en yakın ikiliye düş (kullanıcı akışı kırılmasın).
-  let fallback: DuelPair | null = null;
-  let fallbackGap = Infinity;
-  for (let i = 0; i < pool.length; i++) {
-    for (let j = i + 1; j < pool.length; j++) {
-      const gap = Math.abs((pool[i].rating as number) - (pool[j].rating as number));
-      if (gap < fallbackGap) {
-        fallbackGap = gap;
-        fallback = { a: pool[i], b: pool[j], mode: 'closest' };
-      }
-    }
+  // ±0.5 dışı eşleşme YOK (kural: aynı puan veya en fazla 0.5 fark). Aday yoksa null.
+  if (opts?.random && candidates.length > 0) {
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
-  return fallback;
+  return bestPair;
 }
 
 export interface RatingAnomaly {

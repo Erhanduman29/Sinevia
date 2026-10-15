@@ -98,7 +98,7 @@ describe('pickDuelPair', () => {
     expect(pickDuelPair(movies, 'missing')).toBeNull();
   });
 
-  test('Mod 2 (closest): puan farkı ≤0.6 olan ve en az düelloya girmiş ikili seçilir', () => {
+  test('Mod 2 (closest): puan farkı ≤0.5 olan ve en az düelloya girmiş ikili seçilir', () => {
     const movies = [
       makeMovie({ id: 'a', rating: 7.0, duelCount: 5 }),
       makeMovie({ id: 'b', rating: 7.3, duelCount: 5 }),
@@ -110,6 +110,26 @@ describe('pickDuelPair', () => {
     expect(pair!.mode).toBe('closest');
     // duelCount toplamı düşük olan (c,d) kazanmalı
     expect([pair!.a.id, pair!.b.id].sort()).toEqual(['c', 'd']);
+  });
+
+  test('Mod 2: ±0.5 fark aşılan ikili seçilmez (fallback yok → null)', () => {
+    const movies = [
+      makeMovie({ id: 'a', rating: 7.0 }),
+      makeMovie({ id: 'b', rating: 8.0 }), // fark 1.0 > 0.5
+    ];
+    expect(pickDuelPair(movies)).toBeNull();
+  });
+
+  test('opts.genres: sadece seçilen tür(lere) uyan filmler havuza girer', () => {
+    const movies = [
+      makeMovie({ id: 'sci', rating: 8.0, genres: ['Bilim Kurgu'] }),
+      makeMovie({ id: 'sci2', rating: 8.2, genres: ['Bilim Kurgu'] }),
+      makeMovie({ id: 'com', rating: 8.1, genres: ['Komedi'] }),
+    ];
+    const pair = pickDuelPair(movies, undefined, { genres: ['Bilim Kurgu'] });
+    expect(pair).not.toBeNull();
+    const ids = [pair!.a.id, pair!.b.id].sort();
+    expect(ids).toEqual(['sci', 'sci2']);
   });
 
   test('terk edilmiş (abandoned) filmler havuza girmez', () => {
