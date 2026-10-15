@@ -1474,7 +1474,7 @@ export default function AgentProfileModal({
                         selectedMediaCard.isSpoiler ||
                         rawNote.toLowerCase().includes('[spoiler]') ||
                         rawNote.toLowerCase().includes('#spoiler');
-                      const cleanNote = rawNote.replace(/[spoiler]/gi, '').replace(/#spoiler/gi, '').trim();
+                      const cleanNote = rawNote.replace(/\[spoiler\]/gi, '').replace(/#spoiler/gi, '').trim();
 
                       if (hasSpoiler && !spoilerRevealed) {
                         return (

@@ -1574,7 +1574,7 @@ export default function NetworkPage() {
                     {(() => {
                       const rawNote = selectedLog.note;
                       const hasSpoiler = selectedLog.is_spoiler || rawNote.toLowerCase().includes('[spoiler]') || rawNote.toLowerCase().includes('#spoiler');
-                      const cleanNote = rawNote.replace(/[spoiler]/gi, '').replace(/#spoiler/gi, '').trim();
+                      const cleanNote = rawNote.replace(/\[spoiler\]/gi, '').replace(/#spoiler/gi, '').trim();
                       const isRevealed = revealedSpoilers[selectedLog.id];
 
                       if (hasSpoiler && !isRevealed) {
