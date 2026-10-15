@@ -1722,11 +1722,16 @@ export default function HomePage() {
               <span className="hn-idx">{nextSectionIdx()}</span>
               <h2>Günün Sinema Kartı</h2>
               <span className="ln" />
-              {eligibleMovies.length > 1 && (
-                <button type="button" className="hn-more" onClick={() => setSpotlightOffset((prev) => prev + 1)}>
-                  <RefreshCw size={12} /> Kartı Değiştir
+              <span className="inline-flex items-center gap-3.5">
+                {eligibleMovies.length > 1 && (
+                  <button type="button" className="hn-more" onClick={() => setSpotlightOffset((prev) => prev + 1)}>
+                    <RefreshCw size={12} /> Kartı Değiştir
+                  </button>
+                )}
+                <button type="button" className="hn-more" onClick={() => navigateTo('movies')}>
+                  Tüm Filmler <ChevronRight size={13} />
                 </button>
-              )}
+              </span>
             </div>
 
             <div className="hn-spotlight">
