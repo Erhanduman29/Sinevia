@@ -11,7 +11,7 @@ import { useQuests } from '../context/QuestContext';
 import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
-import { getNextUnwatchedEpisode, formatDateShort, todayStr, normalize } from '../lib/utils';
+import { getNextUnwatchedEpisode, formatDateShort, todayStr, normalize, ratingBgClass } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import PickModal from '../components/PickModal';
 import RatingModal from '../components/RatingModal';
@@ -134,8 +134,8 @@ const HOME_PREMIUM_CSS = `
   background:#14141c;
   border:1px solid rgba(255,255,255,.2);
   color:#fff;
-  font-family:'JetBrains Mono',monospace;
   font-size:10px;
+  font-variant-numeric:tabular-nums;
   font-weight:700;
   letter-spacing:.12em;
   padding:2.5px 10px;
@@ -309,8 +309,8 @@ const HOME_PREMIUM_CSS = `
   gap:6px;
 }
 .snv-id-readout-val b{
-  font-family:'JetBrains Mono',monospace;
   font-size:38px;
+  font-variant-numeric:tabular-nums;
   font-weight:800;
   letter-spacing:-.04em;
   line-height:1;
@@ -370,8 +370,8 @@ const HOME_PREMIUM_CSS = `
   gap:8px;
 }
 .snv-id-mitem b{
-  font-family:'JetBrains Mono',monospace;
   font-size:22px;
+  font-variant-numeric:tabular-nums;
   font-weight:800;
   letter-spacing:-.02em;
   color:#fff;
@@ -422,8 +422,8 @@ const HOME_PREMIUM_CSS = `
   border-radius:50%;
 }
 .snv-id-tier b{
-  font-family:'JetBrains Mono',monospace;
   font-size:15px;
+  font-variant-numeric:tabular-nums;
   font-weight:800;
   color:#fff;
   line-height:1;
@@ -465,8 +465,8 @@ const HOME_PREMIUM_CSS = `
   color:var(--red-hi,var(--color-2,#ff6b7a));
 }
 .snv-re-rem{
-  font-family:'JetBrains Mono',monospace;
   font-size:10px;
+  font-variant-numeric:tabular-nums;
   font-weight:700;
   color:#fff;
   background:rgba(232,56,79,.22);
@@ -517,7 +517,7 @@ const HOME_PREMIUM_CSS = `
 .hn-timer-status span{color:var(--text-main,#f4f4f2)}
 .hn-timer-sub{font-size:12px;color:var(--muted,#9a9a96);margin-top:5px}
 .hn-timer-sub b{color:var(--text-main,#f4f4f2)}
-.hn-timer-sub .hn-mono{font-family:'JetBrains Mono',monospace}
+.hn-timer-sub .hn-mono{font-variant-numeric:tabular-nums}
 .hn-timer-warn{color:#EFC94C;margin-left:8px}
 .hn-timer-btns{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
 .hn-timer-x{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);cursor:pointer;transition:.22s}
@@ -573,7 +573,7 @@ const HOME_PREMIUM_CSS = `
 .hn-sp-poster:hover img{transform:scale(1.03)}
 .hn-big-letter{font-size:150px;font-weight:900;color:rgba(255,255,255,.12);letter-spacing:-.06em;user-select:none;pointer-events:none}
 .hn-filmbadge{position:absolute;top:0;left:0;z-index:2;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;padding:8px 14px;background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-radius:0 0 14px 0;box-shadow:0 6px 18px -6px var(--red,var(--color-1,#e8384f))}
-.hn-rate{position:absolute;top:14px;right:14px;z-index:2;font-family:'JetBrains Mono',monospace;font-weight:900;font-size:15px;background:rgba(10,10,13,.85);border:1px solid rgba(255,255,255,.22);padding:6px 12px;border-radius:11px;color:#fff;backdrop-filter:blur(10px);box-shadow:0 8px 22px -10px rgba(0,0,0,.9)}
+.hn-rate{position:absolute;top:14px;right:14px;z-index:2;font-weight:900;font-variant-numeric:tabular-nums;font-size:15px;background:rgba(10,10,13,.85);border:1px solid rgba(255,255,255,.22);padding:6px 12px;border-radius:11px;color:#fff;backdrop-filter:blur(10px);box-shadow:0 8px 22px -10px rgba(0,0,0,.9)}
 .hn-sp-body{padding:34px 38px;display:flex;flex-direction:column;gap:18px;min-width:0;overflow:hidden}
 .hn-sp-kick{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.26em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
 .hn-sp-body h2{font-family:inherit;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-.035em;line-height:.98;margin:0;background:linear-gradient(100deg,#fff 35%,#9C9CA1);-webkit-background-clip:text;background-clip:text;color:transparent;overflow-wrap:anywhere;min-width:0}
@@ -638,7 +638,7 @@ const HOME_PREMIUM_CSS = `
 .hn-an{flex:1;min-width:0}
 .hn-an b{display:block;font-family:inherit;font-size:13px;font-weight:900;text-transform:uppercase;color:var(--text-main,#f4f4f2)}
 .hn-an span{font-size:11px;color:var(--muted,#9a9a96);font-weight:500}
-.hn-axp{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:900;letter-spacing:.08em;color:var(--red-hi,var(--color-2,#ff6b7a));background:rgba(232,56,79,.14);border:1px solid rgba(232,56,79,.45);padding:5px 10px;white-space:nowrap;border-radius:99px}
+.hn-axp{font-size:10px;font-variant-numeric:tabular-nums;font-weight:900;letter-spacing:.08em;color:var(--red-hi,var(--color-2,#ff6b7a));background:rgba(232,56,79,.14);border:1px solid rgba(232,56,79,.45);padding:5px 10px;white-space:nowrap;border-radius:99px}
 .hn-pl{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:13px}
 .hn-pl i{font-style:normal;color:var(--text-main,#f4f4f2)}
 .hn-pt{height:8px;background:rgba(0,0,0,.5);border-radius:99px;margin-top:6px;position:relative;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
@@ -669,7 +669,7 @@ const HOME_PREMIUM_CSS = `
 .hp-rec-ph{position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(165deg,var(--blob-1,rgba(232,56,79,.26)),transparent 72%)}
 .hp-rec-ph b{font-size:52px;font-weight:900;letter-spacing:-.04em;color:var(--red-hi,var(--color-2,#ff6b7a));text-shadow:0 6px 24px var(--red,rgba(232,56,79,.5))}
 .hp-rec-kind{position:absolute;top:10px;left:10px;z-index:2;font-size:8px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;padding:4px 9px;border-radius:99px;color:var(--on-color-1,#0a0a0e);background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));box-shadow:0 4px 14px -6px var(--red,var(--color-1,#e8384f))}
-.hp-rec-rate{position:absolute;top:10px;right:10px;z-index:2;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--text-main,#f4f4f2);background:var(--glass,var(--bg-card,#1a1a24));border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:4px 9px;border-radius:99px;backdrop-filter:blur(8px)}
+.hp-rec-rate{position:absolute;top:10px;right:10px;z-index:2;font-size:11px;font-weight:900;padding:4px 9px;border-radius:99px;font-variant-numeric:tabular-nums;box-shadow:0 6px 16px -6px rgba(0,0,0,.7)}
 .hp-rec-tx{display:block;padding:13px 15px 15px;min-width:0}
 .hp-rec-tx b{display:block;font-family:inherit;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;color:var(--text-main,#f4f4f2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hp-rec-tx span{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1633,7 +1633,7 @@ export default function HomePage() {
                       <span className="hp-rec-ph" aria-hidden="true"><b>{(h.title || 'S').charAt(0).toUpperCase()}</b></span>
                     )}
                     <span className="hp-rec-kind">{isMovie ? 'Film' : 'Dizi'}</span>
-                    {h.rating != null && <span className="hp-rec-rate">{h.rating}</span>}
+                    {h.rating != null && <span className={`hp-rec-rate ${ratingBgClass(h.rating)}`}>{h.rating}</span>}
                   </span>
                   <span className="hp-rec-tx">
                     <b>{h.title}</b>
