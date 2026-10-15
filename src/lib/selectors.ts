@@ -5,7 +5,7 @@ import type { Movie, WatchHistoryItem, Series } from '../types';
 // Sayfalar bu saf fonksiyonları useMemo ile sarar; burada React bağımlılığı yok.
 // ============================================================================
 
-export type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past';
+export type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past' | 'graveyard';
 export type SortMode = 'az' | 'year' | 'added' | 'rating';
 
 /** Films arama: sadece görünür alanlar (başlık). Boş sorgu = hepsi. */
@@ -24,9 +24,12 @@ export function filterAndSortMovies(
   sortMode: SortMode
 ): Movie[] {
   let filtered = movies;
-  if (watchedFilter === 'unwatched') filtered = filtered.filter((m) => !m.watched);
+  // İzlenecek (watchlist): yarım bırakılanlar (abandoned) izlenecek listesine girmez.
+  if (watchedFilter === 'unwatched') filtered = filtered.filter((m) => !m.watched && !m.abandoned);
   else if (watchedFilter === 'watched') filtered = filtered.filter((m) => m.watched && !m.isPastWatch);
   else if (watchedFilter === 'past') filtered = filtered.filter((m) => m.watched && m.isPastWatch);
+  // Mezarlık: yalnızca yarım bırakılanlar (Sinematik Otopsi / DNF).
+  else if (watchedFilter === 'graveyard') filtered = filtered.filter((m) => Boolean(m.abandoned));
 
   if (selectedGenres.size > 0) {
     filtered = filtered.filter((m) => Array.from(selectedGenres).every((g) => m.genres.includes(g)));
@@ -134,7 +137,8 @@ export function filterAndSortSeries(
   if (watchedFilter !== null) {
     list = list.filter((s) => {
       const isCompleted = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
-      return watchedFilter ? isCompleted : !isCompleted;
+      // İzlenecek: yarım bırakılanlar (abandoned) izlenecek listesine girmez.
+      return watchedFilter ? isCompleted : (!isCompleted && !s.abandoned);
     });
   }
   if (selectedGenres.size > 0) list = list.filter((s) => Array.from(selectedGenres).every((g) => s.genres.includes(g)));

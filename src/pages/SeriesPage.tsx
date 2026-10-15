@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter,
   ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, RefreshCw,
-  PlayCircle, ExternalLink, Eye, SlidersHorizontal, X, Send
+  PlayCircle, ExternalLink, Eye, SlidersHorizontal, X, Send, Skull, RotateCcw
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, getNextUnwatchedEpisode, uid } from '../lib/utils';
@@ -15,6 +15,7 @@ import EditSeriesModal from '../components/EditSeriesModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
 import MediaDetailModal from '../components/MediaDetailModal';
+import AbandonModal from '../components/AbandonModal';
 import type { Series, Episode } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 
@@ -484,6 +485,17 @@ const SERIES_PREMIUM_CSS = `
   box-shadow: 0 0 14px -6px rgba(78, 203, 142, .7);
 }
 
+/* Sinematik Otopsi (DNF) — tema motoru kırmızı zinciri, sabit renk yok */
+.svp-dnf-tag {
+  display: inline-flex; align-items: center; gap: .3rem; width: fit-content;
+  font-family: var(--svp-mono);
+  font-size: 9.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--red, var(--color-1, #e8384f));
+  background: color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 45%, transparent);
+  padding: .2rem .55rem; border-radius: 99px; white-space: nowrap;
+}
+
 /* ---------- AKSİYON İKON BUTONLARI ---------- */
 .svp-act {
   display: inline-flex; align-items: center; justify-content: center;
@@ -507,6 +519,14 @@ const SERIES_PREMIUM_CSS = `
   color: #f87171;
   border-color: rgba(248, 113, 113, .45);
   box-shadow: 0 8px 20px -10px rgba(248, 113, 113, .6);
+}
+/* Sinematik Otopsi (DNF) aksiyonları — tema kırmızı zinciri, sabit renk yok */
+.svp-act-dnf:hover,
+.svp-act-revive:hover {
+  color: var(--red, var(--color-1, #e8384f));
+  border-color: color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 45%, transparent);
+  background: color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 13%, transparent);
+  box-shadow: 0 8px 20px -10px color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 70%, transparent);
 }
 .svp-x {
   display: inline-flex; align-items: center; justify-content: center;
@@ -673,7 +693,7 @@ function saveKeptRatings(map: Record<string, number>) {
 }
 
 export default function SeriesPage() {
-  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast } = useApp();
+  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
   const [pickedSeriesItem, setPickedSeriesItem] = useState<{ series: Series; episode: Episode } | null>(null);
@@ -697,6 +717,8 @@ export default function SeriesPage() {
   const [loadingFriends, setLoadingFriends] = useState(false);
 
   const [watchedFilter, setWatchedFilter] = useState<boolean | null>(false);
+  const [graveyardView, setGraveyardView] = useState(false);
+  const [abandonTarget, setAbandonTarget] = useState<{ series: Series; season: number; episode: number } | null>(null);
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('az');
   const [search, setSearch] = useState('');
@@ -819,7 +841,15 @@ export default function SeriesPage() {
 
   const resetAllFilters = () => { setSearch(''); setSelectedGenres(new Set()); setSortMode('az'); };
 
-  const sortedSeries = useFilteredSeries(data.series, watchedFilter, selectedGenres, search, sortMode);
+  // MEZARLIK: abandoned diziler (izleme durumu filtrelerinden bağımsız görünüm).
+  const graveyardSeries = useMemo(() => data.series.filter((s) => Boolean(s.abandoned)), [data.series]);
+  const sortedSeries = useFilteredSeries(
+    graveyardView ? graveyardSeries : data.series,
+    graveyardView ? null : watchedFilter,
+    selectedGenres,
+    search,
+    sortMode
+  );
 
   const toggleSeries = (id: string) => {
     setExpandedSeries((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -907,7 +937,11 @@ export default function SeriesPage() {
   }, [data.series, sendSeriesSearch]);
 
   const totalCompleted = data.series.filter((s) => s.episodes.length > 0 && s.episodes.every((e) => e.watched)).length;
-  const totalOngoing = data.series.length - totalCompleted;
+  // İzlenecek: yarım bırakılanlar (abandoned) bu sayıya girmez.
+  const totalAbandoned = data.series.filter((s) => Boolean(s.abandoned)).length;
+  const totalOngoing = data.series.filter(
+    (s) => !s.abandoned && !(s.episodes.length > 0 && s.episodes.every((e) => e.watched))
+  ).length;
 
   return (
     <div className="svp-root space-y-3 sm:space-y-5 overflow-x-clip sm:overflow-x-visible">
@@ -968,22 +1002,29 @@ export default function SeriesPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
             <div className="svp-chipbar">
               <button
-                onClick={() => setWatchedFilter(null)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${watchedFilter === null ? 'svp-tab-on' : ''}`}
+                onClick={() => { setGraveyardView(false); setWatchedFilter(null); }}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${!graveyardView && watchedFilter === null ? 'svp-tab-on' : ''}`}
               >
                 Tümü <span className="svp-tab-n">({data.series.length})</span>
               </button>
               <button
-                onClick={() => setWatchedFilter(false)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${watchedFilter === false ? 'svp-tab-on' : ''}`}
+                onClick={() => { setGraveyardView(false); setWatchedFilter(false); }}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${!graveyardView && watchedFilter === false ? 'svp-tab-on' : ''}`}
               >
                 İzlenecek <span className="svp-tab-n">({totalOngoing})</span>
               </button>
               <button
-                onClick={() => setWatchedFilter(true)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${watchedFilter === true ? 'svp-tab-on' : ''}`}
+                onClick={() => { setGraveyardView(false); setWatchedFilter(true); }}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${!graveyardView && watchedFilter === true ? 'svp-tab-on' : ''}`}
               >
                 Bitenler <span className="svp-tab-n">({totalCompleted})</span>
+              </button>
+              <button
+                onClick={() => setGraveyardView(true)}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${graveyardView ? 'svp-tab-on' : ''}`}
+                title="Yarım bırakılan diziler (Sinematik Otopsi)"
+              >
+                🪦 Mezarlık <span className="svp-tab-n">({totalAbandoned})</span>
               </button>
             </div>
 
@@ -1104,7 +1145,7 @@ export default function SeriesPage() {
       ) : sortedSeries.length === 0 ? (
         <div className="svp-empty text-center py-8 px-4 sm:py-12 sm:px-6">
           <Tv size={40} className="mx-auto mb-3 opacity-40" />
-          <p className="svp-mono">{watchedFilter === true ? 'Tamamen bitirdiğin bir dizi yok.' : watchedFilter === false ? 'Bölümleri kalan (izlenecek) dizi yok.' : 'Aramaya uygun dizi bulunamadı.'}</p>
+          <p className="svp-mono">{graveyardView ? 'Mezarlıkta yarım bırakılan dizi yok.' : watchedFilter === true ? 'Tamamen bitirdiğin bir dizi yok.' : watchedFilter === false ? 'Bölümleri kalan (izlenecek) dizi yok.' : 'Aramaya uygun dizi bulunamadı.'}</p>
         </div>
       ) : (
         <div className="space-y-3 sm:space-y-4">
@@ -1195,8 +1236,15 @@ export default function SeriesPage() {
                     </button>
 
                     <div className="text-left min-w-0 flex-1 flex flex-col justify-center">
-                      <div className={`svp-title text-[13px] sm:text-[15px] truncate mb-0.5 ${allWatched ? 'opacity-55' : ''}`}>
-                        {s.title}
+                      <div className="flex items-center gap-1.5 min-w-0 mb-0.5">
+                        <div className={`svp-title text-[13px] sm:text-[15px] truncate min-w-0 ${allWatched ? 'opacity-55' : ''}`}>
+                          {s.title}
+                        </div>
+                        {s.abandoned && (
+                          <span className="svp-dnf-tag shrink-0" title="Sinematik Otopsi: yarım bırakıldı">
+                            🪦 Otopsi
+                          </span>
+                        )}
                       </div>
 
                       <div className="svp-mono truncate mb-1.5">
@@ -1283,6 +1331,33 @@ export default function SeriesPage() {
                   </div>
 
                   <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                    {s.abandoned ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reviveMedia('series', s.id);
+                        }}
+                        title="Operasyonu Geri Al — otopsi kaydı silinir, bölümlere dokunulmaz"
+                        className="svp-act svp-act-revive p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
+                      >
+                        <RotateCcw size={15} />
+                      </button>
+                    ) : !allWatched && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAbandonTarget({
+                            series: s,
+                            season: nextEp?.season ?? (seasons[seasons.length - 1] ?? 1),
+                            episode: nextEp?.episode ?? 1,
+                          });
+                        }}
+                        title="Yarım Bırak (Sinematik Otopsi)"
+                        className="svp-act svp-act-dnf p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
+                      >
+                        <Skull size={15} />
+                      </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1557,6 +1632,23 @@ export default function SeriesPage() {
       )}
 
       {editTarget && <EditSeriesModal series={editTarget} onClose={() => setEditTarget(null)} />}
+
+      {abandonTarget && (
+        <AbandonModal
+          open
+          media="series"
+          title={abandonTarget.series.title}
+          seasonCount={Math.max(1, ...abandonTarget.series.episodes.map((e) => e.season))}
+          episodes={Math.max(1, ...abandonTarget.series.episodes.map((e) => e.episode))}
+          defaultSeason={abandonTarget.season}
+          defaultEpisode={abandonTarget.episode}
+          onClose={() => setAbandonTarget(null)}
+          onSubmit={({ progress, reasons, note }) => {
+            abandonMedia('series', abandonTarget.series.id, { progress, reasons, note });
+            setAbandonTarget(null);
+          }}
+        />
+      )}
 
       {deleteTarget && (
         <ConfirmDialog

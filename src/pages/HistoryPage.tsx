@@ -20,6 +20,7 @@ import {
   Award,
   Tag,
   History,
+  Skull,
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -511,6 +512,8 @@ export default function HistoryPage() {
               : undefined;
             const posterUrl = isMovie ? movieData?.posterUrl : seriesData?.posterUrl;
             const epsCount = !isMovie && seriesId ? (seriesGroups.get(seriesId) || []).length : 0;
+            // Sinematik Otopsi: item.abandoned yoksa itemId/seriesId lookup ile türetilir.
+            const isDnf = Boolean(item.abandoned ?? (isMovie ? movieData?.abandoned : seriesData?.abandoned));
 
             return (
               <div
@@ -568,6 +571,11 @@ export default function HistoryPage() {
                     <h3 className="font-bold text-xs sm:text-sm text-ink-100 truncate group-hover:text-[color:var(--red-hi,var(--color-1))] transition-colors">
                       {item.title}
                     </h3>
+                    {isDnf && (
+                      <div className="mt-1 flex">
+                        <DnfBadge />
+                      </div>
+                    )}
                     {item.reviewTags && item.reviewTags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {item.reviewTags.slice(0, 2).map((t) => (
@@ -640,6 +648,8 @@ export default function HistoryPage() {
                   } else {
                     const sid = seriesId!;
                     const seriesData = data.series.find((s) => s.id === sid);
+                    // Sinematik Otopsi: item.abandoned yoksa seriesId lookup ile türetilir.
+                    const isDnf = Boolean(item.abandoned ?? seriesData?.abandoned);
                     const eps = (seriesGroups.get(sid) || []).sort((a, b) => {
                       if (sortMode === 'oldest')
                         return new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime();
@@ -697,6 +707,7 @@ export default function HistoryPage() {
                                 <span className="text-[11px] font-bold text-azure-300 bg-[color:var(--surface,var(--bg-surface))] border border-azure-500/30 px-2 py-0.5 rounded-lg">
                                   Son: S{item.season} B{item.episode}
                                 </span>
+                                {isDnf && <DnfBadge />}
                               </div>
 
                               <h3 className="text-base sm:text-xl font-bold text-ink-50 truncate mt-1 uppercase tracking-tight">
@@ -1004,6 +1015,19 @@ function SortChip({
   );
 }
 
+/* SİNEMATİK OTOPSİ (DNF) ROZETİ — kırmızı tonlu, muted görünüm. */
+function DnfBadge() {
+  return (
+    <span
+      title="Sinematik Otopsi: yarım bırakıldı"
+      className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/40 opacity-90`}
+    >
+      <Skull size={10} className="flex-shrink-0" />
+      <span className="truncate">Operasyon İptal Edildi (DNF)</span>
+    </span>
+  );
+}
+
 function MovieHistoryCard({
   item,
   movieData,
@@ -1024,6 +1048,8 @@ function MovieHistoryCard({
   const hasDetailed = item.detailedRating && Object.keys(item.detailedRating).length > 0;
   const hasTags = item.reviewTags && item.reviewTags.length > 0;
   const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch);
+  // Sinematik Otopsi: item.abandoned yoksa itemId → film lookup ile türetilir.
+  const isDnf = Boolean(item.abandoned ?? movieData?.abandoned);
 
   return (
     <div className="relative bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[var(--glow)] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all overflow-hidden group">
@@ -1065,6 +1091,7 @@ function MovieHistoryCard({
                   <Award size={10} /> Favori
                 </span>
               )}
+              {isDnf && <DnfBadge />}
             </div>
 
             <button

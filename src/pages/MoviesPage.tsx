@@ -4,7 +4,7 @@ import {
   ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock,
   CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye,
   FolderPlus, X, Play, Pause, Timer, Zap, Lock, EyeOff, ChevronsUpDown, History,
-  CheckSquare, Square, ArrowRightLeft, SlidersHorizontal, Send, Film
+  CheckSquare, Square, ArrowRightLeft, SlidersHorizontal, Send, Film, Skull, RotateCcw
 } from 'lucide-react';
 import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useActions, useLibrary, useSettings } from '../context/slices';
@@ -20,11 +20,12 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
 import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import MediaDetailModal from '../components/MediaDetailModal';
+import AbandonModal from '../components/AbandonModal';
 import type { Movie } from '../types';
 import '../components/movies-premium.css';
 
 type SortMode = 'az' | 'year' | 'rating' | 'added';
-type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past';
+type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past' | 'graveyard';
 const PAST_QUEUE_MODAL_ID = '__PAST_QUEUE__';
 
 export default function MoviesPage() {
@@ -32,6 +33,7 @@ export default function MoviesPage() {
     editMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie,
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie,
     setMovieCollection, setMoviePastQueue, addCollection, showToast,
+    abandonMedia, reviveMedia,
   } = useActions();
   const { movies: libMovies, collections: libCollections } = useLibrary();
   const { agentId, altWatchTemplate, weeklyPlan } = useSettings();
@@ -77,6 +79,7 @@ export default function MoviesPage() {
   const [pastMoveNewColName, setPastMoveNewColName] = useState<string>('');
 
   const [watchedFilter, setWatchedFilter] = useState<WatchedFilterMode>('unwatched');
+  const [abandonTarget, setAbandonTarget] = useState<Movie | null>(null);
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('added');
   const [search, setSearch] = useState('');
@@ -211,6 +214,8 @@ export default function MoviesPage() {
   const resetAllFilters = () => { setSearch(''); setSelectedGenres(new Set()); setSortMode('added'); };
 
   const baseBottomListMovies = useMemo(() => {
+    // Mezarlık: izleme durumundan bağımsız, yalnızca abandoned filmler.
+    if (watchedFilter === 'graveyard') return libMovies.filter((m) => Boolean(m.abandoned));
     if (watchedFilter === 'past') return libMovies.filter((m) => m.watched && m.isPastWatch);
     return libMovies.filter((m) => !m.collectionId && !m.inPastQueue && !m.isPastWatch);
   }, [libMovies, watchedFilter]);
@@ -235,10 +240,12 @@ export default function MoviesPage() {
   }, [allPastColUnratedMovies, selectedGenres, search]);
 
   const filteredCollections = useMemo(() => {
+    // Mezarlık filtresinde koleksiyon bölümü gizlenir (tüm abandoned filmler tek listede).
+    if (watchedFilter === 'graveyard') return [];
     return libCollections.filter((coll) => {
       if (normalize(coll.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return false;
       const movies = collectionMap.get(coll.id) || [];
-      const hasUnwatched = movies.some((m) => !m.watched);
+      const hasUnwatched = movies.some((m) => !m.watched && !m.abandoned);
       const hasNormalWatched = movies.some((m) => m.watched && !m.isPastWatch);
       const hasPastWatched = movies.some((m) => m.watched && m.isPastWatch);
       if (watchedFilter === 'unwatched' && !hasUnwatched) return false;
@@ -441,9 +448,10 @@ export default function MoviesPage() {
   }, [libMovies, sendMovieSearch]);
 
   const sortedBottomMovies = useFilteredMovies(baseBottomListMovies, watchedFilter, selectedGenres, search, sortMode);
-  const totalUnwatched = useMemo(() => libMovies.filter((m) => !m.watched).length, [libMovies]);
+  const totalUnwatched = useMemo(() => libMovies.filter((m) => !m.watched && !m.abandoned).length, [libMovies]);
   const totalWatched = useMemo(() => countWatchedCurrentMovies(libMovies), [libMovies]);
   const totalPastWatched = useMemo(() => countPastMovies(libMovies), [libMovies]);
+  const totalAbandoned = useMemo(() => libMovies.filter((m) => Boolean(m.abandoned)).length, [libMovies]);
 
   const modalSelectableMovies = useMemo(() => {
     if (!addMoviesToCollectionId) return [];
@@ -618,6 +626,13 @@ export default function MoviesPage() {
               <History size={12} className="flex-shrink-0 hidden xs:inline" />
               <span>Önceden ({totalPastWatched})</span>
             </button>
+            <button
+              onClick={() => setWatchedFilter('graveyard')}
+              className={`mpx-chip ${watchedFilter === 'graveyard' ? 'on' : ''}`}
+              title="Yarım bırakılan filmler (Sinematik Otopsi)"
+            >
+              <span>🪦 Yarım Bırakılanlar (Mezarlık) ({totalAbandoned})</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -719,7 +734,7 @@ export default function MoviesPage() {
       </div>
 
       {/* ESKİDEN İZLENENLER */}
-      {watchedFilter !== 'watched' && watchedFilter !== 'past' && (
+      {watchedFilter !== 'watched' && watchedFilter !== 'past' && watchedFilter !== 'graveyard' && (
         <div className="mpx-card mpx-card-hover is-past overflow-hidden transition-all">
           <div className="mpx-headrow">
             <button
@@ -982,6 +997,8 @@ export default function MoviesPage() {
                               onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                               onSendToFriend={openSendModal}
                               altWatchTemplate={altWatchTemplate}
+                              onAbandon={(movie) => setAbandonTarget(movie)}
+                              onRevive={(movie) => reviveMedia('movie', movie.id)}
                             />
                           ))
                         )}
@@ -999,7 +1016,11 @@ export default function MoviesPage() {
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="mpx-sec-title">
-            {watchedFilter === 'past' ? 'Daha Önce İzlenen Filmler' : 'Bağımsız Filmler'}
+            {watchedFilter === 'graveyard'
+              ? '🪦 Yarım Bırakılanlar (Mezarlık)'
+              : watchedFilter === 'past'
+              ? 'Daha Önce İzlenen Filmler'
+              : 'Bağımsız Filmler'}
           </h2>
           {watchedFilter === 'unwatched' && sortedBottomMovies.length > 0 && (
             <button
@@ -1015,7 +1036,9 @@ export default function MoviesPage() {
           <div className="mpx-empty">
             <Projector size={40} className="opacity-40" />
             <p className="text-sm">
-              {watchedFilter === 'past'
+              {watchedFilter === 'graveyard'
+                ? 'Mezarlıkta yarım bırakılan film yok.'
+                : watchedFilter === 'past'
                 ? 'Daha önce izlenen bağımsız film yok.'
                 : watchedFilter === 'watched'
                 ? 'İzlenen bağımsız film yok.'
@@ -1050,6 +1073,8 @@ export default function MoviesPage() {
                   onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                   onSendToFriend={openSendModal}
                   altWatchTemplate={altWatchTemplate}
+                  onAbandon={(movie) => setAbandonTarget(movie)}
+                  onRevive={(movie) => reviveMedia('movie', movie.id)}
                 />
               );
             })}
@@ -1617,6 +1642,20 @@ export default function MoviesPage() {
 
       {editTarget && <EditMovieModal movie={editTarget} onClose={() => setEditTarget(null)} />}
 
+      {abandonTarget && (
+        <AbandonModal
+          open
+          media="movie"
+          title={abandonTarget.title}
+          runtime={abandonTarget.runtime}
+          onClose={() => setAbandonTarget(null)}
+          onSubmit={({ progress, reasons, note }) => {
+            abandonMedia('movie', abandonTarget.id, { progress, reasons, note });
+            setAbandonTarget(null);
+          }}
+        />
+      )}
+
       {confirmMoveColTarget && (
         <ConfirmDialog
           title="Koleksiyondan Toplu Aktarım"
@@ -1641,7 +1680,7 @@ export default function MoviesPage() {
 }
 
 function MovieRow({
-  movie, isHighlighted, nowMs, anotherTimerActive, isPlanned, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, onSendToFriend, altWatchTemplate,
+  movie, isHighlighted, nowMs, anotherTimerActive, isPlanned, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, onSendToFriend, altWatchTemplate, onAbandon, onRevive,
 }: {
   movie: Movie;
   isHighlighted?: boolean;
@@ -1660,6 +1699,8 @@ function MovieRow({
   onSelectDetail: (movie: Movie) => void;
   onSendToFriend: (movie: Movie) => void;
   altWatchTemplate?: string;
+  onAbandon: (movie: Movie) => void;
+  onRevive: (movie: Movie) => void;
 }) {
   const watchLinks: { href: string; text: string; logo: string | null; icon: any }[] = [];
 
@@ -1736,6 +1777,11 @@ function MovieRow({
                 <History size={9} /> Eskiden Sırada
               </span>
             )}
+            {movie.abandoned && (
+              <span className="mpx-tag is-dnf" title="Sinematik Otopsi: yarım bırakıldı">
+                🪦 Otopsi
+              </span>
+            )}
             {collectionName && (
               <button
                 type="button"
@@ -1793,7 +1839,15 @@ function MovieRow({
       {/* Sağ Kısım: Aksiyon Butonları */}
       <div className="flex flex-wrap items-center justify-between md:justify-end gap-2 sm:gap-2 w-full md:w-auto bg-ink-950/40 md:bg-transparent p-2 md:p-0 rounded-xl md:rounded-none border border-ink-800/40 md:border-0 flex-shrink-0">
         <div className="flex items-center gap-1.5 w-full md:w-auto md:flex-none">
-          {movie.watched ? (
+          {movie.abandoned ? (
+            <button
+              onClick={() => onRevive(movie)}
+              title="Operasyonu Geri Al — otopsi kaydı silinir, izleme durumuna dokunulmaz"
+              className="mpx-btn mpx-btn-s mpx-btn-xs w-full md:w-auto"
+            >
+              <RotateCcw size={11} /> Operasyonu Geri Al
+            </button>
+          ) : movie.watched ? (
             <button onClick={() => onUnwatch(movie.id)} className="mpx-btn mpx-btn-g mpx-btn-xs w-full md:w-auto">
               Geri Al
             </button>
@@ -1858,6 +1912,15 @@ function MovieRow({
         </div>
 
         <div className="flex items-center gap-1 md:gap-1 flex-shrink-0 w-full md:w-auto justify-end md:pl-2 md:border-l md:border-ink-800/60">
+          {!movie.abandoned && !movie.watched && (
+            <button
+              onClick={() => onAbandon(movie)}
+              title="Yarım Bırak (Sinematik Otopsi)"
+              className="mpx-btn mpx-btn-s mpx-btn-xs text-red-400/90 hover:text-red-300 mr-auto md:mr-1"
+            >
+              <Skull size={11} /> Yarım Bırak
+            </button>
+          )}
           <button
             onClick={() => onSendToFriend(movie)}
             title="Arkadaşına Tavsiye Et"

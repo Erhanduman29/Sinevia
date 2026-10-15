@@ -511,6 +511,16 @@ button.mpx-tag:hover {
   border-color: rgba(245, 158, 11, 0.4);
   background: rgba(245, 158, 11, 0.12);
 }
+/* Sinematik Otopsi (DNF) — tema motoru kırmızı zinciri, sabit renk yok */
+.mpx-tag.is-dnf {
+  color: var(--red, var(--color-1, #e8384f));
+  border-color: color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 45%, transparent);
+  background: color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 13%, transparent);
+}
+body[data-theme='light'] .mpx-tag.is-dnf,
+body[data-theme='paper-light'] .mpx-tag.is-dnf {
+  color: color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 72%, #000);
+}
 body[data-theme='light'] .mpx-tag.is-past,
 body[data-theme='paper-light'] .mpx-tag.is-past { color: #6d28d9; }
 body[data-theme='light'] .mpx-tag.is-accent,

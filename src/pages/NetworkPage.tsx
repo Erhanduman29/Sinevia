@@ -3,7 +3,7 @@ import {
   Users, UserPlus, Trophy, Activity, Check, X, Star, Plus, Copy, RefreshCw,
   Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift,
   ListVideo, Eye, Info, MessageSquare, MessageCircle, Crown, Radio, Flame,
-  ExternalLink, FileText, Award, History
+  ExternalLink, FileText, Award, History, Skull
 } from 'lucide-react';
 import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
 import type { ShowcaseItem } from '../context/AppContext';
@@ -27,6 +27,11 @@ function timeAgo(dateString: string) {
   if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} saat önce`;
   if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} gün önce`;
   return date.toLocaleDateString('tr-TR');
+}
+
+/** Akış logu başlığı → temiz anahtar (dizilerde " (S1 B2)" eki atılır). */
+function cleanLogTitle(t: string) {
+  return (t || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim().toLocaleLowerCase('tr-TR');
 }
 
 function getLiveRadarStatus(cw: any, nowMs = Date.now()) {
@@ -79,6 +84,22 @@ type ProfileTabType = 'stats' | 'chat';
 
 export default function NetworkPage() {
   const { data, showToast, addMovie, addSeries, updateShowcase } = useApp();
+
+  // SİNEMATİK OTOPSİ LOOKUP: log'ta abandoned alanı yok → başlık üzerinden
+  // kütüphanemdeki film/dizi kayıtlarından abandoned türetilir.
+  const abandonedLogKeys = useMemo(() => {
+    const set = new Set<string>();
+    data.movies.forEach((m: Movie) => {
+      if (m.abandoned) set.add(`movie|${cleanLogTitle(m.title)}`);
+    });
+    data.series.forEach((s) => {
+      if (s.abandoned) set.add(`series|${cleanLogTitle(s.title)}`);
+    });
+    return set;
+  }, [data.movies, data.series]);
+
+  const isLogAbandoned = (log: { item_type?: string; item_title?: string }) =>
+    abandonedLogKeys.has(`${log.item_type || 'movie'}|${cleanLogTitle(log.item_title || '')}`);
   const [activeTab, setActiveTab] = useState<TabType>('feed');
   const [feedFilter, setFeedFilter] = useState<FeedFilterType>('all');
   const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('xp');
@@ -788,6 +809,7 @@ export default function NetworkPage() {
                   if (!profile) return null;
                   const liveStatus = getLiveRadarStatus(profile.currently_watching, radarTick);
                   const hasNote = Boolean(log.note && String(log.note).trim().length > 0);
+                  const isDnf = isLogAbandoned(log);
 
                   return (
                     <div key={log.id} className="bg-ink-950 hover:bg-ink-900 border border-ink-800 rounded-2xl overflow-hidden transition-all group flex flex-col relative shadow-md hover:shadow-lg">
@@ -830,6 +852,12 @@ export default function NetworkPage() {
                       <div className="p-3 sm:p-4">
                         <h3 className="text-sm sm:text-base font-bold text-ink-100 line-clamp-2 leading-tight mb-1">{log.item_title}</h3>
                         <div className="text-[10px] sm:text-[11px] text-ink-500 uppercase tracking-widest font-medium">{log.item_type === 'series' ? 'Dizi' : 'Film'}</div>
+                        {isDnf && (
+                          <div className="mt-1.5 inline-flex items-center gap-1 max-w-full text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/40 opacity-90">
+                            <Skull size={9} className="flex-shrink-0" />
+                            <span className="truncate">Operasyon İptal Edildi (DNF)</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1551,6 +1579,11 @@ export default function NetworkPage() {
                 </button>
                 <h2 className="text-2xl font-extrabold uppercase tracking-tight text-white leading-tight mb-1.5 break-words">{selectedLog.item_title}</h2>
                 <div className="text-[11px] text-ink-500 uppercase tracking-widest font-bold">{selectedLog.item_type === 'series' ? 'Dizi' : 'Film'} • {timeAgo(selectedLog.created_at)}</div>
+                {isLogAbandoned(selectedLog) && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/40 opacity-90">
+                    <Skull size={11} /> Operasyon İptal Edildi (DNF)
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto pr-2 custom-scrollbar mb-5">

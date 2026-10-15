@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
   Hourglass, Activity, User, Users, Building2, Crown, Sparkles,
-  Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon
+  Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon, Skull
 } from 'lucide-react';
 import { useLibrary, useGamification, useSettings } from '../context/slices';
 import { useComputedStats } from '../lib/selectorHooks';
@@ -474,6 +474,78 @@ export default function StatsPage() {
 
   // YENİ: TASARIMI KORUYUP, YÜZLERCE SATIRI TEK FONKSİYONA ÇAĞIRIYORUZ!
   const stats = useComputedStats(movies, series, criteria, history, collections, statsMode);
+
+  // SİNEMATİK OTOPSİ & TAHAMMÜL ANALİZİ — izleme kapsamından bağımsız, kütüphanenin tamamı.
+  const autopsy = useMemo(() => {
+    const abMovies = movies.filter((m) => Boolean(m.abandoned));
+    const abSeries = series.filter((s) => Boolean(s.abandoned));
+    const totalAbandoned = abMovies.length + abSeries.length;
+    if (totalAbandoned === 0) return null;
+
+    const movieRuntimeMins = abMovies.reduce((sum, m) => sum + (m.actualRuntime || m.runtime || 0), 0);
+
+    // Kurtarılan zaman: film → abandonedProgress.value dk; dizi → bölüm × ~45 dk (yaklaşık).
+    const filmSavedMins = abMovies.reduce(
+      (sum, m) => (m.abandonedProgress?.unit === 'minute' ? sum + m.abandonedProgress.value : sum),
+      0
+    );
+    const seriesEpisodes = abSeries.reduce((sum, s) => {
+      const p = s.abandonedProgress;
+      if (p?.unit === 'episode') return sum + p.value;
+      return sum + s.episodes.filter((e) => e.watched).length;
+    }, 0);
+    const seriesSavedMins = seriesEpisodes * 45;
+    const savedMins = filmSavedMins + seriesSavedMins;
+
+    // Tahammül oranı: izlenen / (izlenen + terk).
+    const seriesCompleted = series.filter(
+      (s) => s.episodes.length > 0 && s.episodes.every((e) => e.watched)
+    ).length;
+    const watchedTotal = currentMoviesCount + seriesCompleted;
+    const toleranceRate =
+      watchedTotal + totalAbandoned > 0
+        ? Math.round((watchedTotal / (watchedTotal + totalAbandoned)) * 100)
+        : null;
+
+    // Ortalama dayanma: terk edilen filmlerde ilerleme / süre.
+    const holdable = abMovies.filter((m) => (m.runtime || 0) > 0 && m.abandonedProgress?.unit === 'minute');
+    const holdRuntimeSum = holdable.reduce((sum, m) => sum + (m.runtime || 0), 0);
+    const holdValueSum = holdable.reduce(
+      (sum, m) => sum + Math.min(m.abandonedProgress?.value ?? 0, m.runtime || 0),
+      0
+    );
+    const avgHoldPct =
+      holdRuntimeSum > 0 ? Math.round((holdValueSum / holdRuntimeSum) * 100) : null;
+
+    // Ölüm nedeni dağılımı.
+    const reasonMap = new Map<string, number>();
+    [...abMovies, ...abSeries].forEach((it) =>
+      (it.autopsyReasons || []).forEach((r) => reasonMap.set(r, (reasonMap.get(r) || 0) + 1))
+    );
+    const reasons = [...reasonMap.entries()].sort((a, b) => b[1] - a[1]);
+
+    // Tür dağılımı (ilk 5).
+    const genreMap = new Map<string, number>();
+    [...abMovies, ...abSeries].forEach((it) =>
+      (it.genres || []).forEach((g) => genreMap.set(g, (genreMap.get(g) || 0) + 1))
+    );
+    const genres = [...genreMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    return {
+      abMovies: abMovies.length,
+      abSeries: abSeries.length,
+      totalAbandoned,
+      movieRuntimeMins,
+      filmSavedMins,
+      seriesSavedMins,
+      savedMins,
+      watchedTotal,
+      toleranceRate,
+      avgHoldPct,
+      reasons,
+      genres,
+    };
+  }, [movies, series, currentMoviesCount]);
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
@@ -1129,6 +1201,135 @@ export default function StatsPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* SİNEMATİK OTOPSİ & TAHAMMÜL ANALİZİ */}
+      <div className={PREMIUM_PANEL}>
+        <div className="mb-3.5">
+          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2">
+            <Skull size={18} className="text-red-400" /> Sinematik Otopsi &amp; Tahammül Analizi
+          </h2>
+          <p className="text-xs text-ink-400 mt-0.5">
+            Yarım bırakılan yapımlar, kurtarılan zaman ve ölüm nedenleri
+          </p>
+        </div>
+
+        {autopsy === null ? (
+          <div className="text-center py-10 px-4">
+            <Skull size={36} className="mx-auto text-ink-700 mb-3" />
+            <p className="text-sm font-black uppercase tracking-widest text-ink-400">Henüz otopsi yok</p>
+            <p className="text-xs text-ink-500 mt-1.5">
+              Bir filmi ya da diziyi yarım bıraktığında burada otopsi raporu oluşur.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
+              <div className={`${PREMIUM_CELL} p-3`}>
+                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-red-400 uppercase">
+                  <Skull size={12} /> Terk Edilen
+                </div>
+                <div className={`${PREMIUM_NUM} text-lg sm:text-2xl text-ink-50 mt-1`}>
+                  {autopsy.totalAbandoned} Yapım
+                </div>
+                <div className="text-[10px] text-ink-400 mt-0.5">
+                  {autopsy.abMovies} film{autopsy.movieRuntimeMins > 0 ? ` (≈${Math.round(autopsy.movieRuntimeMins / 60)} sa)` : ''} · {autopsy.abSeries} dizi
+                </div>
+              </div>
+              <div className={`${PREMIUM_CELL} p-3`}>
+                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-red-400 uppercase">
+                  <FastForward size={12} /> Kurtarılan Zaman
+                </div>
+                <div className={`${PREMIUM_NUM} text-lg sm:text-2xl text-ink-50 mt-1`}>
+                  {autopsy.savedMins} dk
+                </div>
+                <div className="text-[10px] text-ink-400 mt-0.5">
+                  film {autopsy.filmSavedMins} dk + dizi ~{autopsy.seriesSavedMins} dk (yaklaşık)
+                </div>
+              </div>
+              <div className={`${PREMIUM_CELL} p-3`}>
+                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-red-400 uppercase">
+                  <Gauge size={12} /> Tahammül Oranı
+                </div>
+                <div className={`${PREMIUM_NUM} text-lg sm:text-2xl text-ink-50 mt-1`}>
+                  {autopsy.toleranceRate !== null ? `%${autopsy.toleranceRate}` : '—'}
+                </div>
+                <div className="text-[10px] text-ink-400 mt-0.5">
+                  İzlenen {autopsy.watchedTotal} · Terk {autopsy.totalAbandoned}
+                </div>
+              </div>
+              <div className={`${PREMIUM_CELL} p-3`}>
+                <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-red-400 uppercase">
+                  <Hourglass size={12} /> Ortalama Dayanma
+                </div>
+                <div className={`${PREMIUM_NUM} text-lg sm:text-2xl text-ink-50 mt-1`}>
+                  {autopsy.avgHoldPct !== null ? `%${autopsy.avgHoldPct}` : '—'}
+                </div>
+                <div className="text-[10px] text-ink-400 mt-0.5">terk edilen filmlerde ilerleme</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-2.5">
+                <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
+                  <Tag size={13} className="text-red-400" /> Ölüm Nedeni Dağılımı
+                </h3>
+                {autopsy.reasons.length === 0 ? (
+                  <p className="text-xs text-ink-500">Neden kaydı girilmemiş.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {autopsy.reasons.map(([reason, count]) => {
+                      const maxCount = autopsy.reasons[0][1];
+                      const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+                      return (
+                        <div key={reason} className="flex items-center gap-2.5">
+                          <div className="w-28 sm:w-32 text-xs font-medium text-ink-300 flex-shrink-0 truncate" title={reason}>
+                            {reason}
+                          </div>
+                          <div className="flex-1 h-5 sm:h-6 bg-ink-800/60 rounded-lg overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-red-600 to-rose-500 rounded-lg transition-all duration-500"
+                              style={{ width: `${Math.max(pct, 6)}%` }}
+                            />
+                          </div>
+                          <span className={`${PREMIUM_NUM} text-[11px] text-ink-400 w-6 text-right flex-shrink-0`}>{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2.5">
+                <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
+                  <Layers size={13} className="text-rose-400" /> Terk Edilenlerde Türler (İlk 5)
+                </h3>
+                {autopsy.genres.length === 0 ? (
+                  <p className="text-xs text-ink-500">Tür bilgisi yok.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {autopsy.genres.map(([genre, count], i) => {
+                      const maxCount = autopsy.genres[0][1];
+                      const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+                      return (
+                        <div key={genre} className="flex items-center gap-2.5">
+                          <div className="w-28 sm:w-32 text-xs font-medium text-ink-300 flex-shrink-0 truncate">{genre}</div>
+                          <div className="flex-1 h-5 sm:h-6 bg-ink-800/60 rounded-lg overflow-hidden">
+                            <div
+                              className={`h-full ${genreColors[i % genreColors.length]} rounded-lg transition-all duration-500`}
+                              style={{ width: `${Math.max(pct, 6)}%` }}
+                            />
+                          </div>
+                          <span className={`${PREMIUM_NUM} text-[11px] text-ink-400 w-6 text-right flex-shrink-0`}>{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
