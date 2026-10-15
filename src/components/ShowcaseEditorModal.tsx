@@ -25,12 +25,14 @@ export default function ShowcaseEditorModal({
   const [draft, setDraft] = useState<ShowcaseItem[]>(initialShowcase || []);
   const [search, setSearch] = useState('');
   const [minRatingFilter, setMinRatingFilter] = useState<number>(0);
+  const [sortMode, setSortMode] = useState<'rating' | 'calibrated'>('rating');
 
   useEffect(() => {
     if (isOpen) {
       setDraft(initialShowcase || []);
       setSearch('');
       setMinRatingFilter(0);
+      setSortMode('rating');
     }
   }, [isOpen, initialShowcase]);
 
@@ -45,6 +47,11 @@ export default function ShowcaseEditorModal({
         posterUrl: m.posterUrl || m.poster || null,
         year: m.year || '',
         rating: Number(m.rating),
+        // Kalibre sıralama seçeneği için Elo puanı (yoksa kullanıcı puanı).
+        calibrated:
+          m.calibratedScore != null && Number(m.calibratedScore) > 0
+            ? Number(m.calibratedScore)
+            : Number(m.rating),
         genres: m.genres || [],
       }));
 
@@ -73,6 +80,8 @@ export default function ShowcaseEditorModal({
           posterUrl: s.posterUrl || s.poster || null,
           year: s.year || '',
           rating: hasWatchedAny && avgRating ? avgRating : null,
+          // Düello motoru film puanları içindir — dizilerin kalibre puanı yoktur.
+          calibrated: null,
           genres: s.genres || [],
         };
       })
@@ -85,10 +94,13 @@ export default function ShowcaseEditorModal({
         return matchesSearch && matchesMinRating;
       })
       .sort((a, b) => {
-        if (b.rating !== a.rating) return b.rating - a.rating;
+        // Kalibre mod: Elo puanı (yoksa puan) bazlı dürüst sıralama.
+        const ra = sortMode === 'calibrated' ? a.calibrated ?? a.rating : a.rating;
+        const rb = sortMode === 'calibrated' ? b.calibrated ?? b.rating : b.rating;
+        if (rb !== ra) return rb - ra;
         return a.title.localeCompare(b.title);
       });
-  }, [movies, series, search, minRatingFilter]);
+  }, [movies, series, search, minRatingFilter, sortMode]);
 
   if (!isOpen) return null;
 
@@ -149,7 +161,11 @@ export default function ShowcaseEditorModal({
                 </span>
               </h2>
               <p className="text-[11px] text-ink-400">
-                Sadece izlediğin ve puanladığın yapımlar en yüksek puandan başlayarak listelenir.
+                Sadece izlediğin ve puanladığın yapımlar{' '}
+                {sortMode === 'calibrated'
+                  ? 'kalibre puan (Elo) en yüksekten başlayarak'
+                  : 'en yüksek puandan başlayarak'}{' '}
+                listelenir.
               </p>
             </div>
           </div>
@@ -271,9 +287,34 @@ export default function ShowcaseEditorModal({
               </button>
             ))}
           </div>
+
+          {/* SIRALAMA: PUAN vs KALİBRE PUAN (Elo) */}
+          <div className="flex items-center gap-1 bg-ink-900 p-1 rounded-xl border border-ink-800">
+            {[
+              { label: 'Puan', val: 'rating' as const },
+              { label: 'Kalibre', val: 'calibrated' as const },
+            ].map(f => (
+              <button
+                key={f.val}
+                onClick={() => setSortMode(f.val)}
+                title={
+                  f.val === 'calibrated'
+                    ? 'Gerçek Sıralama (Kalibre Edilmiş) — Elo puanı bazlı'
+                    : 'Kullanıcı puanı bazlı sıralama'
+                }
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all ${
+                  sortMode === f.val
+                    ? 'bg-gold-500 text-ink-950 shadow'
+                    : 'text-ink-400 hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* PUANA GÖRE SIRALI LİSTE */}
+        {/* SEÇİLİ SIRALAMAYA GÖRE LİSTE */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
           {eligibleItems.length === 0 ? (
             <div className="text-center py-16 px-4">

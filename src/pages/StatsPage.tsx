@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
   Hourglass, Activity, User, Users, Building2, Crown, Sparkles,
-  Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon, Skull
+  Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon, Skull,
+  Swords, Scale, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { useLibrary, useGamification, useSettings } from '../context/slices';
 import { useComputedStats } from '../lib/selectorHooks';
@@ -10,6 +11,8 @@ import { ratingBgClass } from '../lib/utils';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import MediaDetailModal from '../components/MediaDetailModal';
 import WrappedModal from '../components/WrappedModal';
+import CalibrationDuelModal from '../components/CalibrationDuelModal';
+import { detectRatingAnomalies } from '../lib/calibrationEngine';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { WatchHistoryItem } from '../types';
 
@@ -462,6 +465,7 @@ export default function StatsPage() {
   const [peopleTab, setPeopleTab] = useState<'directors' | 'cast' | 'studios'>('directors');
   const [showWrapped, setShowWrapped] = useState(false);
   const [statsMode, setStatsMode] = useState<StatsScopeMode>('current');
+  const [showCalibration, setShowCalibration] = useState(false);
 
   const currentMoviesCount = useMemo(
     () => countWatchedCurrentMovies(movies),
@@ -546,6 +550,49 @@ export default function StatsPage() {
       genres,
     };
   }, [movies, series, currentMoviesCount]);
+
+  // =========================================================================
+  // KÖR KALİBRASYON & ELO — kütüphanenin tamamı (izleme kapsamından bağımsız)
+  // (a) GERÇEK TOP 10: calibratedScore (yoksa puan) ile dürüst sıralama;
+  //     detectRatingAnomalies işaretli filmlerde sapma rozeti gösterilir.
+  // (b) PUAN ENFLASYONU: ortalama |calibrated − rating| sapması + en çok
+  //     şişirilen (direction 'lower') / düşürülen (direction 'raise') filmler.
+  // =========================================================================
+  const anomalies = useMemo(() => detectRatingAnomalies(movies), [movies]);
+  const anomalyById = useMemo(
+    () => new Map(anomalies.map((a) => [a.movie.id, a])),
+    [anomalies]
+  );
+  const realTop10 = useMemo(
+    () =>
+      movies
+        .filter((m) => m.watched && typeof m.rating === 'number' && !m.abandoned)
+        .sort((a, b) => {
+          const diff =
+            (b.calibratedScore ?? b.rating ?? 0) - (a.calibratedScore ?? a.rating ?? 0);
+          return diff !== 0 ? diff : (a.title || '').localeCompare(b.title || '', 'tr');
+        })
+        .slice(0, 10),
+    [movies]
+  );
+  const inflation = useMemo(() => {
+    const both = movies.filter(
+      (m) => typeof m.rating === 'number' && typeof m.calibratedScore === 'number'
+    );
+    if (both.length === 0) return null;
+    const sumAbs = both.reduce(
+      (s, m) => s + Math.abs((m.calibratedScore as number) - (m.rating as number)),
+      0
+    );
+    return {
+      count: both.length,
+      avgAbs: Math.round((sumAbs / both.length) * 100) / 100,
+      // direction 'lower' → puan kalibreden YÜKSEK (şişirilen),
+      // direction 'raise' → puan kalibreden DÜŞÜK (düşürülen).
+      inflated: anomalies.filter((a) => a.direction === 'lower').slice(0, 5),
+      deflated: anomalies.filter((a) => a.direction === 'raise').slice(0, 5),
+    };
+  }, [movies, anomalies]);
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
@@ -1334,6 +1381,192 @@ export default function StatsPage() {
         )}
       </div>
 
+      {/* KÖR KALİBRASYON & ELO — Gerçek Top 10 + Puan Enflasyonu + Başlat */}
+      <div className={PREMIUM_PANEL}>
+        <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2">
+              <Scale size={18} className="text-gold-400" /> Kör Kalibrasyon &amp; Elo
+            </h2>
+            <p className="text-xs text-ink-400 mt-0.5 leading-relaxed">
+              Puan ile düello tabanlı kalibre puan arasındaki fark — dürüst sıralama ve enflasyon analizi
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCalibration(true)}
+            style={{
+              background: 'var(--red, var(--color-1, #e8384f))',
+              color: 'var(--on-color-1, #0a0a0e)',
+              borderColor: 'var(--red, var(--color-1, #e8384f))',
+            }}
+            className="px-4 py-2.5 min-h-11 rounded-xl border font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-transform active:scale-[0.98] shadow-[0_12px_30px_-12px_rgba(232,56,79,0.9)] shrink-0"
+            title="5'li tur halinde kör düello — her düello +XP"
+          >
+            <Swords size={14} /> Zevk Kalibrasyonu Başlat
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* (a) GERÇEK TOP 10 */}
+          <div className="bg-ink-950/50 border border-ink-800/70 rounded-2xl p-3.5 sm:p-4">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
+                <Trophy size={13} className="text-gold-400" /> Gerçek Top 10
+              </h3>
+              <span className="text-[10px] font-bold bg-ink-950 border border-ink-800 text-ink-400 px-2 py-0.5 rounded-full shrink-0">
+                calibratedScore
+              </span>
+            </div>
+            {realTop10.length === 0 ? (
+              <p className="text-xs text-ink-500 py-6 text-center">Henüz puanlı film yok.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {realTop10.map((m, idx) => {
+                  const honest = m.calibratedScore ?? m.rating ?? 0;
+                  const anomaly = anomalyById.get(m.id);
+                  return (
+                    <div key={m.id} className="flex items-center gap-2.5">
+                      <span className={`${PREMIUM_NUM} text-[11px] text-ink-500 w-5 text-right flex-shrink-0`}>
+                        {idx + 1}
+                      </span>
+                      <span
+                        className="text-xs font-bold text-ink-100 truncate flex-1 min-w-0"
+                        title={m.title}
+                      >
+                        {m.title}
+                      </span>
+                      {anomaly && (
+                        <span
+                          title={
+                            anomaly.direction === 'raise'
+                              ? 'Puanı kalibre puanın altında'
+                              : 'Puanı kalibre puanın üzerinde'
+                          }
+                          className="text-[10px] font-black flex-shrink-0 text-ink-400 tabular-nums"
+                        >
+                          {anomaly.direction === 'raise' ? '↑' : '↓'} {Math.abs(anomaly.gap).toFixed(2)}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold text-ink-500 tabular-nums flex-shrink-0 hidden sm:block">
+                        {m.duelCount || 0} düello
+                      </span>
+                      <span
+                        className={`${PREMIUM_NUM} text-xs text-ink-300 flex-shrink-0 w-9 text-right`}
+                        title="Kalibre puan"
+                      >
+                        {honest.toFixed(2)}
+                      </span>
+                      <span
+                        className={`text-[11px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 w-9 text-center ${ratingBgClass(m.rating ?? 0)}`}
+                      >
+                        {m.rating}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* (b) PUAN ENFLASYONU ANALİZİ */}
+          <div className="bg-ink-950/50 border border-ink-800/70 rounded-2xl p-3.5 sm:p-4 flex flex-col gap-3">
+            <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
+              <TrendingUp size={13} className="text-gold-400" /> Puan Enflasyonu Analizi
+            </h3>
+
+            {inflation === null ? (
+              <p className="text-xs text-ink-500 py-6 text-center leading-relaxed">
+                Henüz kalibre puan yok — düello yaptıkça analiz burada oluşur.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-end justify-between gap-3 bg-ink-950/60 border border-ink-800/70 rounded-xl px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
+                      Ortalama |kalibre − puan|
+                    </div>
+                    <div className={`${PREMIUM_NUM} text-xl text-ink-50`}>{inflation.avgAbs.toFixed(2)}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
+                      Sapmalı / Ölçülen
+                    </div>
+                    <div className={`${PREMIUM_NUM} text-xl text-ink-50`}>
+                      {anomalies.length}
+                      <span className="text-xs font-bold text-ink-400"> / {inflation.count}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-ink-400 mb-1.5 flex items-center gap-1">
+                      <ArrowUp size={11} className="text-red-400" /> En Çok Şişirilen
+                    </div>
+                    {inflation.inflated.length === 0 ? (
+                      <p className="text-[11px] text-ink-500">—</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {inflation.inflated.map((a) => (
+                          <div key={a.movie.id} className="flex items-center justify-between gap-2 py-0.5">
+                            <span
+                              className="text-[11px] font-bold text-ink-200 truncate min-w-0"
+                              title={a.movie.title}
+                            >
+                              {a.movie.title}
+                            </span>
+                            <span className="flex items-center gap-1.5 shrink-0 tabular-nums text-[10px]">
+                              <span className="text-ink-500 font-bold">{a.rating.toFixed(1)}</span>
+                              <span className="text-ink-600">→</span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded font-black ${ratingBgClass(a.suggestion)}`}
+                              >
+                                {a.suggestion.toFixed(1)}
+                              </span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-ink-400 mb-1.5 flex items-center gap-1">
+                      <ArrowDown size={11} className="text-gold-400" /> En Çok Düşürülen
+                    </div>
+                    {inflation.deflated.length === 0 ? (
+                      <p className="text-[11px] text-ink-500">—</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {inflation.deflated.map((a) => (
+                          <div key={a.movie.id} className="flex items-center justify-between gap-2 py-0.5">
+                            <span
+                              className="text-[11px] font-bold text-ink-200 truncate min-w-0"
+                              title={a.movie.title}
+                            >
+                              {a.movie.title}
+                            </span>
+                            <span className="flex items-center gap-1.5 shrink-0 tabular-nums text-[10px]">
+                              <span className="text-ink-500 font-bold">{a.rating.toFixed(1)}</span>
+                              <span className="text-ink-600">→</span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded font-black ${ratingBgClass(a.suggestion)}`}
+                              >
+                                {a.suggestion.toFixed(1)}
+                              </span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-3 gap-4">
         <div className={`${PREMIUM_PANEL} flex flex-col justify-between`}>
           <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-gold-400" /> Aylık İzleme</h2>
@@ -1430,6 +1663,7 @@ export default function StatsPage() {
 
       {detailTarget && <MediaDetailModal target={detailTarget} onClose={() => setDetailTarget(null)} />}
       {showWrapped && <WrappedModal onClose={() => setShowWrapped(false)} />}
+      {showCalibration && <CalibrationDuelModal onClose={() => setShowCalibration(false)} />}
     </div>
   );
 }

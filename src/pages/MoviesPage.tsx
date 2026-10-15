@@ -5,7 +5,7 @@ import {
   CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye,
   FolderPlus, X, Play, Pause, Timer, Zap, Lock, EyeOff, ChevronsUpDown, History,
   CheckSquare, Square, ArrowRightLeft, SlidersHorizontal, Send, Film, Skull, RotateCcw,
-  Info, MessageSquare, MonitorPlay
+  Info, MessageSquare, MonitorPlay, Scale
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
@@ -27,9 +27,24 @@ import AbandonModal from '../components/AbandonModal';
 import type { Movie, ExternalActionTemplate } from '../types';
 import '../components/movies-premium.css';
 
-type SortMode = 'az' | 'year' | 'rating' | 'added';
+type SortMode = 'az' | 'year' | 'rating' | 'added' | 'calibrated';
 type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past' | 'graveyard';
 const PAST_QUEUE_MODAL_ID = '__PAST_QUEUE__';
+
+/**
+ * 'Gerçek Sıralama (Kalibre Edilmiş)': kalibre puan (calibratedScore, yoksa
+ * puan) azalan — dürüst sıralama. İzlenmemiş / taksiz (geçerli puanı olmayan)
+ * öğeler SONA toplanır; göreli sıraları korunur (Array.sort stabil).
+ */
+function sortCalibratedMovies(list: Movie[]): Movie[] {
+  const rank = (m: Movie): number | null =>
+    m.watched && typeof m.rating === 'number' ? (m.calibratedScore ?? m.rating) : null;
+  const scored: Movie[] = [];
+  const rest: Movie[] = [];
+  list.forEach((m) => (rank(m) === null ? rest : scored).push(m));
+  scored.sort((a, b) => (rank(b) as number) - (rank(a) as number));
+  return [...scored, ...rest];
+}
 
 /** Hızlı Aksiyon Köprüsü şablon ikonları (lucide adı → bileşen). */
 const BRIDGE_ICONS: Record<string, LucideIcon> = {
@@ -455,7 +470,19 @@ export default function MoviesPage() {
     return libMovies.filter(m => m.title.toLowerCase().includes(q));
   }, [libMovies, sendMovieSearch]);
 
-  const sortedBottomMovies = useFilteredMovies(baseBottomListMovies, watchedFilter, selectedGenres, search, sortMode);
+  // Kalibre mod lib SortMode'a girmediği için filtreme 'added' ile yapılır,
+  // dürüst sıralama yerel karşılaştırıcıyla Memo içinde uygulanır.
+  const filteredBottomForSort = useFilteredMovies(
+    baseBottomListMovies,
+    watchedFilter,
+    selectedGenres,
+    search,
+    sortMode === 'calibrated' ? 'added' : sortMode
+  );
+  const sortedBottomMovies = useMemo(
+    () => (sortMode === 'calibrated' ? sortCalibratedMovies(filteredBottomForSort) : filteredBottomForSort),
+    [filteredBottomForSort, sortMode]
+  );
   const totalUnwatched = useMemo(() => libMovies.filter((m) => !m.watched && !m.abandoned).length, [libMovies]);
   const totalWatched = useMemo(() => countWatchedCurrentMovies(libMovies), [libMovies]);
   const totalPastWatched = useMemo(() => countPastMovies(libMovies), [libMovies]);
@@ -711,6 +738,13 @@ export default function MoviesPage() {
               </button>
               <button onClick={() => setSortMode('rating')} className={`mpx-chip ${sortMode === 'rating' ? 'on' : ''}`}>
                 <StarIcon size={13} /> Puan
+              </button>
+              <button
+                onClick={() => setSortMode('calibrated')}
+                className={`mpx-chip ${sortMode === 'calibrated' ? 'on' : ''}`}
+                title="Gerçek Sıralama (Kalibre Edilmiş) — kalibre puan (Elo) bazlı dürüst sıralama; izlenmemiş/taksizler sonda"
+              >
+                <Scale size={13} /> Gerçek Sıralama
               </button>
             </div>
 

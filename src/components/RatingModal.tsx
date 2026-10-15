@@ -1,8 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus, Tag, History, ShieldAlert } from 'lucide-react'; // YENİ: ShieldAlert ikonu eklendi
+import { X, Star, Sparkles, SlidersHorizontal, StickyNote, Award, Flame, ThumbsUp, Meh, Frown, Skull, Check, Wand2, RotateCcw, Minus, Plus, Tag, History, ShieldAlert, Film, Swords } from 'lucide-react'; // YENİ: ShieldAlert ikonu eklendi
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
 import { useTutorial } from '../context/TutorialContext';
 import { ratingBgClass } from '../lib/utils';
+import { handleImgFallback } from '../lib/selectors';
+import { calculateEloDelta, pickDuelPair } from '../lib/calibrationEngine';
+import type { Movie } from '../types';
 
 interface RatingModalProps {
   title: string;
@@ -22,6 +25,39 @@ const SEQUENTIAL_SCORES = [
   1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10
 ];
 
+/** ANLIK KALİBRASYON VS satırı: kompakt poster + ad + puan + düello rozeti. */
+function CalibSide({ movie }: { movie: Movie }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0 bg-ink-950/60 border border-ink-800/80 rounded-xl p-2">
+      <div className="w-9 h-[54px] rounded-lg overflow-hidden border border-ink-700 shrink-0">
+        {movie.posterUrl ? (
+          <img
+            loading="lazy"
+            decoding="async"
+            src={movie.posterUrl}
+            alt={movie.title}
+            onError={handleImgFallback}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full grid place-items-center text-ink-600">
+            <Film size={14} />
+          </div>
+        )}
+      </div>
+      <div className="min-w-0">
+        <div className="text-[11px] font-black text-ink-50 line-clamp-2 leading-tight">{movie.title}</div>
+        <div className="flex items-center gap-1 mt-1 flex-wrap">
+          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-gold-500/15 text-gold-300 border border-gold-500/30 tabular-nums">
+            ★ {movie.rating ?? '—'}
+          </span>
+          <span className="text-[9px] font-bold text-ink-500 tabular-nums">{movie.duelCount || 0} düello</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RatingModal({
   title,
   subtitle,
@@ -34,9 +70,44 @@ export default function RatingModal({
   onRate,
   onClose,
 }: RatingModalProps) {
-  const { data } = useApp();
+  const { data, resolveDuel } = useApp();
   const { notifyModalOpen, notifyModalClose, notifyEvent } = useTutorial();
   const criteriaList = data.criteria || [];
+
+  // ANLIK KALİBRASYON (tek tur VS): modalın açıldığı film, puanlı film
+  // havuzundaysa en yakın ikinci adayla düello yapar. pickDuelPair havuz
+  // koşulunu (izlenmiş + puanlı + terk edilmemiş) kendisi denetler.
+  const targetMovie = useMemo(() => {
+    if (subtitle.includes('Sezon')) return null; // dizi puanlaması → film havuzuna girmez
+    const sameTitle = data.movies.filter((m) => m.title === title);
+    if (sameTitle.length === 0) return null;
+    const yearMatch = subtitle.match(/Çıkış Yılı:\s*(\d{4})/);
+    const matched = yearMatch
+      ? sameTitle.filter((m) => !m.year || m.year === yearMatch[1])
+      : sameTitle;
+    return matched[0] ?? null;
+  }, [data.movies, title, subtitle]);
+
+  const instantPair = useMemo(
+    () => (targetMovie ? pickDuelPair(data.movies, targetMovie.id) : null),
+    [data.movies, targetMovie]
+  );
+
+  const [instantDone, setInstantDone] = useState<{ delta: number; winnerTitle: string; loserTitle: string } | null>(null);
+  const [instantSkipped, setInstantSkipped] = useState(false);
+
+  const resolveInstant = (side: 'a' | 'b') => {
+    if (!instantPair || instantDone) return;
+    const winner = side === 'a' ? instantPair.a : instantPair.b;
+    const loser = side === 'a' ? instantPair.b : instantPair.a;
+    const wOld = winner.calibratedScore ?? winner.rating ?? 5;
+    const lOld = loser.calibratedScore ?? loser.rating ?? 5;
+    const { delta } = calculateEloDelta(wOld, lOld);
+    // Reducer: Elo güncellemesi + toplam +XP'yi kendi halleder; film puanı
+    // değişirse kalibre alan senkronu da reducer'da (syncCalibratedRating).
+    resolveDuel(winner.id, loser.id, 'movie');
+    setInstantDone({ delta, winnerTitle: winner.title, loserTitle: loser.title });
+  };
 
   // Puanlama tutoriali — ilk açılışta
   useEffect(() => {
@@ -489,6 +560,82 @@ export default function RatingModal({
               </div>
             </div>
           </div>
+
+          {/* ANLIK KALİBRASYON — tek tur VS (Atla her zaman mevcut) */}
+          {instantPair && !instantSkipped && !instantDone && (
+            <div className="bg-ink-900/40 border border-ink-800/80 rounded-2xl overflow-hidden animate-fade-in">
+              <div className="flex items-center justify-between gap-2 px-3.5 sm:px-4 pt-3 pb-1">
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-ink-200">
+                  <Swords size={13} className="text-gold-400" /> Anlık Kalibrasyon
+                  <span className="text-[9px] bg-ink-950 border border-ink-700 text-ink-400 px-1.5 py-0.5 rounded-full">
+                    Tek Tur VS
+                  </span>
+                </div>
+                <span className="text-[10px] text-ink-500 hidden sm:block">
+                  Kör düello — Elo kalibre puanını dengeler
+                </span>
+              </div>
+
+              <div className="px-3.5 sm:px-4 pt-1.5 pb-2 grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                <CalibSide movie={instantPair.a} />
+                <div className="text-center px-0.5">
+                  <div className="text-[11px] font-black text-gold-400">VS</div>
+                </div>
+                <CalibSide movie={instantPair.b} />
+              </div>
+
+              <div className="px-3.5 sm:px-4 pb-3.5 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => resolveInstant('a')}
+                  style={{
+                    background: 'var(--red, var(--color-1, #e8384f))',
+                    color: 'var(--on-color-1, #0a0a0e)',
+                  }}
+                  className="py-2.5 min-h-11 rounded-xl font-black text-[11px] flex items-center justify-center gap-1 transition-transform active:scale-[0.98]"
+                  title="Kazanan: Sol film (←)"
+                >
+                  ← Sol
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInstantSkipped(true)}
+                  className="py-2.5 min-h-11 rounded-xl font-bold text-[11px] bg-ink-950/70 text-ink-300 border border-ink-700/80 hover:bg-ink-800 transition-colors flex items-center justify-center gap-1"
+                  title="Bu düelloyu atla"
+                >
+                  Atla
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resolveInstant('b')}
+                  style={{
+                    background: 'var(--red, var(--color-1, #e8384f))',
+                    color: 'var(--on-color-1, #0a0a0e)',
+                  }}
+                  className="py-2.5 min-h-11 rounded-xl font-black text-[11px] flex items-center justify-center gap-1 transition-transform active:scale-[0.98]"
+                  title="Kazanan: Sağ film (→)"
+                >
+                  Sağ →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ANLIK KALİBRASYON SONUCU */}
+          {instantDone && (
+            <div className="bg-ink-900/40 border border-ink-800/80 rounded-2xl p-3 flex items-center justify-between gap-3 animate-fade-in-up">
+              <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-ink-300 shrink-0">
+                <Check size={13} className="text-emerald-400" /> Kalibrasyon Tamam
+              </span>
+              <span className="text-[11px] font-bold text-ink-400 min-w-0 truncate text-right">
+                <span className="text-ink-100">{instantDone.winnerTitle}</span>{' '}
+                <span className="text-emerald-400 tabular-nums">+{instantDone.delta.toFixed(2)}</span>
+                <span className="mx-1.5 text-ink-600">·</span>
+                <span className="text-ink-100">{instantDone.loserTitle}</span>{' '}
+                <span className="text-red-400 tabular-nums">−{instantDone.delta.toFixed(2)}</span>
+              </span>
+            </div>
+          )}
 
           {/* AĞIRLIKLI DETAYLI KRİTER HESAPLAYICI */}
           {criteriaList.length > 0 && (
