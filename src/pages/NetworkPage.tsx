@@ -158,7 +158,10 @@ export default function NetworkPage() {
     if (freshProfile) {
       setProfilesMap(prev => ({ ...prev, [targetId]: freshProfile }));
     }
-    setFriendLogs(logsData || []);
+    // Gizli eski izleme kayıtları (action_type='watched_hidden') akışa
+    // sızmaması için client-side eleme: .neq KULLANMA, eski satırlarda
+    // action_type NULL/eksik olabilir ve SQL neq bunları sessizce siler.
+    setFriendLogs((logsData || []).filter((l: any) => l.action_type !== 'watched_hidden'));
   };
 
   useEffect(() => {
@@ -253,7 +256,8 @@ export default function NetworkPage() {
 
       if (acceptedIds.size > 0) {
         const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(200);
-        setFeed(logsData || []);
+        // Akıştan gizlenen eski izleme kayıtlarını client-side ele (NULL korunur).
+        setFeed((logsData || []).filter((l: any) => l.action_type !== 'watched_hidden'));
       } else { setFeed([]); }
 
     } catch (error: any) { console.error('Ağ hatası:', error); }
