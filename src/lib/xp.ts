@@ -3,12 +3,12 @@ function xpGapForLevel(level: number): number {
   if (level <= 1) return 0;
   
   const baseXP = 250; // Seviye 2 olmak için gereken ilk büyük eşik (Anında seviye atlamayı önler)
-  const stepXP = 25;  // Her seviyede, bir önceki seviyeden 25 XP daha fazla ister.
+  const stepXP = 30;  // Her seviyede, bir önceki seviyeden 30 XP daha fazla ister.
   
   // Örnek: 
   // Lvl 2 = 250
-  // Lvl 3 = 250 + 25 = 275
-  // Lvl 4 = 250 + 50 = 300
+  // Lvl 3 = 250 + 30 = 280
+  // Lvl 4 = 250 + 60 = 310
   return baseXP + ((level - 2) * stepXP);
 }
 

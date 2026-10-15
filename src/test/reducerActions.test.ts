@@ -319,7 +319,7 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     const state = getInitialState();
     state.totalXp = 999999; // bozuk/şişirilmiş değer
 
-    // movie_add: bronze (5 XP) + silver (15 XP) = 20 XP
+    // movie_add: bronze (5 XP) + silver (10 XP) = 15 XP
     state.achievements = [
       { achievementId: 'movie_add', current: 0, unlockedTiers: ['bronze', 'silver'], tierDates: {}, lastNotifiedTier: 'silver' } as any,
     ];
@@ -327,9 +327,9 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     storageMap.set(QUEST_STORAGE_KEY, JSON.stringify({ completedQuests: ['c_short_movie'] }));
 
     const next = rootReducer(state, { type: 'FORCE_XP_SYNC' } as any);
-    expect(next.totalXp).toBe(20 + 50);
-    expect(next.level).toBe(levelFromXp(70).level);
-    expect(next.xp).toBe(levelFromXp(70).currentLevelXp);
+    expect(next.totalXp).toBe(15 + 50);
+    expect(next.level).toBe(levelFromXp(65).level);
+    expect(next.xp).toBe(levelFromXp(65).currentLevelXp);
   });
 
   test('RECOVER_IDENTITY: kimlik alanları aynen yazılmalı', () => {

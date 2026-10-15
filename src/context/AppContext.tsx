@@ -189,7 +189,7 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
     showLockedNames: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
-    externalActions: [], bonusXp: 0, totalDuelsCompleted: 0,
+    externalActions: [], bonusXp: 0, totalDuelsCompleted: 0, giantSlayerWins: 0,
     weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true, sharePastWatchedInFeed: true,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
     showcase: [],
@@ -636,6 +636,9 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'ruthless_critic': currentVal = state.movies.filter((m) => m.abandoned && (m.runtime || 0) > 0 && m.abandonedProgress?.unit !== 'episode' && (m.abandonedProgress?.value ?? 0) <= (m.runtime || 0) / 2).length; break;
       case 'scale_master': currentVal = state.totalDuelsCompleted || 0; break;
       case 'secret_duelist': currentVal = (state.movies || []).reduce((sum, m) => sum + (m.duelWins || 0), 0); break;
+      case 'secret_giant_slayer': currentVal = state.giantSlayerWins || 0; break;
+      case 'detail_master': currentVal = state.movies.filter((m) => m.detailedRating && Object.keys(m.detailedRating).length > 0).length; break;
+      case 'review_tagger': currentVal = state.movies.filter((m) => (m.reviewTags || []).length > 0).length; break;
       case 'tutorial_explorer': currentVal = readTutorialUnitCount(); break;
     }
 
@@ -833,6 +836,10 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       });
       // XP YOK: düelloda XP kazanılmaz; ödül yalnızca "Terazi Ustası" başarımlarından gelir.
       nextState.totalDuelsCompleted = (state.totalDuelsCompleted || 0) + 1;
+      // GİZLİ BAŞARIM "Taht Deviren": orijinal puanı düşük olan kazandıysa sayaç +1
+      if (winner.rating != null && loser.rating != null && winner.rating < loser.rating) {
+        nextState.giantSlayerWins = (state.giantSlayerWins || 0) + 1;
+      }
       break;
     }
     case 'APPLY_CALIBRATION_SUGGESTION': {

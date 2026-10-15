@@ -188,6 +188,8 @@ export interface AppData {
   externalActions?: ExternalActionTemplate[];
   /** Kör kalibrasyon: tamamlanan düello sayısı (Terazi Ustası başarımı için). */
   totalDuelsCompleted?: number;
+  /** Kör kalibrasyon: "Taht Deviren" gizli başarımı için — orijinal puanı düşük olan kazanan düello sayısı. */
+  giantSlayerWins?: number;
   /** Kalıcı bonus XP (başarı/görev ödülleri; synchronizeXPAndLevel recalc'ine dahildir). */
   bonusXp?: number;
   pendingToasts?: {
