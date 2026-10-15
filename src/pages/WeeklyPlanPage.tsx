@@ -14,6 +14,7 @@ import type { Movie, WeeklyPlanItem } from '../types';
 
 // Matematiksel beyni içeri aktarıyoruz
 import { formatDuration, checkOverlap, computeEndTime } from '../lib/plannerLogic';
+import { handleImgFallback } from '../lib/selectors';
 
 const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 const MONTH_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
@@ -241,7 +242,7 @@ export default function WeeklyPlanPage() {
         </div>
 
         <div className={`w-12 sm:w-14 aspect-[2/3] flex-shrink-0 rounded-xl overflow-hidden bg-ink-900 border relative ${isMissed ? 'border-red-500/30' : 'border-ink-800'}`}>
-          {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={14} className="text-ink-600" /></div>}
+          {movie.posterUrl ? <img loading="lazy" decoding="async" src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover"  onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={14} className="text-ink-600" /></div>}
           {movie.watched && <div className="absolute inset-0 bg-emerald-950/70 flex items-center justify-center backdrop-blur-[2px]"><CheckCircle2 size={16} className="text-emerald-400 drop-shadow-md" /></div>}
         </div>
 
@@ -309,7 +310,7 @@ export default function WeeklyPlanPage() {
         movie.watched ? 'bg-emerald-950/10 border-emerald-500/30 opacity-80' : isMissed ? 'bg-red-950/20 border-red-500/40 shadow-[0_0_18px_-8px_rgba(239,68,68,0.6)]' : 'wp-card hover:border-gold-500/50'
       }`}>
         <div className="w-20 sm:w-24 h-auto flex-shrink-0 bg-ink-950 relative">
-          {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover opacity-90" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={20} className="text-ink-600" /></div>}
+          {movie.posterUrl ? <img loading="lazy" decoding="async" src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover opacity-90"  onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={20} className="text-ink-600" /></div>}
           <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-transparent to-transparent sm:bg-gradient-to-r" />
           {movie.watched && <div className="absolute inset-0 bg-emerald-950/60 flex items-center justify-center backdrop-blur-[2px]"><CheckCircle2 size={24} className="text-emerald-400 drop-shadow-md" /></div>}
         </div>
@@ -773,7 +774,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
                   candidates.map((m) => (
                     <button key={m.id} onClick={() => setSelectedMovie(m)} className="wp-card w-full flex items-center gap-2.5 sm:gap-3 p-2 hover:border-gold-500/50 transition-all text-left group">
                       <div className="w-8 h-11 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm group-hover:shadow-[0_0_16px_-6px_var(--color-1)] border border-ink-800/50">
-                        {m.posterUrl ? <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
+                        {m.posterUrl ? <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover"  onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] sm:text-xs font-black text-ink-100 truncate group-hover:text-white transition-colors">{m.title}</div>
@@ -791,7 +792,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
             <div className="animate-fade-in">
               <div className="flex items-center gap-3 bg-gradient-to-r from-gold-500/10 to-transparent border border-gold-500/30 rounded-xl p-2.5 sm:p-3 shadow-inner mb-4">
                 <div className="w-10 h-14 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm border border-ink-700/50">
-                  {selectedMovie.posterUrl ? <img src={selectedMovie.posterUrl} alt={selectedMovie.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
+                  {selectedMovie.posterUrl ? <img loading="lazy" decoding="async" src={selectedMovie.posterUrl} alt={selectedMovie.title} className="w-full h-full object-cover"  onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] sm:text-sm font-black text-white truncate drop-shadow-sm mb-1">{selectedMovie.title}</div>
@@ -926,7 +927,7 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
         <div className="p-3.5 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar flex-1">
           <div className="flex items-center gap-3 bg-gradient-to-r from-gold-500/10 to-transparent border border-gold-500/30 rounded-xl p-2.5 sm:p-3 shadow-inner mb-4">
             <div className="w-10 h-14 rounded-lg bg-ink-900 overflow-hidden flex-shrink-0 shadow-sm border border-ink-700/50">
-              {movie.posterUrl ? <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
+              {movie.posterUrl ? <img loading="lazy" decoding="async" src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover"  onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={12} className="text-ink-600" /></div>}
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] sm:text-sm font-black text-white truncate drop-shadow-sm mb-1">{movie.title}</div>

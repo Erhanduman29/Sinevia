@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { formatDateShort } from '../lib/utils';
 import type { WatchHistoryItem } from '../types';
+import { handleImgFallback } from '../lib/selectors';
 
 interface WrappedModalProps {
   onClose: () => void;
@@ -630,7 +631,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                     <div key={idx} className="flex items-center gap-3 bg-black/40 border border-white/15 rounded-2xl p-2.5 sm:p-3 shadow-lg">
                       <div className="w-11 h-16 rounded-xl bg-ink-900 overflow-hidden flex-shrink-0 border border-white/10 flex items-center justify-center">
                         {item.posterUrl ? (
-                          <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={item.posterUrl} alt={item.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                         ) : (
                           <Film size={18} className="text-ink-500" />
                         )}

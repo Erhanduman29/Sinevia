@@ -14,6 +14,7 @@ import ShowcaseEditorModal from '../components/ShowcaseEditorModal';
 import ChatHubModal, { renderChatMessageBubble } from '../components/ChatHubModal';
 import RecommendationModals from '../components/RecommendationModals';
 import type { Movie } from '../types';
+import { handleImgFallback } from '../lib/selectors';
 import '../components/network-premium.css';
 
 function timeAgo(dateString: string) {
@@ -581,7 +582,7 @@ export default function NetworkPage() {
                   return (
                     <div key={i} className="w-8 h-11 rounded-lg bg-ink-950 border border-gold-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow">
                       {poster ? (
-                        <img src={poster} alt={sc.title} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={poster} alt={sc.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                       ) : (
                         <Film size={12} className="text-gold-400" />
                       )}
@@ -672,7 +673,7 @@ export default function NetworkPage() {
                     >
                       <div className="w-12 h-16 rounded-xl bg-ink-950 overflow-hidden shrink-0 border border-ink-800 relative">
                         {radar.posterUrl ? (
-                          <img src={radar.posterUrl} alt={radar.title} className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={radar.posterUrl} alt={radar.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                         ) : (
                           <Film size={20} className="text-ink-600 m-auto mt-5" />
                         )}
@@ -710,7 +711,7 @@ export default function NetworkPage() {
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className="w-10 h-14 rounded-lg bg-ink-950 overflow-hidden shrink-0 border border-gold-500/30">
                     {trendingFeedItem.sampleLog.item_poster ? (
-                      <img src={trendingFeedItem.sampleLog.item_poster} alt="" className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={trendingFeedItem.sampleLog.item_poster} alt="" className="w-full h-full object-cover"  onError={handleImgFallback}/>
                     ) : (
                       <Flame size={18} className="text-gold-400 m-auto mt-4" />
                     )}
@@ -803,7 +804,7 @@ export default function NetworkPage() {
 
                       <button onClick={() => setSelectedLog(log)} className="relative w-full aspect-[2/3] bg-ink-900 flex items-center justify-center overflow-hidden">
                         {log.item_poster ? (
-                          <img src={log.item_poster} alt="poster" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700" />
+                          <img loading="lazy" decoding="async" src={log.item_poster} alt="poster" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"  onError={handleImgFallback}/>
                         ) : (
                           <Film size={32} className="text-ink-700" />
                         )}
@@ -896,7 +897,7 @@ export default function NetworkPage() {
                               <div className="flex items-center -space-x-2 shrink-0">
                                 {itemsArr.slice(0, 3).map((it: any, idx: number) =>
                                   it.poster ? (
-                                    <img key={idx} src={it.poster} alt="" className="w-7 h-10 rounded-md object-cover border border-ink-950 shadow" />
+                                    <img loading="lazy" decoding="async" key={idx} src={it.poster} alt="" className="w-7 h-10 rounded-md object-cover border border-ink-950 shadow"  onError={handleImgFallback}/>
                                   ) : null
                                 )}
                               </div>
@@ -1098,7 +1099,7 @@ export default function NetworkPage() {
                               return (
                                 <div key={i} className="w-full h-full bg-ink-950 overflow-hidden">
                                   {pUrl && (
-                                    <img src={pUrl} alt="" className="w-full h-full object-cover filter blur-[1px] scale-110" />
+                                    <img loading="lazy" decoding="async" src={pUrl} alt="" className="w-full h-full object-cover filter blur-[1px] scale-110"  onError={handleImgFallback}/>
                                   )}
                                 </div>
                               );
@@ -1182,13 +1183,13 @@ export default function NetworkPage() {
                             {uShowcase.slice(0, 4).map((sc: any, i: number) => {
                               const pUrl = sc.posterUrl || sc.poster;
                               return pUrl ? (
-                                <img
+                                <img loading="lazy" decoding="async"
                                   key={i}
                                   src={pUrl}
                                   alt={sc.title}
                                   className="w-8 h-11 rounded-lg object-cover border border-ink-700 shadow-md group-hover:border-gold-500/40 transition-colors"
                                   title={sc.title}
-                                />
+                                 onError={handleImgFallback}/>
                               ) : null;
                             })}
                           </div>
@@ -1386,7 +1387,7 @@ export default function NetworkPage() {
                               {fShowcase.slice(0, 4).map((sc: any, idx: number) => {
                                 const pUrl = sc.posterUrl || sc.poster;
                                 return pUrl ? (
-                                  <img key={idx} src={pUrl} alt={sc.title} className="w-7 h-10 rounded-md object-cover border border-ink-950 shadow-md" title={sc.title} />
+                                  <img loading="lazy" decoding="async" key={idx} src={pUrl} alt={sc.title} className="w-7 h-10 rounded-md object-cover border border-ink-950 shadow-md" title={sc.title}  onError={handleImgFallback}/>
                                 ) : null;
                               })}
                             </div>
@@ -1533,7 +1534,7 @@ export default function NetworkPage() {
 
             <div className="w-full md:w-2/5 h-64 md:h-auto bg-ink-900 relative shrink-0">
               {selectedLog.item_poster ? (
-                <img src={selectedLog.item_poster} alt="poster" className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={selectedLog.item_poster} alt="poster" className="w-full h-full object-cover"  onError={handleImgFallback}/>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-ink-700">
                   {selectedLog.item_type === 'series' ? <Tv size={48} /> : <Film size={48} />}

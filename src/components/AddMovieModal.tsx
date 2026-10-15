@@ -4,6 +4,7 @@ import { useApp, resolveTMDBGenres } from '../context/AppContext';
 import { normalize } from '../lib/utils';
 import { searchTMDB, type TMDBResult } from '../lib/tmdb';
 import type { WatchProvider } from '../types';
+import { handleImgFallback } from '../lib/selectors';
 
 interface Props {
   onClose: () => void;
@@ -170,7 +171,7 @@ export default function AddMovieModal({ onClose }: Props) {
                   >
                     <div className="aspect-[2/3] w-full bg-ink-950 flex items-center justify-center relative overflow-hidden">
                       {m.posterUrl ? (
-                        <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"  onError={handleImgFallback}/>
                       ) : (
                         <ImageIcon size={24} className="text-ink-700" />
                       )}
@@ -230,7 +231,7 @@ export default function AddMovieModal({ onClose }: Props) {
 
           {posterUrl && (
             <div className="flex items-start gap-3 p-3.5 bg-ink-800/40 rounded-xl border border-gold-500/30">
-              <img src={posterUrl} alt="Afiş" className="w-12 h-18 rounded-lg object-cover shadow-md flex-shrink-0" />
+              <img loading="lazy" decoding="async" src={posterUrl} alt="Afiş" className="w-12 h-18 rounded-lg object-cover shadow-md flex-shrink-0"  onError={handleImgFallback}/>
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="text-xs font-bold text-gold-400">Sinema Kartı Bilgileri Hazır!</div>
                 <div className="text-[11px] text-ink-300 line-clamp-2">{overview}</div>

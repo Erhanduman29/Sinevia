@@ -9,6 +9,7 @@ import {
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { ratingBgClass, formatDateShort, normalize, uid } from '../lib/utils';
 import { searchTMDB } from '../lib/tmdb';
+import { filterAndSortMovies, countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import { supabase } from '../lib/supabase';
 import AddMovieModal from '../components/AddMovieModal';
 import RatingModal from '../components/RatingModal';
@@ -205,36 +206,24 @@ export default function MoviesPage() {
 
   const resetAllFilters = () => { setSearch(''); setSelectedGenres(new Set()); setSortMode('added'); };
 
-  const sortMovies = (movies: Movie[]): Movie[] => {
-    let filtered = movies;
-    if (watchedFilter === 'unwatched') filtered = filtered.filter((m) => !m.watched);
-    else if (watchedFilter === 'watched') filtered = filtered.filter((m) => m.watched && !m.isPastWatch);
-    else if (watchedFilter === 'past') filtered = filtered.filter((m) => m.watched && m.isPastWatch);
-    if (selectedGenres.size > 0) filtered = filtered.filter((m) => Array.from(selectedGenres).every((g) => m.genres.includes(g)));
-    filtered = filtered.filter(searchMatches);
-    return [...filtered].sort((a, b) => {
-      if (sortMode === 'az') return a.title.localeCompare(b.title, 'tr');
-      if (sortMode === 'year') return (a.year || '9999').localeCompare(b.year || '9999');
-      if (sortMode === 'added') return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
-      const ra = a.watched ? (a.rating ?? -1) : -1;
-      const rb = b.watched ? (b.rating ?? -1) : -1;
-      return rb - ra;
-    });
-  };
+  // Filtre + sıralama mantığı artık saf selectors.filterAndSortMovies'da (tek kaynak, memoize dostu).
+  const sortMovies = (movies: Movie[]): Movie[] =>
+    filterAndSortMovies(movies, watchedFilter as WatchedFilterMode, selectedGenres, search, sortMode as SortMode);
 
   const baseBottomListMovies = useMemo(() => {
     if (watchedFilter === 'past') return data.movies.filter((m) => m.watched && m.isPastWatch);
     return data.movies.filter((m) => !m.collectionId && !m.inPastQueue && !m.isPastWatch);
   }, [data.movies, watchedFilter]);
 
-  const collectionMovies = data.movies.filter((m) => m.collectionId);
+  // collectionMovies her render'da yeni referans üretiyordu (useMemo'yu anlamsız kılıyordu);
+  // filtre artık useMemo gövdesinin içinde — collectionMap sadece data.movies değişince yeniden hesaplanır.
   const collectionMap = useMemo(() => {
     const map = new Map<string, Movie[]>();
-    collectionMovies.forEach((m) => {
+    data.movies.filter((m) => m.collectionId).forEach((m) => {
       const arr = map.get(m.collectionId!) || []; arr.push(m); map.set(m.collectionId!, arr);
     });
     return map;
-  }, [collectionMovies]);
+  }, [data.movies]);
 
   const allPastColUnratedMovies = useMemo(() => data.movies.filter((m) => !m.watched && m.inPastQueue).sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10)), [data.movies]);
 
@@ -451,10 +440,13 @@ export default function MoviesPage() {
     return data.movies.filter(m => m.title.toLowerCase().includes(q));
   }, [data.movies, sendMovieSearch]);
 
-  const sortedBottomMovies = sortMovies(baseBottomListMovies);
-  const totalUnwatched = data.movies.filter((m) => !m.watched).length;
-  const totalWatched = data.movies.filter((m) => m.watched && !m.isPastWatch).length;
-  const totalPastWatched = data.movies.filter((m) => m.watched && m.isPastWatch).length;
+  const sortedBottomMovies = useMemo(
+    () => sortMovies(baseBottomListMovies),
+    [baseBottomListMovies, watchedFilter, selectedGenres, search, sortMode]
+  );
+  const totalUnwatched = useMemo(() => data.movies.filter((m) => !m.watched).length, [data.movies]);
+  const totalWatched = useMemo(() => countWatchedCurrentMovies(data.movies), [data.movies]);
+  const totalPastWatched = useMemo(() => countPastMovies(data.movies), [data.movies]);
 
   const modalSelectableMovies = useMemo(() => {
     if (!addMoviesToCollectionId) return [];
@@ -807,7 +799,7 @@ export default function MoviesPage() {
                       return (
                         <div key={m.id} className="mpx-poster aspect-[2/3] group">
                           {m.posterUrl ? (
-                            <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                            <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"  onError={handleImgFallback}/>
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-ink-700">
                               <Film size={24} />
@@ -952,7 +944,7 @@ export default function MoviesPage() {
                             title={m.title}
                           >
                             {m.posterUrl ? (
-                              <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
+                              <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <ImageIcon size={12} className="text-ink-600" />
@@ -1218,7 +1210,7 @@ export default function MoviesPage() {
                             className={`mpx-poster aspect-[2/3] cursor-pointer group ${isChecked ? 'is-sel' : ''}`}
                           >
                             {m.posterUrl ? (
-                              <img src={m.posterUrl} alt="" className="w-full h-full object-cover" />
+                              <img loading="lazy" decoding="async" src={m.posterUrl} alt="" className="w-full h-full object-cover"  onError={handleImgFallback}/>
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-ink-700">
                                 <Film size={24} />
@@ -1365,7 +1357,7 @@ export default function MoviesPage() {
                           className={`mpx-poster aspect-[2/3] cursor-pointer group ${isSelected ? 'is-sel' : ''}`}
                         >
                           {m.posterUrl ? (
-                            <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-ink-700">
                               <ImageIcon size={24} />
@@ -1487,7 +1479,7 @@ export default function MoviesPage() {
                           className={`mpx-poster aspect-[2/3] cursor-pointer group ${isSelected ? 'is-sel' : ''}`}
                         >
                           {m.posterUrl ? (
-                            <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-ink-700">
                               <ImageIcon size={24} />
@@ -1715,7 +1707,7 @@ function MovieRow({
           className="mpx-poster mpx-poster-sm w-14 sm:w-16 flex-shrink-0 aspect-[2/3] flex items-center justify-center group/poster cursor-pointer focus:outline-none self-start md:self-center"
         >
           {movie.posterUrl ? (
-            <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
+            <img loading="lazy" decoding="async" src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
           ) : (
             <ImageIcon size={16} className="text-ink-600" />
           )}
@@ -1792,7 +1784,7 @@ function MovieRow({
                   onClick={(e) => e.stopPropagation()}
                   className="mpx-link"
                 >
-                  {link.logo ? <img src={link.logo} alt="Platform" className="w-2.5 h-2.5 rounded-[2px] object-cover" /> : <Icon size={10} />}
+                  {link.logo ? <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-2.5 h-2.5 rounded-[2px] object-cover"  onError={handleImgFallback}/> : <Icon size={10} />}
                   <span>{link.text}</span>
                 </a>
               );

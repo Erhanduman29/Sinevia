@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
+import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import MediaDetailModal from '../components/MediaDetailModal';
 import WrappedModal from '../components/WrappedModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
@@ -460,11 +461,11 @@ export default function StatsPage() {
   const [statsMode, setStatsMode] = useState<StatsScopeMode>('current');
 
   const currentMoviesCount = useMemo(
-    () => data.movies.filter((m) => m.watched && !m.isPastWatch).length,
+    () => countWatchedCurrentMovies(data.movies),
     [data.movies]
   );
   const pastMoviesCount = useMemo(
-    () => data.movies.filter((m) => m.watched && m.isPastWatch).length,
+    () => countPastMovies(data.movies),
     [data.movies]
   );
 
@@ -1032,7 +1033,7 @@ export default function StatsPage() {
               return (
                 <button key={h.id} type="button" onClick={() => openHistoryItemDetail(h)} className="group relative flex flex-col text-left bg-ink-950/70 border border-ink-800 hover:border-red-500/50 hover:shadow-[0_0_0_1px_rgba(232,56,79,0.35),0_16px_38px_-16px_rgba(232,56,79,0.6)] rounded-xl sm:rounded-2xl overflow-hidden shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
                   <div className="aspect-[2/3] w-full bg-ink-900 relative overflow-hidden">
-                    {poster ? <img src={poster} alt={h.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" /> : <div className="w-full h-full flex items-center justify-center text-ink-600">{isMovie ? <Film size={24} /> : <Tv size={24} />}</div>}
+                    {poster ? <img loading="lazy" decoding="async" src={poster} alt={h.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"  onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center text-ink-600">{isMovie ? <Film size={24} /> : <Tv size={24} />}</div>}
                     <div className="absolute top-1.5 left-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-gradient-to-br from-red-500 to-red-700 backdrop-blur-md border border-rose-300/30 flex items-center justify-center text-[10px] font-black text-white">#{i + 1}</div>
                     {h.rating !== null && <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-lg text-[10px] sm:text-xs font-black shadow-md ${ratingBgClass(h.rating)}`}>{h.rating}</div>}
                   </div>

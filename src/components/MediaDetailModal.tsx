@@ -8,6 +8,7 @@ import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
 import RatingModal from './RatingModal';
 import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
+import { handleImgFallback } from '../lib/selectors';
 
 export type DetailModalTarget =
   | { type: 'movie'; data: Movie; historyItem?: WatchHistoryItem }
@@ -230,7 +231,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
       >
         {posterUrl && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
-            <img src={posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150" />
+            <img loading="lazy" decoding="async" src={posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150"  onError={handleImgFallback}/>
             <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-900/80 to-transparent" />
           </div>
         )}
@@ -247,7 +248,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
           <div className="flex flex-col md:flex-row gap-4 sm:gap-6 items-center md:items-start">
             <div className="w-32 sm:w-48 md:w-52 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-ink-700/60 shadow-2xl relative group">
               {posterUrl ? (
-                <img src={posterUrl} alt={title} className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={posterUrl} alt={title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-ink-600 gap-2">
                   {isMovie ? <Film size={40} /> : <Tv size={40} />}
@@ -476,7 +477,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold transition-all"
                     >
-                      {link.logo ? <img src={link.logo} alt={link.text} className="w-3.5 h-3.5 rounded-sm object-cover" /> : <Icon size={13} />}
+                      {link.logo ? <img loading="lazy" decoding="async" src={link.logo} alt={link.text} className="w-3.5 h-3.5 rounded-sm object-cover"  onError={handleImgFallback}/> : <Icon size={13} />}
                       {link.text}
                     </a>
                   );

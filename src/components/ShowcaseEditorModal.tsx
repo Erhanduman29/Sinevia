@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, Crown, Search, Star, Film, Tv, Check, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
 import type { ShowcaseItem } from '../context/AppContext';
+import { handleImgFallback } from '../lib/selectors';
 
 interface ShowcaseEditorModalProps {
   isOpen: boolean;
@@ -178,7 +179,7 @@ export default function ShowcaseEditorModal({
                   {slotItem ? (
                     <>
                       {poster ? (
-                        <img src={poster} alt={slotItem.title} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={poster} alt={slotItem.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                       ) : (
                         <Film size={24} className="text-ink-600" />
                       )}
@@ -301,7 +302,7 @@ export default function ShowcaseEditorModal({
                     }`}
                   >
                     {item.posterUrl ? (
-                      <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={item.posterUrl} alt={item.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-ink-700">
                         {item.type === 'series' ? <Tv size={28} /> : <Film size={28} />}

@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import RatingModal from './RatingModal';
 import MediaDetailModal from './MediaDetailModal';
 import type { Movie } from '../types';
+import { handleImgFallback } from '../lib/selectors';
 
 interface RecommendationModalsProps {
   myAgentId: string | null | undefined;
@@ -449,7 +450,7 @@ export default function RecommendationModals({
                             }`}
                           >
                             {item.posterUrl ? (
-                              <img src={item.posterUrl} alt="poster" className="w-full h-full object-cover" />
+                              <img loading="lazy" decoding="async" src={item.posterUrl} alt="poster" className="w-full h-full object-cover"  onError={handleImgFallback}/>
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-ink-700">
                                 {item.type === 'series' ? <Tv size={32} /> : <Film size={32} />}
@@ -600,11 +601,11 @@ export default function RecommendationModals({
                         className="relative aspect-[2/3] rounded-2xl overflow-hidden group border border-ink-800 hover:border-gold-500/50 bg-ink-900 shadow-md cursor-pointer transition-all hover:-translate-y-1"
                       >
                         {item.poster ? (
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={item.poster}
                             alt={item.title}
                             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
-                          />
+                           onError={handleImgFallback}/>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-ink-700">
                             {item.type === 'series' ? <Tv size={32} /> : <Film size={32} />}
@@ -762,7 +763,7 @@ export default function RecommendationModals({
                     className="w-16 sm:w-20 flex-shrink-0 aspect-[2/3] bg-ink-900 rounded-xl overflow-hidden flex items-center justify-center border border-ink-700/60 shadow-md relative group/poster cursor-pointer"
                   >
                     {displayPoster ? (
-                      <img src={displayPoster} alt={displayTitle} className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={displayPoster} alt={displayTitle} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                     ) : (
                       <ImageIcon size={20} className="text-ink-600" />
                     )}

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useApp, resolveTMDBGenres } from '../context/AppContext';
 import { normalize } from '../lib/utils';
+import { handleImgFallback } from '../lib/selectors';
 
 interface ShareImportModalProps {
   rawJson: string;
@@ -504,7 +505,7 @@ export default function ShareImportModal({ rawJson, onClose }: ShareImportModalP
                     >
                       <div className="w-10 sm:w-12 aspect-[2/3] rounded-lg sm:rounded-xl bg-ink-900 overflow-hidden flex-shrink-0 border border-ink-700/60 flex items-center justify-center">
                         {item.posterUrl ? (
-                          <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={item.posterUrl} alt={item.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                         ) : (
                           <ImageIcon size={14} className="text-ink-600" />
                         )}

@@ -34,6 +34,7 @@ import type { Movie } from '../types';
 // YENİ BEYNİMİZİ İÇERİ ALIYORUZ!
 import { calculateDnaSynthesis } from '../lib/dnaLogic';
 import type { SynthVariant } from '../lib/dnaLogic';
+import { handleImgFallback } from '../lib/selectors';
 
 interface DnaSynthesizerModalProps {
   onClose: () => void;
@@ -409,11 +410,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
       >
         {step === 'result' && currentResult?.movie.posterUrl && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
-            <img
+            <img loading="lazy" decoding="async"
               src={currentResult.movie.posterUrl}
               alt=""
               className="w-full h-full object-cover blur-3xl scale-125 saturate-150"
-            />
+             onError={handleImgFallback}/>
             <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/85 to-ink-950/50" />
           </div>
         )}
@@ -572,7 +573,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                     >
                       <div className="w-12 sm:w-14 aspect-[2/3] bg-ink-950 rounded-xl overflow-hidden flex-shrink-0 border border-ink-700/60 shadow-md">
                         {m.posterUrl ? (
-                          <img src={m.posterUrl} alt={m.title} className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <ImageIcon size={16} className="text-ink-700" />
@@ -688,11 +689,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                             <div className="flex gap-3 sm:gap-4 items-start">
                               <div className="w-20 sm:w-28 aspect-[2/3] rounded-xl sm:rounded-2xl overflow-hidden bg-ink-950 border border-ink-700/80 flex-shrink-0 shadow-lg relative">
                                 {movie.posterUrl ? (
-                                  <img
+                                  <img loading="lazy" decoding="async"
                                     src={movie.posterUrl}
                                     alt={movie.title}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                  />
+                                   onError={handleImgFallback}/>
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center text-ink-600">
                                     <Film size={24} />
@@ -919,11 +920,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                   {movieA && movieB && (
                     <div className="bg-ink-900/80 border border-ink-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex items-center gap-3 shadow-lg">
                       {movieA.posterUrl && (
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={movieA.posterUrl}
                           alt={movieA.title}
                           className="w-8 h-11 rounded-lg object-cover border border-emerald-500/50 flex-shrink-0 hidden sm:block"
-                        />
+                         onError={handleImgFallback}/>
                       )}
                       <div className="flex-1 space-y-1.5 min-w-0">
                         <div className="flex justify-between text-[10px] sm:text-[11px] font-black gap-2">
@@ -946,11 +947,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         </div>
                       </div>
                       {movieB.posterUrl && (
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={movieB.posterUrl}
                           alt={movieB.title}
                           className="w-8 h-11 rounded-lg object-cover border border-cyan-500/50 flex-shrink-0 hidden sm:block"
-                        />
+                         onError={handleImgFallback}/>
                       )}
                     </div>
                   )}
@@ -964,11 +965,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                         className="w-36 sm:w-52 aspect-[2/3] rounded-2xl overflow-hidden bg-ink-950 border-2 border-emerald-500/50 shadow-[0_15px_40px_rgba(0,0,0,0.8)] relative group cursor-pointer"
                       >
                         {currentResult.movie.posterUrl ? (
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={currentResult.movie.posterUrl}
                             alt={currentResult.movie.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
+                           onError={handleImgFallback}/>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-ink-600 gap-2">
                             <ImageIcon size={36} />
@@ -1073,11 +1074,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                                 className="inline-flex items-center gap-1.5 min-h-9 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105"
                               >
                                 {link.logo ? (
-                                  <img
+                                  <img loading="lazy" decoding="async"
                                     src={link.logo}
                                     alt="Platform"
                                     className="w-3.5 h-3.5 rounded-sm object-cover"
-                                  />
+                                   onError={handleImgFallback}/>
                                 ) : (
                                   <Icon size={13} />
                                 )}

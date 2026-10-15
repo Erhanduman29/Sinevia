@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, Loader2, Plus, Check, Film, Info } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { AIMessage } from '../context/AppContext';
+import { handleImgFallback } from '../lib/selectors';
 import '../components/ai-premium.css';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''; 
@@ -334,7 +335,7 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
                         <div key={idx} className="ai-card group">
                           <div className="ai-card-media">
                             {poster ? (
-                              <img src={poster} alt={title} className="w-full h-full object-cover transition-transform duration-500" />
+                              <img loading="lazy" decoding="async" src={poster} alt={title} className="w-full h-full object-cover transition-transform duration-500"  onError={handleImgFallback}/>
                             ) : (
                               <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--ai-a3)' }}><Film size={28} className="md:w-8 md:h-8"/></div>
                             )}

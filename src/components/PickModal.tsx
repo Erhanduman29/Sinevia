@@ -11,6 +11,7 @@ import type { Movie, Series, Episode } from '../types';
 // YENİ: Mantık motorundan fonksiyonu ve tipleri çekiyoruz
 import { filterPickerCandidates } from '../lib/pickerLogic';
 import type { PickedItem, ModeFilter, DurationFilter } from '../lib/pickerLogic';
+import { handleImgFallback } from '../lib/selectors';
 
 // Başka sayfaların kırılmaması için PickedItem'i dışarı aktarıyoruz
 export type { PickedItem };
@@ -249,11 +250,11 @@ export default function PickModal({
       >
         {activeBgPoster ? (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-25 transition-all duration-300">
-            <img
+            <img loading="lazy" decoding="async"
               src={activeBgPoster}
               alt=""
               className="w-full h-full object-cover blur-3xl scale-125 saturate-150"
-            />
+             onError={handleImgFallback}/>
             <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent" />
           </div>
         ) : (
@@ -460,7 +461,7 @@ export default function PickModal({
                           title={meta.title}
                         >
                           {meta.posterUrl ? (
-                            <img src={meta.posterUrl} alt={meta.title} className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={meta.posterUrl} alt={meta.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-ink-600">
                               {meta.isMovie ? <Film size={14} /> : <Tv size={14} />}
@@ -514,7 +515,7 @@ export default function PickModal({
 
                     <div className="relative w-36 sm:w-52 aspect-[2/3] rounded-3xl overflow-hidden bg-ink-900 border-2 border-gold-500 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform scale-105 transition-all duration-75">
                       {meta.posterUrl ? (
-                        <img src={meta.posterUrl} alt={meta.title} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={meta.posterUrl} alt={meta.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-ink-600">
                           {meta.isMovie ? <Film size={42} /> : <Tv size={42} />}
@@ -579,7 +580,7 @@ export default function PickModal({
                         className="w-32 sm:w-44 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-gold-500/60 shadow-2xl relative group cursor-pointer"
                       >
                         {meta.posterUrl ? (
-                          <img src={meta.posterUrl} alt={meta.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                          <img loading="lazy" decoding="async" src={meta.posterUrl} alt={meta.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-ink-600">
                             {meta.isMovie ? <Film size={36} /> : <Tv size={36} />}
@@ -678,11 +679,11 @@ export default function PickModal({
                                   className="inline-flex items-center gap-1.5 bg-ink-800 hover:bg-ink-700 text-gold-400 border border-gold-500/30 px-2.5 py-1.5 min-h-9 sm:min-h-0 rounded-xl text-xs font-semibold transition-all hover:scale-105"
                                 >
                                   {link.logo ? (
-                                    <img
+                                    <img loading="lazy" decoding="async"
                                       src={link.logo}
                                       alt="Platform"
                                       className="w-3.5 h-3.5 rounded-sm object-cover"
-                                    />
+                                     onError={handleImgFallback}/>
                                   ) : (
                                     <Icon size={13} />
                                   )}

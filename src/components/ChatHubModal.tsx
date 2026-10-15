@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { uid } from '../lib/utils';
+import { handleImgFallback } from '../lib/selectors';
 
 // ÖZEL MESAJ VE ANKET KONTROL ÖNEKLERİ
 const MEDIA_PREFIX = '__SNV_MEDIA__:';
@@ -106,7 +107,7 @@ export function renderChatMessageBubble({
         <div className="bg-ink-900 border border-violet-500/40 rounded-2xl p-3 shadow-lg flex gap-3.5 w-full">
           <div className="w-16 h-24 rounded-xl bg-ink-950 overflow-hidden shrink-0 border border-ink-800">
             {item.poster ? (
-              <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+              <img loading="lazy" decoding="async" src={item.poster} alt={item.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-ink-600">
                 {item.type === 'series' ? <Tv size={22} /> : <Film size={22} />}
@@ -289,7 +290,7 @@ export function renderChatMessageBubble({
                   <div className="relative z-10 flex items-center gap-3">
                     <div className="w-9 h-12 rounded-lg bg-ink-950 overflow-hidden shrink-0 border border-ink-800">
                       {opt.poster ? (
-                        <img src={opt.poster} alt={opt.title} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={opt.poster} alt={opt.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                       ) : (
                         <Film size={16} className="text-ink-600 m-auto mt-3" />
                       )}
@@ -1031,7 +1032,7 @@ export default function ChatHubModal({
                       className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer border border-ink-800 hover:border-violet-400 bg-ink-900 group transition-all hover:scale-[1.03]"
                     >
                       {item.posterUrl ? (
-                        <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={item.posterUrl} alt={item.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-ink-700">
                           {item.type === 'series' ? <Tv size={28} /> : <Film size={28} />}
@@ -1142,7 +1143,7 @@ export default function ChatHubModal({
                       }`}
                     >
                       {item.posterUrl ? (
-                        <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={item.posterUrl} alt={item.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-ink-700">
                           {item.type === 'series' ? <Tv size={28} /> : <Film size={28} />}

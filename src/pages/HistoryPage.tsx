@@ -28,6 +28,7 @@ import RatingModal from '../components/RatingModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { WatchHistoryItem, Movie, Series } from '../types';
+import { handleImgFallback } from '../lib/selectors';
 
 type SortMode = 'newest' | 'oldest' | 'rating';
 type FilterType = 'all' | 'movie' | 'series';
@@ -562,11 +563,11 @@ export default function HistoryPage() {
               >
                 <div className="aspect-[2/3] w-full bg-[color:var(--surface,var(--bg-surface))] relative overflow-hidden">
                   {posterUrl ? (
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={posterUrl}
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
+                     onError={handleImgFallback}/>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-ink-600">
                       {isMovie ? <Film size={32} /> : <Tv size={32} />}
@@ -703,7 +704,7 @@ export default function HistoryPage() {
                       >
                         {seriesData?.posterUrl && (
                           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-15">
-                            <img src={seriesData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150" />
+                            <img loading="lazy" decoding="async" src={seriesData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150"  onError={handleImgFallback}/>
                             <div className="absolute inset-0 bg-gradient-to-r from-[color:var(--bg-base,#0a0a0d)] via-[color:var(--bg-base,#0a0a0d)]/85 to-transparent" />
                           </div>
                         )}
@@ -723,7 +724,7 @@ export default function HistoryPage() {
                               className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red, var(--color-1, #e8384f))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
                             >
                               {seriesData?.posterUrl ? (
-                                <img src={seriesData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
+                                <img loading="lazy" decoding="async" src={seriesData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
                               ) : (
                                 <Tv size={22} className="text-ink-600" />
                               )}
@@ -1069,7 +1070,7 @@ function MovieHistoryCard({
     <div className="relative bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[var(--glow)] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all overflow-hidden group">
       {movieData?.posterUrl && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-15 group-hover:opacity-25 transition-opacity">
-          <img src={movieData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150" />
+          <img loading="lazy" decoding="async" src={movieData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150"  onError={handleImgFallback}/>
           <div className="absolute inset-0 bg-gradient-to-r from-[color:var(--bg-base,#0a0a0d)] via-[color:var(--bg-base,#0a0a0d)]/85 to-transparent" />
         </div>
       )}
@@ -1083,7 +1084,7 @@ function MovieHistoryCard({
             className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red, var(--color-1, #e8384f))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
           >
             {movieData?.posterUrl ? (
-              <img src={movieData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
+              <img loading="lazy" decoding="async" src={movieData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
             ) : (
               <Film size={22} className="text-ink-600" />
             )}

@@ -15,6 +15,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import type { Series, Episode } from '../types';
+import { handleImgFallback } from '../lib/selectors';
 
 type SortMode = 'az' | 'recent' | 'rating';
 
@@ -1200,7 +1201,7 @@ export default function SeriesPage() {
                       className="svp-poster w-14 sm:w-16 aspect-[2/3] flex-shrink-0 flex items-center justify-center group/poster cursor-pointer focus:outline-none"
                     >
                       {s.posterUrl ? (
-                        <img src={s.posterUrl} alt={s.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300" />
+                        <img loading="lazy" decoding="async" src={s.posterUrl} alt={s.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
                       ) : (
                         <Tv size={16} className="svp-ic-muted" />
                       )}
@@ -1240,7 +1241,7 @@ export default function SeriesPage() {
                               onClick={(e) => e.stopPropagation()}
                               className="svp-link"
                             >
-                              {link.logo ? <img src={link.logo} alt="Platform" className="w-3 h-3 rounded-sm object-cover" /> : <Icon size={11} />}
+                              {link.logo ? <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-3 h-3 rounded-sm object-cover"  onError={handleImgFallback}/> : <Icon size={11} />}
                               <span>{link.text}</span>
                             </a>
                           );
@@ -1471,7 +1472,7 @@ export default function SeriesPage() {
                             className={`svp-modal-card ${isChecked ? 'svp-modal-card-on' : ''}`}
                           >
                             {s.posterUrl ? (
-                              <img src={s.posterUrl} alt="" className="w-full h-full object-cover" />
+                              <img loading="lazy" decoding="async" src={s.posterUrl} alt="" className="w-full h-full object-cover"  onError={handleImgFallback}/>
                             ) : (
                               <div className="w-full h-full flex items-center justify-center svp-ic-muted">
                                 <Tv size={24} />

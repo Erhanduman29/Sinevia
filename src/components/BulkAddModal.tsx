@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { normalize } from '../lib/utils';
+import { handleImgFallback } from '../lib/selectors';
 
 const MOVIE_GENRES = [
   { id: 28, name: 'Aksiyon' },
@@ -501,7 +502,7 @@ export default function BulkAddModal({
                           >
                             <div className="w-8 h-8 rounded-full overflow-hidden bg-ink-800 flex-shrink-0 border border-white/10 flex items-center justify-center">
                               {person.profile_path ? (
-                                <img src={`https://image.tmdb.org/t/p/w200${person.profile_path}`} alt={person.name} className="w-full h-full object-cover" />
+                                <img loading="lazy" decoding="async" src={`https://image.tmdb.org/t/p/w200${person.profile_path}`} alt={person.name} className="w-full h-full object-cover"  onError={handleImgFallback}/>
                               ) : (
                                 <User size={14} className={isSelected ? 'text-ink-950' : 'text-ink-400'} />
                               )}
@@ -596,7 +597,7 @@ export default function BulkAddModal({
                                 alt={title}
                                 className="w-full h-auto aspect-[2/3] object-cover"
                                 loading="lazy"
-                              />
+                               onError={handleImgFallback}/>
 
                               {status.exists ? (
                                 <div
@@ -697,7 +698,7 @@ export default function BulkAddModal({
                     <div className="flex flex-wrap gap-2 md:gap-3">
                       {cart.map((item) => (
                         <div key={item.id} className="relative group w-12 h-16 md:w-16 md:h-24 rounded-lg overflow-hidden border border-ink-700 shadow-md">
-                          <img src={`https://image.tmdb.org/t/p/w200${item.poster_path}`} alt="" className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={`https://image.tmdb.org/t/p/w200${item.poster_path}`} alt="" className="w-full h-full object-cover"  onError={handleImgFallback}/>
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleCartItem(item); }}
                             className="absolute inset-0 bg-red-500/90 items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex backdrop-blur-sm"
@@ -756,7 +757,7 @@ export default function BulkAddModal({
               <div className="flex flex-wrap justify-center gap-2 md:gap-3 p-3 md:p-4 bg-ink-900/50 rounded-2xl border border-ink-800/50">
                 {cart.map((item) => (
                   <div key={item.id} className="relative group w-12 h-16 md:w-16 md:h-24 rounded-lg overflow-hidden border border-ink-700 shadow-md">
-                    <img src={`https://image.tmdb.org/t/p/w200${item.poster_path}`} alt="" className="w-full h-full object-cover" />
+                    <img loading="lazy" decoding="async" src={`https://image.tmdb.org/t/p/w200${item.poster_path}`} alt="" className="w-full h-full object-cover"  onError={handleImgFallback}/>
                     <button
                       onClick={() => setCart(cart.filter((c) => c.id !== item.id))}
                       className="absolute inset-0 bg-red-500/80 items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex backdrop-blur-sm"

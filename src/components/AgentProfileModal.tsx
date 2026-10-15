@@ -11,6 +11,7 @@ import { ratingBgClass, formatDateShort } from '../lib/utils';
 import RatingModal from './RatingModal';
 import MediaDetailModal from './MediaDetailModal';
 import type { Movie } from '../types';
+import { handleImgFallback } from '../lib/selectors';
 
 interface AgentProfileModalProps {
   viewingProfileId: string;
@@ -429,11 +430,11 @@ export default function AgentProfileModal({
               {showcaseItems.map((item, i) => (
                 <div key={i} className="w-full h-full bg-ink-950 overflow-hidden">
                   {item?.posterUrl ? (
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={item.posterUrl}
                       alt=""
                       className="w-full h-full object-cover object-center filter blur-[1px] scale-110"
-                    />
+                     onError={handleImgFallback}/>
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-ink-900 to-ink-950" />
                   )}
@@ -647,11 +648,11 @@ export default function AgentProfileModal({
                         className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-gold-500/40 bg-ink-900 group shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer"
                       >
                         {item.posterUrl ? (
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={item.posterUrl}
                             alt={item.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
+                           onError={handleImgFallback}/>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-ink-800 to-ink-950 text-ink-500 p-3 text-center">
                             {item.type === 'series' ? (
@@ -849,7 +850,7 @@ export default function AgentProfileModal({
                       >
                         <div className="relative aspect-[2/3] bg-ink-900 overflow-hidden">
                           {item.item_poster ? (
-                            <img src={item.item_poster} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                            <img loading="lazy" decoding="async" src={item.item_poster} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"  onError={handleImgFallback}/>
                           ) : (
                             <Film size={20} className="text-ink-700 m-auto mt-8" />
                           )}
@@ -979,7 +980,7 @@ export default function AgentProfileModal({
                               >
                                 <div className="w-14 aspect-[2/3] bg-ink-950 rounded-xl overflow-hidden shrink-0 border border-ink-800 relative">
                                   {log.item_poster ? (
-                                    <img src={log.item_poster} alt="" className="w-full h-full object-cover" />
+                                    <img loading="lazy" decoding="async" src={log.item_poster} alt="" className="w-full h-full object-cover"  onError={handleImgFallback}/>
                                   ) : (
                                     <Film size={18} className="text-ink-600 m-auto mt-6" />
                                   )}
@@ -1210,11 +1211,11 @@ export default function AgentProfileModal({
                       className="w-16 sm:w-20 flex-shrink-0 aspect-[2/3] bg-ink-900 rounded-xl overflow-hidden flex items-center justify-center border border-ink-700/60 shadow-md relative group/poster cursor-pointer self-start md:self-center"
                     >
                       {displayPoster ? (
-                        <img
+                        <img loading="lazy" decoding="async"
                           src={displayPoster}
                           alt={displayTitle}
                           className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"
-                        />
+                         onError={handleImgFallback}/>
                       ) : (
                         <ImageIcon size={20} className="text-ink-600" />
                       )}
@@ -1303,7 +1304,7 @@ export default function AgentProfileModal({
                               className="inline-flex items-center gap-1 bg-ink-800/60 hover:bg-gold-900/40 text-gold-400/90 hover:text-gold-300 border border-gold-500/20 hover:border-gold-500/40 px-2 py-0.5 rounded text-[10px] font-semibold transition-all"
                             >
                               {link.logo ? (
-                                <img src={link.logo} alt="Platform" className="w-3 h-3 rounded-[2px] object-cover" />
+                                <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-3 h-3 rounded-[2px] object-cover"  onError={handleImgFallback}/>
                               ) : (
                                 <Icon size={10} />
                               )}
