@@ -4,7 +4,7 @@ import {
   Shuffle, Tv, Sparkles, Trophy, Star, Search,
   Clock, Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
   ChevronRight, Target, Film, RefreshCw, Users, Lock,
-  Timer, Play, Pause, X, Compass, ShieldAlert, Copy, Crown
+  Timer, Play, Pause, X, Compass, ShieldAlert, Copy, Crown, Swords
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
@@ -17,13 +17,14 @@ import PickModal from '../components/PickModal';
 import RatingModal from '../components/RatingModal';
 import BulkAddModal from '../components/BulkAddModal';
 import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
+import CalibrationDuelModal from '../components/CalibrationDuelModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
 import { RANK_TIERS } from '../lib/rankTiers';
 
 // ============================================================
-// PREMIUM HOME STILLERİ (Masaüstü Monolith + Mobil Kompakt)
+// PREMIUM HOME STILLERİ (Masaüstü Monolith + Mobil Ultra-Kompakt)
 // ============================================================
 const HOME_PREMIUM_CSS = `
 .hn-sec{display:flex;flex-direction:column;gap:16px}
@@ -47,16 +48,24 @@ const HOME_PREMIUM_CSS = `
 }
 
 /* ============================================================
-   01 · SİNEVİA KARTI (Geliştirilmiş Monolith Mimari)
+   01 · SİNEVİA KARTI (Masaüstü Rafine Monolith Mimari)
    ============================================================ */
 .snv-id-card{
   position:relative;
-  border-radius:22px;
-  background:#0a0a0e;
-  border:1px solid rgba(255,255,255,.1);
-  box-shadow:0 30px 80px -30px rgba(0,0,0,.95);
+  border-radius:24px;
+  background:#0a0a0f;
+  border:1px solid rgba(255,255,255,.11);
+  box-shadow:0 34px 90px -32px rgba(0,0,0,.96), inset 0 1px 0 rgba(255,255,255,.08);
   overflow:hidden;
   isolation:isolate;
+}
+.snv-id-card::before{
+  content:'';
+  position:absolute;
+  top:0;left:8%;right:8%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);
+  pointer-events:none;
+  z-index:2;
 }
 .snv-id-backdrop{
   position:absolute;
@@ -64,8 +73,8 @@ const HOME_PREMIUM_CSS = `
   z-index:-2;
   display:grid;
   grid-template-columns:repeat(4,1fr);
-  opacity:.11;
-  filter:grayscale(35%) contrast(115%);
+  opacity:.12;
+  filter:grayscale(30%) contrast(115%);
   pointer-events:none;
 }
 .snv-id-backdrop img{
@@ -78,9 +87,10 @@ const HOME_PREMIUM_CSS = `
   inset:0;
   z-index:-1;
   background:
-    radial-gradient(700px 280px at 0% 0%, rgba(232,56,79,.14), transparent 70%),
-    linear-gradient(90deg, #0a0a0e 22%, rgba(10,10,14,.86) 65%, #0a0a0e 100%),
-    linear-gradient(180deg, rgba(10,10,14,.4) 0%, #0a0a0e 95%);
+    radial-gradient(760px 320px at 0% 0%, rgba(232,56,79,.15), transparent 70%),
+    radial-gradient(640px 280px at 100% 0%, rgba(255,255,255,.035), transparent 70%),
+    linear-gradient(90deg, #0a0a0f 20%, rgba(10,10,15,.85) 62%, #0a0a0f 100%),
+    linear-gradient(180deg, rgba(10,10,15,.35) 0%, #0a0a0f 92%);
   pointer-events:none;
 }
 
@@ -90,7 +100,7 @@ const HOME_PREMIUM_CSS = `
   align-items:center;
   justify-content:space-between;
   gap:32px;
-  padding:36px 42px 32px;
+  padding:34px 40px 30px;
   flex-wrap:wrap;
 }
 .snv-id-left{
@@ -102,44 +112,47 @@ const HOME_PREMIUM_CSS = `
 }
 .snv-id-monogram{
   position:relative;
-  width:92px;
-  height:92px;
+  width:94px;
+  height:94px;
   flex-shrink:0;
   display:grid;
   place-items:center;
+  filter:drop-shadow(0 12px 24px rgba(0,0,0,.6));
 }
 .snv-id-monogram svg{
   position:absolute;
   inset:0;
-  width:92px;
-  height:92px;
+  width:94px;
+  height:94px;
   transform:rotate(-90deg);
 }
 .snv-id-letter{
   width:76px;
   height:76px;
   border-radius:50%;
-  background:rgba(255,255,255,.03);
-  border:1px solid rgba(255,255,255,.09);
+  background:radial-gradient(circle at 30% 25%, rgba(255,255,255,.08), rgba(14,14,20,.95) 75%);
+  border:1px solid rgba(255,255,255,.12);
   display:grid;
   place-items:center;
   font-size:32px;
-  font-weight:800;
+  font-weight:900;
   color:#fff;
   letter-spacing:-.03em;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.15);
 }
 .snv-id-lv-tag{
   position:absolute;
-  bottom:-4px;
-  background:#14141c;
-  border:1px solid rgba(255,255,255,.2);
+  bottom:-5px;
+  background:linear-gradient(135deg,#1e1e2a,#111118);
+  border:1px solid rgba(255,255,255,.24);
   color:#fff;
   font-size:10px;
   font-variant-numeric:tabular-nums;
-  font-weight:700;
-  letter-spacing:.12em;
-  padding:2.5px 10px;
+  font-weight:800;
+  letter-spacing:.14em;
+  padding:2.5px 11px;
   border-radius:99px;
+  box-shadow:0 6px 14px rgba(0,0,0,.75);
 }
 
 .snv-id-titles{
@@ -167,10 +180,10 @@ const HOME_PREMIUM_CSS = `
   display:inline-flex;
   align-items:center;
   gap:6px;
-  background:rgba(255,255,255,.04);
-  border:1px solid rgba(255,255,255,.09);
-  padding:3px 9px;
-  border-radius:6px;
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.1);
+  padding:3.5px 10px;
+  border-radius:7px;
   font-family:'JetBrains Mono',monospace;
   font-size:10.5px;
   letter-spacing:.1em;
@@ -180,7 +193,8 @@ const HOME_PREMIUM_CSS = `
 }
 .snv-id-code-btn:hover{
   color:#fff;
-  border-color:rgba(255,255,255,.25);
+  border-color:rgba(255,255,255,.28);
+  background:rgba(255,255,255,.08);
 }
 .snv-id-name{
   font-family:inherit;
@@ -188,7 +202,10 @@ const HOME_PREMIUM_CSS = `
   font-weight:900;
   letter-spacing:-.035em;
   line-height:1.02;
-  color:#fff;
+  background:linear-gradient(100deg,#ffffff 45%,#b4b4be 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
   margin:2px 0;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -205,21 +222,21 @@ const HOME_PREMIUM_CSS = `
 .snv-id-right{
   display:flex;
   align-items:center;
-  gap:30px;
+  gap:28px;
   flex-shrink:0;
 }
 .snv-id-readout-divider{
   width:1px;
-  height:58px;
-  background:rgba(255,255,255,.09);
+  height:56px;
+  background:linear-gradient(180deg,transparent,rgba(255,255,255,.14),transparent);
 }
 
-/* Büyütülmüş Rozet Vitrin Bloğu (Serinin Yanında) */
+/* Büyütülmüş Rozet Vitrin Bloğu */
 .snv-badge-showcase{
   display:flex;
   align-items:center;
   gap:15px;
-  background:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+  background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
   border:1px solid rgba(255,255,255,.12);
   padding:11px 18px 11px 12px;
   border-radius:16px;
@@ -228,10 +245,11 @@ const HOME_PREMIUM_CSS = `
   text-align:left;
   font-family:inherit;
   color:inherit;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
 }
 .snv-badge-showcase:hover{
   border-color:var(--red,var(--color-1,#e8384f));
-  background:linear-gradient(135deg,rgba(232,56,79,.13),rgba(255,255,255,.025));
+  background:linear-gradient(135deg,rgba(232,56,79,.14),rgba(255,255,255,.025));
   transform:translateY(-2px);
   box-shadow:0 14px 30px -14px rgba(232,56,79,.5);
 }
@@ -239,14 +257,14 @@ const HOME_PREMIUM_CSS = `
   width:54px;
   height:54px;
   border-radius:14px;
-  background:radial-gradient(circle at 30% 25%,rgba(232,56,79,.24),rgba(10,10,14,.92));
-  border:1px solid rgba(232,56,79,.42);
+  background:radial-gradient(circle at 30% 25%,rgba(232,56,79,.26),rgba(10,10,14,.94));
+  border:1px solid rgba(232,56,79,.45);
   display:grid;
   place-items:center;
   font-size:26px;
   color:var(--red-hi,var(--color-2,#ff6b7a));
   flex-shrink:0;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2);
 }
 .snv-badge-emblem.empty{
   background:rgba(255,255,255,.03);
@@ -333,170 +351,260 @@ const HOME_PREMIUM_CSS = `
   margin-top:4px;
 }
 
-/* 2. KATMAN: LAZER XP İLERLEME ÇİZGİSİ (2px) */
+/* 2. KATMAN: LAZER XP İLERLEME ÇİZGİSİ (3px + Parlak Uç) */
 .snv-id-laser-wrap{
   position:relative;
-  height:2px;
+  height:3px;
   background:rgba(255,255,255,.07);
   width:100%;
+  overflow:hidden;
 }
 .snv-id-laser-fill{
   position:absolute;
   top:0;bottom:0;left:0;
-  background:linear-gradient(90deg,transparent,var(--red,var(--color-1,#e8384f)) 30%,var(--red-hi,var(--color-2,#ff6b7a)));
-  box-shadow:0 0 14px var(--red,var(--color-1,#e8384f));
+  background:linear-gradient(90deg,rgba(232,56,79,.35),var(--red,var(--color-1,#e8384f)) 45%,var(--red-hi,var(--color-2,#ff6b7a)) 92%,#ffffff 100%);
+  box-shadow:0 0 18px var(--red,var(--color-1,#e8384f));
   transition:width 1s cubic-bezier(.2,.8,.2,1);
 }
 
-/* 3. KATMAN: ALT İSTATİSTİK + BÜYÜTÜLMÜŞ BAŞARIMLAR + GELİŞMİŞ UNVAN EVRİMİ */
+/* 3. KATMAN: MASAÜSTÜ YENİLENMİŞ ALT KONSOL */
 .snv-id-footer{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:28px;
-  padding:22px 42px;
-  background:rgba(255,255,255,.015);
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  align-items:stretch;
+  gap:0;
+  padding:0;
+  background:linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(0,0,0,.28) 100%);
 }
+
+/* Sol Konsol: 5'li Kariyer İstatistikleri */
 .snv-id-metrics{
-  display:flex;
+  display:grid;
+  grid-template-columns:repeat(5, minmax(74px, auto));
   align-items:center;
-  gap:32px;
-  flex-wrap:wrap;
+  padding:18px 28px;
+  border-right:1px solid rgba(255,255,255,.08);
+  gap:0;
 }
 .snv-id-mitem{
   display:flex;
-  align-items:baseline;
-  gap:8px;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:3px;
+  padding:2px 18px;
+  border-left:1px solid rgba(255,255,255,.07);
+}
+.snv-id-mitem:first-child{
+  padding-left:0;
+  border-left:0;
+}
+.snv-id-mitem:last-child{
+  padding-right:0;
 }
 .snv-id-mitem b{
-  font-size:22px;
+  font-size:23px;
   font-variant-numeric:tabular-nums;
-  font-weight:800;
-  letter-spacing:-.02em;
+  font-weight:900;
+  letter-spacing:-.03em;
+  line-height:1.05;
   color:#fff;
 }
 .snv-id-mitem span{
-  font-size:11px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9.5px;
   font-weight:700;
-  letter-spacing:.14em;
+  letter-spacing:.15em;
   text-transform:uppercase;
   color:var(--muted,#9a9a96);
 }
 
+/* Sağ Konsol: Kademeler + Unvan Evrimi */
 .snv-id-right-foot{
-  display:flex;
+  display:grid;
+  grid-template-columns:1fr minmax(330px, 390px);
   align-items:center;
-  gap:24px;
-  flex-wrap:wrap;
+  gap:0;
+  min-width:0;
 }
 
-/* Büyütülmüş Başarım Kademeleri */
+/* Orta Modül: Kademe Koleksiyon Vitrini */
 .snv-id-tiers{
-  display:flex;
+  display:grid;
+  grid-template-columns:repeat(6, minmax(0, 1fr));
   align-items:center;
   gap:8px;
-  flex-wrap:wrap;
+  padding:16px 24px;
 }
 .snv-id-tier{
-  display:inline-flex;
+  display:flex;
+  flex-direction:column;
   align-items:center;
-  gap:7px;
-  padding:7px 12px;
-  border-radius:10px;
+  justify-content:center;
+  gap:4px;
+  padding:9px 8px;
+  border-radius:12px;
   background:rgba(255,255,255,.025);
   border:1px solid rgba(255,255,255,.07);
   color:inherit;
   font-family:inherit;
   cursor:pointer;
-  transition:.2s;
+  transition:.22s cubic-bezier(.2,.7,.3,1);
+  position:relative;
+  overflow:hidden;
 }
 .snv-id-tier:hover{
-  background:rgba(255,255,255,.07);
-  border-color:rgba(255,255,255,.18);
-  transform:translateY(-1px);
+  background:rgba(255,255,255,.065);
+  border-color:rgba(255,255,255,.2);
+  transform:translateY(-2px);
+  box-shadow:0 10px 22px -12px rgba(0,0,0,.85);
+}
+.snv-id-tier-top{
+  display:flex;
+  align-items:center;
+  gap:6px;
 }
 .snv-id-tier i{
-  width:8px;
-  height:8px;
+  width:7px;
+  height:7px;
   border-radius:50%;
+  flex-shrink:0;
 }
 .snv-id-tier b{
-  font-size:15px;
+  font-size:16px;
   font-variant-numeric:tabular-nums;
-  font-weight:800;
+  font-weight:900;
   color:#fff;
   line-height:1;
 }
 .snv-id-tier span{
-  font-size:11.5px;
-  font-weight:700;
-  letter-spacing:.08em;
+  font-size:9.5px;
+  font-weight:800;
+  letter-spacing:.1em;
   text-transform:uppercase;
-  color:#d4d4d8;
+  color:#c4c4cc;
 }
 
-/* Geliştirilmiş Sonraki Unvan & Evrim Kartı */
+/* Sağ Modül: Yenilenmiş Unvan Evrim Kartı */
 .snv-rank-evolution{
+  height:100%;
   display:flex;
   flex-direction:column;
-  gap:7px;
-  min-width:270px;
-  padding:11px 16px;
-  border-radius:14px;
-  background:linear-gradient(135deg,rgba(232,56,79,.1),rgba(255,255,255,.02));
-  border:1px solid rgba(232,56,79,.3);
+  justify-content:center;
+  gap:9px;
+  padding:16px 28px;
+  border-left:1px solid rgba(255,255,255,.08);
+  background:
+    radial-gradient(260px 120px at 100% 50%, rgba(232,56,79,.13), transparent 75%),
+    rgba(255,255,255,.015);
 }
 .snv-re-top{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
+  gap:10px;
 }
 .snv-re-tag{
   display:inline-flex;
   align-items:center;
-  gap:5px;
+  gap:6px;
   font-family:'JetBrains Mono',monospace;
-  font-size:9px;
+  font-size:9.5px;
   font-weight:800;
   letter-spacing:.16em;
   text-transform:uppercase;
   color:var(--red-hi,var(--color-2,#ff6b7a));
 }
 .snv-re-rem{
-  font-size:10px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9.5px;
   font-variant-numeric:tabular-nums;
   font-weight:700;
-  color:#fff;
-  background:rgba(232,56,79,.22);
-  border:1px solid rgba(232,56,79,.4);
-  padding:2px 8px;
+  color:#e4e4e7;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  padding:2.5px 9px;
   border-radius:99px;
+  white-space:nowrap;
 }
 .snv-re-Flow{
   display:flex;
   align-items:center;
-  gap:8px;
-  font-size:13px;
+  justify-content:space-between;
+  gap:10px;
+}
+.snv-re-node{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+}
+.snv-re-node-ic{
+  width:24px;
+  height:24px;
+  border-radius:7px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.1);
+  display:grid;
+  place-items:center;
+  color:var(--muted,#9a9a96);
+  flex-shrink:0;
+}
+.snv-re-node.target .snv-re-node-ic{
+  background:rgba(232,56,79,.16);
+  border-color:rgba(232,56,79,.4);
+  color:var(--red-hi,var(--color-2,#ff6b7a));
 }
 .snv-re-cur{
   color:var(--muted,#9a9a96);
-  font-weight:600;
+  font-size:12.5px;
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.snv-re-connector{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  position:relative;
+}
+.snv-re-connector::before{
+  content:'';
+  position:absolute;
+  left:0;right:0;
+  height:1px;
+  background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(232,56,79,.5),rgba(255,255,255,.08));
 }
 .snv-re-arrow{
+  position:relative;
+  z-index:1;
+  background:#111118;
+  padding:0 3px;
   color:var(--red-hi,var(--color-2,#ff6b7a));
   flex-shrink:0;
 }
 .snv-re-next{
   color:#fff;
-  font-weight:800;
+  font-size:13.5px;
+  font-weight:900;
   letter-spacing:-.01em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.snv-re-bar-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
 .snv-re-bar{
-  height:4px;
+  flex:1;
+  height:5px;
   border-radius:99px;
-  background:rgba(255,255,255,.08);
+  background:rgba(255,255,255,.07);
   overflow:hidden;
   position:relative;
 }
@@ -505,7 +613,15 @@ const HOME_PREMIUM_CSS = `
   inset:0 auto 0 0;
   border-radius:99px;
   background:linear-gradient(90deg,var(--red,var(--color-1,#e8384f)),var(--red-hi,var(--color-2,#ff6b7a)));
+  box-shadow:0 0 10px var(--red,var(--color-1,#e8384f));
   transition:width .8s ease;
+}
+.snv-re-pct{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  font-weight:800;
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+  flex-shrink:0;
 }
 
 /* ---------- HIZLI ERİŞİM + ZAMANLAYICI ---------- */
@@ -711,15 +827,22 @@ const HOME_PREMIUM_CSS = `
 .hn-bento-card p{font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);margin:0}
 
 /* ============================================================
-   RESPONSIVE & MOBİL KOMPAKT OPTİMİZASYON
+   RESPONSIVE & MOBİL ULTRA-KOMPAKT OPTİMİZASYON
    ============================================================ */
+@media (max-width:1280px) and (min-width:768px){
+  .snv-id-footer{grid-template-columns:1fr}
+  .snv-id-metrics{border-right:0;border-bottom:1px solid rgba(255,255,255,.08);justify-content:space-between}
+}
 @media (max-width:1180px){
   .snv-id-right{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)}
   .snv-id-readout{align-items:flex-start}
 }
-@media (max-width:1080px){
+@media (max-width:1080px) and (min-width:768px){
   .snv-id-main{padding:28px;gap:24px}
-  .snv-id-footer{padding:18px 28px}
+  .snv-id-right-foot{grid-template-columns:1fr}
+  .snv-rank-evolution{border-left:0;border-top:1px solid rgba(255,255,255,.08)}
+}
+@media (max-width:1080px){
   .hp-recent{grid-template-columns:repeat(3,1fr)}
   .hn-spotlight{grid-template-columns:300px minmax(0,1fr)}
   .hn-sp-poster{width:300px}
@@ -728,158 +851,177 @@ const HOME_PREMIUM_CSS = `
   .hn-panel + .hn-panel{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
 }
 @media (max-width:767px){
-  /* Bölüm Başlıkları */
-  .hn-sec{gap:10px}
-  .hn-sec-t{gap:8px;flex-wrap:wrap}
-  .hn-sec-t h2{font-size:13.5px}
-  .hn-sec-t .ln{min-width:16px}
-  .hn-idx{padding:3px 7px;font-size:8.5px;border-radius:6px}
-  .hn-more{padding:4px 2px;font-size:9.5px}
+  /* Bölüm Başlıkları — Zarif ve Küçük */
+  .hn-sec{gap:8px}
+  .hn-sec-t{gap:7px;flex-wrap:wrap}
+  .hn-sec-t h2{font-size:12.5px;letter-spacing:0}
+  .hn-sec-t .ln{min-width:14px}
+  .hn-idx{padding:2.5px 6px;font-size:8px;border-radius:5px;letter-spacing:.14em}
+  .hn-more{padding:2px 0;font-size:8.5px;letter-spacing:.1em}
 
-  /* Genel Mobil Butonlar */
-  .hn-btn{padding:8px 11px;font-size:9.5px;letter-spacing:.06em;gap:4px;min-height:36px;border-radius:10px;justify-content:center}
-  .hn-planned{padding:8px 11px;font-size:9.5px;letter-spacing:.06em;border-radius:10px}
+  /* Genel Mobil Butonlar & Hızlı Erişim */
+  .hn-btn{padding:7px 10px;font-size:9px;letter-spacing:.05em;gap:4px;min-height:34px;border-radius:9px;justify-content:center}
+  .hn-planned{padding:7px 10px;font-size:9px;letter-spacing:.05em;min-height:34px;border-radius:9px}
+  .hn-action{min-height:34px;padding:7px 8px;font-size:9px}
 
-  /* 01 · SİNEVİA KARTI — MOBİLDE MİNİMAL & KOMPAKT */
-  .snv-id-card{border-radius:16px}
-  .snv-id-main{padding:14px;gap:12px}
-  .snv-id-left{gap:12px;width:100%}
-  .snv-id-monogram{width:56px;height:56px}
-  .snv-id-monogram svg{width:56px;height:56px}
-  .snv-id-letter{width:46px;height:46px;font-size:19px}
-  .snv-id-lv-tag{font-size:8px;padding:1.5px 7px;bottom:-3px}
-  .snv-id-titles{gap:2px}
-  .snv-id-kicker{font-size:9px;letter-spacing:.12em;gap:6px}
-  .snv-id-code-btn{font-size:9px;padding:2px 6px}
-  .snv-id-name{font-size:20px;line-height:1.1;margin:1px 0}
+  /* 01 · SİNEVİA KARTI — MOBİLDE MİNİMAL & ZARİF */
+  .snv-id-card{border-radius:14px}
+  .snv-id-main{padding:11px 12px;gap:10px}
+  .snv-id-left{gap:10px;width:100%}
+  .snv-id-monogram{width:48px;height:48px}
+  .snv-id-monogram svg{width:48px;height:48px}
+  .snv-id-letter{width:39px;height:39px;font-size:16px}
+  .snv-id-lv-tag{font-size:7.5px;padding:1px 6px;bottom:-3px;letter-spacing:.08em}
+  .snv-id-titles{gap:1px}
+  .snv-id-kicker{font-size:8px;letter-spacing:.1em;gap:5px}
+  .snv-id-code-btn{font-size:8px;padding:1.5px 5px;border-radius:5px}
+  .snv-id-name{font-size:17.5px;line-height:1.1;margin:1px 0}
   .snv-id-submeta{display:none}
 
   .snv-id-right{
     width:100%;
     display:grid;
     grid-template-columns:1fr 1fr;
-    gap:8px;
-    padding-top:10px;
-    border-top:1px solid rgba(255,255,255,.07);
+    gap:6px;
+    padding-top:8px;
+    border-top:1px solid rgba(255,255,255,.06);
   }
   .snv-id-readout-divider{display:none}
   .snv-badge-showcase{
     grid-column:1 / -1;
-    padding:8px 11px;
-    gap:10px;
-    border-radius:12px;
+    padding:6px 9px;
+    gap:8px;
+    border-radius:10px;
   }
-  .snv-badge-emblem{width:36px;height:36px;border-radius:9px;font-size:17px}
-  .snv-badge-kicker{font-size:8px;letter-spacing:.12em}
-  .snv-badge-title{font-size:12.5px;max-width:220px}
+  .snv-badge-emblem{width:30px;height:30px;border-radius:8px;font-size:14px}
+  .snv-badge-kicker{font-size:7.5px;letter-spacing:.1em}
+  .snv-badge-title{font-size:11px;max-width:210px}
   .snv-badge-sub{display:none}
 
   .snv-id-readout{
     align-items:flex-start;
-    background:rgba(255,255,255,.025);
-    border:1px solid rgba(255,255,255,.07);
-    padding:8px 11px;
-    border-radius:11px;
+    background:rgba(255,255,255,.022);
+    border:1px solid rgba(255,255,255,.06);
+    padding:6px 9px;
+    border-radius:9px;
   }
-  .snv-id-readout-label{font-size:8px;letter-spacing:.12em;margin-bottom:2px}
-  .snv-id-readout-val b{font-size:19px}
-  .snv-id-readout-val em{font-size:9px}
-  .snv-id-readout-sub{font-size:9px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .snv-id-readout-label{font-size:7.5px;letter-spacing:.1em;margin-bottom:1px}
+  .snv-id-readout-val{gap:4px}
+  .snv-id-readout-val b{font-size:16px}
+  .snv-id-readout-val em{font-size:8px;letter-spacing:.08em}
+  .snv-id-readout-sub{font-size:8px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 
-  .snv-id-footer{padding:12px 14px;gap:10px}
+  .snv-id-footer{display:flex;flex-wrap:wrap;padding:9px 12px;gap:8px}
   .snv-id-metrics{
     width:100%;
     display:grid;
     grid-template-columns:repeat(5,1fr);
-    gap:4px;
+    gap:3.5px;
+    padding:0;
+    border-right:0;
     text-align:center;
   }
   .snv-id-mitem{
     flex-direction:column;
     align-items:center;
-    gap:2px;
-    background:rgba(255,255,255,.02);
+    gap:1px;
+    background:rgba(255,255,255,.018);
     border:1px solid rgba(255,255,255,.05);
-    padding:6px 2px;
-    border-radius:9px;
+    padding:4.5px 2px;
+    border-radius:7px;
   }
-  .snv-id-mitem b{font-size:14px;line-height:1.1}
-  .snv-id-mitem span{font-size:7.5px;letter-spacing:.08em}
+  .snv-id-mitem:first-child{border-left:1px solid rgba(255,255,255,.05);padding-left:2px}
+  .snv-id-mitem:last-child{padding-right:2px}
+  .snv-id-mitem b{font-size:12.5px;line-height:1.1}
+  .snv-id-mitem span{font-size:6.8px;letter-spacing:.06em}
 
-  .snv-id-right-foot{width:100%;gap:10px}
+  .snv-id-right-foot{display:flex;flex-wrap:wrap;width:100%;gap:8px}
   .snv-id-tiers{
     width:100%;
     display:grid;
     grid-template-columns:repeat(6,1fr);
-    gap:4px;
+    gap:3.5px;
+    padding:0;
   }
   .snv-id-tier{
     flex-direction:column;
     justify-content:center;
-    gap:2px;
-    padding:5px 2px;
-    border-radius:8px;
+    gap:1.5px;
+    padding:4px 2px;
+    border-radius:7px;
     text-align:center;
   }
-  .snv-id-tier i{width:5px;height:5px}
-  .snv-id-tier b{font-size:11.5px}
-  .snv-id-tier span{font-size:7.5px;letter-spacing:.04em}
+  .snv-id-tier-top{flex-direction:row;gap:3.5px}
+  .snv-id-tier i{width:4.5px;height:4.5px}
+  .snv-id-tier b{font-size:10.5px}
+  .snv-id-tier span{font-size:6.8px;letter-spacing:.03em}
 
   .snv-rank-evolution{
     width:100%;
     min-width:0;
-    padding:9px 12px;
-    gap:5px;
-    border-radius:11px;
+    padding:7px 10px;
+    gap:4px;
+    border-radius:9px;
+    background:linear-gradient(135deg,rgba(232,56,79,.09),rgba(255,255,255,.015));
+    border:1px solid rgba(232,56,79,.26);
   }
-  .snv-re-tag{font-size:8px}
-  .snv-re-rem{font-size:8.5px;padding:1.5px 6px}
-  .snv-re-Flow{font-size:11px;gap:6px}
+  .snv-re-node-ic{display:none}
+  .snv-re-connector::before{display:none}
+  .snv-re-connector{flex:0 0 auto;min-width:0}
+  .snv-re-arrow{background:transparent;padding:0}
+  .snv-re-Flow{justify-content:flex-start;font-size:10px;gap:5px}
+  .snv-re-cur,.snv-re-next{font-size:10px}
+  .snv-re-tag{font-size:7.5px;letter-spacing:.12em}
+  .snv-re-rem{font-size:7.5px;padding:1px 6px}
+  .snv-re-bar{height:3.5px}
+  .snv-re-pct{font-size:8.5px}
 
   /* Canlı Sayaç */
-  .hn-timer{padding:12px 14px;gap:10px}
-  .hn-timer-ic{width:36px;height:36px;border-radius:10px}
+  .hn-timer{padding:10px 12px;gap:8px;border-radius:14px}
+  .hn-timer-ic{width:32px;height:32px;border-radius:9px}
+  .hn-timer-status{font-size:9.5px;letter-spacing:.1em}
+  .hn-timer-sub{font-size:10.5px;margin-top:3px}
   .hn-timer-tx{flex:1 1 100%;min-width:0}
-  .hn-timer-btns{margin-left:0;width:100%}
-  .hn-timer-btns .hn-btn{flex:1}
-  .hn-timer-x{width:36px;height:36px;flex-shrink:0}
+  .hn-timer-btns{margin-left:0;width:100%;gap:6px}
+  .hn-timer-btns .hn-btn{flex:1;min-height:31px;padding:6px 8px;font-size:8.5px}
+  .hn-timer-x{width:31px;height:31px;border-radius:8px;flex-shrink:0}
 
   /* 02 · GÜNÜN SİNEMA KARTI — MOBİLDE YAN YANA KOMPAKT & MİNİMAL */
   .hn-spotlight{
-    grid-template-columns:96px minmax(0,1fr);
-    gap:12px;
-    padding:13px;
-    border-radius:16px;
+    grid-template-columns:84px minmax(0,1fr);
+    gap:10px;
+    padding:11px;
+    border-radius:14px;
     align-items:start;
   }
   .hn-sp-poster{
-    width:96px;
+    width:84px;
     aspect-ratio:2/3;
-    border-radius:10px;
+    border-radius:9px;
     border:1px solid rgba(255,255,255,.14);
     margin:0;
   }
   .hn-filmbadge{display:none}
-  .hn-rate{top:6px;right:6px;font-size:10px;padding:2px 6px;border-radius:6px}
-  .hn-big-letter{font-size:48px}
+  .hn-rate{top:5px;right:5px;font-size:9px;padding:1.5px 5px;border-radius:5px}
+  .hn-big-letter{font-size:40px}
   .hn-sp-body{
     display:contents;
   }
   .hn-sp-head{
     grid-column:2;
-    gap:6px;
+    gap:4.5px;
     min-width:0;
   }
-  .hn-sp-kick{font-size:8px;letter-spacing:.15em}
-  .hn-sp-body h2{font-size:16.5px;line-height:1.12;letter-spacing:-.02em}
-  .hn-meta-chips{gap:4px}
-  .hn-meta-chips span{font-size:8px;padding:3px 7px;letter-spacing:.04em}
-  .hn-genre-row{gap:4px}
-  .hn-genre{font-size:7.5px;padding:3px 7px;letter-spacing:.08em}
+  .hn-sp-kick{font-size:7.5px;letter-spacing:.12em}
+  .hn-sp-body h2{font-size:15px;line-height:1.12;letter-spacing:-.02em}
+  .hn-meta-chips{gap:3.5px}
+  .hn-meta-chips span{font-size:7.5px;padding:2.5px 6px;letter-spacing:.03em}
+  .hn-genre-row{gap:3.5px}
+  .hn-genre{font-size:7px;padding:2.5px 6px;letter-spacing:.06em}
   .hn-gdesc{
     grid-column:1 / -1;
-    font-size:11.5px;
-    line-height:1.5;
+    font-size:11px;
+    line-height:1.45;
     display:-webkit-box;
     -webkit-line-clamp:3;
     -webkit-box-orient:vertical;
@@ -889,83 +1031,96 @@ const HOME_PREMIUM_CSS = `
     grid-column:1 / -1;
     display:grid;
     grid-template-columns:repeat(2,1fr);
-    gap:6px;
+    gap:5px;
     padding-top:2px;
     margin-top:0;
   }
   .hn-btnrow .hn-btn,
   .hn-btnrow .hn-planned{
-    padding:7px 9px;
-    font-size:9px;
-    min-height:33px;
-    border-radius:9px;
-    letter-spacing:.05em;
+    padding:6px 8px;
+    font-size:8.5px;
+    min-height:30px;
+    border-radius:8px;
+    letter-spacing:.04em;
     justify-content:center;
     width:100%;
   }
   .hn-links{
     grid-column:1 / -1;
-    gap:5px;
+    gap:4px;
   }
-  .hn-link-chip{font-size:8px;padding:4px 8px;letter-spacing:.05em;gap:5px}
-  .hn-link-logo{width:11px;height:11px}
+  .hn-link-chip{font-size:7.5px;padding:3.5px 7px;letter-spacing:.04em;gap:4px}
+  .hn-link-logo{width:10px;height:10px}
 
   /* 03 · Diziler */
-  .hn-scard{padding:12px;gap:11px;border-radius:16px}
-  .hn-sposter{width:68px}
-  .hn-sinfo h4{font-size:13px}
-  .hn-next-ep{font-size:8.5px;padding:4px 8px;margin-top:5px}
-  .hn-prog-lab{font-size:8.5px;margin-top:10px}
-  .hn-rate-btn{margin-top:10px;padding:8px;font-size:9.5px}
+  .hn-scard{padding:10px;gap:10px;border-radius:14px}
+  .hn-sposter{width:62px;border-radius:9px}
+  .hn-ep{font-size:7.5px;padding:2.5px 6px;margin:5px;border-radius:5px}
+  .hn-sinfo h4{font-size:12px}
+  .hn-next-ep{font-size:8px;padding:3px 7px;margin-top:4px}
+  .hn-prog-lab{font-size:8px;margin-top:8px}
+  .hn-prog{height:6px;margin-top:4px}
+  .hn-rate-btn{margin-top:8px;padding:6.5px;font-size:8.5px;border-radius:8px;letter-spacing:.08em}
 
   /* 04 · Rozetler + Ağ */
-  .hn-panel{padding:16px 14px}
-  .hn-panel h3{font-size:13px;margin-bottom:12px;gap:8px}
-  .hn-ach{padding:12px;margin-bottom:9px;border-radius:13px}
-  .hn-ach .top{gap:10px}
-  .hn-ai{width:36px;height:36px;border-radius:10px}
-  .hn-an b{font-size:11.5px}
-  .hn-an span{font-size:10px}
-  .hn-axp{font-size:9px;padding:4px 8px}
-  .hn-net-note{font-size:11px;padding:10px 12px;margin-bottom:12px}
-  .hn-agent{padding:9px 11px;gap:11px;border-radius:13px}
-  .hn-agent-poster{width:40px;border-radius:7px}
-  .hn-agent-title{font-size:12px}
-  .hn-agent-who b{font-size:10px}
+  .hn-duo{border-radius:14px}
+  .hn-panel{padding:13px 12px}
+  .hn-panel h3{font-size:12px;margin-bottom:10px;gap:6px}
+  .hn-di{width:7px;height:7px}
+  .hn-ach{padding:10px;margin-bottom:8px;border-radius:11px}
+  .hn-ach .top{gap:9px}
+  .hn-ai{width:32px;height:32px;border-radius:9px}
+  .hn-an b{font-size:11px}
+  .hn-an span{font-size:9.5px}
+  .hn-axp{font-size:8.5px;padding:3px 7px}
+  .hn-pl{font-size:8px;margin-top:8px}
+  .hn-pt{height:6px;margin-top:4px}
+  .hn-net-note{font-size:10.5px;line-height:1.5;padding:8px 10px;margin-bottom:10px;border-radius:10px}
+  .hn-agents{gap:7px}
+  .hn-agent{padding:8px 9px;gap:9px;border-radius:11px}
+  .hn-agent-poster{width:36px;border-radius:6px}
+  .hn-agent-avatar-mini{width:15px;height:15px;font-size:8px}
+  .hn-agent-who b{font-size:9.5px}
+  .hn-agent-who span{font-size:8.5px}
+  .hn-agent-title{font-size:11px}
+  .hn-agent-time{font-size:8px}
+  .hn-st{font-size:8px;padding:3.5px 7px}
+  .hn-net-more{padding:8.5px;font-size:8.5px;border-radius:9px;letter-spacing:.08em}
 
   /* 05 · Son İzlenenler */
-  .hp-recent{grid-template-columns:repeat(2,1fr);gap:10px}
-  .hp-rec-tx{padding:9px 11px 11px}
-  .hp-rec-tx b{font-size:11.5px}
-  .hp-rec-tx span{font-size:8.5px;margin-top:3px}
-  .hp-rec-ph b{font-size:36px}
-  .hp-rec-kind{top:7px;left:7px;font-size:7px;padding:3px 7px}
-  .hp-rec-rate{top:7px;right:7px;font-size:9.5px;padding:3px 7px}
+  .hp-recent{grid-template-columns:repeat(2,1fr);gap:8px}
+  .hp-rec{border-radius:13px}
+  .hp-rec-tx{padding:8px 9px 9px}
+  .hp-rec-tx b{font-size:10.5px}
+  .hp-rec-tx span{font-size:8px;margin-top:2px}
+  .hp-rec-ph b{font-size:32px}
+  .hp-rec-kind{top:6px;left:6px;font-size:6.5px;padding:2.5px 6px}
+  .hp-rec-rate{top:6px;right:6px;font-size:8.5px;padding:2.5px 6px}
 
   /* Bento */
-  .hn-bento-card{padding:16px 15px;border-radius:16px}
-  .hn-bento-title{font-size:20px;margin-top:10px}
-  .hn-bento-ic{width:36px;height:36px;border-radius:10px;margin-bottom:10px}
-  .hn-bento-card h4{font-size:13.5px;margin-bottom:5px}
-  .hn-bento-card p{font-size:11.5px;line-height:1.55}
-  .hn-bento-badge{font-size:8.5px;padding:5px 11px;letter-spacing:.12em}
+  .hn-bento-card{padding:13px 12px;border-radius:14px}
+  .hn-bento-title{font-size:17px;margin-top:7px}
+  .hn-bento-ic{width:32px;height:32px;border-radius:9px;margin-bottom:8px}
+  .hn-bento-card h4{font-size:12px;margin-bottom:4px}
+  .hn-bento-card p{font-size:10.5px;line-height:1.5}
+  .hn-bento-badge{font-size:7.5px;padding:4px 9px;letter-spacing:.1em}
 }
 @media (prefers-reduced-motion:reduce){
   .hn-agents-loading{animation:none}
 }
 `;
 
-// Kademe tintleri — önizleme ile birebir (bronz/gümüş/altın/platin/zümrüt/elmas)
+// Canlı Kademe Renkleri
 const TIER_TINT: Record<string, string> = {
-  bronze: 'rgba(201,139,75,.12)', silver: 'rgba(211,215,222,.10)', gold: 'rgba(239,201,76,.14)',
-  platinum: 'rgba(139,229,236,.12)', emerald: 'rgba(91,220,163,.12)', diamond: 'rgba(127,193,255,.12)',
+  bronze: 'rgba(255,122,47,.14)', silver: 'rgba(226,232,240,.13)', gold: 'rgba(255,200,0,.15)',
+  platinum: 'rgba(165,243,252,.14)', emerald: 'rgba(0,230,118,.14)', diamond: 'rgba(0,210,255,.15)',
 };
 const TIER_INK: Record<string, string> = {
-  bronze: '#C98B4B', silver: '#D3D7DE', gold: '#EFC94C', platinum: '#8BE5EC', emerald: '#5BDCA3', diamond: '#7FC1FF',
+  bronze: '#FF7A2F', silver: '#E2E8F0', gold: '#FFC800', platinum: '#A5F3FC', emerald: '#00E676', diamond: '#00D2FF',
 };
 const TIER_EDGE: Record<string, string> = {
-  bronze: 'rgba(201,139,75,.5)', silver: 'rgba(211,215,222,.45)', gold: 'rgba(239,201,76,.55)',
-  platinum: 'rgba(139,229,236,.5)', emerald: 'rgba(91,220,163,.5)', diamond: 'rgba(127,193,255,.5)',
+  bronze: 'rgba(255,122,47,.48)', silver: 'rgba(226,232,240,.45)', gold: 'rgba(255,200,0,.52)',
+  platinum: 'rgba(165,243,252,.48)', emerald: 'rgba(0,230,118,.48)', diamond: 'rgba(0,210,255,.52)',
 };
 
 function timeAgo(dateString: string) {
@@ -990,6 +1145,7 @@ export default function HomePage() {
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
   const [showPick, setShowPick] = useState(false);
   const [showDnaModal, setShowDnaModal] = useState(false);
+  const [showCalibration, setShowCalibration] = useState(false);
   const [spotlightOffset, setSpotlightOffset] = useState(0);
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1191,7 +1347,7 @@ export default function HomePage() {
 
   const [posterErrors, setPosterErrors] = useState<Record<string, boolean>>({});
 
-  // Sinevia Ağı için poster çözücü (logda poster yoksa yerel kütüphaneden eşleştirir)
+  // Sinevia Ağı için poster çözücü
   const resolveNetworkPoster = useCallback((log: any): string | null => {
     if (log?.item_poster) return log.item_poster;
     if (log?.poster_url) return log.poster_url;
@@ -1213,6 +1369,8 @@ export default function HomePage() {
 
   const userPersona = RANK_TIERS[currentRankIndex];
   const nextRank = RANK_TIERS[currentRankIndex + 1] || null;
+  const CurrentRankIcon = userPersona.icon;
+  const NextRankIcon = nextRank ? nextRank.icon : Crown;
 
   const xpToNext = Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp);
 
@@ -1286,11 +1444,11 @@ export default function HomePage() {
   const nextSectionIdx = () => String(++sectionCounter).padStart(2, '0');
 
   return (
-    <div className="space-y-4 sm:space-y-8 animate-fade-in pb-8 sm:pb-10 max-w-[1400px] mx-auto">
+    <div className="space-y-3.5 sm:space-y-8 animate-fade-in pb-6 sm:pb-10 max-w-[1400px] mx-auto">
       <style>{HOME_PREMIUM_CSS}</style>
 
       {/* =========================================================
-          01 · SİNEVİA KARTI (Masaüstünde Monolith, Mobilde Kompakt)
+          01 · SİNEVİA KARTI
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
@@ -1357,7 +1515,7 @@ export default function HomePage() {
                 title={activeBadgeDef ? `${activeBadgeDef.title} (${activeBadgeDef.rarity})` : 'Koleksiyonundan bir rozet kuşan'}
               >
                 <div className={`snv-badge-emblem${activeBadgeDef ? '' : ' empty'}`}>
-                  {activeBadgeDef ? activeBadgeDef.icon : <ShieldAlert size={20} />}
+                  {activeBadgeDef ? activeBadgeDef.icon : <ShieldAlert size={18} />}
                 </div>
                 <div className="snv-badge-meta">
                   <span className="snv-badge-kicker">
@@ -1404,7 +1562,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 2. ORTA KATMAN: 2PX LAZER İLERLEME HATTI */}
+          {/* 2. ORTA KATMAN: LAZER XP İLERLEME HATTI */}
           <div className="snv-id-laser-wrap" title={`Seviye İlerlemesi: %${Math.floor(lvl.progress)}`}>
             <div className="snv-id-laser-fill" style={{ width: `${Math.max(2, lvl.progress)}%` }} />
           </div>
@@ -1430,8 +1588,10 @@ export default function HomePage() {
                   ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
                 ] as const).map(([tier, label, count]) => (
                   <button key={tier} type="button" className="snv-id-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
-                    <i style={{ background: TIER_INK[tier] }} />
-                    <b>{count}</b>
+                    <div className="snv-id-tier-top">
+                      <i style={{ background: TIER_INK[tier], boxShadow: `0 0 8px ${TIER_INK[tier]}` }} />
+                      <b>{count}</b>
+                    </div>
                     <span>{label}</span>
                   </button>
                 ))}
@@ -1446,12 +1606,23 @@ export default function HomePage() {
                     </span>
                   </div>
                   <div className="snv-re-Flow">
-                    <span className="snv-re-cur">{userPersona.title}</span>
-                    <ChevronRight size={13} className="snv-re-arrow" />
-                    <span className="snv-re-next">{nextRank.title}</span>
+                    <span className="snv-re-node">
+                      <span className="snv-re-node-ic"><CurrentRankIcon size={13} /></span>
+                      <span className="snv-re-cur">{userPersona.title}</span>
+                    </span>
+                    <span className="snv-re-connector">
+                      <ChevronRight size={13} className="snv-re-arrow" />
+                    </span>
+                    <span className="snv-re-node target">
+                      <span className="snv-re-node-ic"><NextRankIcon size={13} /></span>
+                      <span className="snv-re-next">{nextRank.title}</span>
+                    </span>
                   </div>
-                  <div className="snv-re-bar">
-                    <i style={{ width: `${rankProgressPct}%` }} />
+                  <div className="snv-re-bar-row">
+                    <div className="snv-re-bar">
+                      <i style={{ width: `${rankProgressPct}%` }} />
+                    </div>
+                    <span className="snv-re-pct">%{rankProgressPct}</span>
                   </div>
                 </div>
               ) : (
@@ -1461,10 +1632,16 @@ export default function HomePage() {
                     <span className="snv-re-rem">Maksimum Kademe</span>
                   </div>
                   <div className="snv-re-Flow">
-                    <span className="snv-re-next">{userPersona.title}</span>
+                    <span className="snv-re-node target">
+                      <span className="snv-re-node-ic"><CurrentRankIcon size={13} /></span>
+                      <span className="snv-re-next">{userPersona.title}</span>
+                    </span>
                   </div>
-                  <div className="snv-re-bar">
-                    <i style={{ width: '100%' }} />
+                  <div className="snv-re-bar-row">
+                    <div className="snv-re-bar">
+                      <i style={{ width: '100%' }} />
+                    </div>
+                    <span className="snv-re-pct">%100</span>
                   </div>
                 </div>
               )}
@@ -1476,18 +1653,21 @@ export default function HomePage() {
       {/* ==============================
           HIZLI ERİŞİM BUTONLARI
           ============================== */}
-      <div data-tutorial="home-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
+      <div data-tutorial="home-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
         <button type="button" className="hn-btn hn-btn-p hn-action" onClick={() => setShowPick(true)}>
-          <Shuffle size={15} /> Ne İzlesem?
+          <Shuffle size={13} /> Ne İzlesem?
         </button>
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowDnaModal(true)}>
-          <Dna size={15} /> DNA Sentezle
+          <Dna size={13} /> DNA Sentezle
         </button>
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowBulkAdd('movie')}>
-          <Compass size={15} /> Katalog Ekle
+          <Compass size={13} /> Katalog Ekle
         </button>
         <button type="button" className="hn-btn hn-btn-g hn-action" onClick={() => navigateTo('plan')}>
-          <Calendar size={15} /> Planlayıcı
+          <Calendar size={13} /> Planlayıcı
+        </button>
+        <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowCalibration(true)}>
+          <Swords size={13} /> Düelloya Başla
         </button>
       </div>
 
@@ -1495,7 +1675,7 @@ export default function HomePage() {
         const info = getMovieTimerInfo(activeTimerMovie, nowMs);
         return (
           <div className="hn-timer">
-            <div className="hn-timer-ic"><Timer size={20} /></div>
+            <div className="hn-timer-ic"><Timer size={18} /></div>
             <div className="hn-timer-tx">
               <div className="hn-timer-status">
                 <span>{info.isPaused ? 'Sayaç Duraklatıldı' : 'Canlı Geri Sayım Aktif'}</span>
@@ -1510,7 +1690,7 @@ export default function HomePage() {
             </div>
             <div className="hn-timer-btns">
               <button type="button" className="hn-btn hn-btn-g" onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)}>
-                {info.isPaused ? <><Play size={14} className="hn-btn-ic" /> Devam Et</> : <><Pause size={14} className="hn-btn-ic" /> Duraklat</>}
+                {info.isPaused ? <><Play size={12} className="hn-btn-ic" /> Devam Et</> : <><Pause size={12} className="hn-btn-ic" /> Duraklat</>}
               </button>
               <button
                 type="button"
@@ -1518,10 +1698,10 @@ export default function HomePage() {
                 onClick={() => handleRequestRateMovie(activeTimerMovie)}
                 disabled={!info.canRateWithTimer}
               >
-                {info.canRateWithTimer ? <><Star size={14} className="hn-btn-ic" /> Bitir &amp; Puanla</> : <><Lock size={13} className="hn-btn-ic" /> Kilitli</>}
+                {info.canRateWithTimer ? <><Star size={12} className="hn-btn-ic" /> Bitir &amp; Puanla</> : <><Lock size={12} className="hn-btn-ic" /> Kilitli</>}
               </button>
               <button type="button" className="hn-timer-x" onClick={() => cancelWatchingMovie(activeTimerMovie.id)} title="Sayacı İptal Et">
-                <X size={16} />
+                <X size={15} />
               </button>
             </div>
           </div>
@@ -1529,7 +1709,7 @@ export default function HomePage() {
       })()}
 
       {/* =========================================================
-          02 · GÜNÜN SİNEMA KARTI (Mobilde Kompakt Yan Yana, Masaüstünde Geniş)
+          02 · GÜNÜN SİNEMA KARTI
           ========================================================= */}
       {spotlightMovie && (() => {
         const isSpotlightTimerActive = activeTimerMovie?.id === spotlightMovie.id;
@@ -1544,7 +1724,7 @@ export default function HomePage() {
               <span className="ln" />
               {eligibleMovies.length > 1 && (
                 <button type="button" className="hn-more" onClick={() => setSpotlightOffset((prev) => prev + 1)}>
-                  <RefreshCw size={13} /> Kartı Değiştir
+                  <RefreshCw size={12} /> Kartı Değiştir
                 </button>
               )}
             </div>
@@ -1593,10 +1773,10 @@ export default function HomePage() {
 
                 <div className="hn-btnrow">
                   <button type="button" className="hn-btn hn-btn-p" onClick={() => handleRequestRateMovie(spotlightMovie)}>
-                    <Star size={13} className="hn-btn-ic" /> Puanla
+                    <Star size={12} className="hn-btn-ic" /> Puanla
                   </button>
                   <button type="button" className="hn-btn hn-btn-s" onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}>
-                    <Eye size={13} className="hn-btn-ic" /> Sinema Kartı
+                    <Eye size={12} className="hn-btn-ic" /> Sinema Kartı
                   </button>
                   {!isSpotlightTimerActive && (
                     <button
@@ -1605,14 +1785,14 @@ export default function HomePage() {
                       onClick={() => startWatchingMovie(spotlightMovie.id, false)}
                       disabled={Boolean(activeTimerMovie)}
                     >
-                      <Play size={13} className="hn-btn-ic" /> Geri Sayım
+                      <Play size={12} className="hn-btn-ic" /> Geri Sayım
                     </button>
                   )}
                   {isSpotlightPlanned ? (
-                    <span className="hn-planned"><Lock size={12} className="hn-btn-ic" /> Planlandı</span>
+                    <span className="hn-planned"><Lock size={11} className="hn-btn-ic" /> Planlandı</span>
                   ) : (
                     <button type="button" className="hn-btn hn-btn-g" onClick={() => navigateTo('plan')}>
-                      <Calendar size={13} className="hn-btn-ic" /> Haftalığa Ekle
+                      <Calendar size={12} className="hn-btn-ic" /> Haftalığa Ekle
                     </button>
                   )}
                 </div>
@@ -1622,7 +1802,7 @@ export default function HomePage() {
                     const LinkIcon = link.icon;
                     return (
                       <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="hn-link-chip">
-                        {link.logo ? <img src={link.logo} alt={link.text} className="hn-link-logo" /> : <LinkIcon size={12} />}
+                        {link.logo ? <img src={link.logo} alt={link.text} className="hn-link-logo" /> : <LinkIcon size={11} />}
                         {link.text}
                       </a>
                     );
@@ -1635,7 +1815,7 @@ export default function HomePage() {
       })()}
 
       {/* =========================================================
-          03 · İZLEMEYE DEVAM ET (Arşiv kısayolları kalktığı için otomatik 03)
+          03 · İZLEMEYE DEVAM ET
           ========================================================= */}
       {ongoingSeries.length > 0 && (
         <section className="hn-sec">
@@ -1666,7 +1846,7 @@ export default function HomePage() {
                   <div className="hn-prog-lab"><span>{watchedCount} / {totalCount} Bölüm</span><i>%{pct}</i></div>
                   <div className="hn-prog"><i style={{ width: `${Math.max(4, pct)}%` }} /></div>
                   <button type="button" className="hn-rate-btn" onClick={() => setPickedItem({ kind: 'series', series, episode })}>
-                    <Star size={12} className="hn-btn-ic" /> Bölümü Puanla
+                    <Star size={11} className="hn-btn-ic" /> Bölümü Puanla
                   </button>
                 </div>
               </div>
@@ -1676,7 +1856,7 @@ export default function HomePage() {
       )}
 
       {/* =========================================================
-          ROZETLER + SİNEVİA AĞI (Afişli Son 3 İzlenen)
+          ROZETLER + SİNEVİA AĞI
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
@@ -1708,7 +1888,7 @@ export default function HomePage() {
                           borderColor: TIER_EDGE[ach.tier] || 'var(--line-2, rgba(244,244,242,.13))',
                         }}
                       >
-                        <AchIcon size={19} />
+                        <AchIcon size={18} />
                       </div>
                       <div className="hn-an"><b>{ach.name}</b><span>{ach.desc}</span></div>
                       <span className="hn-axp">+{ach.xp} XP</span>
@@ -1744,7 +1924,7 @@ export default function HomePage() {
                           {posterUrl ? (
                             <img src={posterUrl} alt={log.item_title || ''} loading="lazy" />
                           ) : (
-                            <Film size={18} />
+                            <Film size={16} />
                           )}
                         </div>
                         <div className="hn-agent-tx">
@@ -1821,50 +2001,50 @@ export default function HomePage() {
       {/* =========================================================
           BENTO — SİNEVİA NASIL ÇALIŞIR?
           ========================================================= */}
-      <div className="pt-6 sm:pt-10 pb-8 sm:pb-12">
-        <div className="text-center mb-6 sm:mb-10">
-          <div className="hn-bento-badge"><Sparkles size={13} /> Yeni Nesil Sinema Deneyimi</div>
+      <div className="pt-4 sm:pt-10 pb-6 sm:pb-12">
+        <div className="text-center mb-4 sm:mb-10">
+          <div className="hn-bento-badge"><Sparkles size={12} /> Yeni Nesil Sinema Deneyimi</div>
           <h3 className="hn-bento-title">Sinevia Nasıl Çalışır?</h3>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-5">
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Search size={20} /></div>
+            <div className="hn-bento-ic"><Search size={18} /></div>
             <h4>Katalog &amp; Keşif</h4>
             <p>Binlerce yapım arasından filtreleme yap, türlere göre ayır ve kişisel izleme kütüphaneni oluştur.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Dna size={20} /></div>
+            <div className="hn-bento-ic"><Dna size={18} /></div>
             <h4>DNA Laboratuvarı</h4>
             <p>İki favori filminin DNA'sını sentezle. Algoritma bu karışımın genetiğine en uygun yapımı bulup önersin.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Shuffle size={20} /></div>
+            <div className="hn-bento-ic"><Shuffle size={18} /></div>
             <h4>Kararsızlık Çarkı</h4>
             <p>Ne izleyeceğine karar veremiyor musun? Türü ve süreyi belirle, sistem senin için kütüphaneden rastgele seçsin.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Calendar size={20} /></div>
+            <div className="hn-bento-ic"><Calendar size={18} /></div>
             <h4>Haftalık Planlayıcı</h4>
             <p>Hangi gün ne izleyeceğini takvime ekle. Çakışmaları engelle ve izleme maratonunu düzenli hale getir.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Timer size={20} /></div>
+            <div className="hn-bento-ic"><Timer size={18} /></div>
             <h4>Canlı İzleme Sayacı</h4>
             <p>Yapıma başladığında sayacı çalıştır, mola verince duraklat. Filmi yeteri kadar izlemeden sahte puan veremezsin.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Star size={20} /></div>
+            <div className="hn-bento-ic"><Star size={18} /></div>
             <h4>Detaylı Puanlama</h4>
             <p>Senaryo, oyunculuk ve görsellik gibi kendi belirlediğin alt kırılımlarla yapıma ince ayarlı bir puan ver.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Target size={20} /></div>
+            <div className="hn-bento-ic"><Target size={18} /></div>
             <h4>Görev &amp; Rozetler</h4>
             <p>Ajan kontratlarını yerine getir. Gizli başarımları açarak XP topla, rütbeni yükselt ve vitrinine rozet kuşan.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Users size={20} /></div>
+            <div className="hn-bento-ic"><Users size={18} /></div>
             <h4>Sinevia Sosyal Ağı</h4>
             <p>Arkadaşlarını ekle, profillerini gözle, özel film listeleri gönder, canlı mesajlaş ve Liderlik Tablosunda yarış.</p>
           </div>
@@ -1874,6 +2054,7 @@ export default function HomePage() {
       {showBulkAdd && <BulkAddModal initialTab={showBulkAdd} onClose={() => setShowBulkAdd(false)} />}
       {showPick && <PickModal seriesCount={allNextEpisodes.length} unwatchedMovies={eligibleMovies} nextEpisodes={allNextEpisodes} onPick={(item) => setPickedItem(item)} onClose={() => setShowPick(false)} />}
       {showDnaModal && <DnaSynthesizerModal onClose={() => setShowDnaModal(false)} />}
+      {showCalibration && <CalibrationDuelModal onClose={() => setShowCalibration(false)} />}
       {pickedItem && (
         <RatingModal
           title={pickedItem.kind === 'movie' ? pickedItem.movie.title : pickedItem.series.title}
