@@ -15,6 +15,8 @@ import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDB } from '../lib/tmdb';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import { useFilteredMovies } from '../lib/selectorHooks';
+import VirtualList from '../components/VirtualList';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
 import AddMovieModal from '../components/AddMovieModal';
 import RatingModal from '../components/RatingModal';
@@ -113,6 +115,7 @@ export default function MoviesPage() {
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('added');
   const [search, setSearch] = useState('');
+  const searchDeb = useDebouncedValue(search, 180);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -237,7 +240,7 @@ export default function MoviesPage() {
   };
 
   const clearGenres = () => setSelectedGenres(new Set());
-  const searchMatches = (m: Movie) => !search.trim() || m.title.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR'));
+  const searchMatches = (m: Movie) => !searchDeb.trim() || m.title.toLocaleLowerCase('tr-TR').includes(searchDeb.toLocaleLowerCase('tr-TR'));
 
   const activeFilterCount = (search.trim() !== '' ? 1 : 0) + selectedGenres.size + (sortMode !== 'added' ? 1 : 0);
 
@@ -265,9 +268,9 @@ export default function MoviesPage() {
   const pastCollectionUnratedMovies = useMemo(() => {
     let filtered = allPastColUnratedMovies;
     if (selectedGenres.size > 0) filtered = filtered.filter((m) => Array.from(selectedGenres).every((g) => m.genres.includes(g)));
-    if (search.trim() !== '') filtered = filtered.filter(searchMatches);
+    if (searchDeb.trim() !== '') filtered = filtered.filter(searchMatches);
     return filtered;
-  }, [allPastColUnratedMovies, selectedGenres, search]);
+  }, [allPastColUnratedMovies, selectedGenres, searchDeb]);
 
   const filteredCollections = useMemo(() => {
     // Mezarlık filtresinde koleksiyon bölümü gizlenir (tüm abandoned filmler tek listede).
@@ -483,7 +486,7 @@ export default function MoviesPage() {
     baseBottomListMovies,
     watchedFilter,
     selectedGenres,
-    search,
+    searchDeb,
     sortMode === 'calibrated' ? 'added' : sortMode
   );
   const sortedBottomMovies = useMemo(
@@ -1098,8 +1101,15 @@ export default function MoviesPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2.5" data-tutorial="movies-list">
-            {sortedBottomMovies.map((m) => {
+          <VirtualList
+            className="relative"
+            data-tutorial="movies-list"
+            items={sortedBottomMovies}
+            getKey={(m) => m.id}
+            gap={10}
+            estimateHeight={130}
+            overscan={500}
+            renderItem={(m) => {
               const colName = m.collectionId
                 ? libCollections.find((c) => c.id === m.collectionId)?.name
                 : undefined;
@@ -1128,8 +1138,8 @@ export default function MoviesPage() {
                   onRevive={(movie) => reviveMedia('movie', movie.id)}
                 />
               );
-            })}
-          </div>
+            }}
+          />
         )}
       </div>
 
