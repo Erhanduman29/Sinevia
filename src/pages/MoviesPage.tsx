@@ -6,7 +6,8 @@ import {
   FolderPlus, X, Play, Pause, Timer, Zap, Lock, EyeOff, ChevronsUpDown, History,
   CheckSquare, Square, ArrowRightLeft, SlidersHorizontal, Send, Film
 } from 'lucide-react';
-import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { useActions, useLibrary, useSettings } from '../context/slices';
 import { ratingBgClass, formatDateShort, normalize, uid } from '../lib/utils';
 import { searchTMDB } from '../lib/tmdb';
 import { filterAndSortMovies, countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
@@ -27,10 +28,12 @@ const PAST_QUEUE_MODAL_ID = '__PAST_QUEUE__';
 
 export default function MoviesPage() {
   const {
-    data, editMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie,
+    editMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie,
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie,
     setMovieCollection, setMoviePastQueue, addCollection, showToast,
-  } = useApp();
+  } = useActions();
+  const { movies: libMovies, collections: libCollections } = useLibrary();
+  const { agentId, altWatchTemplate, weeklyPlan } = useSettings();
 
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
@@ -79,7 +82,7 @@ export default function MoviesPage() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const activeTimerMovie = useMemo(() => data.movies.find((m) => !m.watched && m.startedAt) || null, [data.movies]);
+  const activeTimerMovie = useMemo(() => libMovies.find((m) => !m.watched && m.startedAt) || null, [libMovies]);
 
   useEffect(() => {
     if (!activeTimerMovie) return;
@@ -91,10 +94,10 @@ export default function MoviesPage() {
   useEffect(() => {
     try {
       const focusTitle = sessionStorage.getItem('sinevia_focus_media_title');
-      if (!focusTitle || data.movies.length === 0) return;
+      if (!focusTitle || libMovies.length === 0) return;
       sessionStorage.removeItem('sinevia_focus_media_title');
 
-      const targetMovie = data.movies.find(
+      const targetMovie = libMovies.find(
         (m) => m.title.toLocaleLowerCase('tr-TR') === focusTitle.toLocaleLowerCase('tr-TR')
       );
 
@@ -124,11 +127,11 @@ export default function MoviesPage() {
         setSearch(focusTitle);
       }
     } catch {}
-  }, [data.movies]);
+  }, [libMovies]);
 
   const detailMovie = useMemo(
-    () => (detailMovieId ? data.movies.find((m) => m.id === detailMovieId) || null : null),
-    [data.movies, detailMovieId]
+    () => (detailMovieId ? libMovies.find((m) => m.id === detailMovieId) || null : null),
+    [libMovies, detailMovieId]
   );
 
   const handleRequestRate = (movie: Movie) => {
@@ -138,7 +141,7 @@ export default function MoviesPage() {
 
   const handleSyncTMDB = async () => {
     setIsSyncing(true);
-    const moviesToSync = data.movies.filter(
+    const moviesToSync = libMovies.filter(
       (m) => !m.tmdbId || !m.posterUrl || !m.keywords || m.keywords.length === 0 || !m.directors || m.directors.length === 0 || !m.cast || m.cast.length === 0 || !m.imdbId
     );
     let syncedCount = 0;
@@ -170,12 +173,12 @@ export default function MoviesPage() {
 
   const allGenres = useMemo(() => {
     const set = new Set<string>();
-    data.movies.forEach((m) => m.genres.forEach((g) => set.add(g)));
+    libMovies.forEach((m) => m.genres.forEach((g) => set.add(g)));
     return Array.from(set).sort();
-  }, [data.movies]);
+  }, [libMovies]);
 
   const eligibleMovies = useMemo(() => {
-    const unwatched = data.movies.filter((m) => !m.watched && !m.inPastQueue);
+    const unwatched = libMovies.filter((m) => !m.watched && !m.inPastQueue);
     const standalone = unwatched.filter((m) => !m.collectionId);
     const collectionGroups = new Map<string, Movie[]>();
     unwatched.filter((m) => m.collectionId).forEach((m) => {
@@ -189,7 +192,7 @@ export default function MoviesPage() {
       if (sorted.length > 0) sequentialCollectionMovies.push(sorted[0]);
     });
     return [...standalone, ...sequentialCollectionMovies];
-  }, [data.movies]);
+  }, [libMovies]);
 
   const toggleGenre = (g: string) => {
     setSelectedGenres((prev) => {
@@ -211,21 +214,21 @@ export default function MoviesPage() {
     filterAndSortMovies(movies, watchedFilter as WatchedFilterMode, selectedGenres, search, sortMode as SortMode);
 
   const baseBottomListMovies = useMemo(() => {
-    if (watchedFilter === 'past') return data.movies.filter((m) => m.watched && m.isPastWatch);
-    return data.movies.filter((m) => !m.collectionId && !m.inPastQueue && !m.isPastWatch);
-  }, [data.movies, watchedFilter]);
+    if (watchedFilter === 'past') return libMovies.filter((m) => m.watched && m.isPastWatch);
+    return libMovies.filter((m) => !m.collectionId && !m.inPastQueue && !m.isPastWatch);
+  }, [libMovies, watchedFilter]);
 
   // collectionMovies her render'da yeni referans üretiyordu (useMemo'yu anlamsız kılıyordu);
-  // filtre artık useMemo gövdesinin içinde — collectionMap sadece data.movies değişince yeniden hesaplanır.
+  // filtre artık useMemo gövdesinin içinde — collectionMap sadece libMovies değişince yeniden hesaplanır.
   const collectionMap = useMemo(() => {
     const map = new Map<string, Movie[]>();
-    data.movies.filter((m) => m.collectionId).forEach((m) => {
+    libMovies.filter((m) => m.collectionId).forEach((m) => {
       const arr = map.get(m.collectionId!) || []; arr.push(m); map.set(m.collectionId!, arr);
     });
     return map;
-  }, [data.movies]);
+  }, [libMovies]);
 
-  const allPastColUnratedMovies = useMemo(() => data.movies.filter((m) => !m.watched && m.inPastQueue).sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10)), [data.movies]);
+  const allPastColUnratedMovies = useMemo(() => libMovies.filter((m) => !m.watched && m.inPastQueue).sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10)), [libMovies]);
 
   const pastCollectionUnratedMovies = useMemo(() => {
     let filtered = allPastColUnratedMovies;
@@ -235,7 +238,7 @@ export default function MoviesPage() {
   }, [allPastColUnratedMovies, selectedGenres, search]);
 
   const filteredCollections = useMemo(() => {
-    return data.collections.filter((coll) => {
+    return libCollections.filter((coll) => {
       if (normalize(coll.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return false;
       const movies = collectionMap.get(coll.id) || [];
       const hasUnwatched = movies.some((m) => !m.watched);
@@ -253,7 +256,7 @@ export default function MoviesPage() {
       }
       return true;
     });
-  }, [data.collections, collectionMap, watchedFilter, selectedGenres, search]);
+  }, [libCollections, collectionMap, watchedFilter, selectedGenres, search]);
 
   const toggleCollection = (id: string) => {
     setExpandedCollections((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -268,7 +271,7 @@ export default function MoviesPage() {
 
   const handleAssignCollection = (movie: Movie, colId: string | null) => {
     setMovieCollection(movie.id, colId);
-    if (colId) { const colName = data.collections.find((c) => c.id === colId)?.name || 'Koleksiyon'; showToast(`"${movie.title}" ➔ ${colName} koleksiyonuna eklendi`, 'success'); }
+    if (colId) { const colName = libCollections.find((c) => c.id === colId)?.name || 'Koleksiyon'; showToast(`"${movie.title}" ➔ ${colName} koleksiyonuna eklendi`, 'success'); }
     else { showToast(`"${movie.title}" koleksiyondan çıkarıldı`, 'info'); }
     setCollectionTargetMovie(null); setNewCollectionName('');
   };
@@ -298,8 +301,8 @@ export default function MoviesPage() {
 
   const openBulkCollectionModal = (colId: string) => {
     setAddMoviesToCollectionId(colId); setCollectionSearch('');
-    if (colId === PAST_QUEUE_MODAL_ID) { const currentInQueue = data.movies.filter((m) => !m.watched && m.inPastQueue).map((m) => m.id); setBulkSelectedMovieIds(new Set(currentInQueue)); }
-    else { const currentInCol = data.movies.filter((m) => m.collectionId === colId).map((m) => m.id); setBulkSelectedMovieIds(new Set(currentInCol)); }
+    if (colId === PAST_QUEUE_MODAL_ID) { const currentInQueue = libMovies.filter((m) => !m.watched && m.inPastQueue).map((m) => m.id); setBulkSelectedMovieIds(new Set(currentInQueue)); }
+    else { const currentInCol = libMovies.filter((m) => m.collectionId === colId).map((m) => m.id); setBulkSelectedMovieIds(new Set(currentInCol)); }
   };
 
   const toggleBulkMovieSelection = (movieId: string) => {
@@ -320,7 +323,7 @@ export default function MoviesPage() {
     if (!addMoviesToCollectionId) return;
     if (addMoviesToCollectionId === PAST_QUEUE_MODAL_ID) {
       let addedCount = 0; let removedCount = 0;
-      data.movies.forEach((m) => {
+      libMovies.forEach((m) => {
         if (m.watched) return; const shouldBeInQueue = bulkSelectedMovieIds.has(m.id); const isCurrentlyInQueue = Boolean(m.inPastQueue);
         if (shouldBeInQueue && !isCurrentlyInQueue) { setMoviePastQueue(m.id, true); addedCount++; } else if (!shouldBeInQueue && isCurrentlyInQueue) { setMoviePastQueue(m.id, false); removedCount++; }
       });
@@ -328,9 +331,9 @@ export default function MoviesPage() {
       setAddMoviesToCollectionId(null); return;
     }
 
-    const targetColId = addMoviesToCollectionId; const targetColName = data.collections.find((c) => c.id === targetColId)?.name || 'Koleksiyon';
+    const targetColId = addMoviesToCollectionId; const targetColName = libCollections.find((c) => c.id === targetColId)?.name || 'Koleksiyon';
     let addedCount = 0; let removedCount = 0;
-    data.movies.forEach((m) => {
+    libMovies.forEach((m) => {
       const shouldBeInCol = bulkSelectedMovieIds.has(m.id); const isCurrentlyInCol = m.collectionId === targetColId;
       if (shouldBeInCol && !isCurrentlyInCol) { setMovieCollection(m.id, targetColId); addedCount++; } else if (!shouldBeInCol && isCurrentlyInCol) { setMovieCollection(m.id, null); removedCount++; }
     });
@@ -340,7 +343,7 @@ export default function MoviesPage() {
 
   const openMoveFromPastModal = () => {
     setPastMoveSearch(''); setPastMoveSelectedIds(new Set()); setPastMoveDestinationMode('remove_queue');
-    const regularCols = data.collections.filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME));
+    const regularCols = libCollections.filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME));
     setPastMoveTargetColId(regularCols[0]?.id || ''); setPastMoveNewColName(''); setShowMoveFromPastModal(true);
   };
 
@@ -353,7 +356,7 @@ export default function MoviesPage() {
     if (pastMoveDestinationMode === 'remove_queue') { pastMoveSelectedIds.forEach((movieId) => { setMoviePastQueue(movieId, false); }); showToast('Seçilen filmler sıradan çıkarıldı!', 'success'); setShowMoveFromPastModal(false); setPastMoveSelectedIds(new Set()); return; }
 
     let finalDestColId: string | null = null; let destLabel = 'Koleksiyon';
-    if (pastMoveDestinationMode === 'existing') { if (!pastMoveTargetColId) { showToast('Koleksiyon seçin!', 'warning'); return; } finalDestColId = pastMoveTargetColId; destLabel = data.collections.find((c) => c.id === pastMoveTargetColId)?.name || 'Koleksiyon'; }
+    if (pastMoveDestinationMode === 'existing') { if (!pastMoveTargetColId) { showToast('Koleksiyon seçin!', 'warning'); return; } finalDestColId = pastMoveTargetColId; destLabel = libCollections.find((c) => c.id === pastMoveTargetColId)?.name || 'Koleksiyon'; }
     else if (pastMoveDestinationMode === 'new') { if (!pastMoveNewColName.trim()) { showToast('İsim yazın!', 'warning'); return; } finalDestColId = addCollection(pastMoveNewColName.trim()); destLabel = pastMoveNewColName.trim(); }
 
     pastMoveSelectedIds.forEach((movieId) => { setMoviePastQueue(movieId, false); setMovieCollection(movieId, finalDestColId); });
@@ -361,7 +364,7 @@ export default function MoviesPage() {
   };
 
   const openSendModal = async (singleMovie?: Movie) => {
-    if (!data.agentId) { showToast('Lütfen önce ayarlardan Sinevia Ağı kimliğinizi oluşturun!', 'error'); return; }
+    if (!agentId) { showToast('Lütfen önce ayarlardan Sinevia Ağı kimliğinizi oluşturun!', 'error'); return; }
 
     if (singleMovie) {
       setSelectedMovieIdsForSend(new Set([singleMovie.id]));
@@ -376,8 +379,8 @@ export default function MoviesPage() {
     setLoadingFriends(true);
 
     try {
-      const { data: fData } = await supabase.from('friendships').select('*').or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).eq('status', 'accepted');
-      const friendIds = (fData || []).map(f => f.requester_id === data.agentId ? f.receiver_id : f.requester_id);
+      const { data: fData } = await supabase.from('friendships').select('*').or(`requester_id.eq.${agentId},receiver_id.eq.${agentId}`).eq('status', 'accepted');
+      const friendIds = (fData || []).map(f => f.requester_id === agentId ? f.receiver_id : f.requester_id);
 
       if (friendIds.length > 0) {
         const { data: pData } = await supabase.from('profiles').select('*').in('agent_id', friendIds);
@@ -398,7 +401,7 @@ export default function MoviesPage() {
     if (!selectedFriendId) { showToast('Lütfen bir arkadaş seç!', 'error'); return; }
     if (selectedMovieIdsForSend.size === 0) { showToast('En az bir film seçmelisin!', 'warning'); return; }
 
-    const selectedMovies = data.movies.filter(m => selectedMovieIdsForSend.has(m.id));
+    const selectedMovies = libMovies.filter(m => selectedMovieIdsForSend.has(m.id));
     const items = selectedMovies.map(m => ({
       id: m.id,
       title: m.title,
@@ -411,7 +414,7 @@ export default function MoviesPage() {
     try {
       await supabase.from('recommendations').insert([{
         id: uid(),
-        sender_id: data.agentId,
+        sender_id: agentId,
         receiver_id: selectedFriendId,
         list_title: sendListTitle.trim() || 'Film Tavsiyeleri',
         items: items,
@@ -436,38 +439,38 @@ export default function MoviesPage() {
 
   const filteredMoviesForModal = useMemo(() => {
     const q = sendMovieSearch.trim().toLowerCase();
-    if (!q) return data.movies;
-    return data.movies.filter(m => m.title.toLowerCase().includes(q));
-  }, [data.movies, sendMovieSearch]);
+    if (!q) return libMovies;
+    return libMovies.filter(m => m.title.toLowerCase().includes(q));
+  }, [libMovies, sendMovieSearch]);
 
   const sortedBottomMovies = useMemo(
     () => sortMovies(baseBottomListMovies),
     [baseBottomListMovies, watchedFilter, selectedGenres, search, sortMode]
   );
-  const totalUnwatched = useMemo(() => data.movies.filter((m) => !m.watched).length, [data.movies]);
-  const totalWatched = useMemo(() => countWatchedCurrentMovies(data.movies), [data.movies]);
-  const totalPastWatched = useMemo(() => countPastMovies(data.movies), [data.movies]);
+  const totalUnwatched = useMemo(() => libMovies.filter((m) => !m.watched).length, [libMovies]);
+  const totalWatched = useMemo(() => countWatchedCurrentMovies(libMovies), [libMovies]);
+  const totalPastWatched = useMemo(() => countPastMovies(libMovies), [libMovies]);
 
   const modalSelectableMovies = useMemo(() => {
     if (!addMoviesToCollectionId) return [];
     const isTargetPastCol = addMoviesToCollectionId === PAST_QUEUE_MODAL_ID;
-    return data.movies.filter((m) => {
+    return libMovies.filter((m) => {
       if (isTargetPastCol && m.watched) return false;
       if (!collectionSearch.trim()) return true;
       return m.title.toLocaleLowerCase('tr-TR').includes(collectionSearch.toLocaleLowerCase('tr-TR'));
     });
-  }, [data.movies, addMoviesToCollectionId, collectionSearch]);
+  }, [libMovies, addMoviesToCollectionId, collectionSearch]);
 
   const modalOtherCollections = useMemo(() => {
     if (!addMoviesToCollectionId) return [];
     const isTargetPastCol = addMoviesToCollectionId === PAST_QUEUE_MODAL_ID;
-    return data.collections.filter((c) => {
+    return libCollections.filter((c) => {
       if (c.id === addMoviesToCollectionId) return false;
       if (normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return false;
       const movies = (collectionMap.get(c.id) || []).filter((m) => (isTargetPastCol ? !m.watched : true));
       return movies.length > 0;
     });
-  }, [data.collections, collectionMap, addMoviesToCollectionId]);
+  }, [libCollections, collectionMap, addMoviesToCollectionId]);
 
   const filteredPastMoviesForMove = useMemo(() => {
     if (!pastMoveSearch.trim()) return allPastColUnratedMovies;
@@ -475,8 +478,8 @@ export default function MoviesPage() {
     return allPastColUnratedMovies.filter((m) => m.title.toLocaleLowerCase('tr-TR').includes(q));
   }, [allPastColUnratedMovies, pastMoveSearch]);
 
-  const regularCollectionsList = useMemo(() => data.collections.filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME)), [data.collections]);
-  const plannedMovieIds = useMemo(() => { const ids = new Set<string>(); (data.weeklyPlan || []).forEach(p => ids.add(p.movieId)); return ids; }, [data.weeklyPlan]);
+  const regularCollectionsList = useMemo(() => libCollections.filter((c) => normalize(c.name) !== normalize(PAST_WATCH_COLLECTION_NAME)), [libCollections]);
+  const plannedMovieIds = useMemo(() => { const ids = new Set<string>(); (weeklyPlan || []).forEach(p => ids.add(p.movieId)); return ids; }, [weeklyPlan]);
 
   return (
     <div className="space-y-4 sm:space-y-5 mpx-root">
@@ -600,7 +603,7 @@ export default function MoviesPage() {
               onClick={() => setWatchedFilter('all')}
               className={`mpx-chip ${watchedFilter === 'all' ? 'on' : ''}`}
             >
-              Tümü ({data.movies.length})
+              Tümü ({libMovies.length})
             </button>
             <button
               onClick={() => setWatchedFilter('unwatched')}
@@ -794,7 +797,7 @@ export default function MoviesPage() {
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                     {pastCollectionUnratedMovies.map((m) => {
                       const origColName = m.collectionId
-                        ? data.collections.find((c) => c.id === m.collectionId)?.name
+                        ? libCollections.find((c) => c.id === m.collectionId)?.name
                         : undefined;
                       return (
                         <div key={m.id} className="mpx-poster aspect-[2/3] group">
@@ -984,7 +987,7 @@ export default function MoviesPage() {
                               onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
                               onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                               onSendToFriend={openSendModal}
-                              altWatchTemplate={data.altWatchTemplate}
+                              altWatchTemplate={altWatchTemplate}
                             />
                           ))
                         )}
@@ -1031,7 +1034,7 @@ export default function MoviesPage() {
           <div className="space-y-2.5" data-tutorial="movies-list">
             {sortedBottomMovies.map((m) => {
               const colName = m.collectionId
-                ? data.collections.find((c) => c.id === m.collectionId)?.name
+                ? libCollections.find((c) => c.id === m.collectionId)?.name
                 : undefined;
               return (
                 <MovieRow
@@ -1052,7 +1055,7 @@ export default function MoviesPage() {
                   onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
                   onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                   onSendToFriend={openSendModal}
-                  altWatchTemplate={data.altWatchTemplate}
+                  altWatchTemplate={altWatchTemplate}
                 />
               );
             })}
@@ -1253,7 +1256,7 @@ export default function MoviesPage() {
         const isTargetPast = addMoviesToCollectionId === PAST_QUEUE_MODAL_ID;
         const targetColName = isTargetPast
           ? 'Eskiden İzlenenler'
-          : data.collections.find((c) => c.id === addMoviesToCollectionId)?.name || 'Koleksiyon';
+          : libCollections.find((c) => c.id === addMoviesToCollectionId)?.name || 'Koleksiyon';
         const allVisibleSelected =
           modalSelectableMovies.length > 0 &&
           modalSelectableMovies.every((m) => bulkSelectedMovieIds.has(m.id));
@@ -1348,7 +1351,7 @@ export default function MoviesPage() {
                       const isSelected = bulkSelectedMovieIds.has(m.id);
                       const otherColName =
                         m.collectionId && m.collectionId !== addMoviesToCollectionId
-                          ? data.collections.find((c) => c.id === m.collectionId)?.name
+                          ? libCollections.find((c) => c.id === m.collectionId)?.name
                           : null;
                       return (
                         <div
@@ -1470,7 +1473,7 @@ export default function MoviesPage() {
                     {filteredPastMoviesForMove.map((m) => {
                       const isSelected = pastMoveSelectedIds.has(m.id);
                       const origColName = m.collectionId
-                        ? data.collections.find((c) => c.id === m.collectionId)?.name
+                        ? libCollections.find((c) => c.id === m.collectionId)?.name
                         : null;
                       return (
                         <div

@@ -1450,7 +1450,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     weeklyPlan: data.weeklyPlan || [], notificationsEnabled: !!data.notificationsEnabled,
     shareWatchedInFeed: data.shareWatchedInFeed !== false, sharePastWatchedInFeed: data.sharePastWatchedInFeed !== false,
     showLockedNames: !!data.showLockedNames, altWatchTemplate: data.altWatchTemplate || '',
-  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.altWatchTemplate]);
+    agentId: data.agentId || '',
+  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.altWatchTemplate, data.agentId]);
 
   // Global tik YOK — sadece aktif timer filmini verir (seyrek değişir); sayfalar kendi
   // yerel nowMs tik'lerini tutmaya devam eder (HomePage dahil — kullanıcıya ait dosya).

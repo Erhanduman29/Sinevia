@@ -52,6 +52,8 @@ export interface SettingsSlice {
   sharePastWatchedInFeed: boolean;
   showLockedNames: boolean;
   altWatchTemplate: string;
+  /** Kimlik (seyrek değişir) — ağ paylaşımları için gerekli. */
+  agentId: string;
 }
 
 export interface TimerSlice {
