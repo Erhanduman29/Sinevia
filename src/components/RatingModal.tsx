@@ -46,6 +46,7 @@ export default function RatingModal({
 
   // Pencere kapandığında (gönderdi ya da vazgeçti) açık tutoriali kapat
   const closeRef = useRef(notifyModalClose);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
   closeRef.current = notifyModalClose;
   useEffect(() => {
     return () => closeRef.current('modal_rating');
@@ -160,7 +161,9 @@ export default function RatingModal({
     } catch {}
     const defRating = initialRating ?? 8;
     setRating(defRating);
-    setNote(initialNote.replace(/\[spoiler\]/g, '').trim());
+    const resetNote = initialNote.replace(/\[spoiler\]/g, '').trim();
+    setNote(resetNote);
+    if (noteRef.current) noteRef.current.value = resetNote;
     setIsSpoiler(initialNote.includes('[spoiler]'));
     setSelectedTags(initialReviewTags || []);
     setIsPastWatch(Boolean(initialIsPastWatch));
@@ -296,8 +299,9 @@ export default function RatingModal({
     const finalDetailed = showCriteria && criteriaList.length > 0 ? critScores : undefined;
     const finalTags = selectedTags.length > 0 ? selectedTags : undefined;
     
-    // YENİ: Eğer spoiler işaretliyse nota etiketi ekle, yoksa temiz notu yolla
-    const finalNote = isSpoiler ? `[spoiler] ${note.trim()}` : note.trim();
+    // YENİ: Eğer spoiler işaretliyse nota etiketi ekle, yoksa temiz notu yolla (uncontrolled textarea: DOM'daki son değeri oku)
+    const liveNote = noteRef.current?.value ?? note;
+    const finalNote = isSpoiler ? `[spoiler] ${liveNote.trim()}` : liveNote.trim();
     
     try {
       localStorage.removeItem(draftKey);
@@ -674,7 +678,8 @@ export default function RatingModal({
             </div>
 
             <textarea
-              value={note}
+              ref={noteRef}
+              defaultValue={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
               placeholder="Bu yapım hakkında ne düşündün? (Ağda arkadaşların da görecek...)"
