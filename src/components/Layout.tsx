@@ -143,16 +143,17 @@ function ActiveRail() {
 
 // ---------------------------------------------------------------------------
 // GLOBAL ARAMA (komut paleti) — tüm sayfalarda AppContext verisini tarar.
-// Cam yüzey + kırmızı (tema) vurgu; sonuçlar gruplu (ikon + bölüm etiketi).
+// NÖTR CAM yüzey: panelde kırmızı/gold VURGU YOK (kullanıcı talebi —
+// "arama çubuğundaki alan hala kırmızı"). Aktiflik/odak ayrımı yalnızca
+// beyaz cam parlaklığıyla verilir; renk motoruna (index.css) dokunulmadı.
 // Tema değişkenleri tanımsız olduğunda (plain-dark/eski temalar) fallback
-// zinciri devreye girer: var(--glass, var(--bg-card)), var(--red, var(--color-1)).
+// zinciri devreye girer: var(--glass, var(--bg-card)), var(--text-main,...).
 // ---------------------------------------------------------------------------
-const SEARCH_ACCENT = 'var(--red, var(--color-1, #e8384f))';
-/** Yumuşak vurgu tonları — panel çerçevesi kırmızı değil; renk yalnızca
- *  GERİ BİLDİRİM anında (odak / aktif satır) alçak opaklıkla belirir. */
-const SEARCH_ACCENT_SOFT = `color-mix(in srgb, ${SEARCH_ACCENT} 55%, transparent)`;
-/** Aktif satır zemini: sola ağırlıklı yumuşak vurgu — düz dolgu değil, sakin. */
-const SEARCH_ACCENT_ROW = `linear-gradient(90deg, color-mix(in srgb, ${SEARCH_ACCENT} 10%, transparent), color-mix(in srgb, ${SEARCH_ACCENT} 3%, transparent) 52%, transparent 88%)`;
+/** Arama panelinin nötr cam vurgu tonları (beyaz = tema metin rengi). */
+const SEARCH_GLASS_ROW = `linear-gradient(90deg, color-mix(in srgb, var(--text-main, #f4f4f2) 7%, transparent), color-mix(in srgb, var(--text-main, #f4f4f2) 2.5%, transparent) 52%, transparent 88%)`;
+const SEARCH_GLASS_RAIL =
+  'linear-gradient(180deg, color-mix(in srgb, var(--text-main, #f4f4f2) 88%, transparent), transparent)';
+const SEARCH_GLASS_EDGE = 'color-mix(in srgb, var(--text-main, #f4f4f2) 26%, transparent)';
 
 /** Sonuç satırının SAĞINDAKİ minik tür/aksiyon etiketi:
  *  medya → Film/Dizi, sayfa içi sekme/buton → Kısayol. */
@@ -646,7 +647,7 @@ function GlobalSearch({
                   className="flex items-center gap-2.5 px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-[0.2em]"
                   style={{ color: 'var(--muted, #8a8a94)' }}
                 >
-                  <group.icon size={12} style={{ color: SEARCH_ACCENT_SOFT }} />
+                  <group.icon size={12} style={{ color: 'var(--muted, #8a8a94)' }} />
                   <span className="shrink-0">{group.label}</span>
                   {/* İnce ayraç: grup etiketini sonuç satırlarından ayırır */}
                   <span
@@ -670,17 +671,17 @@ function GlobalSearch({
                       className="relative w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
                       style={
                         isActive
-                          ? { backgroundImage: SEARCH_ACCENT_ROW }
+                          ? { backgroundImage: SEARCH_GLASS_ROW }
                           : undefined
                       }
                     >
-                      {/* Aktif satır: sol yumuşak kırmızı ray (ince, gölgesiz, zarif) */}
+                      {/* Aktif satır: sol nötr cam ray (ince, gölgesiz, zarif) */}
                       {isActive && (
                         <span
                           aria-hidden
                           className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full"
                           style={{
-                            background: `linear-gradient(180deg, ${SEARCH_ACCENT}, transparent)`,
+                            background: SEARCH_GLASS_RAIL,
                             opacity: 0.9,
                           }}
                         />
@@ -694,7 +695,7 @@ function GlobalSearch({
                           className="w-7 h-10 rounded-md object-cover shrink-0 border"
                           style={{
                             borderColor: isActive
-                              ? SEARCH_ACCENT_SOFT
+                              ? SEARCH_GLASS_EDGE
                               : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
                           }}
                         />
@@ -703,9 +704,9 @@ function GlobalSearch({
                           className="w-8 h-8 rounded-lg grid place-items-center shrink-0 border"
                           style={{
                             borderColor: isActive
-                              ? SEARCH_ACCENT_SOFT
+                              ? SEARCH_GLASS_EDGE
                               : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
-                            color: isActive ? SEARCH_ACCENT_SOFT : 'var(--muted, #8a8a94)',
+                            color: isActive ? 'var(--text-main, #f4f4f2)' : 'var(--muted, #8a8a94)',
                           }}
                         >
                           <entry.icon size={15} />
@@ -739,7 +740,7 @@ function GlobalSearch({
                           size={14}
                           className="transition-opacity duration-200"
                           style={{
-                            color: isActive ? SEARCH_ACCENT_SOFT : 'var(--muted, #8a8a94)',
+                            color: isActive ? 'var(--text-main, #f4f4f2)' : 'var(--muted, #8a8a94)',
                             opacity: isActive ? 1 : 0.4,
                           }}
                         />
@@ -1287,14 +1288,14 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             className="group relative flex items-center gap-2.5 min-w-0 flex-1 max-w-[380px] ml-auto px-4 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 backdrop-blur-md text-left transition-all duration-300 hover:-translate-y-[1px]"
             style={glassSurface}
           >
-            <Search size={15} className="text-ink-400 group-hover:text-gold-400 transition-colors shrink-0" />
+            <Search size={15} className="text-ink-400 group-hover:text-ink-200 transition-colors shrink-0" />
             <span className="flex-1 text-[13px] text-ink-400 whitespace-nowrap overflow-hidden text-ellipsis">Film, dizi, oyuncu ara…</span>
             <kbd className="text-[10px] px-1.5 py-0.5 rounded-md border border-ink-800/60 bg-ink-800/40 text-ink-400 shrink-0" style={{ fontFamily: MONO }}>{searchCombo}</kbd>
             {/* Hover'da vurgu halkası */}
             <span
               aria-hidden
               className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-              style={{ boxShadow: '0 0 0 4px color-mix(in srgb, var(--color-1) 16%, transparent)' }}
+              style={{ boxShadow: '0 0 0 4px color-mix(in srgb, var(--text-main, #f4f4f2) 18%, transparent)' }}
             />
           </button>
 
