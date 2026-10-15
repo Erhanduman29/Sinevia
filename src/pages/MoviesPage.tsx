@@ -4,11 +4,14 @@ import {
   ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock,
   CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye,
   FolderPlus, X, Play, Pause, Timer, Zap, Lock, EyeOff, ChevronsUpDown, History,
-  CheckSquare, Square, ArrowRightLeft, SlidersHorizontal, Send, Film, Skull, RotateCcw
+  CheckSquare, Square, ArrowRightLeft, SlidersHorizontal, Send, Film, Skull, RotateCcw,
+  Info, MessageSquare, MonitorPlay
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useActions, useLibrary, useSettings } from '../context/slices';
 import { ratingBgClass, formatDateShort, normalize, uid } from '../lib/utils';
+import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDB } from '../lib/tmdb';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import { useFilteredMovies } from '../lib/selectorHooks';
@@ -21,12 +24,17 @@ import PickModal from '../components/PickModal';
 import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import AbandonModal from '../components/AbandonModal';
-import type { Movie } from '../types';
+import type { Movie, ExternalActionTemplate } from '../types';
 import '../components/movies-premium.css';
 
 type SortMode = 'az' | 'year' | 'rating' | 'added';
 type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past' | 'graveyard';
 const PAST_QUEUE_MODAL_ID = '__PAST_QUEUE__';
+
+/** Hızlı Aksiyon Köprüsü şablon ikonları (lucide adı → bileşen). */
+const BRIDGE_ICONS: Record<string, LucideIcon> = {
+  ExternalLink, Play, Search, Info, Film, MessageSquare, MonitorPlay, PlayCircle,
+};
 
 export default function MoviesPage() {
   const {
@@ -36,7 +44,7 @@ export default function MoviesPage() {
     abandonMedia, reviveMedia,
   } = useActions();
   const { movies: libMovies, collections: libCollections } = useLibrary();
-  const { agentId, altWatchTemplate, weeklyPlan } = useSettings();
+  const { agentId, altWatchTemplate, weeklyPlan, externalActions } = useSettings();
 
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
@@ -997,6 +1005,7 @@ export default function MoviesPage() {
                               onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                               onSendToFriend={openSendModal}
                               altWatchTemplate={altWatchTemplate}
+                              externalActions={externalActions}
                               onAbandon={(movie) => setAbandonTarget(movie)}
                               onRevive={(movie) => reviveMedia('movie', movie.id)}
                             />
@@ -1073,6 +1082,7 @@ export default function MoviesPage() {
                   onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                   onSendToFriend={openSendModal}
                   altWatchTemplate={altWatchTemplate}
+                  externalActions={externalActions}
                   onAbandon={(movie) => setAbandonTarget(movie)}
                   onRevive={(movie) => reviveMedia('movie', movie.id)}
                 />
@@ -1680,7 +1690,7 @@ export default function MoviesPage() {
 }
 
 function MovieRow({
-  movie, isHighlighted, nowMs, anotherTimerActive, isPlanned, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, onSendToFriend, altWatchTemplate, onAbandon, onRevive,
+  movie, isHighlighted, nowMs, anotherTimerActive, isPlanned, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, onSendToFriend, altWatchTemplate, externalActions, onAbandon, onRevive,
 }: {
   movie: Movie;
   isHighlighted?: boolean;
@@ -1699,10 +1709,11 @@ function MovieRow({
   onSelectDetail: (movie: Movie) => void;
   onSendToFriend: (movie: Movie) => void;
   altWatchTemplate?: string;
+  externalActions?: ExternalActionTemplate[];
   onAbandon: (movie: Movie) => void;
   onRevive: (movie: Movie) => void;
 }) {
-  const watchLinks: { href: string; text: string; logo: string | null; icon: any }[] = [];
+  const watchLinks: { href: string; text: string; logo: string | null; icon: any; primary?: boolean }[] = [];
 
   if (movie.customUrl) watchLinks.push({ href: movie.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
 
@@ -1723,7 +1734,33 @@ function MovieRow({
   const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} izle`);
   watchLinks.push({ href: `https://www.google.com/search?q=${searchQuery}`, text: "Google'da Bul", logo: null, icon: Search });
 
-  if (altWatchTemplate && (movie.imdbId || altWatchTemplate.includes('{slug}') || altWatchTemplate.includes('{title}'))) {
+  // Hızlı Aksiyon Köprüsü — varsa (isPrimary + resolve edilebilir + kapsam uygun)
+  // ilk harici şablon, kartta birincil buton olarak dışarı açılır.
+  const primaryAction = (externalActions || []).find(
+    (t) =>
+      t.isPrimary &&
+      (t.targetScope === 'all' || t.targetScope === 'movie') &&
+      resolveActionUrl(t.urlTemplate, movie) !== null
+  );
+  if (primaryAction) {
+    const primaryHref = resolveActionUrl(primaryAction.urlTemplate, movie);
+    if (primaryHref) {
+      watchLinks.unshift({
+        href: primaryHref,
+        text: primaryAction.label || 'Aksiyon',
+        logo: null,
+        icon: BRIDGE_ICONS[primaryAction.icon] || ExternalLink,
+        primary: true,
+      });
+    }
+  }
+
+  // Köprü, eski tekli alternatif şablonun kendisiyle aynıysa ikisi birden görünmesin.
+  const skipLegacyAlt = Boolean(
+    primaryAction && altWatchTemplate && primaryAction.urlTemplate === rewriteLegacyTemplate(altWatchTemplate)
+  );
+
+  if (altWatchTemplate && !skipLegacyAlt && (movie.imdbId || altWatchTemplate.includes('{slug}') || altWatchTemplate.includes('{title}'))) {
     const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
     const slug = movie.title.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (match) => charMap[match]).replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const finalAltHref = altWatchTemplate.replace('{imdb}', movie.imdbId || '').replace('{slug}', slug).replace('{title}', encodeURIComponent(movie.title)).replace('{year}', movie.year || '');
@@ -1818,6 +1855,24 @@ function MovieRow({
 
             {watchLinks.map((link, idx) => {
               const Icon = link.icon;
+              if (link.primary) {
+                // Birincil harici aksiyon — vurgulu buton, yeni sekmede açılır
+                return (
+                  <a
+                    key={idx}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title={`${link.text} — yeni sekmede açılır`}
+                    className="mpx-btn mpx-btn-p mpx-btn-xs"
+                    style={{ minHeight: 34 }}
+                  >
+                    <Icon size={11} />
+                    <span>{link.text}</span>
+                  </a>
+                );
+              }
               return (
                 <a
                   key={idx}

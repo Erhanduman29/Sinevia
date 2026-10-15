@@ -2,10 +2,13 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter,
   ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, RefreshCw,
-  PlayCircle, ExternalLink, Eye, SlidersHorizontal, X, Send, Skull, RotateCcw
+  PlayCircle, ExternalLink, Eye, SlidersHorizontal, X, Send, Skull, RotateCcw,
+  Play, Info, Film, MessageSquare, MonitorPlay
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, getNextUnwatchedEpisode, uid } from '../lib/utils';
+import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDBSeries } from '../lib/tmdb';
 import { useFilteredSeries } from '../lib/selectorHooks';
 import { supabase } from '../lib/supabase';
@@ -20,6 +23,11 @@ import type { Series, Episode } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 
 type SortMode = 'az' | 'recent' | 'rating';
+
+/** Hızlı Aksiyon Köprüsü şablon ikonları (lucide adı → bileşen). */
+const BRIDGE_ICONS: Record<string, LucideIcon> = {
+  ExternalLink, Play, Search, Info, Film, Tv, MessageSquare, MonitorPlay, PlayCircle,
+};
 
 /* ============================================================
    PREMIUM STILLER (svp- öneki · tema token'larına fallback'li)
@@ -1157,7 +1165,7 @@ export default function SeriesPage() {
             const nextEp = getNextUnwatchedEpisode(s.episodes);
             const progressPct = s.episodes.length > 0 ? Math.round((watchedCount / s.episodes.length) * 100) : 0;
 
-            const watchLinks: { href: string; text: string; logo: string | null; icon: any }[] = [];
+            const watchLinks: { href: string; text: string; logo: string | null; icon: any; primary?: boolean }[] = [];
 
             if (s.customUrl) {
               watchLinks.push({ href: s.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
@@ -1187,7 +1195,33 @@ export default function SeriesPage() {
               icon: Search,
             });
 
-            if (data.altWatchTemplate && (s.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
+            // Hızlı Aksiyon Köprüsü — varsa (isPrimary + resolve edilebilir + kapsam uygun)
+            // ilk harici şablon, kartta birincil buton olarak dışarı açılır.
+            const primaryAction = (data.externalActions || []).find(
+              (t) =>
+                t.isPrimary &&
+                (t.targetScope === 'all' || t.targetScope === 'series') &&
+                resolveActionUrl(t.urlTemplate, s) !== null
+            );
+            if (primaryAction) {
+              const primaryHref = resolveActionUrl(primaryAction.urlTemplate, s);
+              if (primaryHref) {
+                watchLinks.unshift({
+                  href: primaryHref,
+                  text: primaryAction.label || 'Aksiyon',
+                  logo: null,
+                  icon: BRIDGE_ICONS[primaryAction.icon] || ExternalLink,
+                  primary: true,
+                });
+              }
+            }
+
+            // Köprü, eski tekli alternatif şablonun kendisiyle aynıysa ikisi birden görünmesin.
+            const skipLegacyAlt = Boolean(
+              primaryAction && data.altWatchTemplate && primaryAction.urlTemplate === rewriteLegacyTemplate(data.altWatchTemplate)
+            );
+
+            if (data.altWatchTemplate && !skipLegacyAlt && (s.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
               const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
               const slug = s.title
                 .toLocaleLowerCase('tr-TR')
@@ -1262,6 +1296,23 @@ export default function SeriesPage() {
                       <div className="flex gap-1.5 flex-wrap">
                         {watchLinks.map((link, idx) => {
                           const Icon = link.icon;
+                          if (link.primary) {
+                            // Birincil harici aksiyon — vurgulu buton, yeni sekmede açılır
+                            return (
+                              <a
+                                key={idx}
+                                href={link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title={`${link.text} — yeni sekmede açılır`}
+                                className="svp-btn-p px-3 py-1.5"
+                              >
+                                <Icon size={11} />
+                                <span>{link.text}</span>
+                              </a>
+                            );
+                          }
                           return (
                             <a
                               key={idx}

@@ -6,17 +6,18 @@ import {
   BellRing, BellOff, UserCircle, Key, Copy, MessageSquare, Gift, UserPlus, ShieldCheck,
   LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal, Flame, Droplet, Zap, Eye
 } from 'lucide-react';
-import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX } from 'lucide-react';
+import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX, ExternalLink, ChevronUp, Star, Search, Info, Film, Play, MonitorPlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
 import { useTutorial } from '../context/TutorialContext';
-import type { RatingCriterion } from '../types';
+import type { RatingCriterion, ExternalActionTemplate } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ShareImportModal from '../components/ShareImportModal';
 import ShortcutsPanel from '../components/ShortcutsPanel';
 import { uid } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { isSoundEnabled, setSoundEnabled } from '../lib/sound';
+import { ACTION_BRIDGE_PRESETS, newActionId, resolveActionUrl, extractPlaceholders } from '../lib/actionBridge';
 
 // ---------------------------------------------------------------------------
 // PREMIUM YÜZEY & BUTON DİLİ — sinevia-premium.html ile aynı tokenlar.
@@ -169,13 +170,389 @@ function CollapsibleSection({
   );
 }
 
+// ---------------------------------------------------------------------------
+// HIZLI AKSİYON KÖPRÜSÜ — harici şablon yönetimi
+// (CRUD · yukarı/aşağı sıralama · hazır şablonlar · canlı önizleme)
+// Tüm renkler tema token zincirlerine bağlıdır.
+// ---------------------------------------------------------------------------
+const BRIDGE_EMPTY_ACTIONS: ExternalActionTemplate[] = [];
+/** Canlı önizleme örneği — Inception (2010) tüm placeholder alanlarını içerir. */
+const BRIDGE_PREVIEW_MEDIA = { title: 'Inception', year: '2010', imdbId: 'tt1375666', tmdbId: 27205 };
+const BRIDGE_KNOWN_PLACEHOLDERS = ['title', 'title_slug', 'title_plus', 'year', 'imdbId', 'tmdbId', 'imdb', 'slug'];
+const BRIDGE_ICON_NAMES = ['ExternalLink', 'Play', 'Search', 'Info', 'Film', 'MessageSquare', 'MonitorPlay'];
+const BRIDGE_ICONS: Record<string, LucideIcon> = { ExternalLink, Play, Search, Info, Film, MessageSquare, MonitorPlay };
+const BRIDGE_SCOPE_LABELS: Record<ExternalActionTemplate['targetScope'], string> = { all: 'Tümü', movie: 'Film', series: 'Dizi' };
+const BRIDGE_MONO: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' };
+const BRIDGE_ACCENT = 'var(--red, var(--color-1, #e8384f))';
+const BRIDGE_TEXT = 'var(--text-main, #f4f4f2)';
+const BRIDGE_MUTED = 'var(--muted, #9a9a96)';
+const BRIDGE_LINE = 'var(--line-2, var(--border-dim, rgba(244, 244, 242, .13)))';
+const BRIDGE_SURFACE = 'var(--bg-surface, #12121a)';
+const BRIDGE_INPUT_CLS =
+  'w-full px-3 py-2 text-xs sm:text-sm rounded-[10px] transition-colors focus:outline-none focus:border-[color:var(--red,var(--color-1,#e8384f))] ' +
+  'bg-[color:var(--bg-surface,#12121a)] border border-[color:var(--line-2,var(--border-dim))] text-[color:var(--text-main,#f4f4f2)] placeholder:text-[color:var(--muted,#9a9a96)]';
+const BRIDGE_MINI_BTN_CLS =
+  'inline-flex items-center justify-center w-7 h-7 rounded-[9px] border transition-colors focus-visible:outline-none focus-visible:ring-2 ' +
+  'focus-visible:ring-[color:var(--red,var(--color-1,#e8384f))] disabled:opacity-35 disabled:pointer-events-none';
+
+/** Inception (2010) örneğiyle şablonun üreteceği URL'i gösterir; null ise eksik alan uyarısı. */
+function ActionBridgePreview({ urlTemplate }: { urlTemplate: string }) {
+  const url = resolveActionUrl(urlTemplate, BRIDGE_PREVIEW_MEDIA);
+  const missing = extractPlaceholders(urlTemplate).filter((k) => !BRIDGE_KNOWN_PLACEHOLDERS.includes(k));
+  if (url) {
+    return (
+      <p className="flex items-center gap-1.5 min-w-0 text-[11px]" style={{ color: BRIDGE_MUTED }}>
+        <span className="text-[9px] font-black uppercase tracking-widest flex-shrink-0" style={{ color: BRIDGE_ACCENT }}>Önizleme</span>
+        <span className="truncate" style={BRIDGE_MONO}>{url}</span>
+      </p>
+    );
+  }
+  return (
+    <p className="flex items-start gap-1.5 min-w-0 text-[11px]" style={{ color: BRIDGE_MUTED }}>
+      <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" style={{ color: BRIDGE_ACCENT }} />
+      <span className="min-w-0 break-words">
+        {!urlTemplate.trim()
+          ? 'Şablon metni boş — bu şablon için eksik alan var.'
+          : missing.length > 0
+            ? <>Bu şablon için eksik alan: <code style={BRIDGE_MONO}>{missing.map((k) => `{${k}}`).join(' ')}</code></>
+            : 'Bu şablon için eksik alan — Inception (2010) örneğinde çözümlenemedi.'}
+      </span>
+    </p>
+  );
+}
+
+function ActionBridgeSection({
+  actions: persistedActions, onSave,
+}: {
+  actions?: ExternalActionTemplate[];
+  onSave: (actions: ExternalActionTemplate[]) => void;
+}) {
+  const persisted = persistedActions ?? BRIDGE_EMPTY_ACTIONS;
+  const [list, setList] = useState<ExternalActionTemplate[]>(persisted);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ExternalActionTemplate | null>(null);
+
+  // Dışarıdan güncellendiğinde (kaydet / içe aktarma) yerel listeyi senkronla.
+  useEffect(() => {
+    setList(persisted);
+    setEditingId(null);
+    setDraft(null);
+  }, [persisted]);
+
+  const dirty = JSON.stringify(list) !== JSON.stringify(persisted);
+  const editing = editingId !== null;
+
+  const addPreset = (p: Omit<ExternalActionTemplate, 'id'>) =>
+    setList((prev) => (prev.some((a) => a.urlTemplate === p.urlTemplate) ? prev : [...prev, { ...p, id: newActionId() }]));
+
+  const addCustom = () => {
+    const created: ExternalActionTemplate = {
+      id: newActionId(), label: 'Yeni Şablon', urlTemplate: 'https://example.com/search?q={title}',
+      icon: 'ExternalLink', targetScope: 'all', isPrimary: false,
+    };
+    setList((prev) => [...prev, created]);
+    setEditingId(created.id);
+    setDraft(created);
+  };
+
+  const move = (idx: number, dir: -1 | 1) =>
+    setList((prev) => {
+      const j = idx + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      const tmp = next[idx];
+      next[idx] = next[j];
+      next[j] = tmp;
+      return next;
+    });
+
+  const removeAction = (id: string) => {
+    setList((prev) => prev.filter((a) => a.id !== id));
+    if (editingId === id) {
+      setEditingId(null);
+      setDraft(null);
+    }
+  };
+
+  const togglePrimary = (id: string) =>
+    setList((prev) => prev.map((a) => (a.id === id ? { ...a, isPrimary: !a.isPrimary } : a)));
+
+  const startEdit = (a: ExternalActionTemplate) => {
+    setEditingId(a.id);
+    setDraft({ ...a });
+  };
+
+  const commitDraft = () => {
+    if (!draft) return;
+    setList((prev) => prev.map((a) => (a.id === draft.id ? draft : a)));
+    setEditingId(null);
+    setDraft(null);
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Hazır şablonlar — tek tıkla ekleme */}
+      <div className="p-3 rounded-xl space-y-2" style={{ background: BRIDGE_SURFACE, border: `1px solid ${PREMIUM_LINE_SOFT}` }}>
+        <div className="text-[10px] font-black uppercase tracking-widest" style={{ color: BRIDGE_MUTED }}>
+          Hazır Şablonlar · tek tıkla ekle
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {ACTION_BRIDGE_PRESETS.map((p) => {
+            const Ic = BRIDGE_ICONS[p.icon] || ExternalLink;
+            const exists = list.some((a) => a.urlTemplate === p.urlTemplate);
+            return (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => addPreset(p)}
+                disabled={exists}
+                title={exists ? 'Bu şablon zaten listede' : `${p.label} şablonunu ekle`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red,var(--color-1,#e8384f))] disabled:opacity-40"
+                style={{ borderColor: BRIDGE_LINE, background: 'var(--glass, rgba(255, 255, 255, .04))', color: exists ? BRIDGE_MUTED : BRIDGE_TEXT }}
+              >
+                <Ic size={12} style={{ color: exists ? BRIDGE_MUTED : BRIDGE_ACCENT }} />
+                {exists ? 'Eklendi' : p.label}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={addCustom}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-dashed text-[11px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red,var(--color-1,#e8384f))]"
+            style={{ borderColor: BRIDGE_LINE, color: BRIDGE_MUTED }}
+          >
+            <Plus size={12} /> Özel Şablon
+          </button>
+        </div>
+      </div>
+
+      {/* Şablon listesi */}
+      {list.length === 0 ? (
+        <div className="text-xs p-4 rounded-xl text-center" style={{ color: BRIDGE_MUTED, border: `1px dashed ${BRIDGE_LINE}` }}>
+          Henüz şablon yok. Yukarıdaki hazır şablonlardan birini ekleyerek başla.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {list.map((action, idx) => {
+            const Ic = BRIDGE_ICONS[action.icon] || ExternalLink;
+            const isEditing = editingId === action.id;
+            return (
+              <div key={action.id} className="p-2.5 sm:p-3 space-y-2" style={premiumRowStyle}>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className="flex-shrink-0 w-8 h-8 rounded-[9px] grid place-items-center border"
+                    style={{ borderColor: BRIDGE_LINE, background: BRIDGE_SURFACE, color: BRIDGE_ACCENT }}
+                  >
+                    <Ic size={14} />
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs sm:text-sm font-extrabold truncate" style={{ color: BRIDGE_TEXT }}>
+                        {action.label || 'İsimsiz Şablon'}
+                      </span>
+                      <span
+                        className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md border flex-shrink-0"
+                        style={{ borderColor: BRIDGE_LINE, color: BRIDGE_MUTED }}
+                      >
+                        {BRIDGE_SCOPE_LABELS[action.targetScope]}
+                      </span>
+                      {action.isPrimary && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md flex-shrink-0"
+                          style={{ color: BRIDGE_ACCENT, background: 'var(--blob-1, rgba(232, 56, 79, .14))' }}
+                        >
+                          <Star size={9} className="fill-current" /> Birincil
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] truncate" style={{ color: BRIDGE_MUTED, ...BRIDGE_MONO }}>
+                      {action.urlTemplate || '—'}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      title="Yukarı taşı"
+                      onClick={() => move(idx, -1)}
+                      disabled={idx === 0 || editing}
+                      className={BRIDGE_MINI_BTN_CLS}
+                      style={{ borderColor: BRIDGE_LINE, color: BRIDGE_MUTED, background: BRIDGE_SURFACE }}
+                    >
+                      <ChevronUp size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Aşağı taşı"
+                      onClick={() => move(idx, 1)}
+                      disabled={idx === list.length - 1 || editing}
+                      className={BRIDGE_MINI_BTN_CLS}
+                      style={{ borderColor: BRIDGE_LINE, color: BRIDGE_MUTED, background: BRIDGE_SURFACE }}
+                    >
+                      <ChevronDown size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      title={action.isPrimary ? 'Birincilliği kaldır' : 'Kartta birincil buton yap'}
+                      onClick={() => togglePrimary(action.id)}
+                      disabled={editing}
+                      className={BRIDGE_MINI_BTN_CLS}
+                      style={{
+                        borderColor: action.isPrimary ? BRIDGE_ACCENT : BRIDGE_LINE,
+                        color: action.isPrimary ? BRIDGE_ACCENT : BRIDGE_MUTED,
+                        background: action.isPrimary ? 'var(--blob-1, rgba(232, 56, 79, .14))' : BRIDGE_SURFACE,
+                      }}
+                    >
+                      <Star size={13} className={action.isPrimary ? 'fill-current' : ''} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Düzenle"
+                      onClick={() => startEdit(action)}
+                      disabled={editing}
+                      className={BRIDGE_MINI_BTN_CLS}
+                      style={{ borderColor: BRIDGE_LINE, color: BRIDGE_MUTED, background: BRIDGE_SURFACE }}
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Şablonu sil"
+                      onClick={() => removeAction(action.id)}
+                      disabled={editing}
+                      className={BRIDGE_MINI_BTN_CLS}
+                      style={{ borderColor: BRIDGE_LINE, color: BRIDGE_MUTED, background: BRIDGE_SURFACE }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {!isEditing && <ActionBridgePreview urlTemplate={action.urlTemplate} />}
+
+                {isEditing && draft && (
+                  <div className="space-y-2.5 p-2.5 rounded-xl" style={{ background: BRIDGE_SURFACE, border: `1px solid ${BRIDGE_LINE}` }}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <label className="block space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest block" style={{ color: BRIDGE_MUTED }}>Şablon Adı</span>
+                        <input
+                          type="text"
+                          value={draft.label}
+                          onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                          placeholder="Örn: IMDb"
+                          className={BRIDGE_INPUT_CLS}
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest block" style={{ color: BRIDGE_MUTED }}>İkon</span>
+                        <select
+                          value={BRIDGE_ICON_NAMES.includes(draft.icon) ? draft.icon : 'ExternalLink'}
+                          onChange={(e) => setDraft({ ...draft, icon: e.target.value })}
+                          className={BRIDGE_INPUT_CLS}
+                        >
+                          {BRIDGE_ICON_NAMES.map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                          {!BRIDGE_ICON_NAMES.includes(draft.icon) && (
+                            <option value={draft.icon}>{draft.icon}</option>
+                          )}
+                        </select>
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest block" style={{ color: BRIDGE_MUTED }}>Kapsam</span>
+                        <select
+                          value={draft.targetScope}
+                          onChange={(e) => setDraft({ ...draft, targetScope: e.target.value as ExternalActionTemplate['targetScope'] })}
+                          className={BRIDGE_INPUT_CLS}
+                        >
+                          <option value="all">Tümü (film + dizi)</option>
+                          <option value="movie">Sadece Filmler</option>
+                          <option value="series">Sadece Diziler</option>
+                        </select>
+                      </label>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest block" style={{ color: BRIDGE_MUTED }}>Kartta Birincil</span>
+                        <button
+                          type="button"
+                          onClick={() => setDraft({ ...draft, isPrimary: !draft.isPrimary })}
+                          className={`${BRIDGE_INPUT_CLS} flex items-center gap-1.5 text-left font-bold`}
+                          style={{ color: draft.isPrimary ? BRIDGE_ACCENT : BRIDGE_MUTED }}
+                        >
+                          <Star size={13} className={draft.isPrimary ? 'fill-current' : ''} />
+                          {draft.isPrimary ? 'Birincil buton' : 'Kapalı'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <label className="block space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest block" style={{ color: BRIDGE_MUTED }}>URL Şablonu</span>
+                      <input
+                        type="text"
+                        value={draft.urlTemplate}
+                        onChange={(e) => setDraft({ ...draft, urlTemplate: e.target.value })}
+                        placeholder="https://example.com/search?q={title}+{year}"
+                        className={BRIDGE_INPUT_CLS}
+                        style={BRIDGE_MONO}
+                      />
+                    </label>
+
+                    <div className="text-[10px] leading-relaxed" style={{ color: BRIDGE_MUTED }}>
+                      Placeholder'lar:{' '}
+                      {['{title}', '{title_slug}', '{title_plus}', '{year}', '{imdbId}', '{tmdbId}'].map((ph) => (
+                        <code key={ph} className="px-1 py-0.5 rounded mr-1" style={BRIDGE_MONO}>{ph}</code>
+                      ))}
+                    </div>
+
+                    <ActionBridgePreview urlTemplate={draft.urlTemplate} />
+
+                    <div className="flex gap-2 pt-0.5">
+                      <button type="button" onClick={commitDraft} className={`${BTN_P} px-3.5 py-2 text-[11px]`} style={BTN_P_STYLE}>
+                        <Check size={14} /> Uygula
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setEditingId(null); setDraft(null); }}
+                        className={`${BTN_S} px-3.5 py-2 text-[11px]`}
+                        style={BTN_S_STYLE}
+                      >
+                        <X size={14} /> Vazgeç
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Kaydet */}
+      <div className="flex flex-wrap items-center gap-2.5 pt-1">
+        <button
+          type="button"
+          onClick={() => onSave(list)}
+          disabled={!dirty || editing}
+          className={`${BTN_P} px-4 py-2.5 text-xs sm:text-sm`}
+          style={BTN_P_STYLE}
+        >
+          <Check size={16} /> Kaydet
+        </button>
+        <span className="text-[11px]" style={{ color: BRIDGE_MUTED }}>
+          {editing ? 'Açık şablonu uygula veya vazgeç.' : dirty ? 'Kaydedilmemiş değişiklikler var.' : 'Tüm şablonlar güncel.'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const {
     data, addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData,
     toggleLockedNames, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
-    setNickname, recoverIdentity
+    setNickname, recoverIdentity, setExternalActions
   } = useApp();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
 
@@ -796,6 +1173,21 @@ export default function SettingsPage() {
                 <Check size={16} /> Kaydet
               </button>
             </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Hızlı Aksiyon Köprüsü & Şablonlar"
+            icon={<ExternalLink size={18} className="text-azure-400 flex-shrink-0" />}
+            defaultOpen={false}
+            desc="Kartlarda ve detay penceresinde tek tıkla dış sitelere açılan şablonlar. Placeholder'lar medya bilgisinden otomatik doldurulur."
+          >
+            <ActionBridgeSection
+              actions={data.externalActions}
+              onSave={(actions) => {
+                setExternalActions(actions);
+                showToast('Hızlı aksiyon köprüsü şablonları kaydedildi.');
+              }}
+            />
           </CollapsibleSection>
 
           {/* --- KRTİK İŞLEMLER BÖLÜMÜ (EN ALTA ALINDI) --- */}

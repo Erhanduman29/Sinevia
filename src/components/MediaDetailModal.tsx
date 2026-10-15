@@ -3,8 +3,11 @@ import {
   X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search,
   User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers,
   Building2, Tag, Edit2, CheckCircle2, Play, Pause, Timer, Zap, Lock, History,
+  Info, MessageSquare, MonitorPlay,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useApp, getMovieTimerInfo } from '../context/AppContext';
+import { resolveActionUrl } from '../lib/actionBridge';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
 import RatingModal from './RatingModal';
 import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
@@ -13,6 +16,12 @@ import { handleImgFallback } from '../lib/selectors';
 export type DetailModalTarget =
   | { type: 'movie'; data: Movie; historyItem?: WatchHistoryItem }
   | { type: 'series'; data: Series; historyItem?: WatchHistoryItem };
+
+/** Hızlı Aksiyon Köprüsü şablon ikonları (lucide adı → bileşen). */
+const QUICK_ACTION_ICONS: Record<string, LucideIcon> = {
+  ExternalLink, Play, Search, Info, Film, Tv, Youtube, PlayCircle,
+  MessageSquare, MonitorPlay, Star, Layers,
+};
 
 interface MediaDetailModalProps {
   target: DetailModalTarget;
@@ -96,6 +105,15 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
 
   const timerInfo = isMovie && liveMovie && !liveMovie.watched && liveMovie.startedAt ? getMovieTimerInfo(liveMovie, nowMs) : null;
   const anotherTimerActive = isMovie && liveMovie ? appData.movies.some((m) => !m.watched && m.id !== liveMovie.id && m.startedAt) : false;
+
+  // Hızlı Aksiyon Köprüsü — kullanıcının tanımladığı harici şablonlar.
+  // targetScope filtresi (film/dizi/tümü) + resolveActionUrl (null → disabled).
+  const actionScope = isMovie ? ('movie' as const) : ('series' as const);
+  const mediaForActions = isMovie ? liveMovie : liveSeries;
+  const quickActions = (appData.externalActions || [])
+    .filter((t) => t.targetScope === 'all' || t.targetScope === actionScope)
+    .map((t) => ({ tpl: t, href: mediaForActions ? resolveActionUrl(t.urlTemplate, mediaForActions) : null }))
+    .sort((a, b) => Number(!!b.tpl.isPrimary) - Number(!!a.tpl.isPrimary));
 
   const toggleEpNote = (epId: string) => {
     setExpandedEpNotes((prev) => {
@@ -483,6 +501,50 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                   );
                 })}
               </div>
+
+              {quickActions.length > 0 && (
+                <div className="mt-3.5">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-ink-400 mb-1.5 text-center md:text-left">
+                    Hızlı Aksiyonlar
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2">
+                    {quickActions.map(({ tpl, href }) => {
+                      const Icon = QUICK_ACTION_ICONS[tpl.icon] || ExternalLink;
+                      if (!href) {
+                        // Eksik alan (örn. tmdbId) → disabled + tooltip
+                        return (
+                          <span
+                            key={tpl.id}
+                            title="Eksik bilgi (örn. tmdbId)"
+                            aria-disabled="true"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold border opacity-50 cursor-not-allowed select-none"
+                            style={{ background: 'var(--bg-surface, #12121a)', borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #9a9a96)' }}
+                          >
+                            <Icon size={13} /> {tpl.label || 'Aksiyon'}
+                          </span>
+                        );
+                      }
+                      const primary = !!tpl.isPrimary;
+                      return (
+                        <a
+                          key={tpl.id}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`${tpl.label || 'Aksiyon'} — yeni sekmede açılır`}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-bold transition-all border"
+                          style={primary
+                            ? { background: 'var(--blob-1, rgba(232, 56, 79, .14))', borderColor: 'var(--red, var(--color-1, #e8384f))', color: 'var(--text-main, #f4f4f2)' }
+                            : { background: 'var(--bg-surface, #12121a)', borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #9a9a96)' }}
+                        >
+                          <Icon size={13} style={primary ? { color: 'var(--red, var(--color-1, #e8384f))' } : undefined} />
+                          {tpl.label || 'Aksiyon'}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
