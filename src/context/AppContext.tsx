@@ -50,6 +50,7 @@ export interface ExtendedAppData extends AppData {
   tagSentiments?: Record<string, 'positive' | 'negative'>;
   notificationsEnabled?: boolean;
   shareWatchedInFeed?: boolean;
+  sharePastWatchedInFeed?: boolean;
   notifyMessages?: boolean;
   notifyFriendRequests?: boolean;
   notifyLists?: boolean;
@@ -180,7 +181,7 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
     showLockedNames: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
-    weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true,
+    weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true, sharePastWatchedInFeed: true,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
     showcase: [],
     lastCloudSync: Date.now()
@@ -342,6 +343,7 @@ type Action =
   | { type: 'UPDATE_PLAN_ITEM'; id: string; date: string; time: string }
   | { type: 'TOGGLE_NOTIFICATIONS'; enabled: boolean }
   | { type: 'TOGGLE_SHARE_WATCHED'; enabled: boolean }
+  | { type: 'TOGGLE_SHARE_PAST_WATCHED'; enabled: boolean }
   | { type: 'SET_NICKNAME'; nickname: string }
   | { type: 'RECOVER_IDENTITY'; agentId: string; recoveryKey: string; nickname: string }
   | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean }
@@ -688,6 +690,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'SET_THEME') return { ...state, theme: action.theme };
   if (action.type === 'TOGGLE_NOTIFICATIONS') return { ...state, notificationsEnabled: action.enabled };
   if (action.type === 'TOGGLE_SHARE_WATCHED') return { ...state, shareWatchedInFeed: action.enabled };
+  if (action.type === 'TOGGLE_SHARE_PAST_WATCHED') return { ...state, sharePastWatchedInFeed: action.enabled };
   if (action.type === 'TOGGLE_SPECIFIC_NOTIFICATION') return { ...state, [action.key]: action.enabled };
   if (action.type === 'SET_NICKNAME') return { ...state, nickname: action.nickname };
   if (action.type === 'SET_SHOWCASE') return { ...state, showcase: action.showcase.slice(0, 4) };
@@ -847,7 +850,7 @@ interface AppContextValue {
   updateAIHistory: (messages: AIMessage[]) => void; addCriterion: (criterion: RatingCriterion) => void; editCriterion: (id: string, criterion: RatingCriterion) => void; deleteCriterion: (id: string) => void;
   updateAltWatchTemplate: (template: string) => void; updateTheme: (theme: string) => void;
   weeklyPlan: WeeklyPlanItem[]; addPlanItem: (movie: Movie, date: string, time: string) => boolean; deletePlanItem: (id: string) => void; updatePlanItem: (id: string, date: string, time: string) => boolean;
-  grantXp: (xp: number) => void; toggleNotifications: (enabled: boolean) => void; toggleShareWatched: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
+  grantXp: (xp: number) => void; toggleNotifications: (enabled: boolean) => void; toggleShareWatched: (enabled: boolean) => void; toggleSharePastWatched: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
   setNickname: (nickname: string) => void; recoverIdentity: (agentId: string, recoveryKey: string, nickname: string) => void;
   updateShowcase: (items: ShowcaseItem[]) => void;
   forceXpSync: () => void;
@@ -872,6 +875,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) parsedData.weeklyPlan = [];
         if (parsedData.notificationsEnabled === undefined) parsedData.notificationsEnabled = false;
         if (parsedData.shareWatchedInFeed == null) parsedData.shareWatchedInFeed = true;
+        if (parsedData.sharePastWatchedInFeed == null) parsedData.sharePastWatchedInFeed = true;
         if (parsedData.notifyMessages === undefined) parsedData.notifyMessages = true;
         if (parsedData.notifyFriendRequests === undefined) parsedData.notifyFriendRequests = true;
         if (parsedData.notifyLists === undefined) parsedData.notifyLists = true;
@@ -1113,6 +1117,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
   const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []);
   const toggleShareWatched = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_SHARE_WATCHED', enabled }), []);
+  const toggleSharePastWatched = useCallback((enabled: boolean) => {
+    dispatch({ type: 'TOGGLE_SHARE_PAST_WATCHED', enabled });
+    const from = enabled ? 'watched_hidden' : 'watched';
+    const to = enabled ? 'watched' : 'watched_hidden';
+    supabase.from('network_logs').update({ action_type: to }).eq('agent_id', data.agentId).eq('action_type', from)
+      .then(({ error }: { error: any }) => { if (error) { console.error(error); showToast('Eski izleme kayıtları güncellenemedi!', 'warning'); } });
+  }, [data.agentId, showToast]);
   const toggleSpecificNotification = useCallback((key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => dispatch({ type: 'TOGGLE_SPECIFIC_NOTIFICATION', key, enabled }), []);
   const setNickname = useCallback((nickname: string) => { dispatch({ type: 'SET_NICKNAME', nickname }); showToast('Kullanıcı adı güncellendi!', 'success'); }, [showToast]);
   
@@ -1286,7 +1297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AppContext.Provider value={{ data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSpecificNotification, forceXpSync, syncAchievements }}>
+    <AppContext.Provider value={{ data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements }}>
       {children}
     </AppContext.Provider>
   );

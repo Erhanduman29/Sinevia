@@ -23,7 +23,7 @@ import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
 import { RANK_TIERS } from '../lib/rankTiers';
 
 // ============================================================
-// PREMIUM HOME STILLERİ
+// PREMIUM HOME STILLERİ (Masaüstü Monolith + Mobil Kompakt)
 // ============================================================
 const HOME_PREMIUM_CSS = `
 .hn-sec{display:flex;flex-direction:column;gap:16px}
@@ -39,7 +39,7 @@ const HOME_PREMIUM_CSS = `
   border-radius:var(--r-lg,22px);
   box-shadow:var(--shadow,0 24px 60px -24px rgba(0,0,0,.8));
 }
-.hn-spotlight,.hn-duo,.hn-scard,.hn-sc,.hn-timer,.hn-bento-card{
+.hn-spotlight,.hn-duo,.hn-scard,.hn-timer,.hn-bento-card{
   background:var(--glass,var(--bg-card,rgba(255,255,255,.05)));
   border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));
   border-radius:var(--r-lg,22px);
@@ -538,7 +538,7 @@ const HOME_PREMIUM_CSS = `
 .hn-btn-ic{vertical-align:-2px}
 .hn-planned{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;padding:13px 22px;border-radius:13px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border:1px dashed var(--line-2,var(--border-dim,rgba(244,244,242,.13)))}
 
-/* ---------- GÜNÜN SİNEMA KARTI (Sağa Genişletilmiş 340px Tam Afiş Penceresi) ---------- */
+/* ---------- 02 · GÜNÜN SİNEMA KARTI ---------- */
 .hn-spotlight{
   display:grid;
   grid-template-columns:340px minmax(0,1fr);
@@ -575,6 +575,7 @@ const HOME_PREMIUM_CSS = `
 .hn-filmbadge{position:absolute;top:0;left:0;z-index:2;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;padding:8px 14px;background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-radius:0 0 14px 0;box-shadow:0 6px 18px -6px var(--red,var(--color-1,#e8384f))}
 .hn-rate{position:absolute;top:14px;right:14px;z-index:2;font-weight:900;font-variant-numeric:tabular-nums;font-size:15px;background:rgba(10,10,13,.85);border:1px solid rgba(255,255,255,.22);padding:6px 12px;border-radius:11px;color:#fff;backdrop-filter:blur(10px);box-shadow:0 8px 22px -10px rgba(0,0,0,.9)}
 .hn-sp-body{padding:34px 38px;display:flex;flex-direction:column;gap:18px;min-width:0;overflow:hidden}
+.hn-sp-head{display:flex;flex-direction:column;gap:14px;min-width:0}
 .hn-sp-kick{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.26em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
 .hn-sp-body h2{font-family:inherit;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-.035em;line-height:.98;margin:0;background:linear-gradient(100deg,#fff 35%,#9C9CA1);-webkit-background-clip:text;background-clip:text;color:transparent;overflow-wrap:anywhere;min-width:0}
 .hn-meta-chips{display:flex;gap:8px;flex-wrap:wrap;width:fit-content;max-width:100%;min-width:0}
@@ -592,16 +593,6 @@ const HOME_PREMIUM_CSS = `
 .hn-link-chip{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:8px 13px;border-radius:99px;transition:.2s;text-decoration:none}
 .hn-link-chip:hover{color:var(--text-main,#f4f4f2);border-color:rgba(255,255,255,.3);transform:translateY(-2px)}
 .hn-link-logo{width:13px;height:13px;border-radius:3px;object-fit:cover}
-
-/* ---------- ARŞİV KISAYOLLARI ---------- */
-.hn-shortcuts{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.hn-sc{padding:26px 20px;text-align:center;position:relative;transition:.28s cubic-bezier(.2,.7,.3,1);cursor:pointer;font-family:inherit;color:inherit}
-.hn-sc:hover{transform:translateY(-6px);border-color:var(--red,var(--color-1,#e8384f));box-shadow:0 28px 54px -20px rgba(0,0,0,.9),0 0 34px -12px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.1)}
-.hn-sc:hover .hn-sci{border-color:var(--red,var(--color-1,#e8384f));color:var(--red-hi,var(--color-2,#ff6b7a));background:rgba(232,56,79,.12);box-shadow:0 0 22px -6px var(--red,var(--color-1,#e8384f));transform:scale(1.06)}
-.hn-sci{width:46px;height:46px;margin:0 auto 13px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));display:grid;place-items:center;color:var(--muted,#9a9a96);transition:.28s;border-radius:14px;background:rgba(255,255,255,.04)}
-.hn-sc b{display:block;font-family:inherit;font-size:34px;font-weight:900;letter-spacing:-.03em;color:var(--text-main,#f4f4f2)}
-.hn-sc>span:last-child{font-size:9.5px;font-weight:700;letter-spacing:.18em;color:var(--muted,#9a9a96);text-transform:uppercase}
-.hn-sc.red b{color:var(--red-hi,var(--color-2,#ff6b7a));text-shadow:0 0 26px rgba(232,56,79,.6)}
 
 /* ---------- İZLEMEYE DEVAM ET ---------- */
 .hn-series-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -622,7 +613,7 @@ const HOME_PREMIUM_CSS = `
 .hn-rate-btn{margin-top:15px;width:100%;padding:11px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;transition:.24s;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
 .hn-rate-btn:hover{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;color:#fff;box-shadow:0 10px 26px -8px var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
 
-/* ---------- ROZETLER + AĞ ---------- */
+/* ---------- ROZETLER + SİNEVİA AĞI (Afişli Tasarım) ---------- */
 .hn-duo{display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
 .hn-panel{padding:26px 28px}
 .hn-panel + .hn-panel{border-left:1px solid var(--line,rgba(244,244,242,.07))}
@@ -643,15 +634,49 @@ const HOME_PREMIUM_CSS = `
 .hn-pl i{font-style:normal;color:var(--text-main,#f4f4f2)}
 .hn-pt{height:8px;background:rgba(0,0,0,.5);border-radius:99px;margin-top:6px;position:relative;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
 .hn-pt i{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 12px var(--red,var(--color-1,#e8384f))}
-.hn-net-note{font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);padding:13px 16px;margin:0 0 18px;background:linear-gradient(120deg,var(--blob-1,rgba(232,56,79,.12)),transparent 80%);border:1px solid rgba(232,56,79,.3);border-radius:14px}
-.hn-agents{display:flex;flex-direction:column;gap:9px}
-.hn-agent{display:flex;align-items:center;gap:13px;padding:13px 15px;border:1px solid var(--line,rgba(244,244,242,.07));border-radius:14px;background:rgba(255,255,255,.03);transition:.22s}
-.hn-agent:hover{background:rgba(255,255,255,.07);border-color:var(--line-2,var(--border-dim,rgba(244,244,242,.13)));transform:translateX(4px)}
-.hn-aa{width:38px;height:38px;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));background:linear-gradient(150deg,#23232A,#131317);display:grid;place-items:center;font-weight:900;font-size:14px;border-radius:12px;color:var(--text-main,#f4f4f2);flex-shrink:0}
-.hn-agent-tx{flex:1;min-width:0}
-.hn-agent-tx b{font-family:inherit;font-size:13px;font-weight:900;text-transform:uppercase;display:block;color:var(--text-main,#f4f4f2)}
-.hn-agent-tx .sub{font-size:9.5px;font-weight:700;letter-spacing:.14em;color:var(--muted,#9a9a96);text-transform:uppercase;display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hn-st{margin-left:auto;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:5px 10px;color:var(--muted,#9a9a96);border-radius:99px;white-space:nowrap;flex-shrink:0}
+.hn-net-note{font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);padding:13px 16px;margin:0 0 16px;background:linear-gradient(120deg,var(--blob-1,rgba(232,56,79,.12)),transparent 80%);border:1px solid rgba(232,56,79,.3);border-radius:14px}
+.hn-agents{display:flex;flex-direction:column;gap:10px}
+.hn-agent{display:flex;align-items:center;gap:14px;padding:11px 14px;border:1px solid var(--line,rgba(244,244,242,.08));border-radius:16px;background:rgba(255,255,255,.03);transition:.22s}
+.hn-agent:hover{background:rgba(255,255,255,.065);border-color:var(--line-2,var(--border-dim,rgba(244,244,242,.16)));transform:translateX(4px)}
+.hn-agent-poster{
+  width:46px;
+  aspect-ratio:2/3;
+  border-radius:9px;
+  overflow:hidden;
+  flex-shrink:0;
+  background:linear-gradient(160deg,#23232A,#111116);
+  border:1px solid rgba(255,255,255,.14);
+  display:grid;
+  place-items:center;
+  color:var(--muted,#9a9a96);
+  box-shadow:0 8px 18px -8px rgba(0,0,0,.85);
+}
+.hn-agent-poster img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.hn-agent-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.hn-agent-who{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hn-agent-avatar-mini{
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:rgba(232,56,79,.18);
+  border:1px solid rgba(232,56,79,.4);
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+  font-size:9.5px;
+  font-weight:900;
+  display:inline-grid;
+  place-items:center;
+  flex-shrink:0;
+}
+.hn-agent-who b{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--red-hi,var(--color-2,#ff6b7a));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+.hn-agent-who span{font-size:10px;color:var(--muted,#9a9a96);font-weight:600}
+.hn-agent-title{font-family:inherit;font-size:13.5px;font-weight:900;color:var(--text-main,#f4f4f2);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hn-agent-time{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;color:var(--muted,#9a9a96);letter-spacing:.06em;text-transform:uppercase}
+.hn-st{margin-left:auto;font-size:9.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:5px 10px;color:var(--muted,#9a9a96);border-radius:99px;white-space:nowrap;flex-shrink:0}
 .hn-st.on{color:#67E39B;border-color:rgba(78,203,142,.5);background:rgba(78,203,142,.1);box-shadow:0 0 14px -5px rgba(78,203,142,.7)}
 .hn-agents-loading{text-align:center;padding:26px 10px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);animation:hnPulse 1.6s ease-in-out infinite}
 .hn-agents-empty{text-align:center;padding:26px 10px;font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border:1px dashed var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:14px;font-style:italic}
@@ -685,7 +710,9 @@ const HOME_PREMIUM_CSS = `
 .hn-bento-card h4{font-family:inherit;font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:-.015em;margin:0 0 8px;color:var(--text-main,#f4f4f2)}
 .hn-bento-card p{font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);margin:0}
 
-/* ---------- RESPONSIVE ---------- */
+/* ============================================================
+   RESPONSIVE & MOBİL KOMPAKT OPTİMİZASYON
+   ============================================================ */
 @media (max-width:1180px){
   .snv-id-right{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)}
   .snv-id-readout{align-items:flex-start}
@@ -696,82 +723,232 @@ const HOME_PREMIUM_CSS = `
   .hp-recent{grid-template-columns:repeat(3,1fr)}
   .hn-spotlight{grid-template-columns:300px minmax(0,1fr)}
   .hn-sp-poster{width:300px}
-  .hn-series-grid,.hn-shortcuts{grid-template-columns:1fr}
+  .hn-series-grid{grid-template-columns:1fr}
   .hn-duo{grid-template-columns:1fr}
   .hn-panel + .hn-panel{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
 }
 @media (max-width:767px){
-  .hn-sec{gap:12px}
-  .hn-sec-t{gap:10px;flex-wrap:wrap}
+  /* Bölüm Başlıkları */
+  .hn-sec{gap:10px}
+  .hn-sec-t{gap:8px;flex-wrap:wrap}
+  .hn-sec-t h2{font-size:13.5px}
   .hn-sec-t .ln{min-width:16px}
-  .hn-idx{padding:4px 8px;font-size:9px}
-  .hn-more{padding:8px 4px}
-  .hn-btn{padding:12px 14px;font-size:10.5px;letter-spacing:.08em;gap:5px;min-height:44px;justify-content:center}
-  .hn-planned{padding:12px 14px;font-size:10.5px;letter-spacing:.08em}
-  .snv-id-main{padding:22px 18px;gap:20px}
-  .snv-id-monogram{width:74px;height:74px}
-  .snv-id-monogram svg{width:74px;height:74px}
-  .snv-id-letter{width:60px;height:60px;font-size:24px}
-  .snv-id-name{font-size:28px}
+  .hn-idx{padding:3px 7px;font-size:8.5px;border-radius:6px}
+  .hn-more{padding:4px 2px;font-size:9.5px}
+
+  /* Genel Mobil Butonlar */
+  .hn-btn{padding:8px 11px;font-size:9.5px;letter-spacing:.06em;gap:4px;min-height:36px;border-radius:10px;justify-content:center}
+  .hn-planned{padding:8px 11px;font-size:9.5px;letter-spacing:.06em;border-radius:10px}
+
+  /* 01 · SİNEVİA KARTI — MOBİLDE MİNİMAL & KOMPAKT */
+  .snv-id-card{border-radius:16px}
+  .snv-id-main{padding:14px;gap:12px}
+  .snv-id-left{gap:12px;width:100%}
+  .snv-id-monogram{width:56px;height:56px}
+  .snv-id-monogram svg{width:56px;height:56px}
+  .snv-id-letter{width:46px;height:46px;font-size:19px}
+  .snv-id-lv-tag{font-size:8px;padding:1.5px 7px;bottom:-3px}
+  .snv-id-titles{gap:2px}
+  .snv-id-kicker{font-size:9px;letter-spacing:.12em;gap:6px}
+  .snv-id-code-btn{font-size:9px;padding:2px 6px}
+  .snv-id-name{font-size:20px;line-height:1.1;margin:1px 0}
+  .snv-id-submeta{display:none}
+
+  .snv-id-right{
+    width:100%;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    padding-top:10px;
+    border-top:1px solid rgba(255,255,255,.07);
+  }
   .snv-id-readout-divider{display:none}
-  .snv-badge-showcase{width:100%}
-  .snv-id-readout-val b{font-size:28px}
-  .snv-id-footer{padding:18px;gap:18px}
-  .snv-id-metrics{gap:18px 24px}
-  .snv-rank-evolution{width:100%}
-  .hn-timer{padding:14px;gap:12px}
-  .hn-timer-ic{width:40px;height:40px;border-radius:12px}
+  .snv-badge-showcase{
+    grid-column:1 / -1;
+    padding:8px 11px;
+    gap:10px;
+    border-radius:12px;
+  }
+  .snv-badge-emblem{width:36px;height:36px;border-radius:9px;font-size:17px}
+  .snv-badge-kicker{font-size:8px;letter-spacing:.12em}
+  .snv-badge-title{font-size:12.5px;max-width:220px}
+  .snv-badge-sub{display:none}
+
+  .snv-id-readout{
+    align-items:flex-start;
+    background:rgba(255,255,255,.025);
+    border:1px solid rgba(255,255,255,.07);
+    padding:8px 11px;
+    border-radius:11px;
+  }
+  .snv-id-readout-label{font-size:8px;letter-spacing:.12em;margin-bottom:2px}
+  .snv-id-readout-val b{font-size:19px}
+  .snv-id-readout-val em{font-size:9px}
+  .snv-id-readout-sub{font-size:9px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+
+  .snv-id-footer{padding:12px 14px;gap:10px}
+  .snv-id-metrics{
+    width:100%;
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:4px;
+    text-align:center;
+  }
+  .snv-id-mitem{
+    flex-direction:column;
+    align-items:center;
+    gap:2px;
+    background:rgba(255,255,255,.02);
+    border:1px solid rgba(255,255,255,.05);
+    padding:6px 2px;
+    border-radius:9px;
+  }
+  .snv-id-mitem b{font-size:14px;line-height:1.1}
+  .snv-id-mitem span{font-size:7.5px;letter-spacing:.08em}
+
+  .snv-id-right-foot{width:100%;gap:10px}
+  .snv-id-tiers{
+    width:100%;
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:4px;
+  }
+  .snv-id-tier{
+    flex-direction:column;
+    justify-content:center;
+    gap:2px;
+    padding:5px 2px;
+    border-radius:8px;
+    text-align:center;
+  }
+  .snv-id-tier i{width:5px;height:5px}
+  .snv-id-tier b{font-size:11.5px}
+  .snv-id-tier span{font-size:7.5px;letter-spacing:.04em}
+
+  .snv-rank-evolution{
+    width:100%;
+    min-width:0;
+    padding:9px 12px;
+    gap:5px;
+    border-radius:11px;
+  }
+  .snv-re-tag{font-size:8px}
+  .snv-re-rem{font-size:8.5px;padding:1.5px 6px}
+  .snv-re-Flow{font-size:11px;gap:6px}
+
+  /* Canlı Sayaç */
+  .hn-timer{padding:12px 14px;gap:10px}
+  .hn-timer-ic{width:36px;height:36px;border-radius:10px}
   .hn-timer-tx{flex:1 1 100%;min-width:0}
   .hn-timer-btns{margin-left:0;width:100%}
   .hn-timer-btns .hn-btn{flex:1}
-  .hn-timer-x{flex-shrink:0}
-  .hn-spotlight{grid-template-columns:minmax(0,1fr)}
-  .hn-sp-poster{width:100%;max-width:340px;margin:0 auto;border-right:0;border-bottom:1px solid var(--line,rgba(244,244,242,.07))}
-  .hn-sp-body{padding:22px 18px;gap:14px}
-  .hn-sp-body h2{font-size:26px}
-  .hn-meta-chips span{font-size:9.5px;padding:6px 11px;letter-spacing:.08em}
-  .hn-genre{font-size:9.5px;padding:6px 11px;letter-spacing:.12em}
-  .hn-gdesc{font-size:12.5px;line-height:1.65}
-  .hn-btnrow{gap:8px}
-  .hn-btnrow .hn-btn{flex:1 1 auto}
-  .hn-link-chip{font-size:9px;padding:7px 10px;letter-spacing:.08em}
-  .hn-shortcuts{grid-template-columns:repeat(2,1fr);gap:10px}
-  .hn-sc{padding:16px 10px}
-  .hn-sci{width:38px;height:38px;border-radius:12px;margin-bottom:9px}
-  .hn-sc b{font-size:26px}
-  .hn-sc>span:last-child{font-size:8.5px;letter-spacing:.12em}
-  .hn-scard{padding:14px;gap:12px}
-  .hn-sposter{width:72px}
-  .hn-sinfo h4{font-size:14px}
-  .hn-rate-btn{margin-top:12px;padding:10px}
-  .hn-panel{padding:18px 16px}
-  .hn-panel h3{font-size:13.5px;margin-bottom:14px;gap:8px}
-  .hn-ach{padding:13px;margin-bottom:10px;border-radius:14px}
+  .hn-timer-x{width:36px;height:36px;flex-shrink:0}
+
+  /* 02 · GÜNÜN SİNEMA KARTI — MOBİLDE YAN YANA KOMPAKT & MİNİMAL */
+  .hn-spotlight{
+    grid-template-columns:96px minmax(0,1fr);
+    gap:12px;
+    padding:13px;
+    border-radius:16px;
+    align-items:start;
+  }
+  .hn-sp-poster{
+    width:96px;
+    aspect-ratio:2/3;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,.14);
+    margin:0;
+  }
+  .hn-filmbadge{display:none}
+  .hn-rate{top:6px;right:6px;font-size:10px;padding:2px 6px;border-radius:6px}
+  .hn-big-letter{font-size:48px}
+  .hn-sp-body{
+    display:contents;
+  }
+  .hn-sp-head{
+    grid-column:2;
+    gap:6px;
+    min-width:0;
+  }
+  .hn-sp-kick{font-size:8px;letter-spacing:.15em}
+  .hn-sp-body h2{font-size:16.5px;line-height:1.12;letter-spacing:-.02em}
+  .hn-meta-chips{gap:4px}
+  .hn-meta-chips span{font-size:8px;padding:3px 7px;letter-spacing:.04em}
+  .hn-genre-row{gap:4px}
+  .hn-genre{font-size:7.5px;padding:3px 7px;letter-spacing:.08em}
+  .hn-gdesc{
+    grid-column:1 / -1;
+    font-size:11.5px;
+    line-height:1.5;
+    display:-webkit-box;
+    -webkit-line-clamp:3;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .hn-btnrow{
+    grid-column:1 / -1;
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:6px;
+    padding-top:2px;
+    margin-top:0;
+  }
+  .hn-btnrow .hn-btn,
+  .hn-btnrow .hn-planned{
+    padding:7px 9px;
+    font-size:9px;
+    min-height:33px;
+    border-radius:9px;
+    letter-spacing:.05em;
+    justify-content:center;
+    width:100%;
+  }
+  .hn-links{
+    grid-column:1 / -1;
+    gap:5px;
+  }
+  .hn-link-chip{font-size:8px;padding:4px 8px;letter-spacing:.05em;gap:5px}
+  .hn-link-logo{width:11px;height:11px}
+
+  /* 03 · Diziler */
+  .hn-scard{padding:12px;gap:11px;border-radius:16px}
+  .hn-sposter{width:68px}
+  .hn-sinfo h4{font-size:13px}
+  .hn-next-ep{font-size:8.5px;padding:4px 8px;margin-top:5px}
+  .hn-prog-lab{font-size:8.5px;margin-top:10px}
+  .hn-rate-btn{margin-top:10px;padding:8px;font-size:9.5px}
+
+  /* 04 · Rozetler + Ağ */
+  .hn-panel{padding:16px 14px}
+  .hn-panel h3{font-size:13px;margin-bottom:12px;gap:8px}
+  .hn-ach{padding:12px;margin-bottom:9px;border-radius:13px}
   .hn-ach .top{gap:10px}
-  .hn-ai{width:38px;height:38px;border-radius:11px}
-  .hn-an b{font-size:12px}
-  .hn-an span{font-size:10.5px}
-  .hn-net-note{font-size:11.5px;padding:11px 13px}
-  .hn-agent{padding:11px 12px;gap:10px}
-  .hn-aa{width:34px;height:34px;border-radius:10px;font-size:13px}
-  .hn-agent-tx b{font-size:12px}
-  .hp-recent{gap:10px}
-  .hp-rec-tx{padding:10px 12px 12px}
-  .hp-rec-tx b{font-size:12px}
-  .hp-rec-ph b{font-size:40px}
-  .hp-rec-kind{top:8px;left:8px;font-size:7px;padding:3px 7px}
-  .hp-rec-rate{top:8px;right:8px;font-size:10px;padding:3px 7px}
-  .hn-bento-card{padding:20px 18px}
-  .hn-bento-title{font-size:24px}
-  .hn-bento-ic{width:40px;height:40px;border-radius:12px;margin-bottom:12px}
-  .hn-bento-badge{font-size:9px;padding:6px 13px;letter-spacing:.14em}
-}
-@media (max-width:640px){
-  .hn-sec-t h2{font-size:15px}
-  .hp-recent{grid-template-columns:repeat(2,1fr)}
-  .hn-sp-body h2{font-size:23px}
-  .hn-bento-title{font-size:22px}
-  .hn-sp-body{padding:18px 14px}
+  .hn-ai{width:36px;height:36px;border-radius:10px}
+  .hn-an b{font-size:11.5px}
+  .hn-an span{font-size:10px}
+  .hn-axp{font-size:9px;padding:4px 8px}
+  .hn-net-note{font-size:11px;padding:10px 12px;margin-bottom:12px}
+  .hn-agent{padding:9px 11px;gap:11px;border-radius:13px}
+  .hn-agent-poster{width:40px;border-radius:7px}
+  .hn-agent-title{font-size:12px}
+  .hn-agent-who b{font-size:10px}
+
+  /* 05 · Son İzlenenler */
+  .hp-recent{grid-template-columns:repeat(2,1fr);gap:10px}
+  .hp-rec-tx{padding:9px 11px 11px}
+  .hp-rec-tx b{font-size:11.5px}
+  .hp-rec-tx span{font-size:8.5px;margin-top:3px}
+  .hp-rec-ph b{font-size:36px}
+  .hp-rec-kind{top:7px;left:7px;font-size:7px;padding:3px 7px}
+  .hp-rec-rate{top:7px;right:7px;font-size:9.5px;padding:3px 7px}
+
+  /* Bento */
+  .hn-bento-card{padding:16px 15px;border-radius:16px}
+  .hn-bento-title{font-size:20px;margin-top:10px}
+  .hn-bento-ic{width:36px;height:36px;border-radius:10px;margin-bottom:10px}
+  .hn-bento-card h4{font-size:13.5px;margin-bottom:5px}
+  .hn-bento-card p{font-size:11.5px;line-height:1.55}
+  .hn-bento-badge{font-size:8.5px;padding:5px 11px;letter-spacing:.12em}
 }
 @media (prefers-reduced-motion:reduce){
   .hn-agents-loading{animation:none}
@@ -848,8 +1025,8 @@ export default function HomePage() {
       (pData || []).forEach(p => pMap[p.agent_id] = p);
       setProfilesMap(pMap);
 
-      const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', friendIds).order('created_at', { ascending: false }).limit(6);
-      setNetworkFeed(logsData || []);
+      const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', friendIds).order('created_at', { ascending: false }).limit(12);
+      setNetworkFeed((logsData || []).filter((l: any) => l.action_type !== 'watched_hidden').slice(0, 6));
     } catch (err) {
       console.error(err);
     } finally {
@@ -997,7 +1174,6 @@ export default function HomePage() {
       });
   }, [data.history, data.movies, data.series]);
 
-  // Ajan kartının arka planında çok hafif görünecek 4 afiş
   const backdropPosters = useMemo(() => {
     const urls: string[] = [];
     for (const item of recentWatched) {
@@ -1015,6 +1191,18 @@ export default function HomePage() {
 
   const [posterErrors, setPosterErrors] = useState<Record<string, boolean>>({});
 
+  // Sinevia Ağı için poster çözücü (logda poster yoksa yerel kütüphaneden eşleştirir)
+  const resolveNetworkPoster = useCallback((log: any): string | null => {
+    if (log?.item_poster) return log.item_poster;
+    if (log?.poster_url) return log.poster_url;
+    const normTitle = normalize(log?.item_title || '');
+    if (!normTitle) return null;
+    const matchedMovie = data.movies.find((m) => normalize(m.title) === normTitle && m.posterUrl);
+    if (matchedMovie?.posterUrl) return matchedMovie.posterUrl;
+    const matchedSeries = data.series.find((s) => normalize(s.title) === normTitle && s.posterUrl);
+    return matchedSeries?.posterUrl || null;
+  }, [data.movies, data.series]);
+
   const lvl = levelFromXp(data.totalXp);
   const currentRankIndex = useMemo(() => {
     for (let i = RANK_TIERS.length - 1; i >= 0; i--) {
@@ -1028,7 +1216,6 @@ export default function HomePage() {
 
   const xpToNext = Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp);
 
-  // Unvan evrimi ilerleme yüzdesi
   const rankProgressPct = useMemo(() => {
     if (!nextRank) return 100;
     const span = Math.max(1, nextRank.minLevel - userPersona.minLevel);
@@ -1095,16 +1282,15 @@ export default function HomePage() {
 
   const activeBadgeDef = questState.activeBadgeId ? QUEST_DEFS.find(q => q.id === questState.activeBadgeId) : null;
 
-  // Bölüm numaralarının (01, 02, 03...) hatasız ilerlemesi için dinamik sayaç
   let sectionCounter = 0;
   const nextSectionIdx = () => String(++sectionCounter).padStart(2, '0');
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-fade-in pb-10 max-w-[1400px] mx-auto">
+    <div className="space-y-4 sm:space-y-8 animate-fade-in pb-8 sm:pb-10 max-w-[1400px] mx-auto">
       <style>{HOME_PREMIUM_CSS}</style>
 
       {/* =========================================================
-          01 · SİNEVİA KARTI (Geliştirilmiş Monolith Mimari)
+          01 · SİNEVİA KARTI (Masaüstünde Monolith, Mobilde Kompakt)
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
@@ -1126,7 +1312,7 @@ export default function HomePage() {
           )}
           <div className="snv-id-overlay" aria-hidden="true" />
 
-          {/* 1. ÜST KATMAN: SOLDA KİMLİK, SAĞDA BÜYÜK ROZET + SERİ + XP */}
+          {/* 1. ÜST KATMAN */}
           <div className="snv-id-main">
             <div className="snv-id-left">
               <div className="snv-id-monogram">
@@ -1150,7 +1336,7 @@ export default function HomePage() {
                     title="Ağ kodunu kopyala"
                     onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }}
                   >
-                    {data.agentId} <Copy size={11} />
+                    {data.agentId} <Copy size={10} />
                   </button>
                 </div>
 
@@ -1163,7 +1349,7 @@ export default function HomePage() {
             </div>
 
             <div className="snv-id-right">
-              {/* SERİNİN YANINA EKLENEN BÜYÜTÜLMÜŞ ROZET VİTRİNİ */}
+              {/* ROZET VİTRİNİ */}
               <button
                 type="button"
                 className="snv-badge-showcase"
@@ -1171,7 +1357,7 @@ export default function HomePage() {
                 title={activeBadgeDef ? `${activeBadgeDef.title} (${activeBadgeDef.rarity})` : 'Koleksiyonundan bir rozet kuşan'}
               >
                 <div className={`snv-badge-emblem${activeBadgeDef ? '' : ' empty'}`}>
-                  {activeBadgeDef ? activeBadgeDef.icon : <ShieldAlert size={22} />}
+                  {activeBadgeDef ? activeBadgeDef.icon : <ShieldAlert size={20} />}
                 </div>
                 <div className="snv-badge-meta">
                   <span className="snv-badge-kicker">
@@ -1191,7 +1377,7 @@ export default function HomePage() {
               {/* GÜNLÜK SERİ */}
               <div className="snv-id-readout" data-tutorial="home-streak">
                 <span className="snv-id-readout-label">
-                  <Flame size={12} className="flame" /> Günlük Seri
+                  <Flame size={11} className="flame" /> Günlük Seri
                 </span>
                 <div className="snv-id-readout-val">
                   <b>{data.dailyStreak || 0}</b>
@@ -1223,7 +1409,7 @@ export default function HomePage() {
             <div className="snv-id-laser-fill" style={{ width: `${Math.max(2, lvl.progress)}%` }} />
           </div>
 
-          {/* 3. ALT KATMAN: İSTATİSTİKLER + BÜYÜTÜLMÜŞ BAŞARIMLAR + GELİŞMİŞ UNVAN EVRİMİ */}
+          {/* 3. ALT KATMAN */}
           <div className="snv-id-footer">
             <div className="snv-id-metrics">
               <div className="snv-id-mitem"><b>{quickMetrics.watchedMoviesCount}</b><span>Film</span></div>
@@ -1251,7 +1437,6 @@ export default function HomePage() {
                 ))}
               </div>
 
-              {/* GELİŞTİRİLMİŞ UNVAN EVRİM MODÜLÜ */}
               {nextRank ? (
                 <div className="snv-rank-evolution">
                   <div className="snv-re-top">
@@ -1262,7 +1447,7 @@ export default function HomePage() {
                   </div>
                   <div className="snv-re-Flow">
                     <span className="snv-re-cur">{userPersona.title}</span>
-                    <ChevronRight size={14} className="snv-re-arrow" />
+                    <ChevronRight size={13} className="snv-re-arrow" />
                     <span className="snv-re-next">{nextRank.title}</span>
                   </div>
                   <div className="snv-re-bar">
@@ -1291,18 +1476,18 @@ export default function HomePage() {
       {/* ==============================
           HIZLI ERİŞİM BUTONLARI
           ============================== */}
-      <div data-tutorial="home-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div data-tutorial="home-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
         <button type="button" className="hn-btn hn-btn-p hn-action" onClick={() => setShowPick(true)}>
-          <Shuffle size={16} /> Ne İzlesem?
+          <Shuffle size={15} /> Ne İzlesem?
         </button>
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowDnaModal(true)}>
-          <Dna size={16} /> DNA Sentezle
+          <Dna size={15} /> DNA Sentezle
         </button>
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowBulkAdd('movie')}>
-          <Compass size={16} /> Katalog Ekle
+          <Compass size={15} /> Katalog Ekle
         </button>
         <button type="button" className="hn-btn hn-btn-g hn-action" onClick={() => navigateTo('plan')}>
-          <Calendar size={16} /> Planlayıcı
+          <Calendar size={15} /> Planlayıcı
         </button>
       </div>
 
@@ -1310,7 +1495,7 @@ export default function HomePage() {
         const info = getMovieTimerInfo(activeTimerMovie, nowMs);
         return (
           <div className="hn-timer">
-            <div className="hn-timer-ic"><Timer size={22} /></div>
+            <div className="hn-timer-ic"><Timer size={20} /></div>
             <div className="hn-timer-tx">
               <div className="hn-timer-status">
                 <span>{info.isPaused ? 'Sayaç Duraklatıldı' : 'Canlı Geri Sayım Aktif'}</span>
@@ -1344,7 +1529,7 @@ export default function HomePage() {
       })()}
 
       {/* =========================================================
-          02 · GÜNÜN SİNEMA KARTI (Sağa Doğru Genişletilmiş Tam Afiş Penceresi)
+          02 · GÜNÜN SİNEMA KARTI (Mobilde Kompakt Yan Yana, Masaüstünde Geniş)
           ========================================================= */}
       {spotlightMovie && (() => {
         const isSpotlightTimerActive = activeTimerMovie?.id === spotlightMovie.id;
@@ -1382,21 +1567,23 @@ export default function HomePage() {
               </div>
 
               <div className="hn-sp-body">
-                <div className="hn-sp-kick">Kayıt No. {spotlightNo} · Vitrin Önerisi</div>
-                <h2>{spotlightMovie.title}</h2>
-                <div className="hn-meta-chips">
-                  {spotlightMovie.year && <span><b>{spotlightMovie.year}</b></span>}
-                  {spotlightMovie.runtime && <span><b>{spotlightMovie.runtime}</b> dk</span>}
-                  {spotlightMovie.directors && spotlightMovie.directors.length > 0 && <span>Yönetmen <b>{spotlightMovie.directors[0]}</b></span>}
-                  {spotlightMovie.cast && spotlightMovie.cast.length > 0 && <span>Oyuncu <b>{spotlightMovie.cast.slice(0, 2).join(', ')}</b></span>}
-                  {spotlightColName && <span>Koleksiyon <b>{spotlightColName}</b></span>}
-                </div>
-
-                {spotlightMovie.genres.length > 0 && (
-                  <div className="hn-genre-row">
-                    {spotlightMovie.genres.map((g) => <span key={g} className="hn-genre">{g}</span>)}
+                <div className="hn-sp-head">
+                  <div className="hn-sp-kick">Kayıt No. {spotlightNo} · Vitrin Önerisi</div>
+                  <h2>{spotlightMovie.title}</h2>
+                  <div className="hn-meta-chips">
+                    {spotlightMovie.year && <span><b>{spotlightMovie.year}</b></span>}
+                    {spotlightMovie.runtime && <span><b>{spotlightMovie.runtime}</b> dk</span>}
+                    {spotlightMovie.directors && spotlightMovie.directors.length > 0 && <span>Yönetmen <b>{spotlightMovie.directors[0]}</b></span>}
+                    {spotlightMovie.cast && spotlightMovie.cast.length > 0 && <span>Oyuncu <b>{spotlightMovie.cast.slice(0, 2).join(', ')}</b></span>}
+                    {spotlightColName && <span>Koleksiyon <b>{spotlightColName}</b></span>}
                   </div>
-                )}
+
+                  {spotlightMovie.genres.length > 0 && (
+                    <div className="hn-genre-row">
+                      {spotlightMovie.genres.map((g) => <span key={g} className="hn-genre">{g}</span>)}
+                    </div>
+                  )}
+                </div>
 
                 {spotlightMovie.overview ? (
                   <p className="hn-gdesc">{spotlightMovie.overview}</p>
@@ -1406,10 +1593,10 @@ export default function HomePage() {
 
                 <div className="hn-btnrow">
                   <button type="button" className="hn-btn hn-btn-p" onClick={() => handleRequestRateMovie(spotlightMovie)}>
-                    <Star size={14} className="hn-btn-ic" /> Puanla
+                    <Star size={13} className="hn-btn-ic" /> Puanla
                   </button>
                   <button type="button" className="hn-btn hn-btn-s" onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}>
-                    <Eye size={14} className="hn-btn-ic" /> Sinema Kartını Gör
+                    <Eye size={13} className="hn-btn-ic" /> Sinema Kartı
                   </button>
                   {!isSpotlightTimerActive && (
                     <button
@@ -1418,14 +1605,14 @@ export default function HomePage() {
                       onClick={() => startWatchingMovie(spotlightMovie.id, false)}
                       disabled={Boolean(activeTimerMovie)}
                     >
-                      <Play size={14} className="hn-btn-ic" /> Canlı Geri Sayım
+                      <Play size={13} className="hn-btn-ic" /> Geri Sayım
                     </button>
                   )}
                   {isSpotlightPlanned ? (
-                    <span className="hn-planned"><Lock size={13} className="hn-btn-ic" /> Takvime Planlandı</span>
+                    <span className="hn-planned"><Lock size={12} className="hn-btn-ic" /> Planlandı</span>
                   ) : (
                     <button type="button" className="hn-btn hn-btn-g" onClick={() => navigateTo('plan')}>
-                      <Calendar size={14} className="hn-btn-ic" /> Haftalığa Ekle
+                      <Calendar size={13} className="hn-btn-ic" /> Haftalığa Ekle
                     </button>
                   )}
                 </div>
@@ -1435,7 +1622,7 @@ export default function HomePage() {
                     const LinkIcon = link.icon;
                     return (
                       <a key={idx} href={link.href} target="_blank" rel="noopener noreferrer" className="hn-link-chip">
-                        {link.logo ? <img src={link.logo} alt={link.text} className="hn-link-logo" /> : <LinkIcon size={13} />}
+                        {link.logo ? <img src={link.logo} alt={link.text} className="hn-link-logo" /> : <LinkIcon size={12} />}
                         {link.text}
                       </a>
                     );
@@ -1448,40 +1635,7 @@ export default function HomePage() {
       })()}
 
       {/* =========================================================
-          ARŞİV KISAYOLLARI
-          ========================================================= */}
-      <section className="hn-sec">
-        <div className="hn-sec-t">
-          <span className="hn-idx">{nextSectionIdx()}</span>
-          <h2>Arşiv Kısayolları</h2>
-          <span className="ln" />
-        </div>
-        <div className="hn-shortcuts">
-          <button type="button" className="hn-sc" onClick={() => navigateTo('movies')}>
-            <span className="hn-sci"><Film size={20} /></span>
-            <b>{data.movies.length}</b>
-            <span>Film Arşivi</span>
-          </button>
-          <button type="button" className="hn-sc" onClick={() => navigateTo('series')}>
-            <span className="hn-sci"><Tv size={20} /></span>
-            <b>{data.series.length}</b>
-            <span>Dizi Arşivi</span>
-          </button>
-          <button type="button" className="hn-sc" onClick={() => navigateTo('history')}>
-            <span className="hn-sci"><Clock size={20} /></span>
-            <b>{quickMetrics.regularHistoryCount}</b>
-            <span>Geçmiş Kaydı</span>
-          </button>
-          <button type="button" className="hn-sc red" onClick={() => navigateTo('achievements')}>
-            <span className="hn-sci"><Trophy size={20} /></span>
-            <b>{quickMetrics.tierCounts.total}</b>
-            <span>Başarım</span>
-          </button>
-        </div>
-      </section>
-
-      {/* =========================================================
-          İZLEMEYE DEVAM ET
+          03 · İZLEMEYE DEVAM ET (Arşiv kısayolları kalktığı için otomatik 03)
           ========================================================= */}
       {ongoingSeries.length > 0 && (
         <section className="hn-sec">
@@ -1522,7 +1676,7 @@ export default function HomePage() {
       )}
 
       {/* =========================================================
-          ROZETLER + SİNEVİA AĞI
+          ROZETLER + SİNEVİA AĞI (Afişli Son 3 İzlenen)
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
@@ -1554,7 +1708,7 @@ export default function HomePage() {
                           borderColor: TIER_EDGE[ach.tier] || 'var(--line-2, rgba(244,244,242,.13))',
                         }}
                       >
-                        <AchIcon size={20} />
+                        <AchIcon size={19} />
                       </div>
                       <div className="hn-an"><b>{ach.name}</b><span>{ach.desc}</span></div>
                       <span className="hn-axp">+{ach.xp} XP</span>
@@ -1580,17 +1734,33 @@ export default function HomePage() {
                 <div className="hn-agents-empty">Ağında henüz bir hareket yok veya arkadaşın yok.</div>
               ) : (
                 <>
-                  {networkFeed.slice(0, 3).map(log => {
+                  {networkFeed.slice(0, 3).map((log) => {
                     const profile = profilesMap[log.agent_id];
                     if (!profile) return null;
+                    const posterUrl = resolveNetworkPoster(log);
                     return (
                       <div key={log.id} className="hn-agent">
-                        <div className="hn-aa">{(profile.nickname || profile.agent_id || '?').charAt(0).toUpperCase()}</div>
-                        <div className="hn-agent-tx">
-                          <b>{profile.nickname || 'Ajan'}</b>
-                          <span className="sub">{log.item_title}{log.rating ? ` · ${log.rating} puan` : ''} · {timeAgo(log.created_at)}</span>
+                        <div className="hn-agent-poster">
+                          {posterUrl ? (
+                            <img src={posterUrl} alt={log.item_title || ''} loading="lazy" />
+                          ) : (
+                            <Film size={18} />
+                          )}
                         </div>
-                        <span className={`hn-st ${log.rating ? 'on' : ''}`}>{log.rating ? `★ ${log.rating}` : 'İzledi'}</span>
+                        <div className="hn-agent-tx">
+                          <div className="hn-agent-who">
+                            <span className="hn-agent-avatar-mini">
+                              {(profile.nickname || profile.agent_id || '?').charAt(0).toUpperCase()}
+                            </span>
+                            <b>{profile.nickname || 'Ajan'}</b>
+                            <span>izledi</span>
+                          </div>
+                          <div className="hn-agent-title">{log.item_title}</div>
+                          <span className="hn-agent-time">{timeAgo(log.created_at)}</span>
+                        </div>
+                        <span className={`hn-st ${log.rating ? 'on' : ''}`}>
+                          {log.rating ? `★ ${log.rating}` : 'İzledi'}
+                        </span>
                       </div>
                     );
                   })}
@@ -1651,50 +1821,50 @@ export default function HomePage() {
       {/* =========================================================
           BENTO — SİNEVİA NASIL ÇALIŞIR?
           ========================================================= */}
-      <div className="pt-10 pb-12">
-        <div className="text-center mb-10">
-          <div className="hn-bento-badge"><Sparkles size={14} /> Yeni Nesil Sinema Deneyimi</div>
+      <div className="pt-6 sm:pt-10 pb-8 sm:pb-12">
+        <div className="text-center mb-6 sm:mb-10">
+          <div className="hn-bento-badge"><Sparkles size={13} /> Yeni Nesil Sinema Deneyimi</div>
           <h3 className="hn-bento-title">Sinevia Nasıl Çalışır?</h3>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Search size={22} /></div>
+            <div className="hn-bento-ic"><Search size={20} /></div>
             <h4>Katalog &amp; Keşif</h4>
             <p>Binlerce yapım arasından filtreleme yap, türlere göre ayır ve kişisel izleme kütüphaneni oluştur.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Dna size={22} /></div>
+            <div className="hn-bento-ic"><Dna size={20} /></div>
             <h4>DNA Laboratuvarı</h4>
             <p>İki favori filminin DNA'sını sentezle. Algoritma bu karışımın genetiğine en uygun yapımı bulup önersin.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Shuffle size={22} /></div>
+            <div className="hn-bento-ic"><Shuffle size={20} /></div>
             <h4>Kararsızlık Çarkı</h4>
             <p>Ne izleyeceğine karar veremiyor musun? Türü ve süreyi belirle, sistem senin için kütüphaneden rastgele seçsin.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Calendar size={22} /></div>
+            <div className="hn-bento-ic"><Calendar size={20} /></div>
             <h4>Haftalık Planlayıcı</h4>
             <p>Hangi gün ne izleyeceğini takvime ekle. Çakışmaları engelle ve izleme maratonunu düzenli hale getir.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Timer size={22} /></div>
+            <div className="hn-bento-ic"><Timer size={20} /></div>
             <h4>Canlı İzleme Sayacı</h4>
             <p>Yapıma başladığında sayacı çalıştır, mola verince duraklat. Filmi yeteri kadar izlemeden sahte puan veremezsin.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Star size={22} /></div>
+            <div className="hn-bento-ic"><Star size={20} /></div>
             <h4>Detaylı Puanlama</h4>
             <p>Senaryo, oyunculuk ve görsellik gibi kendi belirlediğin alt kırılımlarla yapıma ince ayarlı bir puan ver.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Target size={22} /></div>
+            <div className="hn-bento-ic"><Target size={20} /></div>
             <h4>Görev &amp; Rozetler</h4>
             <p>Ajan kontratlarını yerine getir. Gizli başarımları açarak XP topla, rütbeni yükselt ve vitrinine rozet kuşan.</p>
           </div>
           <div className="hn-bento-card">
-            <div className="hn-bento-ic"><Users size={22} /></div>
+            <div className="hn-bento-ic"><Users size={20} /></div>
             <h4>Sinevia Sosyal Ağı</h4>
             <p>Arkadaşlarını ekle, profillerini gözle, özel film listeleri gönder, canlı mesajlaş ve Liderlik Tablosunda yarış.</p>
           </div>

@@ -4,7 +4,7 @@ import {
   AlertTriangle, Wrench, SlidersHorizontal, PlayCircle, Palette,
   Sparkles, Moon, Sun, Award, ChevronDown, ThumbsUp, ThumbsDown,
   BellRing, BellOff, UserCircle, Key, Copy, MessageSquare, Gift, UserPlus, ShieldCheck,
-  LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal, Flame, Droplet, Zap
+  LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal, Flame, Droplet, Zap, Eye
 } from 'lucide-react';
 import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -103,7 +103,7 @@ const SETTINGS_TABS: { id: SettingsTabId; label: string; icon: LucideIcon }[] = 
   { id: 'visual', label: 'Görsel', icon: Palette },
   { id: 'notifications', label: 'Ses & Bildirim', icon: BellRing },
   { id: 'shortcuts', label: 'Kısayollar', icon: Keyboard },
-  { id: 'game', label: 'Oyun / Ekonomi', icon: Gamepad2 },
+  { id: 'game', label: 'Puanlama & Kütüphane', icon: Gamepad2 },
 ];
 
 function getInitialSettingsTab(): SettingsTabId {
@@ -174,7 +174,7 @@ export default function SettingsPage() {
     data, addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData,
     toggleLockedNames, addCriterion, editCriterion,
-    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSpecificNotification, showToast,
+    deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
     setNickname, recoverIdentity
   } = useApp();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
@@ -632,30 +632,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="p-4 flex items-center justify-between gap-4" style={premiumRowStyle}>
-                <div>
-                  <h3 className="text-sm font-bold text-white mb-1">İzlenenler Akışta Görünsün</h3>
-                  <p className="text-xs text-ink-400">Kapattığında izlediklerin arkadaşlarının Sinevia Ağı akışına düşmez; geçmişin, notların ve puanların senin profilinde kalır.</p>
-                </div>
-                <button
-                  onClick={() => {
-                    const next = data.shareWatchedInFeed === false;
-                    toggleShareWatched(next);
-                    showToast(next ? 'İzlenenlerin artık akışta görünüyor.' : 'İzlenenlerin akışta paylaşılmıyor.', 'info');
-                  }}
-                  role="switch"
-                  aria-checked={data.shareWatchedInFeed !== false}
-                  aria-label="İzlenenlerin akışta görünmesi"
-                  className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
-                  style={switchTrackStyle(data.shareWatchedInFeed !== false)}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.shareWatchedInFeed !== false ? 'translate-x-5' : 'translate-x-0'}`}
-                    style={SWITCH_KNOB_STYLE}
-                  />
-                </button>
-              </div>
-
               <div className="rounded-[var(--r,16px)] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-white/[.09]" style={{ background: 'linear-gradient(120deg, rgba(232, 56, 79, .12), transparent 80%)' }}>
                 <div className="flex items-start gap-2.5">
                   <ShieldCheck size={18} className="text-emerald-400 flex-shrink-0 mt-0.5" />
@@ -730,114 +706,58 @@ export default function SettingsPage() {
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="Tür Yönetimi"
-            icon={<Tag size={18} className="text-gold-400 flex-shrink-0" />}
+            title="Akış Görünürlüğü"
+            icon={<Eye size={18} className="text-gold-400 flex-shrink-0" />}
             defaultOpen={false}
-            desc="Film ve dizi eklerken seçilecek türleri ekle veya sil."
+            desc="Paylaşımlarının Sinevia Ağı akışında nasıl göründüğünü belirle."
           >
-            <div className="flex gap-2 mb-3.5">
-              <input
-                type="text"
-                value={newGenre}
-                onChange={(e) => setNewGenre(e.target.value)}
-                placeholder="Yeni tür adı..."
-                className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
-                onKeyDown={(e) => e.key === 'Enter' && handleAddGenre()}
-              />
-              <button onClick={handleAddGenre} disabled={!newGenre.trim()} className={`${BTN_P} px-3.5 py-2 text-xs sm:text-sm`} style={BTN_P_STYLE}>
-                <Plus size={16} /> Ekle
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              {data.genres.map((g) => (
-                <div key={g} className="flex items-center gap-1.5 bg-ink-800 border border-ink-700 rounded-full pl-3 pr-2 py-1 hover:border-gold-500/50 transition-colors">
-                  {editingGenre === g ? (
-                    <>
-                      <input
-                        type="text"
-                        value={editGenreName}
-                        onChange={(e) => setEditGenreName(e.target.value)}
-                        className="bg-ink-950 border border-gold-500 rounded px-1.5 py-0.5 text-xs sm:text-sm text-ink-100 focus:outline-none w-24"
-                        onKeyDown={(e) => { if (e.key === 'Enter' && editGenreName.trim()) { renameGenre(g, editGenreName); setEditingGenre(null); } }}
-                      />
-                      <button onClick={() => { if (editGenreName.trim()) { renameGenre(g, editGenreName); setEditingGenre(null); } }} className="text-green-400 hover:text-green-300 transition-colors"><Check size={13} /></button>
-                      <button onClick={() => setEditingGenre(null)} className="text-ink-400 hover:text-ink-200 transition-colors"><X size={13} /></button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-xs sm:text-sm text-ink-200">{g}</span>
-                      <button onClick={() => { setEditingGenre(g); setEditGenreName(g); }} className="text-ink-400 hover:text-gold-400 transition-colors"><Edit2 size={12} /></button>
-                      <button onClick={() => setDeleteGenreTarget(g)} className="text-ink-400 hover:text-red-400 transition-colors"><X size={13} /></button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CollapsibleSection>
-
-          <CollapsibleSection
-            title="Koleksiyon Yönetimi"
-            icon={<Boxes size={18} className="text-azure-400 flex-shrink-0" />}
-            defaultOpen={false}
-            desc="Koleksiyonların (evren/seri) adını düzenle veya sil."
-          >
-            <div className="flex gap-2 mb-3.5">
-              <input
-                type="text"
-                value={newCollection}
-                onChange={(e) => setNewCollection(e.target.value)}
-                placeholder="Yeni koleksiyon adı..."
-                className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500/50 transition-all"
-                onKeyDown={(e) => e.key === 'Enter' && handleAddCollection()}
-              />
-              <button onClick={handleAddCollection} disabled={!newCollection.trim()} className={`${BTN_P} px-3.5 py-2 text-xs sm:text-sm`} style={BTN_P_STYLE}>
-                <Plus size={16} /> Ekle
-              </button>
-            </div>
-
-            {data.collections.length === 0 ? (
-              <p className="text-sm text-ink-500">Henüz koleksiyon yok.</p>
-            ) : (
-              <div className="space-y-2">
-                {data.collections.map((c) => {
-                  const movieCount = data.movies.filter((m) => m.collectionId === c.id).length;
-                  return (
-                    <div key={c.id} className="flex items-center gap-2 bg-ink-800/80 border border-ink-700 rounded-xl px-3 py-2.5 hover:border-azure-500/50 transition-colors">
-                      {editingColl === c.id ? (
-                        <>
-                          <input
-                            type="text"
-                            value={editCollName}
-                            onChange={(e) => setEditCollName(e.target.value)}
-                            className="flex-1 bg-ink-950 border border-ink-600 rounded-lg px-2.5 py-1 text-xs sm:text-sm text-ink-100 focus:outline-none"
-                            onKeyDown={(e) => { if (e.key === 'Enter') { renameCollection(c.id, editCollName); setEditingColl(null); } }}
-                          />
-                          <button onClick={() => { renameCollection(c.id, editCollName); setEditingColl(null); }} className="text-green-400 hover:text-green-300 transition-colors"><Check size={16} /></button>
-                          <button onClick={() => setEditingColl(null)} className="text-ink-400 hover:text-ink-200 transition-colors"><X size={16} /></button>
-                        </>
-                      ) : (
-                        <>
-                          <Boxes size={15} className="text-azure-400 flex-shrink-0" />
-                          <span className="flex-1 text-xs sm:text-sm font-medium text-ink-200 truncate">{c.name}</span>
-                          <span className="text-[11px] text-ink-400 flex-shrink-0">{movieCount} film</span>
-                          <button onClick={() => { setEditingColl(c.id); setEditCollName(c.name); }} className="text-ink-400 hover:text-ink-200 transition-colors p-1"><Edit2 size={14} /></button>
-                          <button
-                            onClick={() => {
-                              if (confirmDeleteColl === c.id) { deleteCollection(c.id); setConfirmDeleteColl(null); }
-                              else { setConfirmDeleteColl(c.id); setTimeout(() => setConfirmDeleteColl(null), 2000); }
-                            }}
-                            className="text-ink-400 hover:text-red-400 transition-colors p-1"
-                          >
-                            {confirmDeleteColl === c.id ? <span className="text-[11px] font-bold text-red-400">Sil?</span> : <Trash2 size={14} />}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+            <div className="p-4 flex items-center justify-between gap-4" style={premiumRowStyle}>
+              <div>
+                <h3 className="text-sm font-bold text-white mb-1">İzlenenler Akışta Görünsün</h3>
+                <p className="text-xs text-ink-400">Kapattığında yeni izlediklerin arkadaşlarının Sinevia Ağı akışına düşmez; geçmişin, notların ve puanların senin profilinde kalır.</p>
               </div>
-            )}
+              <button
+                onClick={() => {
+                  const next = data.shareWatchedInFeed === false;
+                  toggleShareWatched(next);
+                  showToast(next ? 'İzlenenlerin artık akışta görünüyor.' : 'İzlenenlerin akışta paylaşılmıyor.', 'info');
+                }}
+                role="switch"
+                aria-checked={data.shareWatchedInFeed !== false}
+                aria-label="İzlenenlerin akışta görünmesi"
+                className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
+                style={switchTrackStyle(data.shareWatchedInFeed !== false)}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.shareWatchedInFeed !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                  style={SWITCH_KNOB_STYLE}
+                />
+              </button>
+            </div>
+
+            <div className="p-4 flex items-center justify-between gap-4" style={premiumRowStyle}>
+              <div>
+                <h3 className="text-sm font-bold text-white mb-1">Eskiden İzlenenler Akışta Görünsün</h3>
+                <p className="text-xs text-ink-400">Kapattığında bu ayardan önce akışa düşen eski izleme kayıtların arkadaşlarının akışında ve profillerinde gizlenir; tekrar açtığında geri görünür.</p>
+              </div>
+              <button
+                onClick={() => {
+                  const next = data.sharePastWatchedInFeed === false;
+                  toggleSharePastWatched(next);
+                  showToast(next ? 'Eskiden izlenenlerin yeniden akışta görünüyor.' : 'Eskiden izlenenlerin akıştan gizlendi.', 'info');
+                }}
+                role="switch"
+                aria-checked={data.sharePastWatchedInFeed !== false}
+                aria-label="Eskiden izlenenlerin akışta görünmesi"
+                className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
+                style={switchTrackStyle(data.sharePastWatchedInFeed !== false)}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.sharePastWatchedInFeed !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                  style={SWITCH_KNOB_STYLE}
+                />
+              </button>
+            </div>
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -1352,6 +1272,117 @@ export default function SettingsPage() {
                 <p className="text-xs text-ink-500 italic">Henüz eleştiri başlığı yok.</p>
               )}
             </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Tür Yönetimi"
+            icon={<Tag size={18} className="text-gold-400 flex-shrink-0" />}
+            defaultOpen={false}
+            desc="Film ve dizi eklerken seçilecek türleri ekle veya sil."
+          >
+            <div className="flex gap-2 mb-3.5">
+              <input
+                type="text"
+                value={newGenre}
+                onChange={(e) => setNewGenre(e.target.value)}
+                placeholder="Yeni tür adı..."
+                className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddGenre()}
+              />
+              <button onClick={handleAddGenre} disabled={!newGenre.trim()} className={`${BTN_P} px-3.5 py-2 text-xs sm:text-sm`} style={BTN_P_STYLE}>
+                <Plus size={16} /> Ekle
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {data.genres.map((g) => (
+                <div key={g} className="flex items-center gap-1.5 bg-ink-800 border border-ink-700 rounded-full pl-3 pr-2 py-1 hover:border-gold-500/50 transition-colors">
+                  {editingGenre === g ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editGenreName}
+                        onChange={(e) => setEditGenreName(e.target.value)}
+                        className="bg-ink-950 border border-gold-500 rounded px-1.5 py-0.5 text-xs sm:text-sm text-ink-100 focus:outline-none w-24"
+                        onKeyDown={(e) => { if (e.key === 'Enter' && editGenreName.trim()) { renameGenre(g, editGenreName); setEditingGenre(null); } }}
+                      />
+                      <button onClick={() => { if (editGenreName.trim()) { renameGenre(g, editGenreName); setEditingGenre(null); } }} className="text-green-400 hover:text-green-300 transition-colors"><Check size={13} /></button>
+                      <button onClick={() => setEditingGenre(null)} className="text-ink-400 hover:text-ink-200 transition-colors"><X size={13} /></button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs sm:text-sm text-ink-200">{g}</span>
+                      <button onClick={() => { setEditingGenre(g); setEditGenreName(g); }} className="text-ink-400 hover:text-gold-400 transition-colors"><Edit2 size={12} /></button>
+                      <button onClick={() => setDeleteGenreTarget(g)} className="text-ink-400 hover:text-red-400 transition-colors"><X size={13} /></button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Koleksiyon Yönetimi"
+            icon={<Boxes size={18} className="text-azure-400 flex-shrink-0" />}
+            defaultOpen={false}
+            desc="Koleksiyonların (evren/seri) adını düzenle veya sil."
+          >
+            <div className="flex gap-2 mb-3.5">
+              <input
+                type="text"
+                value={newCollection}
+                onChange={(e) => setNewCollection(e.target.value)}
+                placeholder="Yeni koleksiyon adı..."
+                className="flex-1 bg-ink-800/80 border border-ink-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-azure-500/50 transition-all"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCollection()}
+              />
+              <button onClick={handleAddCollection} disabled={!newCollection.trim()} className={`${BTN_P} px-3.5 py-2 text-xs sm:text-sm`} style={BTN_P_STYLE}>
+                <Plus size={16} /> Ekle
+              </button>
+            </div>
+
+            {data.collections.length === 0 ? (
+              <p className="text-sm text-ink-500">Henüz koleksiyon yok.</p>
+            ) : (
+              <div className="space-y-2">
+                {data.collections.map((c) => {
+                  const movieCount = data.movies.filter((m) => m.collectionId === c.id).length;
+                  return (
+                    <div key={c.id} className="flex items-center gap-2 bg-ink-800/80 border border-ink-700 rounded-xl px-3 py-2.5 hover:border-azure-500/50 transition-colors">
+                      {editingColl === c.id ? (
+                        <>
+                          <input
+                            type="text"
+                            value={editCollName}
+                            onChange={(e) => setEditCollName(e.target.value)}
+                            className="flex-1 bg-ink-950 border border-ink-600 rounded-lg px-2.5 py-1 text-xs sm:text-sm text-ink-100 focus:outline-none"
+                            onKeyDown={(e) => { if (e.key === 'Enter') { renameCollection(c.id, editCollName); setEditingColl(null); } }}
+                          />
+                          <button onClick={() => { renameCollection(c.id, editCollName); setEditingColl(null); }} className="text-green-400 hover:text-green-300 transition-colors"><Check size={16} /></button>
+                          <button onClick={() => setEditingColl(null)} className="text-ink-400 hover:text-ink-200 transition-colors"><X size={16} /></button>
+                        </>
+                      ) : (
+                        <>
+                          <Boxes size={15} className="text-azure-400 flex-shrink-0" />
+                          <span className="flex-1 text-xs sm:text-sm font-medium text-ink-200 truncate">{c.name}</span>
+                          <span className="text-[11px] text-ink-400 flex-shrink-0">{movieCount} film</span>
+                          <button onClick={() => { setEditingColl(c.id); setEditCollName(c.name); }} className="text-ink-400 hover:text-ink-200 transition-colors p-1"><Edit2 size={14} /></button>
+                          <button
+                            onClick={() => {
+                              if (confirmDeleteColl === c.id) { deleteCollection(c.id); setConfirmDeleteColl(null); }
+                              else { setConfirmDeleteColl(c.id); setTimeout(() => setConfirmDeleteColl(null), 2000); }
+                            }}
+                            className="text-ink-400 hover:text-red-400 transition-colors p-1"
+                          >
+                            {confirmDeleteColl === c.id ? <span className="text-[11px] font-bold text-red-400">Sil?</span> : <Trash2 size={14} />}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CollapsibleSection>
 
           <CollapsibleSection
