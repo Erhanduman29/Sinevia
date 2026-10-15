@@ -635,6 +635,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'past_critic': currentVal = pastWatchedMovies.filter((m) => m.rating !== null && m.note && m.note.trim().length > 0).length; break;
       case 'ruthless_critic': currentVal = state.movies.filter((m) => m.abandoned && (m.runtime || 0) > 0 && m.abandonedProgress?.unit !== 'episode' && (m.abandonedProgress?.value ?? 0) <= (m.runtime || 0) / 2).length; break;
       case 'scale_master': currentVal = state.totalDuelsCompleted || 0; break;
+      case 'secret_duelist': currentVal = (state.movies || []).reduce((sum, m) => sum + (m.duelWins || 0), 0); break;
       case 'tutorial_explorer': currentVal = readTutorialUnitCount(); break;
     }
 

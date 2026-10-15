@@ -1790,14 +1790,19 @@ function EpisodeBox({
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
-          // PUANLAMA KORUMA: unwatch reducer'a girmeden önce puan aynaya yazılır
-          if (episode.watched) onUnwatch();
-          else onRate();
+          // PUAN KORUMA: puanlanmış bölümde tek tık unwatch ile puanı siliyordu.
+          // Puanlı buton artık tıklanamaz — puan düzenleme kalemi duruyor.
+          if (episode.watched) {
+            if (displayRating === null) onUnwatch();
+            return;
+          }
+          onRate();
         }}
-        disabled={episode.watched ? false : !canWatch}
+        disabled={episode.watched ? displayRating !== null : !canWatch}
+        title={episode.watched && displayRating !== null ? 'Puanlı bölüm — puanı düzenlemek için kalem simgesini kullan' : undefined}
         className={`svp-ep min-h-10 sm:min-h-11 md:min-h-0 ${
           episode.watched ? 'svp-ep-done' : canWatch ? 'svp-ep-ready' : 'svp-ep-lock'
-        }`}
+        } ${episode.watched && displayRating !== null ? 'cursor-not-allowed opacity-80' : ''}`}
       >
         {episode.watched ? (
           <Check size={14} />

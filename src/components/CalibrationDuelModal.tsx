@@ -99,7 +99,7 @@ function DuelSide({
       disabled={disabled}
       title={`Kazanan: ${movie.title} (${side === 'a' ? '←' : '→'})`}
       style={{ background: GLASS, borderColor: LINE }}
-      className="group relative w-full min-w-0 max-w-[300px] lg:max-w-[340px] mx-auto rounded-2xl overflow-hidden border text-left transition-all duration-200 hover:border-[color:var(--red,#e8384f)] hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60 disabled:hover:translate-y-0"
+      className="group relative w-full min-w-0 max-w-[300px] sm:max-w-[min(320px,30svh)] lg:max-w-[min(340px,32svh)] mx-auto rounded-2xl overflow-hidden border text-left transition-all duration-200 hover:border-[color:var(--red,#e8384f)] hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60 disabled:hover:translate-y-0"
     >
       {/* AFİŞ */}
       <div
@@ -404,7 +404,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
         </div>
 
         {/* İÇERİK */}
-        <div className="relative z-10 flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar">
+        <div className="relative z-10 flex-1 overflow-y-auto p-3 sm:p-5 custom-scrollbar">
           {reveal ? (
             /* ---------- TUR SONU: animasyonlu ±delta ---------- */
             <div className="animate-fade-in-up space-y-4 py-2 sm:py-4">
@@ -630,7 +630,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
             </div>
           ) : pair ? (
             /* ---------- VS EKRANI ---------- */
-            <div className="space-y-3 sm:space-y-5">
+            <div className="space-y-3 sm:space-y-4">
               <div className="grid grid-cols-[1fr_auto_1fr] gap-1.5 sm:gap-5 items-center">
                 <DuelSide
                   movie={pair.a}

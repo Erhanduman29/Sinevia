@@ -1290,5 +1290,12 @@ body[data-theme="premium-dark"] #main-scroll {
 }
 
 
-/* Arka plan durgunluðu (onaylý): sekme gizlenince animasyonlar duraklar */
+/* Desktop modal backdrop: stronger frosted blur than Tailwind's default sm/md */
+@media (min-width: 640px) {
+  .fixed.inset-0.backdrop-blur-sm { backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); }
+  .fixed.inset-0.backdrop-blur-md { backdrop-filter: blur(36px); -webkit-backdrop-filter: blur(36px); }
+}
+
+
+/* Arka plan durgunluï¿½u (onaylï¿½): sekme gizlenince animasyonlar duraklar */
 body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after { animation-play-state: paused !important; }

@@ -377,6 +377,12 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     { threshold: 50, xp: 150, tier: 'silver', name: 'Dengeli Ölçek' },
     { threshold: 100, xp: 400, tier: 'gold', name: 'Terazi Ustası' }
   ]},
+  // --- GİZLİ BAŞARIM (kör düello zaferleri; gizli) ---
+  { id: 'secret_duelist', name: 'Kör Şampiyon', description: 'Kör düellolarda toplam {threshold} zafer kazan.', icon: 'Gavel', hidden: true, secret: true, category: 'Gizli', tiers: [
+    { threshold: 1, xp: 30, tier: 'bronze', name: 'İlk Zafer' },
+    { threshold: 10, xp: 150, tier: 'silver', name: 'Kör Şampiyon' },
+    { threshold: 50, xp: 400, tier: 'gold', name: 'Gözler Kapalı Usta' }
+  ]},
   // --- GİZLİ BAŞARIM (tüm tutorialer bitince açılır; elmas) ---
   { id: 'tutorial_explorer', name: 'Sinevia Kâşifi', description: 'Uygulamanın her köşesini gezdin, her tutoriali tamamladın.', icon: 'Compass', hidden: true, secret: true, category: 'Özel', tiers: [
     { threshold: TUTORIAL_TOTAL_UNITS, xp: 200, tier: 'diamond', name: 'Sinevia Kâşifi' }
