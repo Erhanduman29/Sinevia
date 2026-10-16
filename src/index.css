@@ -1292,8 +1292,8 @@ body[data-theme="premium-dark"] #main-scroll {
 
 /* Desktop modal backdrop (kullanici talebi):
    - Daha guclu blur (Tailwind sm/md varsayilaninin ustunde)
-   - Tam siyah yerine saydam "donuk cam" perde: arka plan (ust layout dahil)
-     flu gorunsun, tamamen kararmasin. Yalnizca >=640px (masaustu). */
+   - Karanlik perde YOK: arka plan bulanik gorunsun ama kararmasin ->
+     acik, sutlu "buzlu cam" perde (%14 beyaz). Yalnizca >=640px. */
 @media (min-width: 640px) {
   .fixed.inset-0.backdrop-blur-sm { backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); }
   .fixed.inset-0.backdrop-blur-md { backdrop-filter: blur(36px); -webkit-backdrop-filter: blur(36px); }
@@ -1303,9 +1303,14 @@ body[data-theme="premium-dark"] #main-scroll {
   .fixed.inset-0.backdrop-blur-md,
   .fixed.inset-0.backdrop-blur-xl,
   .fixed.inset-0.backdrop-blur-3xl {
-    background-color: color-mix(in srgb, var(--bg-base, #0a0a0e) 55%, transparent) !important;
+    background-color: rgba(255, 255, 255, 0.14) !important;
   }
 }
+
+/* Modal perdelerinde space-y sizmasi: tam ekran (fixed inset-0) overlay'ler
+   space-y-* kapsayicilarinda `* + *` cocugu sayildigi icin margin-top alir
+   ve perde ustte ~32px bosluk birakir. Butun perdeler margin'siz. */
+.fixed.inset-0 { margin: 0 !important; }
 
 
 /* Arka plan durgunlu�u (onayl�): sekme gizlenince animasyonlar duraklar */
