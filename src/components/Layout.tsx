@@ -29,29 +29,17 @@ interface LayoutProps {
 
 // ---------------------------------------------------------------------------
 // PREMIUM KABUK STİLLERİ (kaynak: sinevia-premium.html)
-// Tüm vurgular tema değişkenleri (var(--color-1/2), var(--bg-*), var(--border-dim))
-// üzerinden çalışır; 12 mevcut tema + premium-dark/plain-dark bozulmaz.
-// Burada SADECE stil tanımlanır — nav yapısı ve işlevsellik aynıdır.
 // ---------------------------------------------------------------------------
-// Premium-dark teması var(--glass) token'ı tanımlar; plain-dark ve eski
-// temalarda TANIMLI OLMADIĞI için mutlaka fallback verilir.
 const GLASS_SHEEN =
   'var(--glass, linear-gradient(155deg, rgba(255,255,255,.055), rgba(255,255,255,.018) 55%, rgba(255,255,255,.03)))';
 
-/** Cam yüzey: tema zemin rengi + premium ışık süpürmesi. */
 const glassSurface: React.CSSProperties = { backgroundImage: GLASS_SHEEN };
 
-/** Önizlemedeki mono etiketler (kbd, nav sayaç rozeti) için Archivo. */
 const MONO = "'Archivo', ui-sans-serif, sans-serif";
 
-/**
- * Yan bar zemini: önizlemedeki koyu cam (linear-gradient 180deg, %92→%96).
- * Tema zemininden türetilir; plain-dark dahil tüm temalarda koyu panel verir.
- */
 const SIDEBAR_BG =
   'linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 94%, #ffffff 6%), color-mix(in srgb, var(--bg-base) 96%, transparent))';
 
-/** Başlıklarda beyaz→gri gradyan metin (önizlemedeki .hello h1). */
 const gradTitleStyle: React.CSSProperties = {
   backgroundImage: 'linear-gradient(100deg, #FFFFFF 20%, #B9B9BC)',
   WebkitBackgroundClip: 'text',
@@ -59,7 +47,6 @@ const gradTitleStyle: React.CSSProperties = {
   color: 'transparent',
 };
 
-/** Aktif nav pill: vurgu renginin yumuşak gradyanı + kenar + ışıklı gölge. */
 const activePillStyle: React.CSSProperties = {
   backgroundImage:
     'linear-gradient(120deg, color-mix(in srgb, var(--color-1) 28%, transparent), color-mix(in srgb, var(--color-1) 8%, transparent))',
@@ -68,20 +55,11 @@ const activePillStyle: React.CSSProperties = {
     '0 6px 22px -8px color-mix(in srgb, var(--color-1) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.14)',
 };
 
-/** AKTİF (vurgu tonlu/kırmızı) pill üzerindeki YAZI → PARLAK BEYAZ.
- *  Kural (kullanıcı): kırmızı zemin + sarı yazı yan yana GELMEZ —
- *  text-gold-400 yerine --text-main zinciri (varsayılan premium temada
- *  #f4f4f2 parlak beyaz; açık temalarda tema metin rengi; plain-dark'ta beyaz).
- *  --on-color-1 BİLEREK kullanılmadı: o, DOLU vurgu butonu üzerindeki yazı
- *  rengidir ve çoğu temada koyudur (#0a0a0e) — "parlak beyaz" isteğiyle ters.
- *  bg-gold-500/20 (altın yıkama) inline backgroundColor ile nötrlenir; sınıf
- *  metni DEĞİŞMEZ (layout testleri o stringi birebir sayar). */
 const ACTIVE_PILL_TEXT: React.CSSProperties = {
   color: 'var(--text-main, #f4f4f2)',
   backgroundColor: 'transparent',
 };
 
-/** Logodaki "VIA" gibi aksiyon metni: tema vurgu gradyanı + clip-text. */
 const accentTextStyle: React.CSSProperties = {
   backgroundImage: 'linear-gradient(135deg, var(--color-2), var(--color-1))',
   WebkitBackgroundClip: 'text',
@@ -89,9 +67,6 @@ const accentTextStyle: React.CSSProperties = {
   color: 'transparent',
 };
 
-/** Premium btn-p: açık vurgu → vurgu → koyu vurgu (red-hi/red/red-deep düzeni).
- *  TUR-3: plain-dark'ta beyaz buton VERMESİN diye duraklar --btn-p-* ile
- *  sarılır; tanımsızken (tüm diğer temalar) eskisiyle BİREBİR aynı. */
 const btnPrimaryStyle: React.CSSProperties = {
   backgroundImage:
     'linear-gradient(150deg, var(--btn-p-hi, color-mix(in srgb, var(--color-2) 80%, white)), var(--btn-p-mid, var(--color-1)) 45%, var(--btn-p-low, color-mix(in srgb, var(--color-1) 55%, black)))',
@@ -99,14 +74,12 @@ const btnPrimaryStyle: React.CSSProperties = {
     '0 10px 28px -10px color-mix(in srgb, var(--color-1) 75%, transparent), inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 6px rgba(0,0,0,.25)',
 };
 
-/** Premium btn-s: cam ikincil buton. */
 const btnSecondaryStyle: React.CSSProperties = {
   backgroundImage: 'linear-gradient(150deg, rgba(255,255,255,.14), rgba(255,255,255,.05))',
   borderColor: 'rgba(255,255,255,.16)',
   boxShadow: '0 8px 22px -12px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.16)',
 };
 
-/** Topbar: blur(20px) + saturate(140%) yarı saydam zemin. */
 const topbarStyle: React.CSSProperties = {
   backgroundColor: 'color-mix(in srgb, var(--bg-base) 72%, transparent)',
   backdropFilter: 'blur(20px) saturate(140%)',
@@ -114,12 +87,9 @@ const topbarStyle: React.CSSProperties = {
   boxShadow: '0 18px 44px -26px rgba(0,0,0,.9)',
 };
 
-/** Topbar altındaki kırmızı (tema vurgulu) gradyan saç teli.
- *  TUR-3: plain-dark için duraklar --accent-line (gri) üzerinden. */
 const TOPBAR_HAIRLINE =
   'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-line, var(--color-1)) 55%, transparent) 30%, color-mix(in srgb, var(--accent-line, var(--color-2)) 35%, transparent) 60%, transparent)';
 
-/** Buton üzerinde hover'da geçen parlak süpürme (premium shine). */
 function ButtonShimmer() {
   return (
     <span
@@ -129,8 +99,6 @@ function ButtonShimmer() {
   );
 }
 
-/** Aktif nav öğesinin solundaki ince ışıklı çizgi.
- *  TUR-3: plain-dark'ta çizgi beyaz değil, gri vurgu (--accent-line). */
 function ActiveRail() {
   return (
     <span
@@ -142,21 +110,27 @@ function ActiveRail() {
 }
 
 // ---------------------------------------------------------------------------
-// GLOBAL ARAMA (komut paleti) — tüm sayfalarda AppContext verisini tarar.
-// NÖTR CAM yüzey: panelde kırmızı/gold VURGU YOK (kullanıcı talebi —
-// "arama çubuğundaki alan hala kırmızı"). Aktiflik/odak ayrımı yalnızca
-// beyaz cam parlaklığıyla verilir; renk motoruna (index.css) dokunulmadı.
-// Tema değişkenleri tanımsız olduğunda (plain-dark/eski temalar) fallback
-// zinciri devreye girer: var(--glass, var(--bg-card)), var(--text-main,...).
+// GLOBAL ARAMA (komut paleti) — nötr cam yüzey, yazı yazarken renk/çerçeve değişmez
 // ---------------------------------------------------------------------------
-/** Arama panelinin nötr cam vurgu tonları (beyaz = tema metin rengi). */
 const SEARCH_GLASS_ROW = `linear-gradient(90deg, color-mix(in srgb, var(--text-main, #f4f4f2) 7%, transparent), color-mix(in srgb, var(--text-main, #f4f4f2) 2.5%, transparent) 52%, transparent 88%)`;
 const SEARCH_GLASS_RAIL =
   'linear-gradient(180deg, color-mix(in srgb, var(--text-main, #f4f4f2) 88%, transparent), transparent)';
 const SEARCH_GLASS_EDGE = 'color-mix(in srgb, var(--text-main, #f4f4f2) 26%, transparent)';
 
-/** Sonuç satırının SAĞINDAKİ minik tür/aksiyon etiketi:
- *  medya → Film/Dizi, sayfa içi sekme/buton → Kısayol. */
+const SEARCH_NEUTRAL_CSS = `
+.sv-search-input,
+.sv-search-input:focus,
+.sv-search-input:focus-visible,
+.sv-search-input:active {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+`;
+
 function rowTypeLabel(entry: SearchEntry): string | null {
   if (entry.media) return entry.media.type === 'movie' ? 'Film' : 'Dizi';
   if (entry.action) return 'Kısayol';
@@ -167,9 +141,8 @@ const searchPanelStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-card, #15151b)',
   backgroundImage:
     'var(--glass, linear-gradient(155deg, rgba(255,255,255,.06), rgba(255,255,255,.02)))',
-  borderColor: 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
+  borderColor: 'rgba(255,255,255,.12)',
   borderRadius: 'var(--r, 16px)',
-  // Derin yumuşak gölge + hafif iç cam parıltısı (ince kenar vurgusu).
   boxShadow:
     '0 40px 110px -36px rgba(0,0,0,.95), 0 2px 10px -6px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.09)',
 };
@@ -180,12 +153,8 @@ interface SearchEntry {
   sub?: string;
   icon: LucideIcon;
   tab: TabId;
-  /** Film/dizi sonucu ise doğrudan kartı açar (sayfaya değil). */
   media?: { type: 'movie' | 'series'; id: string };
-  /** Sonuç satırındaki poster küçük görseli (varsa). */
   poster?: string;
-  /** Sayfa İÇİ sekme/buton deep-link'i: seçilince sessionStorage'a yazılır ve
-   *  hedef sayfa mount olurken okuyup kendi sekmesine geçer. */
   action?: string;
 }
 
@@ -196,7 +165,6 @@ interface SearchGroup {
   entries: SearchEntry[];
 }
 
-/** Tüm sayfalar (hash hedefleri) — arama sonuçlarında "Bölümler" grubunu besler. */
 const SEARCH_PAGES: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'home', label: 'Ana Sayfa', icon: LayoutDashboard },
   { id: 'movies', label: 'Filmler', icon: Film },
@@ -220,14 +188,6 @@ function pageEntries(): SearchEntry[] {
   }));
 }
 
-// ---------------------------------------------------------------------------
-// SAYFA İÇİ SEKME / BUTON KISAYOLLARI (deep-link)
-// Kullanıcı: "görevler yazınca başarımlar sayfasındaki görevler kısmına gitmeli,
-// bunun gibi sayfa içindeki ek sekmeler, butonları ekle."
-// Seçilince sessionStorage('sinevia_search_action') = action yazılır; hedef
-// sayfa mount olurken bu anahtarı okuyup ilgili SEKMESİNE geçer ve siler.
-// keywords: normalize() edilerek AND token'larıyla karşılaştırılır.
-// ---------------------------------------------------------------------------
 const SEARCH_ACTIONS: {
   key: string;
   label: string;
@@ -257,15 +217,10 @@ const SEARCH_ACTIONS: {
   },
 ];
 
-/** Türkçe-duyarlı küçük harfe çevirir (İ/ı sorunlarını önler). */
 function trLower(value: string): string {
   return value.toLocaleLowerCase('tr-TR');
 }
 
-/** Sorgudaki HER kelimenin (boşluğa göre bölünmüş, AND) metinde geçmesini sağlar.
- *  normalize(): Türkçe karakter → ascii + tr-TR küçük harf + boşluk sadeleştirme;
- *  hem sorgu hem metin aynı işlemden geçtiği için 'SAÇMA'/'sacma' gibi
- *  yazım farkları ve İ/ı sorunları eşleşmeyi bozmaz. */
 function matchesAllTokens(query: string, haystack: string): boolean {
   const hay = normalize(haystack);
   const tokens = normalize(query).split(/\s+/).filter(Boolean);
@@ -273,18 +228,11 @@ function matchesAllTokens(query: string, haystack: string): boolean {
   return tokens.every((t) => hay.includes(t));
 }
 
-/** Sorguya göre gruplu arama sonuçlarını üretir.
- *  Her kelime ayrı ayrı AND olarak aranır ("her kelimeyi alabilmeliyiz") ve
- *  SADECE sayfalarda GÖRÜNEN alanlar taranır: başlık, yıl, tür, kadro,
- *  yönetmen/yaratıcı, not, etiketler, koleksiyon adı, bölüm adları.
- *  Arkaplan verisi (overview/özet, runtime/süre) ARANMAZ. */
 function buildSearchGroups(query: string, data: any): SearchGroup[] {
   const q = query.trim();
   const groups: SearchGroup[] = [];
   if (!q) return groups;
 
-  // SAYFA İÇİ SEKME/BUTON KISAYOLLARI — listenin en başında: "görevler" gibi
-  // bir sorguda Enter doğrudan hedef sekmeye gitsin (grup/mantık aynen korunur).
   const actionHits: SearchEntry[] = SEARCH_ACTIONS.filter((a) =>
     matchesAllTokens(q, a.keywords)
   ).map((a) => ({
@@ -305,8 +253,6 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
   const collections: any[] = Array.isArray(data?.collections) ? data.collections : [];
   const colName = (id?: string | null) =>
     (id && collections.find((c) => c.id === id)?.name) || '';
-  /** Arama yığını üretici: dizi → boşlukla birleşim, skaler (başlık/yıl/not)
-   *  → String, boş → ''. Böylece ayrı bir .concat() bloğuna gerek kalmaz. */
   const join = (value: unknown) =>
     Array.isArray(value)
       ? value.join(' ')
@@ -314,9 +260,6 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
         ? ''
         : String(value);
 
-  // FİLM: yalnızca sayfalarda GÖRÜNEN alanlar aranır.
-  // (overview/summary ve runtime arama dışındadır — kullanıcı kuralı:
-  //  "sayfalarda gözüken her şeyi almalı, arka planda tutulanı almamalı".)
   const movieHits: SearchEntry[] = movies
     .filter((m) =>
       matchesAllTokens(
@@ -337,7 +280,6 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     }));
   if (movieHits.length) groups.push({ id: 'movies', label: 'Filmler', icon: Film, entries: movieHits });
 
-  // DİZİ: görünür alanlar (özet hariç) + bölüm adları.
   const seriesHits: SearchEntry[] = series
     .filter((s) =>
       matchesAllTokens(
@@ -358,7 +300,6 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     }));
   if (seriesHits.length) groups.push({ id: 'series', label: 'Diziler', icon: Tv, entries: seriesHits });
 
-  // Koleksiyonlar: liste adı ile eşleşen filmlerin evi.
   const collectionHits: SearchEntry[] = collections
     .filter((c) => matchesAllTokens(q, `${c.name || ''} ${c.description || ''}`))
     .slice(0, 4)
@@ -373,7 +314,6 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     groups.push({ id: 'collections', label: 'Koleksiyonlar', icon: Film, entries: collectionHits });
   }
 
-  // Geçmiş: aynı başlık tekrar etmesin (son izleme kayıtları); not + etiketler de aranır.
   const seenHistory = new Set<string>();
   const historyHits: SearchEntry[] = history
     .filter((h) =>
@@ -400,7 +340,6 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     }));
   if (historyHits.length) groups.push({ id: 'history', label: 'Geçmiş', icon: History, entries: historyHits });
 
-  // Kişiler & oyuncular: film (oyuncu/yönetmen) + dizi (oyuncu/yaratıcı) kadroları.
   const peopleMap = new Map<string, TabId>();
   movies.forEach((m) => {
     [...(m.cast || []), ...(m.directors || [])].forEach((p: string) => {
@@ -426,7 +365,6 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     groups.push({ id: 'people', label: 'Kişiler & Oyuncular', icon: Users, entries: peopleHits });
   }
 
-  // Başarımlar: rozet adı/kategorisi/açıklaması ile eşleşme (kazanılan kademe sayısı alt bilgi).
   const achievementProgress: any[] = Array.isArray(data?.achievements) ? data.achievements : [];
   const achHits: SearchEntry[] = ACHIEVEMENT_DEFS
     .filter((def) => matchesAllTokens(q, `${def.name} ${def.category || ''} ${def.description || ''}`))
@@ -446,17 +384,12 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
     groups.push({ id: 'achievements', label: 'Başarımlar', icon: Trophy, entries: achHits });
   }
 
-  // Sayfa/bölüm eşleşmeleri (ör. "ağ", "başarımlar").
   const pageHits = pageEntries().filter((p) => matchesAllTokens(q, p.label));
   if (pageHits.length) groups.push({ id: 'pages', label: 'Bölümler', icon: LayoutDashboard, entries: pageHits });
 
   return groups;
 }
 
-/**
- * Global arama katmanı: cam yüzey, gruplu sonuçlar, klavye ile gezinme.
- * ESC / arka plan tıklaması kapatır; Enter seçili sonuca gider.
- */
 function GlobalSearch({
   open,
   onClose,
@@ -467,7 +400,6 @@ function GlobalSearch({
   open: boolean;
   onClose: () => void;
   onNavigate: (tab: TabId) => void;
-  /** Film/dizi sonucu seçildiğinde sayfaya değil KARTA gider. */
   onSelectMedia: (m: { type: 'movie' | 'series'; id: string }) => void;
   data: any;
 }) {
@@ -476,9 +408,6 @@ function GlobalSearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
 
-  // Sonuçlar yalnızca (query, data) değişince yeniden hesaplanır: buildSearchGroups
-  // her tuş vuruşunda tüm kütüphaneyi normalize+AND ile taradığı için memo şart.
-  // (Sadece memoization — DOM yapısı ve görünür davranış birebir aynı.)
   const groups: SearchGroup[] = useMemo(
     () =>
       query.trim()
@@ -488,7 +417,6 @@ function GlobalSearch({
   );
   const flat: SearchEntry[] = useMemo(() => groups.flatMap((g) => g.entries), [groups]);
 
-  // Açılınca input'a odaklan; kapanınca önceki odağı geri ver.
   useEffect(() => {
     if (!open) return;
     restoreRef.current = (typeof document !== 'undefined'
@@ -506,12 +434,10 @@ function GlobalSearch({
     };
   }, [open]);
 
-  // Sorgu değişince seçimi başa al.
   useEffect(() => {
     setActive(0);
   }, [query]);
 
-  // ESC her durumda kapatır (input odağı kaymış olsa bile).
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -528,26 +454,22 @@ function GlobalSearch({
 
   const select = (entry: SearchEntry | undefined) => {
     if (!entry) return;
-    // Film/dizi sonucu → sayfaya değil, doğrudan KARTA gider (onNavigate yok).
     if (entry.media) {
       onSelectMedia(entry.media);
       onClose();
       return;
     }
-    // Sayfa İÇİ sekme/buton (deep-link) → hedef sayfa mount'ta anahtarı okur.
     if (entry.action) {
       try {
         sessionStorage.setItem('sinevia_search_action', entry.action);
       } catch {
-        /* gizli mod / kota: anahtar yazılamazsa sayfa normal sekmesinde açılır */
+        /* ignore */
       }
-      // Sayfa zaten açıksa mount tekrarlanmaz → o yüzden event de duyurulur.
       window.dispatchEvent(new Event('sinevia-search-action'));
       onNavigate(entry.tab);
       onClose();
       return;
     }
-    // Kişi/koleksiyon/geçmiş/başarımlar/sayfa → eskisi gibi hedef sayfaya.
     onNavigate(entry.tab);
     onClose();
   };
@@ -572,7 +494,7 @@ function GlobalSearch({
       aria-modal="true"
       aria-label="Global arama"
     >
-      {/* Arka plan: karartma + blur */}
+      <style>{SEARCH_NEUTRAL_CSS}</style>
       <div
         className="absolute inset-0"
         style={{ background: 'rgba(0,0,0,.62)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
@@ -580,7 +502,6 @@ function GlobalSearch({
       />
 
       <div className="relative w-full max-w-xl overflow-hidden border backdrop-blur-2xl" style={searchPanelStyle}>
-        {/* Üst saç teli — tek ince nötr cam kenar (kırmızı çerçeve kaldırıldı) */}
         <span
           aria-hidden
           className="absolute inset-x-0 top-0 h-px pointer-events-none"
@@ -590,10 +511,10 @@ function GlobalSearch({
           }}
         />
 
-        {/* Arama girişi — sakin cam satır; renksiz, sade (kullanıcı talebi) */}
+        {/* Arama girişi — yazı yazarken arka plan ve çerçeve asla renk değiştirmez */}
         <div
           className="relative flex items-center gap-3 px-4 py-4 border-b"
-          style={{ borderColor: 'var(--line, var(--border-dim))' }}
+          style={{ borderColor: 'rgba(255,255,255,.10)', background: 'transparent' }}
         >
           <Search size={18} className="shrink-0" style={{ color: 'var(--muted, #8a8a94)' }} />
           <input
@@ -603,33 +524,30 @@ function GlobalSearch({
             onKeyDown={handleKeyDown}
             placeholder="Film, dizi, kişi veya sayfa ara…"
             aria-label="Global arama girişi"
-            className="flex-1 bg-transparent border-0 outline-none text-[15px] tracking-[0.01em] text-ink-50 placeholder:text-ink-500"
+            className="sv-search-input flex-1 !bg-transparent !border-0 !outline-none !ring-0 !shadow-none text-[15px] tracking-[0.01em] text-ink-50 placeholder:text-ink-500"
           />
-          {/* ESC rozeti: kibar, cam, sessiz */}
           <kbd
             className="text-[9.5px] px-1.5 py-[3px] rounded-md border shrink-0 uppercase tracking-[0.1em]"
             style={{
               fontFamily: MONO,
-              borderColor: 'var(--line, var(--border-dim, rgba(255,255,255,.10)))',
+              borderColor: 'rgba(255,255,255,.12)',
               color: 'var(--muted, #8a8a94)',
-              background: 'var(--surface, rgba(255,255,255,.04))',
+              background: 'rgba(255,255,255,.04)',
             }}
           >
             ESC
           </kbd>
         </div>
 
-        {/* Sonuçlar (gruplu) — MOBİL: klavye açıkken daha yüksek kullanım (index.css @media) */}
         <div className="sv-search-results max-h-[52vh] overflow-y-auto custom-scrollbar py-1.5">
           {groups.length === 0 ? (
             <div className="px-4 py-12 text-center">
-              {/* İkon + ikili metin: sakin cam rozet, sırıtmayan vurgu */}
               <span
                 aria-hidden
                 className="mx-auto mb-3 w-11 h-11 rounded-xl grid place-items-center border"
                 style={{
-                  borderColor: 'var(--line, var(--border-dim, rgba(255,255,255,.10)))',
-                  background: 'var(--surface, rgba(255,255,255,.04))',
+                  borderColor: 'rgba(255,255,255,.10)',
+                  background: 'rgba(255,255,255,.04)',
                   color: 'var(--muted, #8a8a94)',
                 }}
               >
@@ -649,13 +567,12 @@ function GlobalSearch({
                 >
                   <group.icon size={12} style={{ color: 'var(--muted, #8a8a94)' }} />
                   <span className="shrink-0">{group.label}</span>
-                  {/* İnce ayraç: grup etiketini sonuç satırlarından ayırır */}
                   <span
                     aria-hidden
                     className="flex-1 h-px"
                     style={{
                       background:
-                        'linear-gradient(90deg, var(--line, var(--border-dim, rgba(255,255,255,.12))), transparent)',
+                        'linear-gradient(90deg, rgba(255,255,255,.12), transparent)',
                     }}
                   />
                 </div>
@@ -675,7 +592,6 @@ function GlobalSearch({
                           : undefined
                       }
                     >
-                      {/* Aktif satır: sol nötr cam ray (ince, gölgesiz, zarif) */}
                       {isActive && (
                         <span
                           aria-hidden
@@ -686,7 +602,6 @@ function GlobalSearch({
                           }}
                         />
                       )}
-                      {/* Film/dizi sonuçlarında poster küçük görseli; yoksa ikon kutusu */}
                       {entry.poster ? (
                         <img
                           src={entry.poster}
@@ -696,7 +611,7 @@ function GlobalSearch({
                           style={{
                             borderColor: isActive
                               ? SEARCH_GLASS_EDGE
-                              : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
+                              : 'rgba(255,255,255,.12)',
                           }}
                         />
                       ) : (
@@ -705,7 +620,7 @@ function GlobalSearch({
                           style={{
                             borderColor: isActive
                               ? SEARCH_GLASS_EDGE
-                              : 'var(--line, var(--border-dim, rgba(255,255,255,.12)))',
+                              : 'rgba(255,255,255,.12)',
                             color: isActive ? 'var(--text-main, #f4f4f2)' : 'var(--muted, #8a8a94)',
                           }}
                         >
@@ -725,8 +640,6 @@ function GlobalSearch({
                           </span>
                         )}
                       </span>
-                      {/* Sağ ipucu: tür/aksiyon etiketi + ok — aktifte vurgulu,
-                          diğerinde sessiz (yer sabit, kayma olmaz) */}
                       <span className="shrink-0 flex items-center gap-2">
                         {rowTypeLabel(entry) && (
                           <span
@@ -753,10 +666,9 @@ function GlobalSearch({
           )}
         </div>
 
-        {/* Alt ipuçları — ferah: sakin tipografi + ince dikey ayraç */}
         <div
           className="flex items-center justify-between gap-3 px-4 py-3 border-t text-[10px] font-semibold uppercase tracking-[0.16em]"
-          style={{ borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #8a8a94)' }}
+          style={{ borderColor: 'rgba(255,255,255,.10)', color: 'var(--muted, #8a8a94)' }}
         >
           <span className="flex items-center gap-2.5">
             <span className="flex items-center gap-1.5">
@@ -765,7 +677,7 @@ function GlobalSearch({
             <span
               aria-hidden
               className="w-px h-3"
-              style={{ background: 'var(--line, var(--border-dim, rgba(255,255,255,.12)))' }}
+              style={{ background: 'rgba(255,255,255,.12)' }}
             />
             <span>↑↓ Gezin</span>
           </span>
@@ -777,21 +689,15 @@ function GlobalSearch({
 }
 
 export default function Layout({ children, activeTab, onTabChange }: LayoutProps) {
-  // AppContext'ten (veya ilgili yerden) syncStatus durumunu çekiyoruz. 
-  // Sen Context'e ekleyene kadar hata vermemesi için fallback atadık.
   const appCtx = useApp() as any;
   const syncStatus: 'syncing' | 'synced' | 'error' = appCtx.syncStatus || 'synced';
   const { watchMovie, watchEpisode } = appCtx;
 
-  // Topbar karşılama satırı + global arama verisi.
   const profileData = appCtx?.data || {};
   const nickname: string = profileData.nickname || 'Sinevia Ajanı';
   const level: number = Number(profileData.level) || 1;
   const streak: number = Number(profileData.dailyStreak) || 0;
 
-  // Yan bardaki mono sayaç rozetleri (önizlemedeki .nav a .n) — semantik:
-  // Filmler/Diziler = toplam kayıt; Geçmiş = izleme kaydı; Haftalık Plan =
-  // planlı öğe; Başarımlar = AÇILAN rozet (kademe) sayısı. 0 ise rozet gizli.
   const unlockedBadgeCount = (Array.isArray(profileData.achievements) ? profileData.achievements : [])
     .reduce((sum: number, a: any) => sum + (Array.isArray(a?.unlockedTiers) ? a.unlockedTiers.length : 0), 0);
   const navCounts: Partial<Record<TabId, number>> = {
@@ -802,21 +708,15 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     achievements: unlockedBadgeCount,
   };
 
-  // Karşılama (önizlemedeki .hello h1) — saate göre, gerçek takma adla.
   const hour = new Date().getHours();
   const greeting = hour < 6 ? 'İyi geceler' : hour < 12 ? 'Günaydın' : hour < 18 ? 'İyi günler' : 'İyi akşamlar';
 
-  // Tutorial sürerken alt nav'ı kaydırma ile gizleme: hedef adımlar (örn.
-  // karşılama turundaki nav-movies) menü görünürken tamamlanmalı.
   const { activeTutorial } = useTutorial();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showWrapped, setShowWrapped] = useState(false);
-  // Global arama katmanı.
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  // Aramadan seçilen film/dizi KARTI (sayfaya değil karta gider).
   const [searchDetail, setSearchDetail] = useState<DetailModalTarget | null>(null);
-  // Üst bardaki Katalog / Ne İzlesem butonları ana sayfadakiyle AYNI pencereleri açar.
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
   const [showPick, setShowPick] = useState(false);
   const [pickedItem, setPickedItem] = useState<
@@ -825,13 +725,11 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     | null
   >(null);
 
-  // Topbar'daki arama kutusunun kısayol rozeti ("/" varsayılan, ayarlardan değişir).
   const [searchCombo, setSearchCombo] = useState('/');
   useEffect(() => {
     setSearchCombo(describeCombo(loadBindings().focusSearch));
   }, []);
 
-  /** Global aramadan film/dizi seçilince: sayfaya değil, MEDYA KARTINA gider. */
   const handleSearchSelectMedia = ({ type, id }: { type: 'movie' | 'series'; id: string }) => {
     if (type === 'movie') {
       const movie = (profileData.movies || []).find((m: any) => m?.id === id);
@@ -842,7 +740,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     }
   };
 
-  // Akıllı Alt Bar (Auto-Hide) State ve Referansları
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const lastScrollY = useRef(0);
@@ -859,15 +756,16 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     { id: 'ai', icon: Bot, label: 'AI Asistan', shortLabel: 'AI' },
   ] as const;
 
+  // Mobil alt bar — en sağa Ayarlar eklendi
   const mobileBottomTabs = [
     { id: 'movies', icon: Film, label: 'Filmler' },
     { id: 'series', icon: Tv, label: 'Diziler' },
     { id: 'network', icon: Users, label: 'Sinevia Ağı' },
     { id: 'history', icon: History, label: 'Geçmiş' },
     { id: 'achievements', icon: Trophy, label: 'Başarımlar' },
+    { id: 'settings', icon: Settings, label: 'Ayarlar' },
   ] as const;
 
-  // 1. KUSURSUZ MODAL ALGILAYICI
   useEffect(() => {
     const checkModals = () => {
       const hasModals = Array.from(document.querySelectorAll('.fixed.inset-0')).some(el => {
@@ -888,10 +786,9 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     return () => observer.disconnect();
   }, []);
 
-  // 2. YAVAŞ KAYDIRMAYA DUYARLI AKILLI SCROLL MOTORU
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (isModalOpen) return;
-    if (activeTutorial) return; // tutorial sırasında nav sabit kalsın
+    if (activeTutorial) return;
 
     const currentY = e.currentTarget.scrollTop;
     
@@ -925,11 +822,8 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     setIsMobileMenuOpen(false);
   };
 
-  // Global arama: üst bardaki arama butonu tüm sayfalarda aynı katmanı açar.
-  // Sayfa-içi arama (focusPageSearch) korunur; global katman birincil.
   const openGlobalSearch = () => setIsSearchOpen(true);
 
-  // Ctrl/Cmd+K ile global aramayı aç (bu kombinasyon başka yerde kullanılmıyor).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
@@ -941,8 +835,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // "Ne İzlesem" (PickModal) verileri — ana sayfadakiyle aynı havuz:
-  // izlenmemiş standalone + koleksiyonların ilk sırası, planlanmamış.
   const pastColIds = useMemo(
     () =>
       new Set(
@@ -990,91 +882,89 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] bg-ink-950 font-sans text-ink-50 selection:bg-azure-500/30 selection:text-azure-200 overflow-hidden relative isolate transition-colors duration-500">
-      {/* Ortam ışıkları: negatif z ile her zaman içeriknin ARKASINDA kalır
-          MOBİL: 600/500px blob'lar tam ekranı kaplayıp büyük ölçüyordu →
-          daraltıldı; ≥768px (md:) değerleri ÖNCEDENKİ İLE BİREBİR aynı. */}
       <div className="fixed top-[-10%] right-[-5%] w-[300px] h-[300px] sm:w-[420px] sm:h-[420px] md:w-[600px] md:h-[600px] rounded-full blur-[70px] sm:blur-[100px] md:blur-[130px] pointer-events-none ambient-glow-1 -z-10 transition-all duration-700" />
       <div className="fixed bottom-[-10%] left-[-5%] w-[300px] h-[300px] sm:w-[420px] sm:h-[420px] md:w-[600px] md:h-[600px] rounded-full blur-[70px] sm:blur-[100px] md:blur-[130px] pointer-events-none ambient-glow-2 -z-10 transition-all duration-700" />
       <div className="fixed top-[40%] left-[30%] w-[260px] h-[260px] sm:w-[380px] sm:h-[380px] md:w-[500px] md:h-[500px] rounded-full blur-[80px] sm:blur-[110px] md:blur-[140px] pointer-events-none ambient-glow-3 -z-10 transition-all duration-700" />
 
-      {/* MOBİL: SABİT ÜST BAR */}
-      {/* iOS çentik/safe-area: başlık calc ile büyür, içerik satırı 56px'te kalır */}
-      <header className="md:hidden fixed top-0 inset-x-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-ink-900/80 backdrop-blur-xl border-b border-ink-800 z-[60] flex items-center justify-between pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] shadow-md shrink-0 transition-transform duration-300" style={glassSurface}>
-        {/* Premium kırmızı (tema vurgulu) alt saç teli */}
+      {/* MOBİL: SABİT ÜST BAR (Arama Çubuğu + Katalog + Ne İzlesem) */}
+      <header
+        className="md:hidden fixed top-0 inset-x-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-ink-900/80 backdrop-blur-xl border-b border-ink-800 z-[60] flex items-center justify-between gap-1.5 pl-[max(0.6rem,env(safe-area-inset-left))] pr-[max(0.6rem,env(safe-area-inset-right))] shadow-md shrink-0 transition-transform duration-300"
+        style={glassSurface}
+      >
         <span aria-hidden className="absolute inset-x-0 bottom-[-1px] h-px pointer-events-none" style={{ background: TOPBAR_HAIRLINE }} />
-        <div className="flex items-center gap-1.5 min-w-0">
-          {/* 44px dokunma hedefi (iOS HIG) */}
+
+        {/* Sol: Menü + Marka */}
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             data-tutorial="nav-tabs"
-            className="w-11 h-11 flex items-center justify-center rounded-xl text-white bg-ink-900 border border-ink-800 hover:bg-ink-800 transition-colors shrink-0"
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-white bg-ink-900 border border-ink-800 hover:bg-ink-800 transition-colors shrink-0"
             title="Menü"
           >
-            {isMobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
+            {isMobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 
-          <button onClick={() => handleMobileMenuClick('home')} className="flex items-center gap-1.5 min-h-11 transition-transform active:scale-95">
-            <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-              <Sini size={30} mood="idle" showGlow={false} />
+          <button
+            onClick={() => handleMobileMenuClick('home')}
+            className="flex items-center gap-1 transition-transform active:scale-95 shrink-0"
+            title="Ana Sayfa"
+          >
+            <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
+              <Sini size={26} mood="idle" showGlow={false} />
             </div>
-            {/* MOBİL: dar ekranda (safe-area dâhil) taşmasın diye marka
-                yazısı bir kademe küçük + sıkı harf aralığı */}
-            <span className="text-[12px] font-black text-white tracking-[0.1em] uppercase whitespace-nowrap">SINEVIA</span>
+            <span className="hidden xs:inline text-[11px] font-black text-white tracking-[0.08em] uppercase whitespace-nowrap">
+              SINEVIA
+            </span>
           </button>
         </div>
 
+        {/* Orta: Mobil Arama Çubuğu */}
+        <button
+          type="button"
+          onClick={openGlobalSearch}
+          aria-label="Global arama"
+          className="flex-1 min-w-0 h-9 px-2.5 rounded-xl bg-ink-900/75 border border-ink-800/80 flex items-center gap-1.5 text-left transition-colors hover:border-ink-700"
+        >
+          <Search size={14} className="text-ink-400 shrink-0" />
+          <span className="text-[11.5px] text-ink-400 truncate">Ara…</span>
+        </button>
+
+        {/* Sağ: Katalog + Ne İzlesem + Bulut Durumu */}
         <div className="flex items-center gap-1 shrink-0">
-          
-          {/* YENİ: MOBİL BULUT EŞİTLEME İKONU */}
-          <div 
-            className={`relative flex items-center justify-center w-8 h-8 rounded-xl border transition-all mr-0.5 ${
+          <button
+            type="button"
+            onClick={() => setShowBulkAdd('movie')}
+            className="h-9 px-2.5 rounded-xl text-ink-50 font-extrabold text-[10px] tracking-[0.06em] uppercase flex items-center gap-1 border shrink-0 transition-transform active:scale-95"
+            style={btnSecondaryStyle}
+            title="Katalog Ekle"
+          >
+            <Film size={13} />
+            <span>Katalog</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPick(true)}
+            className="relative overflow-hidden h-9 px-2.5 rounded-xl text-white font-extrabold text-[10px] tracking-[0.06em] uppercase flex items-center gap-1 shrink-0 transition-transform active:scale-95"
+            style={btnPrimaryStyle}
+            title="Ne İzlesem"
+          >
+            <Dices size={13} />
+            <span>Ne İzlesem</span>
+          </button>
+
+          <div
+            className={`relative hidden sm:flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${
               syncStatus === 'syncing' ? 'bg-azure-500/10 border-azure-500/30 text-azure-400' :
               syncStatus === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
               'bg-emerald-500/5 border-emerald-500/20 text-emerald-500/70'
             }`}
             title={syncStatus === 'syncing' ? 'Bulutla eşitleniyor...' : syncStatus === 'error' ? 'Bağlantı hatası' : 'Sistem güncel'}
           >
-            {syncStatus === 'syncing' ? <RefreshCw size={14} className="animate-spin" /> :
-             syncStatus === 'error' ? <CloudOff size={14} /> :
-             <Cloud size={14} />}
-             
-             {syncStatus === 'syncing' && (
-               <span className="absolute inset-0 rounded-xl border border-azure-400 animate-ping opacity-30" />
-             )}
+            {syncStatus === 'syncing' ? <RefreshCw size={13} className="animate-spin" /> :
+             syncStatus === 'error' ? <CloudOff size={13} /> :
+             <Cloud size={13} />}
           </div>
-
-          <button
-            onClick={() => handleMobileMenuClick('ai')}
-            className={`w-11 h-11 flex items-center justify-center rounded-xl border transition-all shrink-0 ${
-              activeTab === 'ai'
-                ? 'text-gold-400 border'
-                : 'bg-ink-900/80 text-ink-400 border-ink-800 hover:text-ink-100'
-            }`}
-            style={activeTab === 'ai' ? activePillStyle : undefined}
-            title="AI Asistan"
-          >
-            <Bot size={17} />
-          </button>
-
-          {/* Küçük ekranda başlık taşmasın: Wrapped aynı işlevi menüde de var */}
-          <button
-            onClick={() => setShowWrapped(true)}
-            className="relative overflow-hidden hidden sm:flex items-center gap-1 min-h-11 px-2.5 py-1.5 rounded-xl text-white text-[11px] font-black shadow-md whitespace-nowrap transition-transform hover:-translate-y-[1px]"
-            style={btnPrimaryStyle}
-          >
-            <Sparkles size={13} /> Wrapped
-            <ButtonShimmer />
-          </button>
-
-          <button
-            onClick={() => handleMobileMenuClick('settings')}
-            className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all shrink-0 ${
-              activeTab === 'settings' ? 'bg-ink-800 text-gold-400 border border-gold-500/30' : 'text-ink-400 hover:bg-ink-900 hover:text-white'
-            }`}
-            title="Ayarlar"
-          >
-            <Settings size={18} />
-          </button>
         </div>
       </header>
 
@@ -1132,7 +1022,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         </div>
       )}
 
-      {/* MASAÜSTÜ SOL SIDEBAR — premium cam yüzey */}
+      {/* MASAÜSTÜ SOL SIDEBAR */}
       <aside
         className="hidden md:flex flex-col w-56 shrink-0 z-20 bg-ink-900/80 backdrop-blur-[18px] border-r transition-colors duration-500"
         style={{
@@ -1141,7 +1031,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           boxShadow: '12px 0 44px -20px rgba(0,0,0,.7)',
         }}
       >
-        {/* Marka bloğu + alt kırmızı saç teli — yükseklik masaüstü üst bar (header) ile EŞİT */}
         <button
           onClick={() => onTabChange('home')}
           className="relative h-[72px] px-[22px] flex items-center border-b border-ink-800/50 hover:bg-ink-800/40 transition-colors text-left cursor-pointer"
@@ -1186,14 +1075,11 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
               >
                 <item.icon size={17} className={`transition-transform duration-300 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
                 <span>{item.label}</span>
-                {/* DİZİLİM: TEK SATIR — ikon + etiket yan yana (items-center),
-                    sayaç rozeti SAĞA sabit (ml-auto), etiketin SAĞINDA (alta değil). */}
                 {(navCounts[item.id as TabId] ?? 0) > 0 && (
                   <span
                     className="ml-auto inline-flex items-center px-1.5 py-[3px] rounded-md text-[10px] font-bold leading-none"
                     style={{
                       fontFamily: MONO,
-                      // AKTİF pill kırmızı tonlu → rozet de beyaz (kırmızı+sarı yok).
                       color: isActive ? 'var(--text-main, #f4f4f2)' : 'var(--muted, #8a8a94)',
                       background: isActive
                         ? 'color-mix(in srgb, var(--text-main, #f4f4f2) 12%, transparent)'
@@ -1213,8 +1099,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         </nav>
 
         <div className="p-3 border-t border-ink-800/60 space-y-2">
-          
-          {/* YENİ: MASAÜSTÜ BULUT EŞİTLEME PANELİ (cam) */}
           <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-ink-800/40 border border-ink-800/50 mb-3 select-none" style={glassSurface}>
             <div className="relative flex items-center justify-center">
               {syncStatus === 'syncing' ? <RefreshCw size={15} className="text-azure-400 animate-spin" /> :
@@ -1235,7 +1119,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             </div>
           </div>
 
-          {/* Premium btn-p: Wrapped */}
           <button
             onClick={() => setShowWrapped(true)}
             className="relative overflow-hidden w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white font-extrabold text-[11px] tracking-[0.12em] uppercase shadow-lg transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px"
@@ -1245,7 +1128,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             <ButtonShimmer />
           </button>
 
-          {/* Ayarlar (nav ile aynı aktif pill mantığı) */}
           <button
             onClick={() => onTabChange('settings')}
             className={`relative w-full flex items-center gap-3 px-3.5 py-[11px] rounded-xl transition-all duration-300 font-bold text-[12.5px] tracking-[0.06em] uppercase whitespace-nowrap group ${
@@ -1263,11 +1145,8 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       </aside>
 
       {/* ANA İÇERİK ALANI */}
-      {/* main'de z-index YOK: modal/tutorial katmanları (z-90…z-300) kök
-          stacking context'te sidebar (z-20) ve alt nav (z-58) ile yarışsın,
-          aksi halde hepsi içerik alanının altında sıkışıp kalıyor. */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent relative pt-[calc(3.5rem+env(safe-area-inset-top))] pb-0 md:pt-0 md:pb-0">
-        {/* MASAÜSTÜ PREMIUM TOPBAR — blur(20px) + alt kırmızı gradyan saç teli */}
+        {/* MASAÜSTÜ PREMIUM TOPBAR */}
         <header
           className="hidden md:flex items-center gap-4 h-[72px] px-6 shrink-0 relative z-30 border-b border-ink-800/60 backdrop-blur-[20px] transition-colors duration-500"
           style={topbarStyle}
@@ -1281,7 +1160,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             </p>
           </div>
 
-          {/* Premium arama butonu: GLOBAL aramayı açar (tüm veriler + "/" kısayolu) */}
           <button
             onClick={openGlobalSearch}
             aria-label="Global arama"
@@ -1291,16 +1169,8 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             <Search size={15} className="text-ink-400 group-hover:text-ink-200 transition-colors shrink-0" />
             <span className="flex-1 text-[13px] text-ink-400 whitespace-nowrap overflow-hidden text-ellipsis">Film, dizi, oyuncu ara…</span>
             <kbd className="text-[10px] px-1.5 py-0.5 rounded-md border border-ink-800/60 bg-ink-800/40 text-ink-400 shrink-0" style={{ fontFamily: MONO }}>{searchCombo}</kbd>
-            {/* Hover'da vurgu halkası */}
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-              style={{ boxShadow: '0 0 0 4px color-mix(in srgb, var(--text-main, #f4f4f2) 18%, transparent)' }}
-            />
           </button>
 
-          {/* Aksiyon butonları (premium buton sistemi) */}
-          {/* Katalog: ana sayfadakiyle AYNI katalog ekleme penceresini doğrudan açar */}
           <button
             onClick={() => setShowBulkAdd('movie')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-ink-50 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap backdrop-blur-md transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px shrink-0"
@@ -1309,7 +1179,6 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             <Film size={15} /> Katalog
           </button>
 
-          {/* Ne İzlesem: ana sayfadakiyle AYNI seçici penceresini doğrudan açar */}
           <button
             onClick={() => setShowPick(true)}
             className="relative overflow-hidden group flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px shrink-0"
@@ -1326,24 +1195,21 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             <Users size={15} /> Sinevia Ağı
           </button>
 
-          {/* Premium alt saç teli */}
           <span aria-hidden className="absolute left-0 right-0 bottom-[-1px] h-px pointer-events-none" style={{ background: TOPBAR_HAIRLINE }} />
         </header>
 
         <div id="main-scroll" onScroll={handleScroll} className="flex-1 overflow-y-auto p-3.5 sm:p-4 md:p-8 relative custom-scrollbar pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
-          {/* Başarımlar sayfası masaüstünde daha geniş bir vitrin ister */}
-        <div className={activeTab === 'achievements' ? 'w-full max-w-[100rem] mx-auto' : 'max-w-7xl mx-auto'}>{children}</div>
+          <div className={activeTab === 'achievements' ? 'w-full max-w-[100rem] mx-auto' : 'max-w-7xl mx-auto'}>{children}</div>
         </div>
       </main>
 
-      {/* MOBİL: AKILLI (GİZLENEN) SABİT ALT NAVİGASYON BARI */}
+      {/* MOBİL: AKILLI SABİT ALT NAVİGASYON BARI (6 Sekme — En Sağda Ayarlar) */}
       <nav
-        className={`md:hidden fixed bottom-0 inset-x-0 min-h-[62px] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-ink-900/80 backdrop-blur-2xl border-t border-ink-800/60 z-[58] grid grid-cols-5 px-1.5 shadow-[0_-8px_25px_rgba(0,0,0,0.6)] transition-transform duration-300 ease-in-out ${
+        className={`md:hidden fixed bottom-0 inset-x-0 min-h-[62px] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] bg-ink-900/80 backdrop-blur-2xl border-t border-ink-800/60 z-[58] grid grid-cols-6 px-1 shadow-[0_-8px_25px_rgba(0,0,0,0.6)] transition-transform duration-300 ease-in-out ${
           isNavVisible && !isModalOpen ? 'translate-y-0' : 'translate-y-[120%]'
         }`}
         style={glassSurface}
       >
-        {/* Premium üst saç teli */}
         <span aria-hidden className="absolute inset-x-0 top-0 h-px pointer-events-none" style={{ background: TOPBAR_HAIRLINE }} />
         {mobileBottomTabs.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -1359,9 +1225,8 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
               }`}
               style={isActive ? { backgroundImage: activePillStyle.backgroundImage } : undefined}
             >
-              <Icon size={20} className={isActive ? 'scale-110' : ''} />
-              {/* MOBİL: dar ekranda satır kırılmasın (taşma/çakışma olmasın) */}
-              <span className={`text-[9.5px] tracking-tight whitespace-nowrap ${isActive ? 'font-black' : 'font-semibold'}`}>
+              <Icon size={19} className={isActive ? 'scale-110' : ''} />
+              <span className={`text-[9px] tracking-tight whitespace-nowrap ${isActive ? 'font-black' : 'font-semibold'}`}>
                 {tab.label}
               </span>
             </button>
@@ -1369,7 +1234,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         })}
       </nav>
 
-      {/* GLOBAL ARAMA (komut paleti): tüm verilerde gruplu sonuçlar */}
+      {/* GLOBAL ARAMA */}
       <GlobalSearch
         open={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
@@ -1377,12 +1242,11 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         onSelectMedia={handleSearchSelectMedia}
         data={profileData}
       />
-      {/* Aramadan seçilen film/dizi kartı (arama kapandığı için katman çakışması olmaz) */}
       {searchDetail && (
         <MediaDetailModal target={searchDetail} onClose={() => setSearchDetail(null)} />
       )}
 
-      {/* ÜST BAR MODALLARI — ana sayfaydın AYNI pencereler */}
+      {/* ÜST BAR MODALLARI */}
       {showBulkAdd && <BulkAddModal initialTab={showBulkAdd} onClose={() => setShowBulkAdd(false)} />}
       {showPick && (
         <PickModal

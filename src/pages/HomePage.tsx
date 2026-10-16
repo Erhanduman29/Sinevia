@@ -1663,9 +1663,6 @@ export default function HomePage() {
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowBulkAdd('movie')}>
           <Compass size={13} /> Katalog Ekle
         </button>
-        <button type="button" className="hn-btn hn-btn-g hn-action" onClick={() => navigateTo('plan')}>
-          <Calendar size={13} /> Planlayıcı
-        </button>
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowCalibration(true)}>
           <Swords size={13} /> Düelloya Başla
         </button>

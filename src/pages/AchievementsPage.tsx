@@ -1,135 +1,316 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as Icons from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ACHIEVEMENT_DEFS, TIER_COLORS, TIER_ORDER } from '../lib/achievements';
+import { ACHIEVEMENT_DEFS, TIER_ORDER } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
 import { RANK_TIERS } from '../lib/rankTiers';
-
-// YENİ: Bizim hazırladığımız Görev Panosu Bileşeni
 import QuestBoard from '../components/QuestBoard';
 
 // ============================================================
-// PREMIUM CAM ROZET STİLLERİ (sinevia-premium.html §06 kriteri)
-// Tüm renkler tema CSS değişkenlerine bağlıdır:
-// premium tokenlar önce gelir (--red/--red-hi/--red-deep, --glass, --surface,
-// --line-2, --r, --r-lg, --shadow), plain-dark gibi token tanımsız
-// temalar için zincirleme fallback: --color-1/2/3 → sabit değer.
+// CANLI GERÇEK METAL & MÜCEVHER KADEME PALETİ
 // ============================================================
-const ACHV_PREMIUM_CSS = `
-.achv-card{
-  position:relative; overflow:hidden;
-  background:var(--glass, var(--bg-card, rgba(255,255,255,.05)));
-  border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius:var(--r, 16px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
-  transition:transform .24s cubic-bezier(.2,.7,.3,1), box-shadow .24s, border-color .24s;
+interface TierVisualTheme {
+  label: string;
+  solid: string;        // Ana canlı renk (sol şerit, bar, vurgu)
+  barGradient: string;  // İlerleme çubuğu ve aktif buton canlı gradyanı
+  badgeBg: string;      // Kademe etiketi arka planı
+  badgeBorder: string;  // Kademe etiketi çerçevesi
+  badgeText: string;    // Kademe etiketi parlak yazı rengi
+  medalBg: string;      // İkon kutusu canlı metalik/mücevher gradyanı
+  medalBorder: string;  // İkon kutusu parlak çerçevesi
+  iconColor: string;    // İkonun kendi parlak rengi
+  activeText: string;   // Filtre butonu seçiliyse yazı rengi
 }
-.achv-card.is-locked{
-  background:var(--glass, var(--bg-card, rgba(255,255,255,.05)));
+
+const TIER_VISUALS: Record<string, TierVisualTheme> = {
+  bronze: {
+    label: 'Bronz',
+    solid: '#FF7A2F',
+    barGradient: 'linear-gradient(90deg, #D9531E 0%, #FF7A2F 55%, #FFAA6E 100%)',
+    badgeBg: 'rgba(255, 122, 47, 0.16)',
+    badgeBorder: 'rgba(255, 145, 77, 0.45)',
+    badgeText: '#FFB085',
+    medalBg: 'linear-gradient(135deg, rgba(255, 122, 47, 0.28) 0%, rgba(163, 62, 18, 0.18) 100%)',
+    medalBorder: '#FF8542',
+    iconColor: '#FF9E66',
+    activeText: '#09090D',
+  },
+  silver: {
+    label: 'Gümüş',
+    solid: '#E2E8F0',
+    barGradient: 'linear-gradient(90deg, #94A3B8 0%, #E2E8F0 55%, #FFFFFF 100%)',
+    badgeBg: 'rgba(226, 232, 240, 0.15)',
+    badgeBorder: 'rgba(226, 232, 240, 0.48)',
+    badgeText: '#F8FAFC',
+    medalBg: 'linear-gradient(135deg, rgba(241, 245, 249, 0.28) 0%, rgba(148, 163, 184, 0.16) 100%)',
+    medalBorder: '#CBD5E1',
+    iconColor: '#FFFFFF',
+    activeText: '#09090D',
+  },
+  gold: {
+    label: 'Altın',
+    solid: '#FFC800',
+    barGradient: 'linear-gradient(90deg, #EAB308 0%, #FFC800 50%, #FFF066 100%)',
+    badgeBg: 'rgba(255, 200, 0, 0.16)',
+    badgeBorder: 'rgba(255, 215, 0, 0.50)',
+    badgeText: '#FFE46B',
+    medalBg: 'linear-gradient(135deg, rgba(255, 204, 0, 0.30) 0%, rgba(180, 120, 0, 0.18) 100%)',
+    medalBorder: '#FFD026',
+    iconColor: '#FFE047',
+    activeText: '#09090D',
+  },
+  platinum: {
+    label: 'Platin',
+    solid: '#A5F3FC',
+    barGradient: 'linear-gradient(90deg, #38BDF8 0%, #A5F3FC 55%, #ECFEFF 100%)',
+    badgeBg: 'rgba(165, 243, 252, 0.15)',
+    badgeBorder: 'rgba(165, 243, 252, 0.48)',
+    badgeText: '#CFFAFE',
+    medalBg: 'linear-gradient(135deg, rgba(165, 243, 252, 0.28) 0%, rgba(56, 189, 248, 0.16) 100%)',
+    medalBorder: '#67E8F9',
+    iconColor: '#E0F2FE',
+    activeText: '#09090D',
+  },
+  emerald: {
+    label: 'Zümrüt',
+    solid: '#00E676',
+    barGradient: 'linear-gradient(90deg, #059669 0%, #00E676 55%, #69F0AE 100%)',
+    badgeBg: 'rgba(0, 230, 118, 0.15)',
+    badgeBorder: 'rgba(0, 230, 118, 0.45)',
+    badgeText: '#69F0AE',
+    medalBg: 'linear-gradient(135deg, rgba(0, 230, 118, 0.28) 0%, rgba(5, 150, 105, 0.16) 100%)',
+    medalBorder: '#10B981',
+    iconColor: '#34D399',
+    activeText: '#09090D',
+  },
+  diamond: {
+    label: 'Elmas',
+    solid: '#00D2FF',
+    barGradient: 'linear-gradient(90deg, #0284C7 0%, #00D2FF 55%, #80EAFF 100%)',
+    badgeBg: 'rgba(0, 210, 255, 0.16)',
+    badgeBorder: 'rgba(56, 189, 248, 0.52)',
+    badgeText: '#7DD3FC',
+    medalBg: 'linear-gradient(135deg, rgba(0, 210, 255, 0.30) 0%, rgba(2, 132, 199, 0.18) 100%)',
+    medalBorder: '#38BDF8',
+    iconColor: '#7DD3FC',
+    activeText: '#09090D',
+  },
+  secret: {
+    label: 'Gizli',
+    solid: '#FF2E63',
+    barGradient: 'linear-gradient(90deg, #BE123C 0%, #FF2E63 55%, #FF85A1 100%)',
+    badgeBg: 'rgba(255, 46, 99, 0.16)',
+    badgeBorder: 'rgba(255, 46, 99, 0.48)',
+    badgeText: '#FDA4AF',
+    medalBg: 'linear-gradient(135deg, rgba(255, 46, 99, 0.28) 0%, rgba(159, 18, 57, 0.18) 100%)',
+    medalBorder: '#F43F5E',
+    iconColor: '#FB7185',
+    activeText: '#FFFFFF',
+  },
+};
+
+interface ClosestLockedTrophy {
+  name: string;
+  pct: number;
+  current: number;
+  target: number;
+  tier: string;
+}
+
+// Her başarım için kendi kimliğini yansıtan zengin ikon çözücü
+function resolveAchievementIcon(def: any): React.ComponentType<any> {
+  if (def?.icon && (Icons as any)[def.icon]) {
+    return (Icons as any)[def.icon];
+  }
+  const text = `${def?.id || ''} ${def?.name || ''} ${def?.category || ''}`.toLocaleLowerCase('tr-TR');
+  if (text.includes('film') || text.includes('movie') || text.includes('sinema')) return Icons.Clapperboard;
+  if (text.includes('dizi') || text.includes('series') || text.includes('sezon') || text.includes('bölüm')) return Icons.Tv;
+  if (text.includes('seri') || text.includes('streak') || text.includes('alev') || text.includes('gün')) return Icons.Flame;
+  if (text.includes('puan') || text.includes('rate') || text.includes('eleştir') || text.includes('yıldız')) return Icons.Star;
+  if (text.includes('yorum') || text.includes('not') || text.includes('inceleme') || text.includes('kalem')) return Icons.Feather;
+  if (text.includes('gece') || text.includes('night') || text.includes('baykuş')) return Icons.Moon;
+  if (text.includes('maraton') || text.includes('hız') || text.includes('süre') || text.includes('saat')) return Icons.Zap;
+  if (text.includes('tür') || text.includes('kaşif') || text.includes('genre')) return Icons.Compass;
+  if (text.includes('koleksiyon') || text.includes('arşiv') || text.includes('kütüphane')) return Icons.Layers;
+  if (text.includes('dna') || text.includes('sentez')) return Icons.Dna;
+  if (text.includes('görev') || text.includes('kontrat') || text.includes('quest')) return Icons.Crosshair;
+  if (text.includes('ağ') || text.includes('sosyal') || text.includes('arkadaş')) return Icons.Users;
+  if (text.includes('korku') || text.includes('gerilim')) return Icons.Skull;
+  if (text.includes('bilim') || text.includes('uzay')) return Icons.Rocket;
+  if (text.includes('romantik') || text.includes('aşk')) return Icons.Heart;
+  if (text.includes('komedi')) return Icons.Smile;
+  if (text.includes('aksiyon') || text.includes('savaş')) return Icons.Swords;
+  if (def?.secret) return Icons.Eye;
+  return Icons.Trophy;
+}
+
+const ACHV_SOLID_CSS = `
+/* ---------- CANLI RENKLİ BAŞARIM KARTI ---------- */
+.achv-card{
+  position:relative;
+  overflow:hidden;
+  background:#0F0F16;
+  border:1px solid #232332;
+  border-left:4px solid var(--tier-solid);
+  border-radius:15px;
+  transition:transform .22s ease, border-color .22s ease, background-color .22s ease, box-shadow .22s ease;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
 }
 .achv-card:hover{
-  transform:translateX(4px);
-  border-color:rgba(232,56,79,.45);
-  box-shadow:0 10px 28px -14px rgba(0,0,0,.9), -4px 0 24px -14px rgba(232,56,79,.7);
+  transform:translateY(-3px);
+  background:#14141E;
+  border-color:var(--tier-medal-border);
+  border-left-color:var(--tier-solid);
+  box-shadow:0 16px 36px -18px rgba(0,0,0,.95);
+}
+.achv-card.is-locked{
+  background:#0A0A0F;
+  border-color:#1B1B26;
+  border-left-color:var(--tier-solid);
 }
 .achv-card.is-locked:hover{
-  transform:none;
+  background:#0F0F17;
+  border-color:#2D2D3F;
+  border-left-color:var(--tier-solid);
 }
-.achv-topline{
-  position:absolute; top:0; left:0; right:0; height:3px; z-index:3;
-  background:linear-gradient(90deg, var(--red-deep, var(--color-3, #8e1220)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-hi, var(--color-2, #ff6b7a)));
+
+/* Canlı Metalik/Mücevher İkon Rozeti */
+.achv-medal-wrap{
+  position:relative;
+  width:56px;
+  height:56px;
+  flex-shrink:0;
 }
-.achv-card.is-locked .achv-topline{
-  height:1px;
-  background:linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
-}
-.achv-body{ transition:opacity .3s ease, filter .3s ease; }
-.achv-card.is-locked .achv-body{ filter:grayscale(1); opacity:.6; }
-.achv-card.is-locked:hover .achv-body{ filter:grayscale(.35); opacity:.86; }
 .achv-medal{
-  width:44px; height:44px; flex-shrink:0;
-  border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius:13px;
-  background:rgba(255,255,255,.05);
-  display:grid; place-items:center;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 10px 24px -12px rgba(0,0,0,.9);
+  width:56px;
+  height:56px;
+  border-radius:14px;
+  background:var(--tier-medal-bg);
+  border:1.5px solid var(--tier-medal-border);
+  color:var(--tier-icon);
+  display:grid;
+  place-items:center;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22);
+  transition:transform .22s ease;
 }
-.achv-medal.gold{ border-color:rgba(229,193,59,.55); color:#EFC94C; background:rgba(229,193,59,.1); box-shadow:0 0 20px -6px rgba(229,193,59,.6), inset 0 1px 0 rgba(255,255,255,.10), 0 10px 24px -12px rgba(0,0,0,.9); }
-.achv-medal.silver{ border-color:rgba(201,205,212,.45); color:#D3D7DE; background:rgba(201,205,212,.08); box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 10px 24px -12px rgba(0,0,0,.9); }
-.achv-card:not(.is-locked) .achv-medal:not(.gold):not(.silver){
-  border-color:rgba(255,255,255,.28);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.38), 0 12px 26px -12px rgba(0,0,0,.9), 0 0 26px -8px var(--red, var(--color-1, #e8384f));
+.achv-card:hover .achv-medal{
+  transform:scale(1.05);
 }
-.achv-xp{
-  position:absolute; right:0; bottom:0; z-index:4;
-  display:inline-flex; align-items:center; gap:5px;
-  padding:5px 12px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
-  font-family:'Archivo',system-ui,sans-serif;
-  color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.4);
-  background:linear-gradient(135deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-deep, var(--color-3, #8e1220)) 130%);
-  border-top-left-radius:14px;
-  border-bottom-right-radius:var(--r, 16px);
-  box-shadow:-6px -6px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35);
+.achv-card.is-locked .achv-medal{
+  opacity:.72;
 }
-.achv-card .achv-body span{ font-family:'Archivo',system-ui,sans-serif; }
+.achv-card.is-locked:hover .achv-medal{
+  opacity:1;
+}
+.achv-status-pip{
+  position:absolute;
+  bottom:-4px;
+  right:-4px;
+  width:20px;
+  height:20px;
+  border-radius:6px;
+  display:grid;
+  place-items:center;
+  border:1.5px solid #0F0F16;
+}
+.achv-status-pip.locked{
+  background:#1E1E2A;
+  color:#A1A1AA;
+}
+.achv-status-pip.unlocked{
+  background:var(--tier-solid);
+  color:#09090D;
+}
+
+/* Kademe Etiketi & XP */
+.achv-tier-tag{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:3.5px 10px;
+  border-radius:7px;
+  font-size:10.5px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  background:var(--tier-badge-bg);
+  border:1px solid var(--tier-badge-border);
+  color:var(--tier-badge-text);
+}
+.achv-tier-dot{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--tier-solid);
+}
+.achv-xp-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:3.5px 10px;
+  border-radius:7px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  font-weight:800;
+  background:var(--tier-badge-bg);
+  border:1px solid var(--tier-badge-border);
+  color:var(--tier-badge-text);
+  flex-shrink:0;
+}
+
+/* İlerleme Çubuğu (Canlı Gradyan) */
 .achv-track{
-  position:relative; overflow:hidden;
-  height:8px;
-  background:rgba(0,0,0,.5);
-  border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
+  position:relative;
+  overflow:hidden;
+  height:7px;
+  background:#191924;
   border-radius:99px;
-  box-shadow:inset 0 1px 3px rgba(0,0,0,.7);
 }
 .achv-fill{
-  position:absolute; top:0; bottom:0; left:0; border-radius:99px;
-  background:linear-gradient(90deg, var(--red-deep, var(--color-3, #8e1220)), var(--red, var(--color-1, #e8384f)) 55%, var(--red-hi, var(--color-2, #ff6b7a)));
-  box-shadow:0 0 12px rgba(232,56,79,.7);
-  transition:width 1s ease;
+  position:absolute;
+  top:0; bottom:0; left:0;
+  border-radius:99px;
+  background:var(--tier-bar-gradient);
+  transition:width .6s ease;
 }
-.achv-fill::after{
-  content:''; position:absolute; inset:0;
-  background:linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent);
-  transform:translateX(-100%);
-}
-.achv-card:hover .achv-fill::after{ animation:achvShine 1.4s ease; }
-@keyframes achvShine{ from{ transform:translateX(-100%);} to{ transform:translateX(100%);} }
+
+/* Arama ve Filtre Kontrolleri */
 .achv-search{
-  background:var(--surface, rgba(255,255,255,.05));
-  border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius:14px;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
-  transition:border-color .25s, box-shadow .25s, background .25s;
+  background:#0D0D12;
+  border:1px solid #242430;
+  border-radius:12px;
+  transition:border-color .2s;
 }
 .achv-search:focus{
   border-color:var(--red, var(--color-1, #e8384f));
-  background:var(--bg-card, rgba(255,255,255,.07));
-  box-shadow:0 0 0 4px var(--blob-1, rgba(232,56,79,.16)), inset 0 1px 0 rgba(255,255,255,.08);
+  background:#111118;
 }
 .achv-chip{
-  position:relative;
-  background:var(--surface, rgba(255,255,255,.04));
-  border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius:11px;
-  transition:transform .22s cubic-bezier(.2,.7,.3,1), box-shadow .22s;
+  background:transparent;
+  border:1px solid transparent;
+  border-radius:8px;
+  transition:all .18s ease;
 }
-.achv-chip:hover{ transform:translateY(-2px); box-shadow:0 6px 16px -8px rgba(0,0,0,.55); }
 .achv-chip.on{
-  background:linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)));
-  border-color:transparent; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35);
-  box-shadow:0 8px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35);
+  background:#22222E;
+  border-color:#3A3A4E;
+  color:#fff;
 }
-.achv-panel{
-  background:var(--glass, var(--bg-card, rgba(255,255,255,.05)));
-  border:1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)));
-  border-radius:var(--r-lg, 22px);
-  box-shadow:var(--shadow, 0 24px 60px -24px rgba(0,0,0,.8)), inset 0 1px 0 rgba(255,255,255,.07);
-  overflow:hidden;
+
+@media (max-width: 640px){
+  .achv-medal-wrap, .achv-medal{
+    width:50px;
+    height:50px;
+    border-radius:12px;
+  }
 }
 `;
 
 type SortMode = 'newest' | 'oldest' | 'az' | 'za';
 type FilterMode = 'all' | 'unlocked' | 'locked';
-type ViewTab = 'trophies' | 'quests'; // Yeni Sekme Sistemi
+type ViewTab = 'trophies' | 'quests';
 
 export default function AchievementsPage() {
   const { data } = useApp();
@@ -139,11 +320,7 @@ export default function AchievementsPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [search, setSearch] = useState('');
 
-  // GLOBAL ARAMA DEEP-LINK (anahtar: sinevia_search_action).
-  // Arama panelinden "Görev Panosu" / "Kupa Kasası" seçildiğinde Layout bu
-  // anahtarı yazar; sayfa mount OLURKEN okuyup doğrudan ilgili SEKMEYE geçer
-  // ve anahtarı siler (Aynı kalıp: MoviesPage → sinevia_focus_media_title).
-  // Sadece okuma: sekme butonları / QuestBoard JSX'ine dokunulmadı.
+  // GLOBAL ARAMA DEEP-LINK
   useEffect(() => {
     const applySearchAction = () => {
       try {
@@ -157,7 +334,6 @@ export default function AchievementsPage() {
       }
     };
     applySearchAction();
-    // Sayfa zaten açıksa mount tekrarlanmaz; Layout bu eventi de yayınlar.
     window.addEventListener('sinevia-search-action', applySearchAction);
     return () => window.removeEventListener('sinevia-search-action', applySearchAction);
   }, []);
@@ -188,7 +364,6 @@ export default function AchievementsPage() {
   });
 
   ACHIEVEMENT_DEFS.forEach((def: any) => {
-    // GİZLİ (secret) başarım listede HİÇ GÖRÜNMEZ — yalnızca test modunda
     if (def.secret && !data.showLockedNames) return;
     const prog = progressMap.get(def.id);
     const unlockedTiers = prog?.unlockedTiers || [];
@@ -205,16 +380,54 @@ export default function AchievementsPage() {
         const unlockedAt = prog?.tierDates?.[tier.tier] || prog?.unlockedAt || '2000-01-01T00:00:00.000Z';
         displayAchievements.push({
           id: `${def.id}_${tier.tier}`,
-          def, tier, isUnlocked: true, unlockedAt, current: prog?.current || 0,
+          def,
+          tier,
+          isUnlocked: true,
+          unlockedAt,
+          current: prog?.current || 0,
         });
       } else {
         displayAchievements.push({
           id: `${def.id}_${tier.tier}_locked`,
-          def, tier, isUnlocked: false, unlockedAt: null, current: prog?.current || 0,
+          def,
+          tier,
+          isUnlocked: false,
+          unlockedAt: null,
+          current: prog?.current || 0,
         });
       }
     });
   });
+
+  // Kupa Kasası İstatistikleri
+  const trophyVaultInsights = useMemo((): {
+    earnedTrophyXp: number;
+    closestLocked: ClosestLockedTrophy | null;
+  } => {
+    let earnedTrophyXp = 0;
+    let closestLocked: ClosestLockedTrophy | null = null;
+
+    for (const a of displayAchievements) {
+      if (a.isUnlocked) {
+        earnedTrophyXp += Number(a.tier.xp || 0);
+      } else if (!a.def.secret || data.showLockedNames) {
+        const target = Math.max(1, Number(a.tier.threshold || 1));
+        const current = Math.min(target, Number(a.current || 0));
+        const pct = Math.min(99, Math.floor((current / target) * 100));
+        if (pct > 0 && (closestLocked === null || pct > closestLocked.pct)) {
+          closestLocked = {
+            name: String(a.tier.name || a.def.name || ''),
+            pct,
+            current,
+            target,
+            tier: String(a.tier.tier || 'bronze'),
+          };
+        }
+      }
+    }
+
+    return { earnedTrophyXp, closestLocked };
+  }, [displayAchievements, data.showLockedNames]);
 
   const filteredAchievements = displayAchievements.filter((a) => {
     if (activeTier && a.tier.tier !== activeTier) return false;
@@ -270,7 +483,9 @@ export default function AchievementsPage() {
   const formatDateTime = (dateString: string) => {
     try {
       return new Intl.DateTimeFormat('tr-TR', {
-        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
       }).format(new Date(dateString));
     } catch {
       return '';
@@ -282,323 +497,292 @@ export default function AchievementsPage() {
     0
   );
   const unlockedTiersCount = displayAchievements.filter((a) => a.isUnlocked).length;
+  const lockedTiersCount = Math.max(0, totalPossibleTiers - unlockedTiersCount);
   const trophyCompletionPct = totalPossibleTiers > 0 ? Math.round((unlockedTiersCount / totalPossibleTiers) * 100) : 0;
   const isTestMode = data.showLockedNames;
+  const closestTrophy = trophyVaultInsights.closestLocked;
 
   return (
-    <div className="space-y-4 md:space-y-6 animate-fade-in">
-      <style>{ACHV_PREMIUM_CSS}</style>
+    <div className="space-y-4 sm:space-y-6 animate-fade-in pb-10">
+      <style>{ACHV_SOLID_CSS}</style>
 
       {/* ÜST BAŞLIK VE SEKME (TAB) SEÇİCİ */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
-          <div
-            className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)))',
-              boxShadow: '0 6px 18px -6px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35)',
-            }}
-          >
-            <Icons.Trophy size={20} style={{ color: '#fff' }} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
+        <h1 className="text-xl sm:text-3xl font-black uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#FFC800] text-[#09090D] flex items-center justify-center shrink-0">
+            <Icons.Trophy size={19} />
           </div>
-          <div>
-            <span>Ödüller & Kariyer</span>
-          </div>
+          <span>Ödüller &amp; Kariyer</span>
         </h1>
 
         <div
           data-tutorial="ach-tabs"
-          className="flex p-1 rounded-2xl w-full sm:w-auto"
-          style={{
-            background: 'var(--surface, rgba(255,255,255,.04))',
-            border: '1px solid var(--line-2, var(--border-dim, rgba(244,244,242,.13)))',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.06)',
-          }}
+          className="grid grid-cols-2 sm:flex p-1 rounded-xl w-full sm:w-auto bg-[#0D0D12] border border-[#22222C]"
         >
           <button
             onClick={() => setActiveTab('trophies')}
-            className={`flex-1 sm:w-36 flex items-center justify-center gap-1.5 px-4 py-2.5 min-h-11 sm:min-h-0 rounded-xl text-xs font-black transition-all ${
-              activeTab === 'trophies' ? 'scale-[1.02]' : 'text-ink-400 hover:text-ink-200'
-            }`}
-            style={
+            className={`sm:w-36 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-black transition-all ${
               activeTab === 'trophies'
-                ? {
-                    background: 'linear-gradient(140deg, var(--red-hi, var(--color-2, #ff6b7a)), var(--red-deep, var(--color-3, #8e1220)))',
-                    color: '#fff',
-                    textShadow: '0 1px 2px rgba(0,0,0,.35)',
-                    boxShadow: '0 8px 22px -8px var(--red, var(--color-1, #e8384f)), inset 0 1px 0 rgba(255,255,255,.35)',
-                  }
-                : undefined
-            }
+                ? 'bg-[#FFC800] text-[#09090D]'
+                : 'text-ink-400 hover:text-ink-200'
+            }`}
           >
             <Icons.Medal size={14} /> KUPA KASASI
           </button>
           <button
             onClick={() => setActiveTab('quests')}
-            className={`flex-1 sm:w-36 flex items-center justify-center gap-1.5 px-4 py-2.5 min-h-11 sm:min-h-0 rounded-xl text-xs font-black transition-all ${
-              activeTab === 'quests' ? 'scale-[1.02]' : 'text-ink-400 hover:text-ink-200'
-            }`}
-            style={
+            className={`sm:w-36 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-black transition-all ${
               activeTab === 'quests'
-                ? {
-                    background: 'linear-gradient(140deg, #a78bfa, #6d28d9)',
-                    color: '#fff',
-                    textShadow: '0 1px 2px rgba(0,0,0,.35)',
-                    boxShadow: '0 8px 22px -8px rgba(139,92,246,.7), inset 0 1px 0 rgba(255,255,255,.35)',
-                  }
-                : undefined
-            }
+                ? 'bg-violet-600 text-white'
+                : 'text-ink-400 hover:text-ink-200'
+            }`}
           >
             <Icons.Target size={14} /> GÖREV PANOSU
           </button>
         </div>
       </div>
 
-      {/* YENİ OYUNLAŞTIRMA SEKME İÇERİĞİ: GÖREV PANOSU */}
-      {activeTab === 'quests' && (
-        <QuestBoard />
-      )}
+      {/* GÖREV PANOSU SEKME İÇERİĞİ */}
+      {activeTab === 'quests' && <QuestBoard />}
 
-      {/* ESKİ ANA İÇERİK: PASİF BAŞARIMLAR VE RÜTBE ARENASI */}
+      {/* KUPA KASASI SEKME İÇERİĞİ */}
       {activeTab === 'trophies' && (
-        <div className="space-y-4 md:space-y-6 animate-fade-in-up">
-          {/* SEVİYE, XP & KUPA ARENASI */}
-          <div className={`relative bg-gradient-to-br from-ink-950 via-ink-900/95 to-ink-950 border ${userPersona.border} rounded-3xl sm:rounded-[2.2rem] p-4 sm:p-7 shadow-2xl overflow-hidden`}>
-            <div className={`absolute -top-24 -right-20 w-72 sm:w-96 h-72 sm:h-96 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`} />
-            <div className={`hidden sm:block absolute -bottom-28 -left-20 w-80 h-80 ${userPersona.bgGlow} rounded-full blur-[100px] pointer-events-none transition-all duration-1000`} />
-            <div
-              className="hidden sm:block absolute inset-0 opacity-[0.04] pointer-events-none"
-              style={{
-                backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)',
-                backgroundSize: '24px 24px',
-              }}
-            />
+        <div className="space-y-4 sm:space-y-6 animate-fade-in-up">
+          {/* SEVİYE, XP & GELİŞTİRİLMİŞ KUPA KASASI */}
+          <div className="bg-[#0D0D12] border border-[#22222C] rounded-2xl p-4 sm:p-6 shadow-2xl">
+            <div className="flex flex-col xl:flex-row items-stretch gap-4 sm:gap-6">
+              {/* Sol: Avatar + Rütbe */}
+              <div className="flex items-center gap-4 sm:gap-5 flex-shrink-0">
+                <div className="relative w-16 h-16 sm:w-24 sm:h-24 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-16 h-16 sm:w-24 sm:h-24 -rotate-90 transform" viewBox="0 0 108 108">
+                    <circle cx="54" cy="54" r={circleRadius} stroke="#1C1C26" strokeWidth="7" fill="transparent" />
+                    <circle
+                      cx="54"
+                      cy="54"
+                      r={circleRadius}
+                      stroke={userPersona.strokeColor}
+                      strokeWidth="7"
+                      strokeDasharray={circleCircumference}
+                      strokeDashoffset={circleOffset}
+                      strokeLinecap="round"
+                      fill="transparent"
+                      className="transition-all duration-1000 ease-out"
+                    />
+                  </svg>
 
-            <div className="relative z-10 flex flex-col xl:flex-row items-center gap-4 sm:gap-6 xl:gap-7">
-              <div className="flex flex-row items-center justify-between sm:justify-start gap-3.5 sm:gap-5 flex-shrink-0 w-full xl:w-auto">
-                <div className="flex items-center gap-3.5 sm:gap-5">
-                  <div className="relative w-16 h-16 sm:w-28 sm:h-28 flex items-center justify-center flex-shrink-0">
-                    <div className={`absolute inset-1 sm:inset-2 rounded-full bg-gradient-to-br ${userPersona.gradient} opacity-25 blur-lg sm:blur-xl animate-pulse`} />
-
-                    <svg className="w-16 h-16 sm:w-28 sm:h-28 -rotate-90 transform" viewBox="0 0 108 108">
-                      <circle cx="54" cy="54" r={circleRadius} stroke="currentColor" strokeWidth="7" fill="transparent" className="text-ink-950" />
-                      <circle
-                        cx="54" cy="54" r={circleRadius} stroke={userPersona.strokeColor} strokeWidth="7"
-                        strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round"
-                        fill="transparent" className="transition-all duration-1000 ease-out"
-                      />
-                    </svg>
-
-                    <div className={`absolute inset-2.5 sm:inset-4 rounded-full bg-gradient-to-br ${userPersona.gradient} p-0.5 shadow-2xl`}>
-                      <div className="w-full h-full bg-ink-950 rounded-full flex flex-col items-center justify-center">
-                        <PersonaIcon className={`${userPersona.color} w-5 h-5 sm:w-[30px] sm:h-[30px]`} />
-                        <span className="hidden sm:block text-[10px] font-black text-ink-400 uppercase mt-0.5">
-                          %{Math.floor(lvl.progress)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className={`hidden sm:block absolute -bottom-1.5 px-3 py-0.5 rounded-full bg-gradient-to-r ${userPersona.gradient} text-ink-950 font-black text-xs shadow-lg border border-white/30`}>
-                      SV. {lvl.level}
-                    </div>
-                  </div>
-
-                  <div className="text-left">
-                    <span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border mb-1 ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}>
-                      <Icons.Sparkles size={10} /> {userPersona.title}
+                  <div className="absolute inset-2.5 sm:inset-3.5 rounded-full bg-[#14141D] border border-[#282836] flex flex-col items-center justify-center">
+                    <PersonaIcon className={`${userPersona.color} w-5 h-5 sm:w-7 sm:h-7`} />
+                    <span className="hidden sm:block text-[9px] font-black text-ink-400 uppercase mt-0.5">
+                      %{Math.floor(lvl.progress)}
                     </span>
-                    <div className="text-2xl sm:text-4xl font-black text-ink-50 tracking-tight leading-none">
-                      Seviye {lvl.level}
-                    </div>
-                    <p className="hidden sm:block text-xs text-ink-400 mt-1.5 max-w-[230px] leading-relaxed">
-                      {userPersona.subtitle}
-                    </p>
                   </div>
                 </div>
 
-                <div className="flex sm:hidden flex-col items-end bg-ink-950/90 border border-gold-500/30 px-3 py-1.5 rounded-2xl">
-                  <span className="text-[9px] font-black uppercase tracking-wider text-gold-400">Kupalar</span>
-                  <div className="text-base font-black text-white leading-tight">
-                    {unlockedTiersCount} <span className="text-xs font-bold text-ink-500">/ {totalPossibleTiers}</span>
+                <div className="text-left min-w-0">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-widest border mb-1 ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}>
+                    <Icons.Sparkles size={10} /> {userPersona.title}
+                  </span>
+                  <div className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none">
+                    Seviye {lvl.level}
                   </div>
+                  <p className="hidden sm:block text-xs text-ink-400 mt-1 max-w-[220px] leading-relaxed">
+                    {userPersona.subtitle}
+                  </p>
                 </div>
               </div>
 
-              <div className="flex-1 w-full bg-ink-950/75 border border-ink-800/90 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-inner space-y-2 sm:space-y-3">
+              {/* Orta: XP İlerleme Kutusu */}
+              <div className="flex-1 w-full bg-[#12121A] border border-[#22222E] rounded-xl p-3.5 sm:p-5 flex flex-col justify-between gap-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">Toplam Deneyim Puanı</span>
-                    <div className="text-sm sm:text-xl font-black text-ink-50 flex items-baseline gap-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">Toplam Deneyim Puanı</span>
+                    <div className="text-base sm:text-2xl font-black text-white flex items-baseline gap-1.5 mt-0.5">
                       <span>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</span>
                       <span className="text-[10px] sm:text-xs font-bold text-ink-400">(%{Math.floor(lvl.progress)})</span>
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <span className="hidden sm:block text-[10px] font-black uppercase tracking-widest text-ink-400">Seviye {lvl.level + 1} Hedefi</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">Seviye {lvl.level + 1} Hedefi</span>
                     <span className={`text-xs sm:text-sm font-black ${userPersona.color}`}>
                       {Math.max(0, lvl.nextLevelXp - lvl.currentLevelXp).toLocaleString('tr-TR')} XP Kaldı
                     </span>
                   </div>
                 </div>
 
-                <div className="relative h-3 sm:h-5 w-full bg-ink-900 rounded-lg sm:rounded-xl overflow-hidden border border-ink-700/80 p-0.5 shadow-inner">
-                  <div className={`h-full rounded-md sm:rounded-lg bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000 relative overflow-hidden`} style={{ width: `${Math.max(3, lvl.progress)}%` }}>
-                    <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_25%,rgba(255,255,255,0.35)_50%,transparent_75%)] bg-[length:200%_100%] animate-pulse" />
-                    <div className="absolute right-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_#fff]" />
-                  </div>
-
-                  <div className="hidden sm:grid absolute inset-0 grid-cols-20 pointer-events-none">
-                    {Array.from({ length: 20 }).map((_, idx) => (
-                      <div key={idx} className="border-r border-ink-950/40 last:border-0" />
-                    ))}
-                  </div>
+                <div className="relative h-3 w-full bg-[#09090D] rounded-full overflow-hidden border border-[#22222E]">
+                  <div
+                    className={`h-full rounded-full bg-gradient-to-r ${userPersona.barGradient} transition-all duration-1000`}
+                    style={{ width: `${Math.max(3, lvl.progress)}%` }}
+                  />
                 </div>
 
-                <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-ink-400 pt-0.5">
-                  <span className="hidden sm:inline">Seviye İlerlemesi: %{Math.floor(lvl.progress)}</span>
+                <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-ink-400">
+                  <span>Seviye İlerlemesi: %{Math.floor(lvl.progress)}</span>
                   {nextRank ? (
-                    <span className={userPersona.color}>Sonraki Unvan: {nextRank.title} (Sv.{nextRank.minLevel})</span>
+                    <span className={`${userPersona.color} truncate`}>Sonraki Unvan: {nextRank.title} (Sv.{nextRank.minLevel})</span>
                   ) : (
-                    <span className="text-zinc-100 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">Maksimum Unvana Ulaşıldı! 👑</span>
+                    <span className="text-zinc-100">Maksimum Unvan 👑</span>
                   )}
                 </div>
               </div>
 
-              {/* Sağ: Kupa Koleksiyonu Kasası */}
-              <div className="w-full xl:w-[22rem] bg-ink-950/80 border border-gold-500/30 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between gap-3 flex-shrink-0 shadow-xl">
-                <div className="hidden sm:flex items-center justify-between">
+              {/* Sağ: Geliştirilmiş Kupa Kasası Özeti */}
+              <div className="w-full xl:w-[24rem] bg-[#12121A] border border-[#3A3012] rounded-xl p-4 sm:p-5 flex flex-col justify-between gap-3.5 flex-shrink-0">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gold-400 block">Toplanan Kupalar</span>
-                    <div className="text-2xl sm:text-3xl font-black text-ink-50 mt-0.5 leading-none">
-                      {unlockedTiersCount} <span className="text-sm font-bold text-ink-500">/ {totalPossibleTiers}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#FFD026] flex items-center gap-1.5">
+                      <Icons.Trophy size={12} /> Toplanan Kupalar
+                    </span>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-2xl sm:text-3xl font-black text-white leading-none font-mono">
+                        {unlockedTiersCount}
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-ink-400 font-mono">
+                        / {totalPossibleTiers} Kupa
+                      </span>
                     </div>
                   </div>
-                  <div className="w-11 h-11 rounded-2xl bg-gold-500/15 border border-gold-500/30 flex flex-col items-center justify-center">
-                    <Icons.Trophy size={16} className="text-gold-400" />
-                    <span className="text-[10px] font-black text-gold-300">%{trophyCompletionPct}</span>
+
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="px-2.5 py-1 rounded-md bg-[#2B2205] border border-[#9A7B1C] text-[#FFE047] text-xs font-black font-mono">
+                      %{trophyCompletionPct} Tamamlandı
+                    </div>
+                    <span className="text-[10px] font-bold text-ink-400 font-mono">
+                      +{trophyVaultInsights.earnedTrophyXp.toLocaleString('tr-TR')} XP Kazanıldı
+                    </span>
                   </div>
                 </div>
 
-                <div className="hidden sm:block h-2 w-full bg-ink-900 rounded-full overflow-hidden border border-ink-800">
-                  <div className="h-full bg-gradient-to-r from-amber-600 via-gold-500 to-yellow-300 rounded-full transition-all duration-700" style={{ width: `${Math.max(2, trophyCompletionPct)}%` }} />
-                </div>
-
-                <div className="grid grid-cols-6 gap-1 sm:pt-1 sm:border-t border-ink-800/80 text-center">
-                  {[
-                    { key: 'bronze', label: 'Bronz', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/25' },
-                    { key: 'silver', label: 'Gümüş', color: 'text-slate-200', bg: 'bg-slate-400/10 border-slate-400/25' },
-                    { key: 'gold', label: 'Altın', color: 'text-yellow-300', bg: 'bg-yellow-500/10 border-yellow-500/25' },
-                    { key: 'platinum', label: 'Platin', color: 'text-cyan-200', bg: 'bg-cyan-400/10 border-cyan-400/25' },
-                    { key: 'emerald', label: 'Zümrüt', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/25' },
-                    { key: 'diamond', label: 'Elmas', color: 'text-sky-300', bg: 'bg-sky-500/10 border-sky-500/25' },
-                  ].map((gem) => (
-                    <button
-                      key={gem.key}
-                      type="button"
-                      onClick={() => setActiveTier(activeTier === gem.key ? null : gem.key)}
-                      className={`rounded-xl py-1.5 px-0.5 min-h-11 sm:min-h-0 border transition-all ${gem.bg} ${activeTier === gem.key ? 'ring-2 ring-gold-400 scale-105' : 'hover:brightness-125'}`}
-                      title={`${gem.label} Kupalarını Filtrele`}
-                    >
-                      <div className={`text-[10px] sm:text-xs font-black leading-none ${gem.color}`}>{tierStats[gem.key]?.unlocked || 0}</div>
-                      <div className="text-[8px] sm:text-[9px] font-bold text-ink-300 mt-1 truncate">{gem.label}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="hidden sm:block relative z-10 mt-5 pt-4 border-t border-ink-800/80 w-full">
-              <div className="flex gap-2 md:gap-3 pb-2 w-full justify-center">
-                {RANK_TIERS.map((tier, idx) => {
-                  if (idx < currentRankIndex - 1 || idx > currentRankIndex + 2) return null;
-
-                  const isUnlocked = lvl.level >= tier.minLevel;
-                  const isCurrent = idx === currentRankIndex;
-                  const TierIcon = tier.icon;
-                  
-                  return (
+                <div className="space-y-2">
+                  <div className="h-2.5 w-full bg-[#09090D] rounded-full overflow-hidden border border-[#22222E]">
                     <div
-                      key={tier.title}
-                      className={`relative rounded-xl px-4 py-3 border transition-all flex items-center justify-center gap-3 flex-1 min-w-max ${
-                        isCurrent ? `${tier.badgeBg}${tier.border} shadow-md scale-[1.02]` : isUnlocked ? 'bg-ink-900/70 border-ink-800/90 opacity-90' : 'bg-ink-950/40 border-ink-800/40 opacity-45'
-                      }`}
-                    >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isUnlocked ? tier.badgeBg : 'bg-ink-900'}`}>
-                        {isUnlocked ? <TierIcon size={16} className={tier.color} /> : <Icons.Lock size={14} className="text-ink-500" />}
-                      </div>
-                      
-                      <div className="flex flex-col items-start justify-center">
-                        <div className={`text-xs font-black whitespace-nowrap ${isCurrent ? tier.color : isUnlocked ? 'text-ink-100' : 'text-ink-500'}`}>
-                          {tier.title}
-                        </div>
-                        <div className="text-[10px] font-bold text-ink-500 flex items-center gap-1 mt-0.5">
-                          <span>Sv. {tier.minLevel}+</span>
-                          {isUnlocked && <Icons.CheckCircle2 size={10} className="text-emerald-400" />}
-                        </div>
-                      </div>
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${Math.max(2, trophyCompletionPct)}%`,
+                        background: 'linear-gradient(90deg, #EAB308 0%, #FFC800 50%, #FFF066 100%)',
+                      }}
+                    />
+                  </div>
+
+                  {closestTrophy !== null ? (
+                    <div className="flex items-center justify-between text-[11px] pt-0.5 gap-2">
+                      <span className="text-ink-400 truncate">
+                        Sıradaki: <strong className="text-white">{closestTrophy.name}</strong>
+                      </span>
+                      <span className="font-mono font-black text-[#FFD026] shrink-0">
+                        {closestTrophy.current}/{closestTrophy.target} (%{closestTrophy.pct})
+                      </span>
                     </div>
-                  );
-                })}
+                  ) : (
+                    <div className="flex items-center justify-between text-[11px] pt-0.5 text-ink-400">
+                      <span>Açık: <strong className="text-[#00E676]">{unlockedTiersCount}</strong></span>
+                      <span>Kilitli: <strong className="text-ink-200">{lockedTiersCount}</strong></span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ARAMA, SIRALAMA VE KADEME FİLTRELERİ */}
-          <div className="space-y-3 md:space-y-4">
-            <div className="flex flex-col md:flex-row gap-2 md:gap-3">
+          {/* ARAMA, FİLTRE VE SIRALAMA BARLARI */}
+          <div className="space-y-2.5 sm:space-y-3">
+            <div className="flex flex-col lg:flex-row gap-2.5">
+              {/* Arama Çubuğu */}
               <div className="relative flex-1">
-                <Icons.Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500 md:w-[18px] md:h-[18px]" />
+                <Icons.Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Başarım adı, açıklama veya kategori ara..."
-                  className="achv-search w-full pl-10 pr-9 py-2 md:py-2.5 text-base md:text-sm text-ink-100 placeholder-ink-500 focus:outline-none"
+                  className="achv-search w-full pl-10 pr-9 py-2.5 text-sm text-ink-100 placeholder-ink-500 focus:outline-none"
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => setSearch('')}
                     title="Aramayı Temizle"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white p-1 min-h-9 min-w-9 md:min-h-0 md:min-w-0 md:p-0.5 flex items-center justify-center rounded-full hover:bg-ink-700 transition-colors"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white p-1 flex items-center justify-center rounded-full hover:bg-ink-700 transition-colors"
                   >
                     <Icons.X size={15} />
                   </button>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
-                <div className="flex flex-shrink-0 bg-ink-800/50 rounded-xl p-1 md:p-1.5 border border-ink-700/50">
-                  <button onClick={() => setFilterMode('all')} className={`achv-chip px-2.5 py-1.5 md:px-3 md:py-1.5 min-h-11 md:min-h-0 text-[11px] md:text-xs font-bold transition-all ${filterMode === 'all' ? 'on' : 'text-ink-400 hover:text-ink-200'}`}>Tümü</button>
-                  <button onClick={() => setFilterMode('unlocked')} className={`achv-chip px-2.5 py-1.5 md:px-3 md:py-1.5 min-h-11 md:min-h-0 text-[11px] md:text-xs font-bold transition-all ${filterMode === 'unlocked' ? 'on' : 'text-ink-400 hover:text-ink-200'}`}>Açıklar</button>
-                  <button onClick={() => setFilterMode('locked')} className={`achv-chip px-2.5 py-1.5 md:px-3 md:py-1.5 min-h-11 md:min-h-0 text-[11px] md:text-xs font-bold transition-all ${filterMode === 'locked' ? 'on' : 'text-ink-400 hover:text-ink-200'}`}>Kilitliler</button>
-                </div>
-                <div className="flex flex-shrink-0 bg-ink-800/50 rounded-xl p-1 md:p-1.5 border border-ink-700/50">
-                  <button onClick={() => setSortMode('newest')} className={`achv-chip px-2.5 py-1.5 md:px-3 md:py-1.5 min-h-11 md:min-h-0 text-[11px] md:text-xs font-bold transition-all flex items-center gap-1 md:gap-1.5 ${sortMode === 'newest' ? 'on' : 'text-ink-400 hover:text-ink-200'}`}>
-                    <Icons.Clock size={12} className="md:w-3.5 md:h-3.5" /> Yeni
+              {/* Durum ve Sıralama Seçiciler */}
+              <div className="grid grid-cols-2 sm:flex items-center gap-2">
+                <div className="grid grid-cols-3 bg-[#0D0D12] rounded-xl p-1 border border-[#22222C]">
+                  <button
+                    onClick={() => setFilterMode('all')}
+                    className={`achv-chip py-2 px-2.5 text-[11px] sm:text-xs font-bold ${
+                      filterMode === 'all' ? 'on' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    Tümü
                   </button>
-                  <button onClick={() => setSortMode('oldest')} className={`achv-chip px-2.5 py-1.5 md:px-3 md:py-1.5 min-h-11 md:min-h-0 text-[11px] md:text-xs font-bold transition-all flex items-center gap-1 md:gap-1.5 ${sortMode === 'oldest' ? 'on' : 'text-ink-400 hover:text-ink-200'}`}>Eski</button>
-                  <button onClick={() => setSortMode('az')} className={`achv-chip px-2.5 py-1.5 md:px-3 md:py-1.5 min-h-11 md:min-h-0 text-[11px] md:text-xs font-bold transition-all flex items-center gap-1 md:gap-1.5 ${sortMode === 'az' ? 'on' : 'text-ink-400 hover:text-ink-200'}`}>
-                    <Icons.ArrowDownAZ size={12} className="md:w-3.5 md:h-3.5" /> A-Z
+                  <button
+                    onClick={() => setFilterMode('unlocked')}
+                    className={`achv-chip py-2 px-2.5 text-[11px] sm:text-xs font-bold ${
+                      filterMode === 'unlocked' ? 'on' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    Açıklar
+                  </button>
+                  <button
+                    onClick={() => setFilterMode('locked')}
+                    className={`achv-chip py-2 px-2.5 text-[11px] sm:text-xs font-bold ${
+                      filterMode === 'locked' ? 'on' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    Kilitli
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 bg-[#0D0D12] rounded-xl p-1 border border-[#22222C]">
+                  <button
+                    onClick={() => setSortMode('newest')}
+                    className={`achv-chip py-2 px-2.5 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 ${
+                      sortMode === 'newest' ? 'on' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    Yeni
+                  </button>
+                  <button
+                    onClick={() => setSortMode('oldest')}
+                    className={`achv-chip py-2 px-2.5 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 ${
+                      sortMode === 'oldest' ? 'on' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    Eski
+                  </button>
+                  <button
+                    onClick={() => setSortMode('az')}
+                    className={`achv-chip py-2 px-2.5 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 ${
+                      sortMode === 'az' ? 'on' : 'text-ink-400 hover:text-ink-200'
+                    }`}
+                  >
+                    A-Z
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="flex overflow-x-auto md:flex-wrap gap-2 md:gap-2.5 pt-1 md:pt-2 pb-2 md:pb-0 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+            {/* Kademe Filtre Şeridi (Canlı Metal & Mücevher Renkleri) */}
+            <div className="flex overflow-x-auto sm:flex-wrap gap-2 py-1 hide-scrollbar snap-x">
               <button
                 onClick={() => setActiveTier(null)}
-                className={`flex-shrink-0 px-3 py-2 md:px-4 md:py-2.5 min-h-11 md:min-h-0 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 border ${
-                  activeTier === null ? 'bg-ink-700 border-ink-500 text-white shadow-md' : 'bg-ink-800/60 border-ink-700/50 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
+                className={`snap-start flex-shrink-0 px-3.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${
+                  activeTier === null
+                    ? 'bg-white text-[#09090D] border-white'
+                    : 'bg-[#0D0D12] border-[#22222C] text-ink-400 hover:text-white'
                 }`}
               >
-                Tüm Kademeler
+                Tüm Kademeler ({unlockedTiersCount}/{totalPossibleTiers})
               </button>
 
               {TIER_ORDER.map((tier: string) => {
-                const tierInfo = (TIER_COLORS as any)[tier];
-                const LegendIcon = (Icons as any)[tierInfo?.icon] || Icons.Award;
+                const vis = TIER_VISUALS[tier] || TIER_VISUALS.bronze;
                 const isActive = activeTier === tier;
                 const stats = tierStats[tier];
 
@@ -606,151 +790,171 @@ export default function AchievementsPage() {
                   <button
                     key={tier}
                     onClick={() => setActiveTier(isActive ? null : tier)}
-                    className={`group flex-shrink-0 relative flex items-center gap-1.5 md:gap-2 px-3 py-2 md:px-4 md:py-2.5 min-h-11 md:min-h-0 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 border overflow-hidden ${tierInfo?.bg} ${
-                      isActive ? 'border-white/30 text-white shadow-[0_0_15px_rgba(0,0,0,0.3)] md:scale-105' : `border-transparent ${tierInfo?.text} md:hover:scale-105 opacity-80 hover:opacity-100`
-                    }`}
+                    className="snap-start flex-shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all"
+                    style={{
+                      background: isActive ? vis.barGradient : vis.badgeBg,
+                      border: `1px solid ${isActive ? vis.solid : vis.badgeBorder}`,
+                      color: isActive ? vis.activeText : vis.badgeText,
+                    }}
                   >
-                    {isActive && <div className="absolute inset-0 bg-white/15" />}
-                    <LegendIcon size={14} className={isActive ? 'text-white md:w-4 md:h-4' : 'md:w-4 md:h-4'} />
-                    <span className="relative z-10">{tierInfo?.label}</span>
-                    <span className={`relative z-10 ml-0.5 md:ml-1 px-1.5 py-0.5 rounded-md shadow-inner text-[9px] md:text-[10px] tracking-widest ${isActive ? 'bg-black/30 text-white' : 'bg-black/20 text-white/90'}`}>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ background: isActive ? vis.activeText : vis.solid }}
+                    />
+                    <span>{vis.label}</span>
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-extrabold"
+                      style={{
+                        background: isActive ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.45)',
+                        color: '#fff',
+                      }}
+                    >
                       {tier !== 'secret' || isTestMode ? `${stats.unlocked}/${stats.total}` : stats.unlocked}
                     </span>
                   </button>
                 );
               })}
             </div>
-
-            {activeTier && (
-              <div className="achv-panel mt-2 md:mt-4 p-4 md:p-5 flex flex-col gap-2 md:gap-3 animate-fade-in-up relative overflow-hidden">
-                <div className={`absolute inset-0 opacity-10 ${(TIER_COLORS as any)[activeTier].bg}`} />
-                <div className="relative z-10 flex items-center justify-between">
-                  <div className="flex items-center gap-2 md:gap-2.5">
-                    {React.createElement((Icons as any)[(TIER_COLORS as any)[activeTier].icon] || Icons.Award, {
-                      size: 18,
-                      className: `${(TIER_COLORS as any)[activeTier].text} md:w-5 md:h-5`,
-                    })}
-                    <span className={`text-sm md:text-base font-bold uppercase tracking-widest ${(TIER_COLORS as any)[activeTier].text}`}>
-                      {(TIER_COLORS as any)[activeTier].label} SERÜVENİ
-                    </span>
-                  </div>
-                  <div className="text-base md:text-lg font-black text-ink-100">
-                    {tierStats[activeTier].unlocked}
-                    {(activeTier !== 'secret' || isTestMode) && <span className="text-ink-500 font-bold"> / {tierStats[activeTier].total}</span>}
-                  </div>
-                </div>
-                {(activeTier !== 'secret' || isTestMode) && (
-                  <div className="relative z-10 h-2 md:h-2.5 w-full bg-ink-950 rounded-full overflow-hidden shadow-inner border border-ink-800/80">
-                    <div
-                      className={`h-full rounded-full transition-all duration-1000 relative ${(TIER_COLORS as any)[activeTier].bg}`}
-                      style={{ width: `${Math.floor((tierStats[activeTier].unlocked / Math.max(tierStats[activeTier].total, 1)) * 100)}%` }}
-                    >
-                      <div className="absolute inset-0 bg-white/20 animate-pulse" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* BAŞARIM KARTLARI LİSTESİ — geniş ekranda 3 sütun, kartlar girişimde sırayla belirir */}
-          <div data-tutorial="ach-grid" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 lg:gap-5 pb-8 pt-2 md:pt-4">
-            {filteredAchievements.map((a, index) => {
-              const tierInfo = (TIER_COLORS as any)[a.tier.tier];
-              const Icon = a.isUnlocked && tierInfo ? (Icons as any)[tierInfo.icon] || Icons.Award : (Icons as any)[a.def.icon] || Icons.HelpCircle;
+          {/* BAŞARIM KARTLARI LİSTESİ */}
+          <div
+            data-tutorial="ach-grid"
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4 pb-8"
+          >
+            {filteredAchievements.map((a) => {
+              const tierKey = a.tier.tier as string;
+              const vis = TIER_VISUALS[tierKey] || TIER_VISUALS.bronze;
+              const AchIcon = resolveAchievementIcon(a.def);
               const displayName = a.tier.name || a.def.name;
               const parsedDesc = a.def.description.replace('{threshold}', String(a.tier.threshold));
               const isLocked = !a.isUnlocked;
               const isSecret = !!a.def.secret;
-              const isGoldTier = a.tier.tier === 'gold';
-              const isSilverTier = a.tier.tier === 'silver';
 
               const current = Math.min(a.current, a.tier.threshold);
               const target = a.tier.threshold;
-              const percentage = Math.floor((current / target) * 100);
+              const percentage = Math.min(100, Math.floor((current / Math.max(1, target)) * 100));
 
               return (
                 <div
                   key={a.id}
-                  className={`achv-card trophy-card group ${isLocked ? 'is-locked' : 'is-open'}`}
-                  style={{ animation: 'trophy-rise .5s cubic-bezier(.22,1,.36,1) both', animationDelay: `${Math.min(index, 12) * 45}ms` }}
+                  className={`achv-card ${isLocked ? 'is-locked' : 'is-open'}`}
+                  style={
+                    {
+                      '--tier-solid': vis.solid,
+                      '--tier-bar-gradient': vis.barGradient,
+                      '--tier-badge-bg': vis.badgeBg,
+                      '--tier-badge-border': vis.badgeBorder,
+                      '--tier-badge-text': vis.badgeText,
+                      '--tier-medal-bg': vis.medalBg,
+                      '--tier-medal-border': vis.medalBorder,
+                      '--tier-icon': vis.iconColor,
+                    } as React.CSSProperties
+                  }
                 >
-                  {/* Kademeye/temaya özel premium üst vurgu çizgisi */}
-                  <div className="achv-topline" aria-hidden="true" />
-
-                  <div className="relative p-3.5 md:p-4 pb-8 md:pb-9">
-                    {/* Kilitli kartlar soluk+gri, açık kartlar tam parlaklıkta */}
-                    <div className="achv-body flex gap-3.5 md:gap-4">
-                      {/* Cam rozet madalyonu */}
-                      <div className="relative shrink-0">
-                        <div
-                          className={`achv-medal ${isGoldTier ? 'gold' : isSilverTier ? 'silver' : ''} ${!isLocked && !isGoldTier && !isSilverTier ? tierInfo?.bg + ' ' + tierInfo?.text : ''}`}
-                          style={isLocked && !isGoldTier && !isSilverTier ? { background: 'var(--bg-card, rgba(255,255,255,.05))' } : undefined}
-                        >
-                          <Icon size={26} className="md:w-7 md:h-7" />
+                  <div className="p-4 sm:p-5 flex flex-col gap-3.5 h-full justify-between">
+                    <div className="flex items-start gap-3.5 sm:gap-4">
+                      {/* Sol: Kademe Renginde Canlı Metalik/Mücevher İkon */}
+                      <div className="achv-medal-wrap">
+                        <div className="achv-medal">
+                          <AchIcon size={26} strokeWidth={2.2} />
                         </div>
+                        {isLocked ? (
+                          <span className="achv-status-pip locked" title="Kilitli">
+                            <Icons.Lock size={11} />
+                          </span>
+                        ) : (
+                          <span className="achv-status-pip unlocked" title="Kazanıldı">
+                            <Icons.Check size={12} strokeWidth={3} />
+                          </span>
+                        )}
                       </div>
 
+                      {/* Sağ: Kademe Etiketi + XP + Başlık + Açıklama */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
-                            <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${tierInfo?.bg} ${tierInfo?.text}`}>
-                              {tierInfo?.label}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="achv-tier-tag">
+                              <span className="achv-tier-dot" />
+                              {vis.label}
                             </span>
+
+                            {a.def.category && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 bg-[#181824] border border-[#2B2B3D] px-2 py-0.5 rounded">
+                                {a.def.category}
+                              </span>
+                            )}
+
                             {isSecret && isTestMode && (
-                              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30">
+                              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border bg-[#2C0B16] text-rose-300 border-rose-700">
                                 Gizli
                               </span>
                             )}
-                            {!isLocked && (
-                              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1">
-                                <Icons.CheckCircle2 size={10} className="md:w-3 md:h-3" /> Tamamlandı
-                              </span>
-                            )}
                           </div>
 
-                          {!isLocked && a.unlockedAt && (
-                            <span className="text-[10px] md:text-xs font-semibold text-ink-500 whitespace-nowrap text-right">
-                              {formatDateTime(a.unlockedAt)}
-                            </span>
-                          )}
+                          <span className="achv-xp-pill">
+                            +{a.tier.xp} XP
+                          </span>
                         </div>
 
-                        <h3 className={`mt-1.5 text-sm md:text-[15px] font-bold tracking-tight leading-snug ${isLocked ? 'text-ink-300' : 'text-white'}`}>
+                        <h3
+                          className={`mt-2 text-base sm:text-[16.5px] font-black tracking-tight leading-snug ${
+                            isLocked ? 'text-zinc-100' : 'text-white'
+                          }`}
+                        >
                           {displayName}
                         </h3>
-                        <p className={`text-[11px] md:text-xs leading-relaxed mt-0.5 ${isLocked ? 'text-ink-500' : 'text-ink-300'}`}>
-                          {isLocked && !isTestMode ? 'Bu kupanın sırrını çözmek için izlemeye devam et.' : parsedDesc}
-                        </p>
 
-                        {isLocked && (
-                          <div className="mt-2.5">
-                            <div className="flex justify-between items-end mb-1">
-                              <span className="text-[10px] md:text-xs font-bold text-ink-500">
-                                İlerleme: {current} / {target}
-                              </span>
-                              <span className="text-sm md:text-base font-black text-ink-200 tracking-tight">%{percentage}</span>
-                            </div>
-                            <div className="achv-track">
-                              <div className="achv-fill" style={{ width: `${percentage}%` }} />
-                            </div>
-                          </div>
-                        )}
+                        <p
+                          className={`text-xs sm:text-[13px] leading-relaxed mt-1 ${
+                            isLocked ? 'text-zinc-400' : 'text-zinc-300'
+                          }`}
+                        >
+                          {isLocked && isSecret && !isTestMode
+                            ? 'Bu gizli kupanın sırrını çözmek için keşfetmeye devam et.'
+                            : parsedDesc}
+                        </p>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Alt köşe kırmızı XP rozeti (+150 XP vb.) */}
-                  <span className="achv-xp">
-                    <Icons.Star size={10} className="md:w-3 md:h-3" /> +{a.tier.xp} XP
-                  </span>
+                    {/* Alt Bar: İlerleme Çubuğu veya Kazanılma Tarihi */}
+                    {isLocked ? (
+                      <div className="pt-2.5 border-t border-[#1E1E2A] space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-zinc-400 font-mono">
+                            İlerleme: <strong className="text-white">{current}</strong> / {target}
+                          </span>
+                          <span className="font-mono font-black text-xs" style={{ color: vis.solid }}>
+                            %{percentage}
+                          </span>
+                        </div>
+                        <div className="achv-track">
+                          <div className="achv-fill" style={{ width: `${percentage}%` }} />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-2.5 border-t border-[#1E1E2A] flex items-center justify-between text-xs">
+                        <span
+                          className="font-extrabold uppercase tracking-wider flex items-center gap-1.5 text-[11px]"
+                          style={{ color: vis.solid }}
+                        >
+                          <Icons.CheckCircle2 size={13} /> Kupa Açıldı
+                        </span>
+                        {a.unlockedAt && (
+                          <span className="text-[11px] font-mono font-semibold text-zinc-400">
+                            {formatDateTime(a.unlockedAt)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
 
             {filteredAchievements.length === 0 && (
-              <div className="col-span-full text-center py-10 md:py-12 text-ink-500 text-xs md:text-sm font-medium bg-ink-900/30 rounded-2xl border border-ink-800/50">
-                <Icons.SearchX size={28} className="mx-auto mb-2 md:mb-3 text-ink-600 md:w-8 md:h-8" />
+              <div className="col-span-full text-center py-12 text-ink-400 text-sm font-medium bg-[#0D0D12] rounded-2xl border border-[#22222C]">
+                <Icons.SearchX size={32} className="mx-auto mb-3 text-ink-600" />
                 Arama ve filtreleme kriterlerine uygun başarım bulunamadı.
               </div>
             )}

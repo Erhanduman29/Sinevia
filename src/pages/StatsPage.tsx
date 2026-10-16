@@ -112,7 +112,9 @@ function RadarChart({ data, maxScore = 10 }: { data: { name: string; score: numb
   );
 }
 
-/* ------------- İZLEME HARİTASI (Yıllık / Aylık / Haftalık / Günlük) ------------- */
+/* ══════════════════════════════════════════════════════════════
+   MODERN İZLEME HARİTASI (Yıllık Nabız Şeritleri & Kapsül Sütunlar)
+   ══════════════════════════════════════════════════════════════ */
 type MapMode = 'year' | 'month' | 'week' | 'day';
 
 const MAP_MODES: { id: MapMode; label: string }[] = [
@@ -122,71 +124,185 @@ const MAP_MODES: { id: MapMode; label: string }[] = [
   { id: 'day', label: 'Günlük' },
 ];
 
-const MAP_MODE_META: Record<MapMode, { badge: string; desc: string }> = {
-  year: { badge: 'Son 365 Gün', desc: 'Son 12 ayın ısı haritası — her kutucuk bir gün. Parlaklık o günkü izleme yoğunluğunu gösterir.' },
-  month: { badge: 'Son 12 Ay', desc: 'Aylara göre döküm: hangi ay ne kadar dolu, tek bakışta gör.' },
-  week: { badge: 'Son 12 Hafta', desc: 'Haftalık ritmin: hangi hafta daha yoğun geçti, hangisi boş kaldı?' },
-  day: { badge: 'Son 14 Gün', desc: 'Günlük tempon — bugün dahil son iki haftanın izleme ritmi.' },
+const MAP_MODE_META: Record<MapMode, { badge: string; desc: string; unitLabel: string }> = {
+  year: {
+    badge: 'Son 12 Ay Zaman Çizelgesi',
+    desc: 'Her satır bir ayı, satır içindeki her dikey çubuk ise o ayın 1’inden son gününe kadar olan izleme nabzını gösterir.',
+    unitLabel: 'Aktif Gün',
+  },
+  month: {
+    badge: 'Son 12 Ay',
+    desc: 'Aylık izleme ritmin — hangi aylarda sinema maratonu yaptığını ve zirve dönemini karşılaştır.',
+    unitLabel: 'Aktif Ay',
+  },
+  week: {
+    badge: 'Son 12 Hafta',
+    desc: 'Haftalık tempo analizi — son 3 aydaki haftalık izleme istikrarını ve yoğunluk dalgalarını takip et.',
+    unitLabel: 'Aktif Hafta',
+  },
+  day: {
+    badge: 'Son 14 Gün',
+    desc: 'Yakın plan nabız — bugün dahil son iki haftadaki günlük ekran ritmin.',
+    unitLabel: 'Aktif Gün',
+  },
 };
 
 const TR_MONTHS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+const TR_MONTHS_FULL = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 const TR_DAYS = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
 
 const dayKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-function heatClass(count: number) {
-  if (count === 0) return 'bg-white/[0.045] border-white/[0.06]';
-  if (count === 1) return 'bg-red-500/30 border-red-500/50';
-  if (count <= 3) return 'bg-red-500/60 border-red-500/70';
-  if (count <= 5)
-    return 'bg-gradient-to-br from-rose-400 to-red-500 border-rose-300/70 shadow-[0_0_8px_rgba(232,56,79,0.55)]';
-  return 'bg-gradient-to-br from-rose-300 to-red-500 border-rose-200 shadow-[0_0_12px_rgba(255,107,122,0.75)]';
-}
 
 interface BarItem {
   label: string;
   sub?: string;
   count: number;
   title: string;
+  isCurrent?: boolean;
 }
 
-function WatchBars({ items, accent }: { items: BarItem[]; accent: string }) {
+function WatchBars({
+  items,
+  mode,
+  onHoverItem,
+}: {
+  items: BarItem[];
+  mode: MapMode;
+  onHoverItem: (item: BarItem | null) => void;
+}) {
   const max = Math.max(...items.map((i) => i.count), 1);
+  const total = items.reduce((s, i) => s + i.count, 0);
+  const avg = items.length > 0 ? total / items.length : 0;
+
   return (
-    <div className="flex items-end gap-1.5 sm:gap-2.5 h-40 sm:h-48">
-      {items.map((it, i) => (
-        <div key={i} className="flex-1 min-w-0 flex flex-col items-center gap-1 h-full group">
-          <span
-            className={`${PREMIUM_NUM} text-[10px] leading-none transition-colors ${
-              it.count > 0 ? 'text-white' : 'text-ink-600'
-            }`}
-          >
-            {it.count > 0 ? it.count : ''}
-          </span>
-          <div className="w-full flex-1 flex items-end">
+    <div className="relative bg-ink-950/55 border border-ink-800/70 rounded-2xl p-3.5 sm:p-5 overflow-hidden">
+      {/* Arka Plan Kılavuz Çizgileri (Grid Lines) */}
+      <div className="absolute inset-x-4 top-5 bottom-12 flex flex-col justify-between pointer-events-none z-0">
+        {[1, 0.75, 0.5, 0.25, 0].map((ratio, idx) => {
+          const val = Math.round(max * ratio);
+          return (
+            <div key={idx} className="flex items-center gap-2 w-full">
+              <span className={`${PREMIUM_NUM} text-[9px] text-ink-600 w-5 text-right select-none`}>
+                {ratio === 0 ? '0' : val > 0 ? val : ''}
+              </span>
+              <div className="flex-1 border-b border-dashed border-ink-800/60" />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Kapsül Sütunlar */}
+      <div className="relative z-10 flex items-end gap-1.5 sm:gap-2.5 h-44 sm:h-52 pl-6 pt-3">
+        {items.map((it, i) => {
+          const isPeak = it.count > 0 && it.count === max;
+          const heightPct = it.count === 0 ? 4 : Math.max(12, Math.round((it.count / max) * 100));
+
+          let barGradient = 'bg-ink-800/50 border-ink-700/40';
+          if (it.count > 0) {
+            if (isPeak) {
+              barGradient =
+                'bg-gradient-to-t from-red-600 via-rose-500 to-amber-300 border-amber-300/70 shadow-[0_0_20px_-2px_rgba(251,191,36,0.55)]';
+            } else if (mode === 'month') {
+              barGradient =
+                'bg-gradient-to-t from-red-800 via-red-500 to-rose-400 border-rose-400/50 shadow-[0_0_14px_-3px_rgba(232,56,79,0.5)]';
+            } else if (mode === 'week') {
+              barGradient =
+                'bg-gradient-to-t from-rose-800 via-rose-500 to-red-400 border-rose-300/50 shadow-[0_0_14px_-3px_rgba(255,107,122,0.5)]';
+            } else {
+              barGradient =
+                'bg-gradient-to-t from-red-700 via-rose-500 to-rose-300 border-rose-300/60 shadow-[0_0_12px_-3px_rgba(232,56,79,0.45)]';
+            }
+          }
+
+          return (
             <div
-              title={it.title}
-              className={`w-full rounded-t-md transition-all duration-500 group-hover:brightness-125 group-hover:-translate-y-0.5 ${
-                it.count > 0 ? accent : 'bg-ink-800/70 border-t border-ink-700'
-              }`}
-              style={{ height: `${it.count === 0 ? 3 : Math.max(10, (it.count / max) * 100)}%` }}
-            />
-          </div>
-          <span className="text-[9px] sm:text-[10px] font-bold text-ink-400 truncate w-full text-center leading-none">
-            {it.label}
+              key={i}
+              onMouseEnter={() => onHoverItem(it)}
+              onMouseLeave={() => onHoverItem(null)}
+              className="flex-1 min-w-0 flex flex-col items-center gap-1.5 h-full group cursor-pointer"
+            >
+              {/* Üst Değer Rozeti */}
+              <div className="h-5 flex items-center justify-center">
+                {it.count > 0 ? (
+                  <span
+                    className={`${PREMIUM_NUM} text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md transition-all duration-200 flex items-center gap-0.5 ${
+                      isPeak
+                        ? 'bg-amber-400/15 text-amber-300 border border-amber-400/40 scale-105'
+                        : 'text-ink-200 group-hover:text-white group-hover:bg-white/[0.07]'
+                    }`}
+                  >
+                    {isPeak && <Crown size={9} className="text-amber-300 fill-current hidden sm:inline" />}
+                    {it.count}
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-bold text-ink-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                    0
+                  </span>
+                )}
+              </div>
+
+              {/* Dikey Kapsül Yuvası (Track) */}
+              <div className="w-full max-w-[38px] flex-1 bg-white/[0.02] border border-white/[0.04] group-hover:border-white/[0.12] group-hover:bg-white/[0.04] rounded-xl p-0.5 flex items-end overflow-hidden transition-all duration-300">
+                <div
+                  title={it.title}
+                  className={`w-full rounded-[9px] border-t transition-all duration-500 ease-out group-hover:brightness-125 relative overflow-hidden ${barGradient}`}
+                  style={{ height: `${heightPct}%` }}
+                >
+                  {it.count > 0 && (
+                    <div className="absolute inset-x-0 top-0 h-2 bg-white/25 blur-[1px]" />
+                  )}
+                </div>
+              </div>
+
+              {/* Alt Etiketler */}
+              <div className="flex flex-col items-center leading-none pt-0.5 w-full">
+                <span
+                  className={`text-[9px] sm:text-[10px] font-extrabold truncate w-full text-center transition-colors ${
+                    it.isCurrent
+                      ? 'text-gold-400'
+                      : isPeak
+                      ? 'text-rose-300'
+                      : 'text-ink-400 group-hover:text-ink-100'
+                  }`}
+                >
+                  {it.label}
+                </span>
+                {it.sub && (
+                  <span
+                    className={`text-[8px] font-bold mt-0.5 w-full text-center truncate ${
+                      it.isCurrent ? 'text-gold-400/80' : 'text-ink-600'
+                    }`}
+                  >
+                    {it.sub}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Alt Dönem Özeti */}
+      <div className="mt-3 pt-2.5 border-t border-ink-800/60 flex items-center justify-between text-[10px] sm:text-[11px] text-ink-400 font-semibold flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(232,56,79,0.8)]" />
+            Birim Ortalaması: <strong className={`${PREMIUM_NUM} text-ink-100`}>{avg.toFixed(1)} yapım</strong>
           </span>
-          {it.sub && (
-            <span className="text-[8px] font-bold text-ink-600 -mt-0.5 w-full text-center leading-none">{it.sub}</span>
-          )}
         </div>
-      ))}
+        <div className="flex items-center gap-1.5 text-amber-300/90">
+          <Crown size={12} className="fill-current" />
+          <span>Taç işaretli sütun bu görünümün zirvesini temsil eder</span>
+        </div>
+      </div>
     </div>
   );
 }
 
 function WatchMap({ history }: { history: WatchHistoryItem[] }) {
   const [mode, setMode] = useState<MapMode>('year');
+  const [hoveredDetail, setHoveredDetail] = useState<{ label: string; count: number; badge?: string } | null>(null);
 
   const watchMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -200,37 +316,73 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayKey = dayKey(today);
   const keyCount = (d: Date) => watchMap.get(dayKey(d)) || 0;
 
   const meta = MAP_MODE_META[mode];
 
-  /* ---------- YILLIK: 365 günlük ızgara ---------- */
-  const buildYearWeeks = () => {
-    const start = new Date(today);
-    start.setDate(today.getDate() - 364);
-    const days: Date[] = [];
-    for (let i = 0; i < 365; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      days.push(d);
-    }
-    const weeks: (Date | null)[][] = [];
-    let week: (Date | null)[] = [];
-    for (let i = 0; i < days[0].getDay(); i++) week.push(null);
-    days.forEach((d) => {
-      week.push(d);
-      if (week.length === 7) {
-        weeks.push(week);
-        week = [];
+  /* ---------- YILLIK: 12 Aylık Yatay Nabız Şeritleri (Okunaklı & Net) ---------- */
+  const yearMonthStrips = useMemo(() => {
+    if (mode !== 'year') return [];
+    const result: {
+      key: string;
+      monthShort: string;
+      monthName: string;
+      yearNum: number;
+      daysInMonth: number;
+      totalCount: number;
+      activeDays: number;
+      isCurrentMonth: boolean;
+      days: { date: Date; dayNum: number; count: number; isToday: boolean; isFuture: boolean }[];
+    }[] = [];
+
+    for (let i = 11; i >= 0; i--) {
+      const firstOfMonth = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const y = firstOfMonth.getFullYear();
+      const m = firstOfMonth.getMonth();
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+      let totalCount = 0;
+      let activeDays = 0;
+      const days: { date: Date; dayNum: number; count: number; isToday: boolean; isFuture: boolean }[] = [];
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(y, m, d);
+        const k = dayKey(dateObj);
+        const c = watchMap.get(k) || 0;
+        const isFuture = dateObj > today;
+        if (!isFuture) {
+          totalCount += c;
+          if (c > 0) activeDays++;
+        }
+        days.push({
+          date: dateObj,
+          dayNum: d,
+          count: c,
+          isToday: k === todayKey,
+          isFuture,
+        });
       }
-    });
-    if (week.length) {
-      while (week.length < 7) week.push(null);
-      weeks.push(week);
+
+      result.push({
+        key: `${y}-${m}`,
+        monthShort: TR_MONTHS[m],
+        monthName: TR_MONTHS_FULL[m],
+        yearNum: y,
+        daysInMonth,
+        totalCount,
+        activeDays,
+        isCurrentMonth: i === 0,
+        days,
+      });
     }
-    return weeks;
-  };
-  const yearWeeks = mode === 'year' ? buildYearWeeks() : [];
+    return result;
+  }, [mode, watchMap]);
+
+  const maxMonthTotalInYear = useMemo(
+    () => Math.max(...yearMonthStrips.map((m) => m.totalCount), 1),
+    [yearMonthStrips]
+  );
 
   /* ---------- AYLIK: son 12 ay ---------- */
   const monthBars: BarItem[] = [];
@@ -244,9 +396,10 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
       }
       monthBars.push({
         label: TR_MONTHS[d.getMonth()],
-        sub: String(d.getFullYear()).slice(2),
+        sub: `'${String(d.getFullYear()).slice(2)}`,
         count: c,
-        title: `${TR_MONTHS[d.getMonth()]} ${d.getFullYear()}: ${c} yapım`,
+        title: `${TR_MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}: ${c} yapım`,
+        isCurrent: i === 0,
       });
     }
   }
@@ -257,9 +410,11 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
     for (let i = 11; i >= 0; i--) {
       const anchor = new Date(today);
       anchor.setDate(today.getDate() - i * 7);
-      const dow = (anchor.getDay() + 6) % 7; // 0 = Pazartesi
+      const dow = (anchor.getDay() + 6) % 7;
       const startW = new Date(anchor);
       startW.setDate(anchor.getDate() - dow);
+      const endW = new Date(startW);
+      endW.setDate(startW.getDate() + 6);
       let c = 0;
       for (let j = 0; j < 7; j++) {
         const d = new Date(startW);
@@ -268,8 +423,10 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
       }
       weekBars.push({
         label: `${startW.getDate()} ${TR_MONTHS[startW.getMonth()]}`,
+        sub: i === 0 ? 'Bu Hf.' : `${endW.getDate()} ${TR_MONTHS[endW.getMonth()]}`,
         count: c,
-        title: `${startW.getDate()} ${TR_MONTHS[startW.getMonth()]} haftası: ${c} yapım`,
+        title: `${startW.getDate()} ${TR_MONTHS_FULL[startW.getMonth()]} – ${endW.getDate()} ${TR_MONTHS_FULL[endW.getMonth()]} haftası: ${c} yapım`,
+        isCurrent: i === 0,
       });
     }
   }
@@ -282,10 +439,11 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
       d.setDate(today.getDate() - i);
       const c = keyCount(d);
       dayBars.push({
-        label: TR_DAYS[d.getDay()],
-        sub: String(d.getDate()).padStart(2, '0'),
+        label: i === 0 ? 'Bugün' : TR_DAYS[d.getDay()],
+        sub: `${String(d.getDate()).padStart(2, '0')} ${TR_MONTHS[d.getMonth()]}`,
         count: c,
-        title: `${d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}: ${c} yapım`,
+        title: `${d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' })}: ${c} yapım`,
+        isCurrent: i === 0,
       });
     }
   }
@@ -298,7 +456,7 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
     return { total, active, max };
   };
 
-  let summary = { total: 0, active: 0, max: 0, peak: '—' };
+  let summary = { total: 0, active: 0, denominator: 365, max: 0, peak: '—' };
   if (mode === 'year') {
     const counts: number[] = [];
     for (let i = 0; i < 365; i++) {
@@ -306,40 +464,64 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
       d.setDate(today.getDate() - i);
       counts.push(keyCount(d));
     }
-    summary = { ...statsOf(counts), peak: `Tek günde en çok ${statsOf(counts).max}` };
+    const s = statsOf(counts);
+    const bestMonth = yearMonthStrips.reduce(
+      (a, b) => (b.totalCount > a.totalCount ? b : a),
+      yearMonthStrips[0] || { monthName: '—', totalCount: 0 }
+    );
+    summary = {
+      ...s,
+      denominator: 365,
+      peak: bestMonth.totalCount > 0 ? `${bestMonth.monthName} (${bestMonth.totalCount})` : `Rekor: ${s.max}`,
+    };
   } else if (mode === 'month') {
     const s = statsOf(monthBars.map((b) => b.count));
     const peakBar = monthBars.reduce((a, b) => (b.count > a.count ? b : a), monthBars[0]);
-    summary = { ...s, peak: `En dolu ay: ${peakBar.label}` };
+    summary = { ...s, denominator: 12, peak: peakBar.count > 0 ? `${peakBar.label} (${peakBar.count} yapım)` : '—' };
   } else if (mode === 'week') {
     const s = statsOf(weekBars.map((b) => b.count));
     const peakBar = weekBars.reduce((a, b) => (b.count > a.count ? b : a), weekBars[0]);
-    summary = { ...s, peak: `En yoğun hafta: ${peakBar.label}` };
+    summary = { ...s, denominator: 12, peak: peakBar.count > 0 ? `${peakBar.label} (${peakBar.count} yapım)` : '—' };
   } else {
     const s = statsOf(dayBars.map((b) => b.count));
     const peakBar = dayBars.reduce((a, b) => (b.count > a.count ? b : a), dayBars[0]);
-    summary = { ...s, peak: `En yoğun gün: ${peakBar.label}` };
+    summary = { ...s, denominator: 14, peak: peakBar.count > 0 ? `${peakBar.label} (${peakBar.count} yapım)` : '—' };
   }
 
   const hasData = watchMap.size > 0;
+  const activePct = Math.round((summary.active / summary.denominator) * 100);
 
   return (
-    <div>
-      {/* Başlık + görünüm seçici */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-        <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
+    <div className="space-y-3.5">
+      {/* Başlık + Sekme Seçici */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5">
           <span className={`w-8 h-8 rounded-xl ${RED_TILE}`}>
             <Calendar size={16} className="text-white" />
           </span>
-          İzleme Haritası
-        </h2>
-        <div className="flex items-center gap-1 self-start sm:self-auto bg-ink-950/70 border border-ink-800 rounded-xl p-1">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100">
+                İzleme Haritası
+              </h2>
+              <span className="text-[9.5px] font-black uppercase tracking-widest text-rose-300 bg-red-500/10 border border-red-500/30 px-2 py-0.5 rounded-md">
+                {meta.badge}
+              </span>
+            </div>
+            <p className="text-[11px] text-ink-400 mt-0.5 leading-snug">{meta.desc}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 self-start sm:self-auto bg-ink-950/80 border border-ink-800 rounded-xl p-1 shrink-0">
           {MAP_MODES.map((m) => (
             <button
               key={m.id}
               type="button"
-              onClick={() => setMode(m.id)}
-              className={`px-2.5 sm:px-3.5 py-1.5 min-h-11 sm:min-h-0 rounded-lg text-[10px] sm:text-xs font-black transition-all ${
+              onClick={() => {
+                setMode(m.id);
+                setHoveredDetail(null);
+              }}
+              className={`px-2.5 sm:px-3.5 py-1.5 min-h-9 sm:min-h-0 rounded-lg text-[10px] sm:text-xs font-black transition-all ${
                 mode === m.id ? RED_PILL_ACTIVE : 'text-ink-400 hover:text-ink-100 hover:bg-white/[0.06]'
               }`}
             >
@@ -349,106 +531,239 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
         </div>
       </div>
 
-      <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
-        <p className="text-[11px] sm:text-xs text-ink-400 max-w-xl leading-relaxed">{meta.desc}</p>
-        <span className="text-[10px] font-black uppercase tracking-widest text-rose-300 bg-red-500/10 border border-red-500/30 px-2.5 py-1 rounded-lg">
-          {meta.badge}
-        </span>
-      </div>
-
       {!hasData ? (
-        <p className="text-xs text-ink-500 py-8 text-center">Bu kapsamda henüz izleme verin bulunmuyor.</p>
+        <div className="text-center py-8 bg-ink-950/40 rounded-2xl border border-ink-800/60">
+          <p className="text-xs text-ink-500">Bu kapsamda henüz izleme verin bulunmuyor.</p>
+        </div>
       ) : (
         <>
-          {/* Özet şeritleri */}
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <div className={`${PREMIUM_CELL} px-3 py-2`}>
-              <div className="text-[9px] font-black uppercase tracking-widest text-ink-500">Bu Dönem</div>
-              <div className={`${PREMIUM_NUM} text-base sm:text-lg text-white leading-tight`}>
-                {summary.total} <span className="text-[10px] font-bold text-ink-400">yapım</span>
+          {/* Kompakt Özet Şeritleri */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className={`${PREMIUM_CELL} px-3 py-2 flex items-center justify-between`}>
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-ink-500">Bu Dönem</div>
+                <div className={`${PREMIUM_NUM} text-sm sm:text-lg text-white leading-tight`}>
+                  {summary.total} <span className="text-[10px] font-bold text-ink-400">yapım</span>
+                </div>
               </div>
+              <Film size={14} className="text-rose-400/70 hidden sm:block" />
             </div>
-            <div className={`${PREMIUM_CELL} px-3 py-2`}>
-              <div className="text-[9px] font-black uppercase tracking-widest text-ink-500">Aktif Gün</div>
-              <div className={`${PREMIUM_NUM} text-base sm:text-lg text-rose-300 leading-tight`}>
-                {summary.active} <span className="text-[10px] font-bold text-ink-400">/ {mode === 'year' ? 365 : mode === 'day' ? 14 : mode === 'week' ? 84 : 365}</span>
+
+            <div className={`${PREMIUM_CELL} px-3 py-2 flex items-center justify-between`}>
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-ink-500">{meta.unitLabel}</div>
+                <div className={`${PREMIUM_NUM} text-sm sm:text-lg text-rose-300 leading-tight`}>
+                  {summary.active} <span className="text-[10px] font-bold text-ink-500">/ {summary.denominator}</span>
+                </div>
               </div>
+              <span className={`${PREMIUM_NUM} text-[10px] text-ink-400 hidden sm:inline`}>%{activePct}</span>
             </div>
-            <div className={`${PREMIUM_CELL} px-3 py-2`}>
-              <div className="text-[9px] font-black uppercase tracking-widest text-ink-500">Zirve</div>
-              <div className="text-[11px] sm:text-xs font-black text-gold-300 leading-tight mt-1 truncate">{summary.peak}</div>
+
+            <div className={`${PREMIUM_CELL} px-3 py-2 flex items-center justify-between min-w-0`}>
+              <div className="min-w-0">
+                <div className="text-[9px] font-black uppercase tracking-widest text-ink-500">Zirve</div>
+                <div className="text-[11px] sm:text-xs font-black text-gold-300 leading-tight mt-0.5 truncate">
+                  {summary.peak}
+                </div>
+              </div>
+              <Crown size={14} className="text-gold-400/80 shrink-0 hidden sm:block" />
             </div>
           </div>
 
+          {/* YILLIK GÖRÜNÜM: 12 Aylık Yatay Nabız & Zaman Şeritleri */}
           {mode === 'year' && (
-            <div className="overflow-x-auto custom-scrollbar pb-2 pt-1">
-              {/* Ay etiketleri */}
-              <div className="flex gap-1 mb-1.5 pl-6 sm:pl-7">
-                {yearWeeks.map((week, i) => {
-                  const firstDay = week.find(Boolean) as Date | undefined;
-                  const show = week.some((d) => d && d.getDate() === 1);
+            <div className="bg-ink-950/55 border border-ink-800/70 rounded-2xl p-3 sm:p-4 space-y-3">
+              {/* Üst Canlı Bilgi Barı */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-ink-800/60 text-xs">
+                <div className="flex items-center gap-2 min-h-[18px] min-w-0">
+                  <Sparkles size={13} className="text-gold-400 shrink-0" />
+                  {hoveredDetail ? (
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="font-bold text-white truncate">{hoveredDetail.label}</span>
+                      <span className="text-ink-600">•</span>
+                      <span
+                        className={`${PREMIUM_NUM} px-2 py-0.5 rounded text-[11px] font-black ${
+                          hoveredDetail.count > 0
+                            ? 'bg-red-500/20 text-rose-300 border border-red-500/30'
+                            : 'bg-ink-900 text-ink-400'
+                        }`}
+                      >
+                        {hoveredDetail.count > 0 ? `${hoveredDetail.count} yapım izlendi` : 'İzleme yok'}
+                      </span>
+                      {hoveredDetail.badge && (
+                        <span className="text-[10px] font-bold text-gold-400">({hoveredDetail.badge})</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-ink-400 text-[11px] truncate">
+                      Her satır bir ayı, dikey çubuklar ise o ayın günlerini (1–31) gösterir. Detay için çubukların üzerine gel.
+                    </span>
+                  )}
+                </div>
+
+                {/* Renk Anlamları */}
+                <div className="flex items-center gap-2 text-[10px] text-ink-400 font-semibold self-end sm:self-auto shrink-0">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-ink-800" /> Boş
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-500/70" /> 1–2
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-red-500" /> 3–4
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-300" /> 5+ Rekor
+                  </span>
+                </div>
+              </div>
+
+              {/* 12 Ay Satır Listesi (Masaüstünde 2 Sütun, Mobilde 1 Sütun) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-2.5">
+                {yearMonthStrips.map((mItem) => {
+                  const hasActivity = mItem.totalCount > 0;
+                  const isPeak = hasActivity && mItem.totalCount === maxMonthTotalInYear;
+
                   return (
-                    <div key={i} className="w-3 sm:w-3.5 text-[8px] font-bold text-ink-500 leading-none whitespace-nowrap">
-                      {show && firstDay ? TR_MONTHS[firstDay.getMonth()] : ''}
+                    <div
+                      key={mItem.key}
+                      className={`flex items-center gap-2.5 sm:gap-3 px-3 py-2 rounded-xl border transition-all ${
+                        isPeak
+                          ? 'bg-gradient-to-r from-red-950/35 via-ink-900/70 to-ink-900/50 border-rose-500/45 shadow-[0_6px_20px_-10px_rgba(232,56,79,0.5)]'
+                          : hasActivity
+                          ? 'bg-ink-900/50 border-ink-800/80 hover:border-ink-700'
+                          : 'bg-ink-950/35 border-ink-800/40 opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      {/* Sol: Ay Adı & Yıl */}
+                      <div className="w-20 sm:w-24 shrink-0">
+                        <div className="flex items-center gap-1">
+                          {isPeak && <Crown size={11} className="text-amber-300 fill-current shrink-0" />}
+                          <span
+                            className={`text-xs font-black uppercase tracking-tight truncate ${
+                              mItem.isCurrentMonth ? 'text-gold-400' : 'text-ink-100'
+                            }`}
+                          >
+                            {mItem.monthName}
+                          </span>
+                        </div>
+                        <div className="text-[10px] font-semibold text-ink-500 flex items-center gap-1">
+                          <span>{mItem.yearNum}</span>
+                          <span>•</span>
+                          <span className={mItem.activeDays > 0 ? 'text-ink-400' : 'text-ink-600'}>
+                            {mItem.activeDays}g aktif
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Orta: 1'den 31'e Günlük Nabız Çubukları (Equalizer) */}
+                      <div className="flex-1 flex items-end gap-[2px] sm:gap-[3px] h-7 bg-ink-950/70 border border-ink-800/60 rounded-lg px-2 py-1">
+                        {mItem.days.map((d) => {
+                          if (d.isFuture) {
+                            return (
+                              <div
+                                key={d.dayNum}
+                                className="flex-1 h-1 rounded-full bg-white/[0.02]"
+                              />
+                            );
+                          }
+
+                          const formatted = d.date.toLocaleDateString('tr-TR', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                            weekday: 'short',
+                          });
+
+                          let barHeight = '22%';
+                          let barColor = 'bg-white/[0.08] hover:bg-white/30';
+
+                          if (d.count === 1) {
+                            barHeight = '52%';
+                            barColor = 'bg-rose-500/75 hover:bg-rose-400';
+                          } else if (d.count === 2) {
+                            barHeight = '70%';
+                            barColor = 'bg-red-500 hover:bg-rose-400 shadow-[0_0_6px_rgba(232,56,79,0.5)]';
+                          } else if (d.count === 3 || d.count === 4) {
+                            barHeight = '86%';
+                            barColor = 'bg-gradient-to-t from-red-600 to-rose-400 shadow-[0_0_8px_rgba(232,56,79,0.7)]';
+                          } else if (d.count >= 5) {
+                            barHeight = '100%';
+                            barColor = 'bg-gradient-to-t from-rose-500 to-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.85)]';
+                          }
+
+                          return (
+                            <div
+                              key={d.dayNum}
+                              onMouseEnter={() =>
+                                setHoveredDetail({
+                                  label: formatted,
+                                  count: d.count,
+                                  badge: d.isToday ? 'Bugün' : undefined,
+                                })
+                              }
+                              onMouseLeave={() => setHoveredDetail(null)}
+                              title={`${formatted}: ${d.count} yapım`}
+                              className="flex-1 h-full flex items-end cursor-pointer group/day"
+                            >
+                              <div
+                                style={{ height: barHeight }}
+                                className={`w-full rounded-[2px] transition-all duration-150 group-hover/day:scale-y-110 ${barColor} ${
+                                  d.isToday ? 'ring-1 ring-amber-300' : ''
+                                }`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Sağ: Ay Toplam Sayısı */}
+                      <div className="w-12 sm:w-14 text-right shrink-0">
+                        <span
+                          className={`${PREMIUM_NUM} inline-block text-xs sm:text-sm px-2 py-0.5 rounded-lg font-black ${
+                            isPeak
+                              ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                              : hasActivity
+                              ? 'bg-red-500/15 text-rose-300 border border-red-500/30'
+                              : 'bg-ink-900/70 text-ink-600'
+                          }`}
+                        >
+                          {mItem.totalCount}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-              <div className="flex gap-1.5">
-                {/* Hafta günleri etiketleri */}
-                <div className="flex flex-col gap-1 pr-1">
-                  {['Pzt', 'Çar', 'Cum'].map((d) => (
-                    <div key={d} className="h-3 sm:h-3.5 flex items-center text-[8px] font-bold text-ink-600 leading-none">
-                      {d}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-1">
-                  {yearWeeks.map((week, wIndex) => (
-                    <div key={wIndex} className="flex flex-col gap-1">
-                      {week.map((date, dIndex) => {
-                        if (!date) return <div key={`empty-${dIndex}`} className="w-3 h-3 sm:w-3.5 sm:h-3.5" />;
-                        const count = keyCount(date);
-                        return (
-                          <div
-                            key={dayKey(date)}
-                            title={`${date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}: ${count} yapım`}
-                            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-[4px] border transition-all duration-150 cursor-help hover:scale-150 hover:ring-1 hover:ring-white/70 ${heatClass(count)}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-1.5 mt-3 text-[9px] sm:text-[10px] text-ink-500 font-medium">
-                <span>Az</span>
-                <div className="w-2.5 h-2.5 rounded-[3px] bg-white/[0.045] border border-white/[0.06]" />
-                <div className="w-2.5 h-2.5 rounded-[3px] bg-red-500/30 border border-red-500/50" />
-                <div className="w-2.5 h-2.5 rounded-[3px] bg-red-500/60 border border-red-500/70" />
-                <div className="w-2.5 h-2.5 rounded-[3px] bg-gradient-to-br from-rose-400 to-red-500 border border-rose-300/70" />
-                <div className="w-2.5 h-2.5 rounded-[3px] bg-gradient-to-br from-rose-300 to-red-500 border border-rose-200" />
-                <span>Çok</span>
-              </div>
             </div>
           )}
 
+          {/* AYLIK / HAFTALIK / GÜNLÜK GÖRÜNÜM (Korundu) */}
           {mode === 'month' && (
             <WatchBars
               items={monthBars}
-              accent="bg-gradient-to-t from-red-700 to-red-500 shadow-[0_0_14px_rgba(232,56,79,0.4)]"
+              mode="month"
+              onHoverItem={(it) =>
+                setHoveredDetail(it ? { label: it.title.split(':')[0], count: it.count, badge: it.isCurrent ? 'Bu Ay' : undefined } : null)
+              }
             />
           )}
           {mode === 'week' && (
             <WatchBars
               items={weekBars}
-              accent="bg-gradient-to-t from-red-600 to-rose-500 shadow-[0_0_14px_rgba(255,107,122,0.4)]"
+              mode="week"
+              onHoverItem={(it) =>
+                setHoveredDetail(it ? { label: it.title.split(':')[0], count: it.count, badge: it.isCurrent ? 'Bu Hafta' : undefined } : null)
+              }
             />
           )}
           {mode === 'day' && (
             <WatchBars
               items={dayBars}
-              accent="bg-gradient-to-t from-rose-500 to-red-400 shadow-[0_0_14px_rgba(232,56,79,0.35)]"
+              mode="day"
+              onHoverItem={(it) =>
+                setHoveredDetail(it ? { label: it.title.split(':')[0], count: it.count, badge: it.isCurrent ? 'Bugün' : undefined } : null)
+              }
             />
           )}
         </>
@@ -486,6 +801,69 @@ export default function StatsPage() {
   }, [history]);
 
   const stats = useComputedStats(movies, series, criteria, history, collections, statsMode);
+
+  // GELİŞMİŞ PUAN DAĞILIMI & SPEKTRUM ANALİZİ
+  const ratingAnalytics = useMemo(() => {
+    const entries = stats.ratings; // [rating, count][]
+    const totalRated = entries.reduce((acc, [, c]) => acc + c, 0);
+    if (totalRated === 0) {
+      return {
+        totalRated: 0,
+        maxCount: 1,
+        modeRating: 0,
+        modeCount: 0,
+        stdDev: 0,
+        masterpieceRate: 0,
+        tiers: [
+          { id: 'masterpiece', label: 'Başyapıt Bandı', range: '9.0 – 10', count: 0, pct: 0, color: 'text-amber-300', bar: 'from-amber-400 to-yellow-500', border: 'border-amber-500/30' },
+          { id: 'great', label: 'Güçlü Yapımlar', range: '7.0 – 8.9', count: 0, pct: 0, color: 'text-emerald-300', bar: 'from-emerald-500 to-teal-400', border: 'border-emerald-500/30' },
+          { id: 'decent', label: 'Ortalama / Çerezlik', range: '5.0 – 6.9', count: 0, pct: 0, color: 'text-sky-300', bar: 'from-sky-500 to-blue-400', border: 'border-sky-500/30' },
+          { id: 'poor', label: 'Hayal Kırıklığı', range: '1.0 – 4.9', count: 0, pct: 0, color: 'text-rose-400', bar: 'from-red-600 to-rose-500', border: 'border-red-500/30' },
+        ],
+        sortedDesc: [] as [number, number][],
+      };
+    }
+
+    const maxCount = Math.max(...entries.map(([, c]) => c), 1);
+    const bestEntry = entries.reduce((a, b) => (b[1] > a[1] ? b : a), entries[0]);
+
+    const weightedSum = entries.reduce((acc, [r, c]) => acc + Number(r) * c, 0);
+    const mean = weightedSum / totalRated;
+    const variance =
+      entries.reduce((acc, [r, c]) => acc + c * Math.pow(Number(r) - mean, 2), 0) / totalRated;
+    const stdDev = Math.sqrt(variance);
+
+    let masterpiece = 0;
+    let great = 0;
+    let decent = 0;
+    let poor = 0;
+
+    entries.forEach(([r, c]) => {
+      const num = Number(r);
+      if (num >= 9) masterpiece += c;
+      else if (num >= 7) great += c;
+      else if (num >= 5) decent += c;
+      else poor += c;
+    });
+
+    const pctOf = (n: number) => Math.round((n / totalRated) * 100);
+
+    return {
+      totalRated,
+      maxCount,
+      modeRating: Number(bestEntry[0]),
+      modeCount: bestEntry[1],
+      stdDev,
+      masterpieceRate: pctOf(masterpiece),
+      tiers: [
+        { id: 'masterpiece', label: 'Başyapıt Bandı', range: '9.0 – 10', count: masterpiece, pct: pctOf(masterpiece), color: 'text-amber-300', bar: 'from-amber-400 to-yellow-500', border: 'border-amber-500/30' },
+        { id: 'great', label: 'Güçlü Yapımlar', range: '7.0 – 8.9', count: great, pct: pctOf(great), color: 'text-emerald-300', bar: 'from-emerald-500 to-teal-400', border: 'border-emerald-500/30' },
+        { id: 'decent', label: 'Ortalama / Çerezlik', range: '5.0 – 6.9', count: decent, pct: pctOf(decent), color: 'text-sky-300', bar: 'from-sky-500 to-blue-400', border: 'border-sky-500/30' },
+        { id: 'poor', label: 'Hayal Kırıklığı', range: '1.0 – 4.9', count: poor, pct: pctOf(poor), color: 'text-rose-400', bar: 'from-red-600 to-rose-500', border: 'border-red-500/30' },
+      ],
+      sortedDesc: [...entries].sort((a, b) => Number(b[0]) - Number(a[0])),
+    };
+  }, [stats.ratings]);
 
   // SİNEMATİK OTOPSİ & TAHAMMÜL ANALİZİ — izleme kapsamından bağımsız, kütüphanenin tamamı.
   const autopsy = useMemo(() => {
@@ -619,7 +997,6 @@ export default function StatsPage() {
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
-  const dayNames = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
   const genreColors = [
     'from-red-500 to-rose-400', 'from-rose-500 to-red-400', 'from-red-600 to-red-400', 'from-rose-600 to-rose-400',
     'from-red-500 to-orange-400', 'from-rose-500 to-pink-400', 'from-red-700 to-red-500', 'from-rose-400 to-red-300',
@@ -1178,7 +1555,7 @@ export default function StatsPage() {
               return (
                 <button key={h.id} type="button" onClick={() => openHistoryItemDetail(h)} className="group relative flex flex-col text-left bg-ink-950/70 border border-ink-800 hover:border-red-500/50 hover:shadow-[0_0_0_1px_rgba(232,56,79,0.35),0_16px_38px_-16px_rgba(232,56,79,0.6)] rounded-xl sm:rounded-2xl overflow-hidden shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
                   <div className="aspect-[2/3] w-full bg-ink-900 relative overflow-hidden">
-                    {poster ? <img loading="lazy" decoding="async" src={poster} alt={h.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"  onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center text-ink-600">{isMovie ? <Film size={24} /> : <Tv size={24} />}</div>}
+                    {poster ? <img loading="lazy" decoding="async" src={poster} alt={h.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center text-ink-600">{isMovie ? <Film size={24} /> : <Tv size={24} />}</div>}
                     <div className="absolute top-1.5 left-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-gradient-to-br from-red-500 to-red-700 backdrop-blur-md border border-rose-300/30 flex items-center justify-center text-[10px] font-black text-white">#{i + 1}</div>
                     {h.rating !== null && <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-lg text-[10px] sm:text-xs font-black shadow-md ${ratingBgClass(h.rating)}`}>{h.rating}</div>}
                   </div>
@@ -1627,88 +2004,181 @@ export default function StatsPage() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
-        <div className={`${PREMIUM_PANEL} flex flex-col justify-between`}>
-          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-gold-400" /> Aylık İzleme</h2>
-          {stats.monthly.length === 0 ? (
-            <p className="text-sm text-ink-500">Henüz veri yok.</p>
+      {/* YENİLENMİŞ TAM GENİŞLİKLİ PUAN DAĞILIMI & SPEKTRUM ANALİZİ */}
+      <div className={`${PREMIUM_PANEL} relative overflow-hidden`}>
+        <div className="absolute -left-16 -bottom-16 w-52 h-52 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
+                <span className={`w-8 h-8 rounded-xl ${RED_TILE}`}>
+                  <TrendingUp size={16} className="text-white" />
+                </span>
+                Puan Dağılımı &amp; Kalite Spektrumu
+              </h2>
+              <p className="text-xs text-ink-400 mt-0.5">
+                Verdiğin puanların kademe dağılımı, en sık kullandığın notlar ve puan değişim geçmişin
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-ink-950/80 border border-ink-800 text-ink-300 px-3 py-1.5 rounded-xl">
+                <History size={13} className="text-rose-400" /> {ratingChangeCount} puan değişimi
+              </span>
+              {ratingAnalytics.totalRated > 0 && (
+                <span className="text-[11px] font-black bg-ink-950 border border-ink-800 text-gold-400 px-3 py-1.5 rounded-xl">
+                  Toplam {ratingAnalytics.totalRated} Puanlama
+                </span>
+              )}
+            </div>
+          </div>
+
+          {ratingAnalytics.totalRated === 0 ? (
+            <div className="text-center py-8 bg-ink-950/40 rounded-xl border border-ink-800/60">
+              <p className="text-sm text-ink-500">Henüz puan verilmemiş.</p>
+            </div>
           ) : (
-            <>
-              <div className="flex items-end justify-between gap-2.5 h-36 sm:h-40 mb-3">
-                {stats.monthly.map(([month, val]) => {
-                  const [y, m] = month.split('-');
-                  const monthName = new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('tr-TR', { month: 'short' });
-                  const heightPct = (val.total / stats.maxMonthly) * 100;
-                  const moviePct = val.total > 0 ? (val.movies / val.total) * 100 : 0;
-                  return (
-                    <div key={month} className="flex flex-col items-center gap-1.5 flex-1 group">
-                      <div className={`${PREMIUM_NUM} text-xs text-ink-300`}>{val.total}</div>
-                      <div className="w-full max-w-[2rem] flex flex-col-reverse rounded-t-lg overflow-hidden transition-all duration-700 group-hover:brightness-110 group-hover:shadow-[0_0_14px_rgba(232,56,79,0.5)]" style={{ height: `${Math.max(heightPct, 6)}%` }}>
-                        <div className="bg-gradient-to-t from-red-700 to-red-500 transition-all duration-700" style={{ height: `${moviePct}%` }} />
-                        <div className="bg-gradient-to-t from-rose-600 to-rose-400 transition-all duration-700" style={{ height: `${100 - moviePct}%` }} />
+            <div className="space-y-4">
+              {/* 4'lü Özet Metrik Kartları */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                <div className={`${PREMIUM_CELL} p-3`}>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-ink-500">Genel Ortalama</div>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className={`${PREMIUM_NUM} text-xl sm:text-2xl text-white`}>{stats.avgTotal.toFixed(2)}</span>
+                    <span className="text-[10px] font-bold text-gold-400">/ 10</span>
+                  </div>
+                  <div className={`text-[10px] font-bold mt-0.5 truncate ${stats.ratingPersona.color}`}>
+                    {stats.ratingPersona.label}
+                  </div>
+                </div>
+
+                <div className={`${PREMIUM_CELL} p-3`}>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-ink-500">Favori Notun (Mod)</div>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className={`px-2 py-0.5 rounded-lg text-sm sm:text-base font-black ${ratingBgClass(ratingAnalytics.modeRating)}`}>
+                      {ratingAnalytics.modeRating}
+                    </span>
+                    <span className={`${PREMIUM_NUM} text-xs text-ink-300`}>{ratingAnalytics.modeCount} kez</span>
+                  </div>
+                  <div className="text-[10px] text-ink-500 mt-1">En sık verdiğin puan</div>
+                </div>
+
+                <div className={`${PREMIUM_CELL} p-3`}>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-ink-500">Başyapıt Oranı</div>
+                  <div className={`${PREMIUM_NUM} text-xl sm:text-2xl text-amber-300 mt-1`}>
+                    %{ratingAnalytics.masterpieceRate}
+                  </div>
+                  <div className="text-[10px] text-ink-500 mt-0.5">9.0 ve üzeri puanlananlar</div>
+                </div>
+
+                <div className={`${PREMIUM_CELL} p-3`}>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-ink-500">Kanaat Sapması</div>
+                  <div className={`${PREMIUM_NUM} text-xl sm:text-2xl text-rose-300 mt-1`}>
+                    ±{ratingAnalytics.stdDev.toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-ink-500 mt-0.5">
+                    {ratingAnalytics.stdDev < 1.2 ? 'Belirli bir bantta sabit' : 'Geniş skalada değişken'}
+                  </div>
+                </div>
+              </div>
+
+              {/* 4 Kademeli Kalite Segmentasyonu + Yığılmış Spektrum Barı */}
+              <div className="bg-ink-950/55 border border-ink-800/70 rounded-2xl p-3.5 sm:p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold text-ink-300">
+                  <span>Kalite Kademeleri Dağılımı</span>
+                  <span className="text-[10px] text-ink-500">10 üzerinden puan dilimleri</span>
+                </div>
+
+                <div className="h-3 w-full bg-ink-900 rounded-full overflow-hidden flex border border-ink-800 p-0.5 gap-0.5">
+                  {ratingAnalytics.tiers.map((t) =>
+                    t.count > 0 ? (
+                      <div
+                        key={t.id}
+                        title={`${t.label} (${t.range}): ${t.count} yapım (%${t.pct})`}
+                        className={`h-full bg-gradient-to-r ${t.bar} first:rounded-l-full last:rounded-r-full transition-all duration-700`}
+                        style={{ width: `${Math.max(4, t.pct)}%` }}
+                      />
+                    ) : null
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {ratingAnalytics.tiers.map((t) => (
+                    <div
+                      key={t.id}
+                      className={`bg-ink-900/60 border ${t.border} rounded-xl p-2.5 flex items-center justify-between gap-2`}
+                    >
+                      <div className="min-w-0">
+                        <div className={`text-xs font-black truncate ${t.color}`}>{t.label}</div>
+                        <div className="text-[10px] text-ink-500 font-semibold">{t.range} Puan</div>
                       </div>
-                      <div className="text-[11px] text-ink-500 font-medium">{monthName}</div>
+                      <div className="text-right flex-shrink-0">
+                        <div className={`${PREMIUM_NUM} text-sm text-white`}>{t.count}</div>
+                        <div className={`${PREMIUM_NUM} text-[10px] text-ink-400`}>%{t.pct}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2 Sütunlu Detaylı Puan Çubukları */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 bg-ink-950/40 border border-ink-800/60 rounded-2xl p-3.5 sm:p-4 max-h-72 overflow-y-auto custom-scrollbar">
+                {ratingAnalytics.sortedDesc.map(([rating, count]) => {
+                  const widthPct = Math.max(6, (count / ratingAnalytics.maxCount) * 100);
+                  const sharePct = Math.round((count / ratingAnalytics.totalRated) * 100);
+                  const isMode = Number(rating) === ratingAnalytics.modeRating;
+                  return (
+                    <div
+                      key={rating}
+                      className={`flex items-center gap-2.5 py-1 px-1.5 rounded-lg transition-colors ${
+                        isMode ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-md font-black flex-shrink-0 w-11 text-center shadow-sm ${ratingBgClass(
+                          Number(rating)
+                        )}`}
+                      >
+                        {rating}
+                      </span>
+                      <div className="flex-1 h-4 bg-ink-900 rounded-md overflow-hidden border border-ink-800/80">
+                        <div
+                          className={`h-full rounded-md transition-all duration-700 ${
+                            Number(rating) >= 9
+                              ? 'bg-gradient-to-r from-amber-500 to-yellow-400 shadow-[0_0_10px_rgba(251,191,36,0.45)]'
+                              : Number(rating) >= 7
+                              ? 'bg-gradient-to-r from-red-600 to-rose-400 shadow-[0_0_10px_rgba(232,56,79,0.4)]'
+                              : 'bg-gradient-to-r from-ink-600 to-ink-400'
+                          }`}
+                          style={{ width: `${widthPct}%` }}
+                        />
+                      </div>
+                      <div className="w-16 text-right flex items-baseline justify-end gap-1 flex-shrink-0">
+                        <span className={`${PREMIUM_NUM} text-xs text-ink-100`}>{count}</span>
+                        <span className={`${PREMIUM_NUM} text-[10px] text-ink-500`}>(%{sharePct})</span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-              <div className="flex items-center justify-center gap-5 text-xs text-ink-400 border-t border-ink-800/50 pt-2.5">
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-red-500" /> Film</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-rose-400" /> Dizi</span>
-              </div>
-            </>
-          )}
-        </div>
 
-        <div className={`${PREMIUM_PANEL} flex flex-col justify-between`}>
-          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><Calendar size={16} className="text-rose-400" /> Haftalık Yoğunluk</h2>
-          {history.length === 0 ? (
-            <p className="text-sm text-ink-500">Henüz veri yok.</p>
-          ) : (
-            <div className="flex flex-1 items-end justify-between gap-2 h-40 pt-4">
-              {stats.dayOfWeekMap.map((count, i) => (
-                <div key={i} className="flex flex-col items-center gap-1.5 flex-1 group h-full justify-end">
-                  <div className={`${PREMIUM_NUM} text-xs text-ink-300`}>{count}</div>
-                  <div className="w-full max-w-[2rem] bg-gradient-to-t from-red-800 to-rose-400 rounded-t-md transition-all duration-700 group-hover:brightness-110 group-hover:shadow-[0_0_12px_rgba(232,56,79,0.5)]" style={{ height: `${(count / stats.maxDayOfWeek) * 80}%`, minHeight: count > 0 ? '6px' : '2px' }} />
-                  <div className="text-[11px] text-ink-500 font-medium">{dayNames[i]}</div>
+              {/* Son Puan Değişikliği Bandı */}
+              {lastRatingChange && (
+                <div className="bg-ink-950/60 border border-ink-800/70 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs">
+                  <span className="text-ink-400 truncate flex items-center gap-1.5">
+                    <History size={13} className="text-rose-400 shrink-0" />
+                    <span>Son puan değişikliği:</span>
+                    <strong className="font-bold text-ink-100 truncate">{lastRatingChange.title}</strong>
+                  </span>
+                  <span className="flex items-center gap-1.5 font-black tabular-nums flex-shrink-0">
+                    <s className="text-ink-500 text-[11px]">{lastRatingChange.previousRating}</s>
+                    <span className="text-ink-500 text-[10px]">→</span>
+                    <span className={`px-1.5 py-0.5 rounded ${ratingBgClass(lastRatingChange.rating ?? 0)}`}>
+                      {lastRatingChange.rating}
+                    </span>
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className={PREMIUM_PANEL}>
-          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-gold-400" /> Puan Dağılımı
-          <span className="ml-auto flex items-center gap-1.5 text-[11px] font-bold normal-case tracking-wide text-ink-400">
-            <History size={13} className="text-rose-400" /> {ratingChangeCount} puan değişimi
-          </span>
-        </h2>
-          {stats.ratings.length === 0 ? (
-            <p className="text-sm text-ink-500">Henüz puan verilmemiş.</p>
-          ) : (
-            <div className="space-y-2 max-h-44 overflow-y-auto pr-1 custom-scrollbar">
-              {stats.ratings.map(([rating, count]) => {
-                const maxCount = Math.max(...stats.ratings.map(([, c]) => c));
-                return (
-                  <div key={rating} className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded font-bold flex-shrink-0 w-10 text-center ${ratingBgClass(rating)}`}>{rating}</span>
-                    <div className="flex-1 h-4 bg-ink-800/60 rounded overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-red-700 to-rose-400 rounded shadow-[0_0_8px_rgba(232,56,79,0.4)] transition-all duration-700" style={{ width: `${(count / maxCount) * 100}%` }} />
-                    </div>
-                    <span className={`${PREMIUM_NUM} text-xs text-ink-300 w-7 text-right`}>{count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {lastRatingChange && (
-            <div className="mt-3 pt-2.5 border-t border-ink-800/50 flex items-center justify-between gap-2 text-xs">
-              <span className="text-ink-400 truncate">Son değişiklik: <span className="font-bold text-ink-200">{lastRatingChange.title}</span></span>
-              <span className="flex items-center gap-1.5 font-black tabular-nums flex-shrink-0">
-                <s className="text-ink-500 text-[11px]">{lastRatingChange.previousRating}</s>
-                <span className="text-ink-500 text-[10px]">→</span>
-                <span className={`px-1.5 py-0.5 rounded ${ratingBgClass(lastRatingChange.rating ?? 0)}`}>{lastRatingChange.rating}</span>
-              </span>
+              )}
             </div>
           )}
         </div>
