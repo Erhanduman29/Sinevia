@@ -70,6 +70,8 @@ export default function MoviesPage() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
+  const [unwatchTarget, setUnwatchTarget] = useState<Movie | null>(null);
+  const [reviveTarget, setReviveTarget] = useState<Movie | null>(null);
   const [showDna, setShowDna] = useState(false);
   const [pickedMovie, setPickedMovie] = useState<Movie | null>(null);
   const [ratingTarget, setRatingTarget] = useState<Movie | null>(null);
@@ -1040,7 +1042,7 @@ export default function MoviesPage() {
                               onStartWatch={startWatchingMovie}
                               onTogglePause={togglePauseWatchingMovie}
                               onCancelWatch={cancelWatchingMovie}
-                              onUnwatch={unwatchMovie}
+                              onUnwatch={(id) => setUnwatchTarget(libMovies.find((m) => m.id === id) ?? null)}
                               onEdit={(movie) => setEditTarget(movie)}
                               onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
                               onSelectDetail={(movie) => setDetailMovieId(movie.id)}
@@ -1048,7 +1050,7 @@ export default function MoviesPage() {
                               altWatchTemplate={altWatchTemplate}
                               externalActions={externalActions}
                               onAbandon={(movie) => setAbandonTarget(movie)}
-                              onRevive={(movie) => reviveMedia('movie', movie.id)}
+                              onRevive={(movie) => setReviveTarget(movie)}
                             />
                           ))
                         )}
@@ -1117,7 +1119,7 @@ export default function MoviesPage() {
                   onStartWatch={startWatchingMovie}
                   onTogglePause={togglePauseWatchingMovie}
                   onCancelWatch={cancelWatchingMovie}
-                  onUnwatch={unwatchMovie}
+                  onUnwatch={(id) => setUnwatchTarget(libMovies.find((m) => m.id === id) ?? null)}
                   onEdit={(movie) => setEditTarget(movie)}
                   onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
                   onSelectDetail={(movie) => setDetailMovieId(movie.id)}
@@ -1125,7 +1127,7 @@ export default function MoviesPage() {
                   altWatchTemplate={altWatchTemplate}
                   externalActions={externalActions}
                   onAbandon={(movie) => setAbandonTarget(movie)}
-                  onRevive={(movie) => reviveMedia('movie', movie.id)}
+                  onRevive={(movie) => setReviveTarget(movie)}
                 />
               );
             })}
@@ -1722,6 +1724,28 @@ export default function MoviesPage() {
           message={`"${deleteTarget.title}" silinecek. Emin misin?`}
           onConfirm={() => { deleteMovie(deleteTarget.id); setDeleteTarget(null); }}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {unwatchTarget && (
+        <ConfirmDialog
+          title="İzlemeyi Geri Al"
+          message={`"${unwatchTarget.title}" izlenmemiş olarak işaretlenecek; puanı, notu ve izleme bilgileri silinecek. Emin misin?`}
+          confirmLabel="Evet, Geri Al"
+          cancelLabel="Vazgeç"
+          onConfirm={() => { unwatchMovie(unwatchTarget.id); setUnwatchTarget(null); }}
+          onCancel={() => setUnwatchTarget(null)}
+        />
+      )}
+
+      {reviveTarget && (
+        <ConfirmDialog
+          title="Operasyonu Geri Al"
+          message={`"${reviveTarget.title}" için otopsi kaydı silinecek; izleme durumuna dokunulmaz. Devam edilsin mi?`}
+          confirmLabel="Evet, Geri Al"
+          cancelLabel="Vazgeç"
+          onConfirm={() => { reviveMedia('movie', reviveTarget.id); setReviveTarget(null); }}
+          onCancel={() => setReviveTarget(null)}
         />
       )}
 

@@ -173,7 +173,7 @@ export default function HistoryPage() {
     { type: 'movie' | 'series'; item: WatchHistoryItem; seriesId?: string }[]
   >();
   displayItems.forEach((d) => {
-    const dateKey = new Date(d.item.watchedAt).toLocaleDateString('tr-TR', {
+    const dateKey = new Date(d.item.ratingChangedAt || d.item.watchedAt).toLocaleDateString('tr-TR', {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
@@ -545,8 +545,9 @@ export default function HistoryPage() {
                   </div>
 
                   {item.rating !== null && (
-                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-xl text-xs font-black tabular-nums shadow-lg ${ratingBgClass(item.rating)}`}>
-                      ★ {item.rating}
+                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-xl text-xs font-black tabular-nums shadow-lg flex items-center gap-1 ${ratingBgClass(item.rating)}`}>
+                      <PrevRatingHint previousRating={item.previousRating} />
+                      <span>★ {item.rating}</span>
                     </div>
                   )}
 
@@ -735,6 +736,7 @@ export default function HistoryPage() {
                             <div className="flex items-center gap-1.5">
                               {item.rating !== null && (
                                 <div className={`px-3 py-1 rounded-xl font-black text-sm sm:text-base shadow-lg flex items-center gap-1 tabular-nums ${ratingBgClass(item.rating)}`}>
+                                  <PrevRatingHint previousRating={item.previousRating} />
                                   <StarIcon size={13} className="fill-current" />
                                   <span>{item.rating}</span>
                                 </div>
@@ -1028,6 +1030,16 @@ function DnfBadge() {
   );
 }
 
+/** Geçmiş puanı rozeti — "10 →" soluk; yeni puan renkli çipte kalır (puan değişimi belirtisi). */
+function PrevRatingHint({ previousRating }: { previousRating?: number }) {
+  if (previousRating == null) return null;
+  return (
+    <span className="text-[10px] sm:text-[11px] font-black tabular-nums opacity-70">
+      {previousRating} →
+    </span>
+  );
+}
+
 function MovieHistoryCard({
   item,
   movieData,
@@ -1174,6 +1186,7 @@ function MovieHistoryCard({
         <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-2.5 sm:pt-0 border-t border-[color:var(--line,var(--border-dim))] sm:border-0 flex-shrink-0">
           {item.rating !== null && (
             <div className={`px-3 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg flex items-center gap-1 tabular-nums ${ratingBgClass(item.rating)}`}>
+              <PrevRatingHint previousRating={item.previousRating} />
               <StarIcon size={15} className="fill-current" />
               <span>{item.rating}</span>
             </div>

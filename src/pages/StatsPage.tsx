@@ -477,6 +477,14 @@ export default function StatsPage() {
   );
 
   // YENİ: TASARIMI KORUYUP, YÜZLERCE SATIRI TEK FONKSİYONA ÇAĞIRIYORUZ!
+  const { ratingChangeCount, lastRatingChange } = useMemo(() => {
+    const changed = history.filter((h) => h.previousRating != null);
+    const latest = changed.length > 0
+      ? [...changed].sort((a, b) => new Date(b.ratingChangedAt || b.watchedAt).getTime() - new Date(a.ratingChangedAt || a.watchedAt).getTime())[0]
+      : null;
+    return { ratingChangeCount: changed.length, lastRatingChange: latest };
+  }, [history]);
+
   const stats = useComputedStats(movies, series, criteria, history, collections, statsMode);
 
   // SİNEMATİK OTOPSİ & TAHAMMÜL ANALİZİ — izleme kapsamından bağımsız, kütüphanenin tamamı.
@@ -1670,7 +1678,11 @@ export default function StatsPage() {
         </div>
 
         <div className={PREMIUM_PANEL}>
-          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-gold-400" /> Puan Dağılımı</h2>
+          <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-gold-400" /> Puan Dağılımı
+          <span className="ml-auto flex items-center gap-1.5 text-[11px] font-bold normal-case tracking-wide text-ink-400">
+            <History size={13} className="text-rose-400" /> {ratingChangeCount} puan değişimi
+          </span>
+        </h2>
           {stats.ratings.length === 0 ? (
             <p className="text-sm text-ink-500">Henüz puan verilmemiş.</p>
           ) : (
@@ -1687,6 +1699,16 @@ export default function StatsPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+          {lastRatingChange && (
+            <div className="mt-3 pt-2.5 border-t border-ink-800/50 flex items-center justify-between gap-2 text-xs">
+              <span className="text-ink-400 truncate">Son değişiklik: <span className="font-bold text-ink-200">{lastRatingChange.title}</span></span>
+              <span className="flex items-center gap-1.5 font-black tabular-nums flex-shrink-0">
+                <s className="text-ink-500 text-[11px]">{lastRatingChange.previousRating}</s>
+                <span className="text-ink-500 text-[10px]">→</span>
+                <span className={`px-1.5 py-0.5 rounded ${ratingBgClass(lastRatingChange.rating ?? 0)}`}>{lastRatingChange.rating}</span>
+              </span>
             </div>
           )}
         </div>

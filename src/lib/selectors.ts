@@ -190,8 +190,8 @@ export function filterAndSortHistory(
     );
   }
   items.sort((a, b) => {
-    if (sortMode === 'newest') return new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime();
-    if (sortMode === 'oldest') return new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime();
+    if (sortMode === 'newest') return new Date(b.ratingChangedAt || b.watchedAt).getTime() - new Date(a.ratingChangedAt || a.watchedAt).getTime();
+    if (sortMode === 'oldest') return new Date(a.ratingChangedAt || a.watchedAt).getTime() - new Date(b.ratingChangedAt || b.watchedAt).getTime();
     if (sortMode === 'rating') return (b.rating ?? -1) - (a.rating ?? -1);
     return 0;
   });

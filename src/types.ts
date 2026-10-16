@@ -141,6 +141,10 @@ export interface WatchHistoryItem {
   episode?: number;
   /** DNF işareti: bu kayıt "yarım bırakma" otopsisinden geliyorsa true. */
   abandoned?: boolean;
+  /** Puan düzenleme: önceki puan (yalnız sonradan yapılan değişimlerde yazılır). */
+  previousRating?: number;
+  /** Puan değişiminin yapıldığı an — sıralama/tarih önceliğinde kullanılır. */
+  ratingChangedAt?: string;
 }
 
 export interface AchievementProgress {
