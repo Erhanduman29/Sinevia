@@ -8,7 +8,7 @@ import { levelFromXp } from '../lib/xp';
 import { calculateEloDelta } from '../lib/calibrationEngine';
 import { rewriteLegacyTemplate } from '../lib/actionBridge';
 import { supabase } from '../lib/supabase';
-import { idbGet, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded } from '../lib/storageService';
+import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, PREV_ACCOUNT_KEY } from '../lib/storageService';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
 import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, ActionsSlice } from './slices';
 
@@ -800,9 +800,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
           ? { ...s, abandoned: true, abandonedAt: nowIso, abandonedProgress: action.progress, autopsyReasons: action.reasons, autopsyNote: action.note }
           : s));
       }
-      nextState.bonusXp = (state.bonusXp || 0) + 25;
-      const oldTotalAbandon = state.totalXp || 0;
-      nextState.pendingXpGain = { gained: 25, oldTotal: oldTotalAbandon, newTotal: oldTotalAbandon + 25 };
+      // Mezarlığa ekleme artık XP kazandırmıyor.
       break;
     }
     case 'REVIVE_MEDIA': {
@@ -1007,7 +1005,7 @@ export interface AppContextValue {
   updateShowcase: (items: ShowcaseItem[]) => void;
   forceXpSync: () => void;
   syncAchievements: () => void;
-  /** Sinematik Otopsi: film/diziyi yarım bırak (otopi +25 XP). */
+  /** Sinematik Otopsi: film/diziyi yarım bırak (otopi). */
   abandonMedia: (mediaType: 'movie' | 'series', id: string, opts?: { abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }) => void;
   reviveMedia: (mediaType: 'movie' | 'series', id: string) => void;
   /** Kör kalibrasyon düellosunu çöz (kazanan/kaybeden film kimlikleri). */
@@ -1024,6 +1022,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [data, dispatch] = useReducer(rootReducer, undefined, () => {
     try {
+      // "Cihazdan Çıkış Yap" sonrası: bayrak varsa eski snapshot'ı tamamen atla.
+      // IMPORT_DATA kimliği koruduğu (preservedIdentity) ve reload anındaki
+      // flushWrites eski boot anlık görüntüsünü geri yazabildiği için silme
+      // yaklaşımı güvenilmez — init bayrağı doğrudan görüp taze başlar.
+      if (localStorage.getItem('sinevia_zero_reset') === '1') return defaultData();
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored); const migrated = migrateLegacyPastCollection(parsed.movies, parsed.collections);
@@ -1099,6 +1102,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (didHydrateRef.current) return;
     didHydrateRef.current = true;
     (async () => {
+      // -1) Hesap geri yükleme: "Cihazdan Çıkış" taşınan hesaptan yerel yedeğe
+      //     dönüyorsa (sinevia_restore_prev bayrağı) önce yedeği IDB'ye kur,
+      //     sonra normal akış (göç + HYDRATE_FROM_IDB) yedeği hidrate etsin.
+      if (localStorage.getItem('sinevia_restore_prev') === '1') {
+        try {
+          localStorage.removeItem('sinevia_restore_prev');
+          const stash = await idbGet<{ data: ExtendedAppData; secretToken?: string | null; quests?: unknown }>(PREV_ACCOUNT_KEY);
+          if (stash?.data?.agentId) {
+            await idbSet(STORAGE_KEY, stash.data);
+            await idbDel(PREV_ACCOUNT_KEY);
+            writeBootSnapshot(stash.data as unknown as Record<string, unknown>);
+            if (stash.quests != null) {
+              try { localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(stash.quests)); } catch { /* kota */ }
+            }
+            if (stash.secretToken) {
+              try { localStorage.setItem('sinevia_secret_token', stash.secretToken); } catch { /* kota */ }
+            } else {
+              try { localStorage.removeItem('sinevia_secret_token'); } catch { /* kota */ }
+            }
+            // Geri yüklenen sürüm yerel otoritedir: taşıma anındaki bulut/basitleşme
+            // damgaları sıfırlansın ki sonraki senkron bu hesabı temel alsın.
+            try {
+              localStorage.removeItem('sinevia_last_modified');
+              localStorage.removeItem('sinevia_last_cloud_seen');
+            } catch { /* kota */ }
+          } else {
+            // Yedek yok/bozuksa: sıfır hesap akışına düş.
+            try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
+          }
+        } catch {
+          try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
+        }
+      }
+      // 0) Sıfır hesap zorlaması: bayrak varsa ana kütüphaneyi IndexedDB'den sil,
+      //    cihaza özel alanları temizle ve hidratasyonu atla (init zaten taze
+      //    defaultData ile dönmüştü — eski veri geri gelmesin).
+      if (localStorage.getItem('sinevia_zero_reset') === '1') {
+        await idbDel(STORAGE_KEY);
+        try {
+          [
+            // DİKKAT: STORAGE_KEY (boot anlık görüntüsü) bilinçli olarak silinmez —
+            // init zaten bayrakla taze defaultData ile açtı ve persist efekti yeni
+            // kimliği oraya yazdı; silersek sonraki her açılışta yeni kimlik üretilirdi.
+            'sinevia_zero_reset', QUEST_STORAGE_KEY, 'sinevia_secret_token',
+            'sinevia-tutorial-v1', 'sinevia-academy-ui-v1',
+            'sinevia_last_modified', 'sinevia_last_cloud_seen',
+            'sinevia_active_tab', 'sinevia_settings_tab', 'sinevia_shortcuts_v1',
+          ].forEach((k) => localStorage.removeItem(k));
+        } catch { /* kota */ }
+        return;
+      }
       // 1) Göç: localStorage'da hâlâ tam kayıt varsa ve IDB boşsa, IDB'ye taşı.
       const migratedOk = await migrateToIdbIfNeeded(STORAGE_KEY);
       // 2) IDB'den tam veriyi oku ve hidrate et (reducer init'i sadece snapshot okumuş olabilir).
@@ -1478,7 +1532,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Sinematik Otopsi (DNF) — yarım bırakma ve geri diriltme.
   const abandonMedia = useCallback((mediaType: 'movie' | 'series', id: string, opts?: { abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }) => {
     dispatch({ type: 'ABANDON_MEDIA', mediaType, id, abandonedAt: opts?.abandonedAt, progress: opts?.progress, reasons: opts?.reasons, note: opts?.note });
-    showToast('🪦 Otopsi kaydedildi — "Yarım Bırakılanlar" mezarlığına eklendi (+25 XP)', 'success');
+    showToast('🪦 Otopsi kaydedildi — "Yarım Bırakılanlar" mezarlığına eklendi', 'success');
   }, [showToast]);
   const reviveMedia = useCallback((mediaType: 'movie' | 'series', id: string) => {
     dispatch({ type: 'REVIVE_MEDIA', mediaType, id });

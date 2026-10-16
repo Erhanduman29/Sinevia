@@ -388,7 +388,7 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
     }
   });
   const decades = Array.from(decadeMap.entries())
-    .map(([decade, val]) => ({ decade, count: val.count, avg: val.ratedCount > 0 ? val.ratingSum / val.ratedCount : 0 }))
+    .map(([decade, val]) => ({ decade, count: val.count, avg: val.ratedCount > 0 ? val.ratingSum / val.ratedCount : 0, ratingSum: val.ratingSum, ratedCount: val.ratedCount }))
     .sort((a, b) => a.decade.localeCompare(b.decade));
   const maxDecadeCount = Math.max(...decades.map((d) => d.count), 1);
 

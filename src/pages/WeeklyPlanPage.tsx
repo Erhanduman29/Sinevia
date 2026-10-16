@@ -10,6 +10,7 @@ import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
 import RatingModal from '../components/RatingModal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PickModal from '../components/PickModal';
 import type { Movie, WeeklyPlanItem } from '../types';
 
 // Matematiksel beyni içeri aktarıyoruz
@@ -672,6 +673,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [date, setDate] = useState(presetDate || toDateStr(startOfToday()));
   const [time, setTime] = useState('20:00');
+  const [showPick, setShowPick] = useState(false);
 
   const plannedMovieIds = useMemo(() => new Set((data.weeklyPlan || []).filter((p) => !data.movies.find((m) => m.id === p.movieId)?.watched).map((p) => p.movieId)), [data.weeklyPlan, data.movies]);
 
@@ -763,6 +765,18 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
                   {data.genres.map((g) => (<option key={g} value={g}>{g}</option>))}
                 </select>
               </div>
+
+              {/* Ne İzlesem — kararsız kalana: rulet adayların arasından seçer */}
+              {candidates.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowPick(true)}
+                  className="w-full wp-card flex items-center justify-center gap-2 py-2.5 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gold-300 hover:text-gold-200 hover:border-gold-500/50 transition-all"
+                >
+                  <Sparkles size={14} />
+                  Kararsız mısın? Ne İzlesem ile seç
+                </button>
+              )}
 
               <div className="space-y-1.5 max-h-[35dvh] overflow-y-auto custom-scrollbar pr-1.5">
                 {candidates.length === 0 ? (
@@ -875,6 +889,18 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
           </div>
         </div>
       </div>
+
+      {showPick && (
+        <PickModal
+          seriesCount={0}
+          unwatchedMovies={candidates}
+          nextEpisodes={[]}
+          onPick={(item) => {
+            if (item.kind === 'movie' && item.movie) setSelectedMovie(item.movie);
+          }}
+          onClose={() => setShowPick(false)}
+        />
+      )}
     </div>
   );
 }

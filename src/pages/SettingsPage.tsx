@@ -18,6 +18,7 @@ import { uid } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { isSoundEnabled, setSoundEnabled } from '../lib/sound';
 import { ACTION_BRIDGE_PRESETS, newActionId, resolveActionUrl, extractPlaceholders } from '../lib/actionBridge';
+import { idbGet, idbSet, idbDel, PREV_ACCOUNT_KEY } from '../lib/storageService';
 
 // ---------------------------------------------------------------------------
 // PREMIUM YÜZEY & BUTON DİLİ — sinevia-premium.html ile aynı tokenlar.
@@ -579,6 +580,13 @@ export default function SettingsPage() {
   const [recNickname, setRecNickname] = useState('');
   const [recSecretToken, setRecSecretToken] = useState('');
   const [transferBundleInput, setTransferBundleInput] = useState('');
+  const [isTransferPreviewOpen, setIsTransferPreviewOpen] = useState(false);
+  const [transferPreview, setTransferPreview] = useState<{
+    incomingAgentId: string; incomingNickname: string;
+    incoming: { movies: number; series: number; history: number } | null;
+    localAgentId: string; localNickname: string;
+    localMovies: number; localSeries: number; localHistory: number;
+  } | null>(null);
   const [isCheckingName, setIsCheckingName] = useState(false);
 
   const currentSecretToken = typeof window !== 'undefined' ? (localStorage.getItem('sinevia_secret_token') || '') : '';
@@ -711,10 +719,66 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRecoverIdentity = () => {
+  /** Taşınan hesabın bulut yedeğinin özetini çeker (çakışma diyaloğu için). */
+  const fetchIncomingSummary = async (agentId: string) => {
+    try {
+      const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${agentId}.json`);
+      const res = await fetch(`${urlData.publicUrl}?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      const json = JSON.parse(await res.text());
+      const core = json.core || json;
+      if (!core || typeof core !== 'object') return null;
+      return {
+        movies: (core.movies || []).length,
+        series: (core.series || []).length,
+        history: (core.history || []).length,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const handleRecoverIdentity = async () => {
     if (!recAgentId.trim() || !recKey.trim() || !recNickname.trim()) {
       showToast('Lütfen Ağ Kodu, İsim ve Kurtarma Anahtarı alanlarını doldurun!', 'error');
       return;
+    }
+
+    // Taşıma öncesi onay: yerel ve taşınan hesabın içeriği gösterilir,
+    // kullanıcı hangisini yükleyeceğini bilerek onaylar.
+    const incoming = await fetchIncomingSummary(recAgentId.trim().toUpperCase());
+    setTransferPreview({
+      incomingAgentId: recAgentId.trim().toUpperCase(),
+      incomingNickname: recNickname.trim(),
+      incoming,
+      localAgentId: data.agentId || '',
+      localNickname: data.nickname || '',
+      localMovies: (data.movies || []).length,
+      localSeries: (data.series || []).length,
+      localHistory: (data.history || []).length,
+    });
+    setIsTransferPreviewOpen(true);
+  };
+
+  const handleConfirmTransferImport = async () => {
+    if (!recAgentId.trim() || !recKey.trim() || !recNickname.trim()) {
+      setIsTransferPreviewOpen(false);
+      setTransferPreview(null);
+      return;
+    }
+
+    const hasLocalContent = (data.movies?.length || 0) + (data.series?.length || 0) + (data.history?.length || 0) > 0;
+    try {
+      if (hasLocalContent) {
+        // Yerel hesap yedeği: taşıma üzerine yazılınca kaybolmasın; çıkış yapınca geri gelsin.
+        await idbSet(PREV_ACCOUNT_KEY, {
+          data: JSON.parse(JSON.stringify(data)),
+          secretToken: localStorage.getItem('sinevia_secret_token'),
+          quests: JSON.parse(localStorage.getItem('sinevia-quests-v1') || 'null'),
+        });
+      }
+    } catch (e) {
+      console.error('Yerel hesap yedeği alınamadı', e);
     }
 
     const tokenToSave = recSecretToken.trim();
@@ -724,6 +788,8 @@ export default function SettingsPage() {
 
     recoverIdentity(recAgentId.trim().toUpperCase(), recKey.trim(), recNickname.trim());
     setIsRecoverMode(false);
+    setIsTransferPreviewOpen(false);
+    setTransferPreview(null);
     setRecAgentId('');
     setRecKey('');
     setRecNickname('');
@@ -735,6 +801,12 @@ export default function SettingsPage() {
         window.location.reload();
       }, 600);
     }
+  };
+
+  const handleCancelTransferImport = () => {
+    setIsTransferPreviewOpen(false);
+    setTransferPreview(null);
+    showToast('İptal edildi — bu cihazdaki hesap olduğu gibi korundu.', 'info');
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -787,15 +859,28 @@ export default function SettingsPage() {
     setEditingReviewTag(null);
   };
 
-  const handleDisconnectDevice = () => {
-    localStorage.removeItem('sinevia-v1');
-    localStorage.removeItem('sinevia-quests-v1');
-    localStorage.removeItem('sinevia_secret_token');
-    // Tutorial ilerlemesi ve akademi yoldaşının durumu da cihaza özel veridir;
-    // sıfırlama ile birlikte onlar da baştan başlar.
-    localStorage.removeItem('sinevia-tutorial-v1');
-    localStorage.removeItem('sinevia-academy-ui-v1');
-    window.location.reload(); 
+  /** Cihazdaki yerel veriyi sıfırlamak için bayrak bırakır — asıl temizliği
+   *  AppProvider init/mount'u yapar: boot anlık görüntüsü (kimlik dahil) yeniden
+   *  yükleme anında pagehide ile geri yazılsa bile init bayrağı görüp taze
+   *  defaultData ile açar, IndexedDB kaydını siler ve hidratasyonu atlar. */
+  const clearLocalDeviceData = async (forceZero = false) => {
+    if (!forceZero) {
+      try {
+        // Taşıma ile gelinen yerel hesap yedeği varsa: çıkış, o yedeğe döner
+        // (Sıfır hesap değil). Bayrak mount'ta yedeği IDB'ye kurar.
+        const prev = await idbGet<{ data?: { movies?: unknown[]; series?: unknown[]; history?: unknown[]; agentId?: string } }>(PREV_ACCOUNT_KEY);
+        if (prev?.data?.agentId || (prev?.data?.movies?.length || 0) + (prev?.data?.series?.length || 0) + (prev?.data?.history?.length || 0) > 0) {
+          try { localStorage.setItem('sinevia_restore_prev', '1'); } catch { /* kota */ }
+          return;
+        }
+      } catch { /* yedek okunamadı → sıfırlamaya düş */ }
+    }
+    try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
+  };
+
+  const handleDisconnectDevice = async () => {
+    await clearLocalDeviceData();
+    window.location.reload();
   };
 
   const handleExecuteFullReset = async () => {
@@ -807,12 +892,10 @@ export default function SettingsPage() {
       console.error("Buluttan silme hatası", e);
     }
     
-    localStorage.removeItem('sinevia-v1');
-    localStorage.removeItem('sinevia-quests-v1');
-    localStorage.removeItem('sinevia_secret_token');
-    // Tutorial ilerlemesi ve akademi yoldaşının durumu da sıfırlanmalı
-    localStorage.removeItem('sinevia-tutorial-v1');
-    localStorage.removeItem('sinevia-academy-ui-v1');
+    // Yerel kütüphane IndexedDB'de — bayrak init'te onu da temizler.
+    // Tam sıfırlamada yerel hesap yedeği de silinir (geri dönecek hesap yok).
+    try { await idbDel(PREV_ACCOUNT_KEY); } catch { /* kota */ }
+    await clearLocalDeviceData(true);
 
     setShowResetModal(false);
     setConfirmResetStage(0);
@@ -1230,7 +1313,7 @@ export default function SettingsPage() {
                 </h3>
                 <p className="text-xs sm:text-sm text-ink-400 mb-4 leading-relaxed">
                   Sadece bu tarayıcıdaki verileri temizler ve seni yeni bir "Sıfır" hesaba geçirir. 
-                  Buluttaki asıl hesabın (veya Chrome'daki verilerin) <strong>asla zarar görmez.</strong> İstediğin zaman Taşıma Kodu ile geri dönebilirsin.
+                  <strong>Bu cihaza daha önce taşıma ile hesap yüklediysen</strong> (yerel kaydı saklandıysa) çıkış yapınca <strong>o hesap geri gelir.</strong>
                 </p>
                 <button 
                   onClick={() => setShowLogoutModal(true)} 
@@ -1818,10 +1901,83 @@ export default function SettingsPage() {
       {showLogoutModal && (
         <ConfirmDialog
           title="Cihazdan Çıkış Yap"
-          message="Bu cihazdaki hesabın (kimliğin) kapatılacak ve Sinevia sıfırlanacaktır. Taşıma Kodunu bir yere kaydettiğinden emin misin? Buluttaki verilerin silinmeyecek."
+          message="Bu cihazdaki hesabın kapatılacak ve Sinevia sıfırlanacaktır. Taşıma Kodunu bir yere kaydettiğinden emin misin? Buluttaki verilerin silinmeyecek. Bu cihaza daha önce taşıma ile hesap yüklediysen yerel kaydı saklanır; çıkış yapınca o hesap geri gelir."
           onConfirm={handleDisconnectDevice}
           onCancel={() => setShowLogoutModal(false)}
         />
+      )}
+
+      {isTransferPreviewOpen && transferPreview && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(4, 4, 6, .72)', backdropFilter: 'blur(16px)' }} onClick={handleCancelTransferImport}>
+          <div
+            className="w-full max-w-md animate-uvPop rounded-[22px] overflow-hidden border border-white/12"
+            style={{ background: 'linear-gradient(165deg, #17171C 0%, #0E0E12 60%, #0B0B0E 100%)', boxShadow: '0 50px 110px -30px rgba(0, 0, 0, .95)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/8" style={{ background: 'linear-gradient(120deg, rgba(212, 165, 60, .16), rgba(212, 165, 60, .02) 70%)' }}>
+              <div className="flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full" style={{ background: '#d4a53c', boxShadow: '0 0 8px #d4a53c' }} />
+                <span className="text-xs font-extrabold uppercase tracking-widest text-gold-300">Hesap Taşıma — Hangisini Yükleyelim?</span>
+              </div>
+              <p className="text-[11px] text-ink-400 mt-1.5 leading-relaxed">
+                Taşıma işlemi bu cihazdaki içeriğin yerine taşınan hesabın bulut yedeğini yükler. Aşağıdan kontrol edip onaylayabilirsin:
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 p-4">
+              <div className="rounded-xl border border-ink-800 bg-ink-950/60 p-3">
+                <div className="text-[10px] font-black uppercase tracking-wider text-ink-500 mb-2">Bu Cihazdaki</div>
+                <div className="text-xs font-bold text-ink-200 truncate">{transferPreview.localNickname || 'Yeni Üye'}</div>
+                <div className="text-[10px] text-ink-500 font-mono mb-2 truncate">{transferPreview.localAgentId || '—'}</div>
+                <ul className="text-[11px] text-ink-300 space-y-0.5">
+                  <li>{transferPreview.localMovies} film</li>
+                  <li>{transferPreview.localSeries} dizi</li>
+                  <li>{transferPreview.localHistory} puanlama / geçmiş</li>
+                </ul>
+              </div>
+              <div className="rounded-xl border border-gold-500/30 bg-gold-500/5 p-3">
+                <div className="text-[10px] font-black uppercase tracking-wider text-gold-500/80 mb-2">Taşınan Hesap</div>
+                <div className="text-xs font-bold text-ink-200 truncate">{transferPreview.incomingNickname}</div>
+                <div className="text-[10px] text-ink-500 font-mono mb-2 truncate">{transferPreview.incomingAgentId}</div>
+                {transferPreview.incoming ? (
+                  <ul className="text-[11px] text-ink-300 space-y-0.5">
+                    <li>{transferPreview.incoming.movies} film</li>
+                    <li>{transferPreview.incoming.series} dizi</li>
+                    <li>{transferPreview.incoming.history} puanlama / geçmiş</li>
+                  </ul>
+                ) : (
+                  <p className="text-[11px] text-red-400 leading-snug">Bulut yedeği bulunamadı — yalnızca kimlik taşınacak, içerik yereldeki gibi kalır.</p>
+                )}
+              </div>
+            </div>
+
+            {(transferPreview.localMovies + transferPreview.localSeries + transferPreview.localHistory) > 0 && (
+              <div className="mx-4 mb-1 flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2">
+                <AlertTriangle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-red-300 leading-snug">
+                  <strong>Çakışma:</strong> Bu cihazda da içerik var. "Taşınanı Yükle" dersen bu cihazdaki hesap yedeklenir ve taşınan hesap yüklenir — çıkış yapınca yedek geri gelir.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 p-4 pt-3">
+              <button
+                onClick={handleCancelTransferImport}
+                className="font-bold uppercase tracking-wider px-4 py-2.5 text-xs rounded-[10px] border border-white/12 text-ink-200 transition-all hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(150deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05))' }}
+              >
+                İptal (Bu Cihazdakiyle Devam)
+              </button>
+              <button
+                onClick={handleConfirmTransferImport}
+                className="font-extrabold uppercase tracking-wider px-4 py-2.5 text-xs rounded-[10px] text-white transition-all hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(120deg, #d4a53c, #9a7420)', boxShadow: '0 8px 22px -10px rgba(212, 165, 60, .7)' }}
+              >
+                Taşınanı Yükle
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showResetModal && (

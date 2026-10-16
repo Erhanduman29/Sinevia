@@ -15,6 +15,7 @@ import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDB } from '../lib/tmdb';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import { useFilteredMovies } from '../lib/selectorHooks';
+import { openPlatform, listLibraryPlatforms } from '../lib/platformLinks';
 import { supabase } from '../lib/supabase';
 import AddMovieModal from '../components/AddMovieModal';
 import RatingModal from '../components/RatingModal';
@@ -111,6 +112,7 @@ export default function MoviesPage() {
   const [pastMoveNewColName, setPastMoveNewColName] = useState<string>('');
 
   const [watchedFilter, setWatchedFilter] = useState<WatchedFilterMode>('unwatched');
+  const [platformFilter, setPlatformFilter] = useState<string>('');
   const [abandonTarget, setAbandonTarget] = useState<Movie | null>(null);
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('added');
@@ -488,10 +490,14 @@ export default function MoviesPage() {
     search,
     sortMode === 'calibrated' ? 'added' : sortMode
   );
-  const sortedBottomMovies = useMemo(
-    () => (sortMode === 'calibrated' ? sortCalibratedMovies(filteredBottomForSort) : filteredBottomForSort),
-    [filteredBottomForSort, sortMode]
-  );
+  const sortedBottomMovies = useMemo(() => {
+    const base = sortMode === 'calibrated' ? sortCalibratedMovies(filteredBottomForSort) : filteredBottomForSort;
+    if (!platformFilter) return base;
+    return base.filter((m) =>
+      (m.watchProviders || []).some((p) => p.providerName === platformFilter)
+    );
+  }, [filteredBottomForSort, sortMode, platformFilter]);
+  const platformOptions = useMemo(() => listLibraryPlatforms(libMovies), [libMovies]);
   const totalUnwatched = useMemo(() => libMovies.filter((m) => !m.watched && !m.abandoned).length, [libMovies]);
   const totalWatched = useMemo(() => countWatchedCurrentMovies(libMovies), [libMovies]);
   const totalPastWatched = useMemo(() => countPastMovies(libMovies), [libMovies]);
@@ -680,6 +686,21 @@ export default function MoviesPage() {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {platformOptions.length > 0 && (
+              <select
+                value={platformFilter}
+                onChange={(e) => setPlatformFilter(e.target.value)}
+                title="Platforma göre filtrele"
+                className="mpx-btn mpx-btn-xs mpx-btn-s flex-1 sm:flex-none"
+              >
+                <option value="">Tüm Platformlar</option>
+                {platformOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               type="button"
               onClick={() => setIsFilterPanelOpen((prev) => !prev)}
@@ -1778,7 +1799,7 @@ function MovieRow({
   onAbandon: (movie: Movie) => void;
   onRevive: (movie: Movie) => void;
 }) {
-  const watchLinks: { href: string; text: string; logo: string | null; icon: any; primary?: boolean }[] = [];
+  const watchLinks: { href: string; text: string; logo: string | null; icon: any; primary?: boolean; platform?: string }[] = [];
 
   if (movie.customUrl) watchLinks.push({ href: movie.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
 
@@ -1792,7 +1813,7 @@ function MovieRow({
       else if (pName.includes('blutv')) finalHref = `https://www.blutv.com/arama?q=${encodeURIComponent(movie.title)}`;
       else if (pName.includes('mubi')) finalHref = `https://mubi.com/tr/search?query=${encodeURIComponent(movie.title)}`;
       else if (pName.includes('apple')) finalHref = `https://tv.apple.com/tr/search?q=${encodeURIComponent(movie.title)}`;
-      watchLinks.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle });
+      watchLinks.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle, platform: provider.providerName });
     });
   }
 
@@ -1944,8 +1965,14 @@ function MovieRow({
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (link.platform && openPlatform(link.platform, movie.title)) {
+                      e.preventDefault();
+                    }
+                  }}
                   className="mpx-link"
+                  title={link.platform ? `${link.platform} uygulamasında aç` : undefined}
                 >
                   {link.logo ? <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-2.5 h-2.5 rounded-[2px] object-cover"  onError={handleImgFallback}/> : <Icon size={10} />}
                   <span>{link.text}</span>

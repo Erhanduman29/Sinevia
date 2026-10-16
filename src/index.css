@@ -547,6 +547,15 @@ body[data-theme] [class*="from-azure"]:not([class*="/"]) {
 /* --- Tema-vurgusu kanalları: seçim + odak halkası (4 renkli
        temada --color-4, diğerlerinde --color-1'e fallback) --- */
 body[data-theme] ::selection { background-color: var(--color-1) !important; color: var(--on-color-1) !important; }
+
+/* Native <select> açılır listesi: temaya uygun zemin/yazı rengi */
+select option {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+}
+body[data-theme="light"] select,
+body[data-theme="paper-light"] select { color-scheme: light; }
+body:not([data-theme="light"]):not([data-theme="paper-light"]) select { color-scheme: dark; }
 body[data-theme] *:focus-visible { outline-color: var(--color-4, var(--color-1)) !important; }
 
 /* =========================================================

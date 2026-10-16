@@ -1590,7 +1590,7 @@ export default function StatsPage() {
             </div>
 
             {stats.criteriaAverages.length > 0 && (
-              <div className="space-y-3 mt-auto">
+              <div className="space-y-3 mt-auto max-h-64 overflow-y-auto custom-scrollbar pr-1.5">
                 {stats.criteriaAverages.map((crit) => {
                   const pct = Math.min(100, Math.max(5, (crit.avg / 10) * 100));
                   return (
@@ -1609,26 +1609,53 @@ export default function StatsPage() {
             )}
           </div>
 
-          <div className={PREMIUM_PANEL}>
+          <div className={`${PREMIUM_PANEL} flex flex-col`}>
             <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 mb-1 flex items-center gap-2"><Compass size={18} className="text-gold-400" /> Dönemlere Göre Tercihlerin</h2>
             <p className="text-xs text-ink-400 mb-4">İzlediğin filmlerin çıkış yaptıkları on yıllara göre dağılımı</p>
             {stats.decades.length === 0 ? (
               <p className="text-xs text-ink-500 py-6 text-center">Henüz yeterli yıl verisi yok.</p>
             ) : (
-              <div className="space-y-2.5">
-                {stats.decades.map((d) => {
-                  const pct = Math.max(10, (d.count / stats.maxDecadeCount) * 100);
+              <>
+                {/* Özet: toplam, en çok dönem, ağırlıklı ortalama puan */}
+                {(() => {
+                  const total = stats.decades.reduce((s, d) => s + d.count, 0);
+                  const top = stats.decades.reduce((a, d) => (d.count > a.count ? d : a), stats.decades[0]);
+                  const ratedSum = stats.decades.reduce((s, d) => s + (d.ratedCount || 0), 0);
+                  const ratingSum = stats.decades.reduce((s, d) => s + (d.ratingSum || 0), 0);
+                  const overallAvg = ratedSum > 0 ? ratingSum / ratedSum : 0;
                   return (
-                    <div key={d.decade} className="flex items-center gap-2.5">
-                      <div className="w-14 text-xs font-black text-ink-200 flex-shrink-0">{d.decade}</div>
-                      <div className="flex-1 h-6 bg-ink-950 rounded-lg overflow-hidden border border-ink-800/80">
-                        <div className="h-full bg-gradient-to-r from-red-700 to-rose-400 rounded-lg flex items-center justify-end pr-2 text-[11px] font-black text-white shadow-[0_0_12px_rgba(232,56,79,0.45)] transition-all duration-700" style={{ width: `${pct}%` }}>{d.count}</div>
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="rounded-xl bg-ink-950/50 border border-ink-800/70 px-2.5 py-2 text-center">
+                        <div className="text-lg sm:text-xl font-black text-ink-100 leading-none">{total}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-ink-500 mt-1">Toplam Film</div>
                       </div>
-                      {d.avg > 0 && <span className={`text-xs px-2 py-0.5 rounded font-bold w-10 text-center flex-shrink-0 ${ratingBgClass(d.avg)}`}>{d.avg.toFixed(1)}</span>}
+                      <div className="rounded-xl bg-gold-500/10 border border-gold-500/30 px-2.5 py-2 text-center">
+                        <div className="text-lg sm:text-xl font-black text-gold-300 leading-none">{top.decade.replace("'", "")}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-gold-500/70 mt-1">En Çok İzlenen</div>
+                      </div>
+                      <div className="rounded-xl bg-ink-950/50 border border-ink-800/70 px-2.5 py-2 text-center">
+                        <div className={`text-lg sm:text-xl font-black leading-none ${overallAvg > 0 ? ratingBgClass(overallAvg).split(" ").slice(-1)[0] : "text-ink-400"}`}>{overallAvg > 0 ? overallAvg.toFixed(1) : "—"}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-ink-500 mt-1">Ort. Puan</div>
+                      </div>
                     </div>
                   );
-                })}
-              </div>
+                })()}
+                <div className="space-y-2.5 flex-1">
+                  {stats.decades.map((d) => {
+                    const pct = Math.max(10, (d.count / stats.maxDecadeCount) * 100);
+                    const isTop = d.count === stats.maxDecadeCount;
+                    return (
+                      <div key={d.decade} className={`flex items-center gap-2.5 rounded-lg px-1.5 -mx-1.5 ${isTop ? "bg-gold-500/10 border border-gold-500/25" : ""}`}>
+                        <div className={`w-14 text-xs font-black flex-shrink-0 ${isTop ? "text-gold-300" : "text-ink-200"}`}>{d.decade}</div>
+                        <div className="flex-1 h-6 bg-ink-950 rounded-lg overflow-hidden border border-ink-800/80">
+                          <div className={`h-full rounded-lg flex items-center justify-end pr-2 text-[11px] font-black text-white transition-all duration-700 ${isTop ? "bg-gradient-to-r from-gold-600 to-gold-400 shadow-[0_0_12px_rgba(212,165,60,0.5)]" : "bg-gradient-to-r from-red-700 to-rose-400 shadow-[0_0_12px_rgba(232,56,79,0.45)]"}`} style={{ width: `${pct}%` }}>{d.count}</div>
+                        </div>
+                        {d.avg > 0 && <span className={`text-xs px-2 py-0.5 rounded font-bold w-10 text-center flex-shrink-0 ${ratingBgClass(d.avg)}`}>{d.avg.toFixed(1)}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>

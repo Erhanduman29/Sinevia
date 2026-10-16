@@ -11,6 +11,7 @@ import { ratingBgClass, getNextUnwatchedEpisode, uid } from '../lib/utils';
 import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDBSeries } from '../lib/tmdb';
 import { useFilteredSeries } from '../lib/selectorHooks';
+import { openPlatform, listLibraryPlatforms } from '../lib/platformLinks';
 import { supabase } from '../lib/supabase';
 import AddSeriesModal from '../components/AddSeriesModal';
 import RatingModal from '../components/RatingModal';
@@ -726,6 +727,7 @@ export default function SeriesPage() {
 
   const [watchedFilter, setWatchedFilter] = useState<boolean | null>(false);
   const [graveyardView, setGraveyardView] = useState(false);
+  const [platformFilter, setPlatformFilter] = useState<string>('');
   const [abandonTarget, setAbandonTarget] = useState<{ series: Series; season: number; episode: number } | null>(null);
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('az');
@@ -851,13 +853,18 @@ export default function SeriesPage() {
 
   // MEZARLIK: abandoned diziler (izleme durumu filtrelerinden bağımsız görünüm).
   const graveyardSeries = useMemo(() => data.series.filter((s) => Boolean(s.abandoned)), [data.series]);
-  const sortedSeries = useFilteredSeries(
+  const filteredSeriesBase = useFilteredSeries(
     graveyardView ? graveyardSeries : data.series,
     graveyardView ? null : watchedFilter,
     selectedGenres,
     search,
     sortMode
   );
+  const sortedSeries = useMemo(() => {
+    if (!platformFilter) return filteredSeriesBase;
+    return filteredSeriesBase.filter((s) => (s.watchProviders || []).some((p) => p.providerName === platformFilter));
+  }, [filteredSeriesBase, platformFilter]);
+  const platformOptions = useMemo(() => listLibraryPlatforms(data.series), [data.series]);
 
   const toggleSeries = (id: string) => {
     setExpandedSeries((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -1037,12 +1044,23 @@ export default function SeriesPage() {
             </div>
 
             <div className="flex items-center gap-1.5">
+              {platformOptions.length > 0 && (
+                <select
+                  value={platformFilter}
+                  onChange={(e) => setPlatformFilter(e.target.value)}
+                  title="Platforma göre filtrele"
+                  className="svp-btn-s flex-1 sm:flex-none px-3 sm:px-3.5 py-2 min-h-10 sm:min-h-0"
+                >
+                  <option value="">Tüm Platformlar</option>
+                  {platformOptions.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              )}
               <button
                 type="button"
                 onClick={() => setIsFilterPanelOpen((prev) => !prev)}
-                className={`svp-btn-ghost flex-1 sm:flex-none min-w-0 px-3 sm:px-3.5 py-2 min-h-10 sm:min-h-0 ${
-                  isFilterPanelOpen || activeFilterCount > 0 ? 'svp-chip-on' : ''
-                }`}
+                className={`${isFilterPanelOpen || activeFilterCount > 0 ? 'svp-btn-p' : 'svp-btn-s'} flex-1 sm:flex-none min-w-0 px-3 sm:px-3.5 py-2 min-h-10 sm:min-h-0`}
               >
                 <SlidersHorizontal size={14} />
                 <span className="truncate min-w-0">Ara &amp; Filtrele</span>
@@ -1165,7 +1183,7 @@ export default function SeriesPage() {
             const nextEp = getNextUnwatchedEpisode(s.episodes);
             const progressPct = s.episodes.length > 0 ? Math.round((watchedCount / s.episodes.length) * 100) : 0;
 
-            const watchLinks: { href: string; text: string; logo: string | null; icon: any; primary?: boolean }[] = [];
+            const watchLinks: { href: string; text: string; logo: string | null; icon: any; primary?: boolean; platform?: string }[] = [];
 
             if (s.customUrl) {
               watchLinks.push({ href: s.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
@@ -1183,7 +1201,7 @@ export default function SeriesPage() {
                 else if (pName.includes('mubi')) finalHref = `https://mubi.com/tr/search?query=${encodeURIComponent(s.title)}`;
                 else if (pName.includes('apple')) finalHref = `https://tv.apple.com/tr/search?q=${encodeURIComponent(s.title)}`;
 
-                watchLinks.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle });
+                watchLinks.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle, platform: provider.providerName });
               });
             }
 
@@ -1319,7 +1337,13 @@ export default function SeriesPage() {
                               href={link.href}
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (link.platform && openPlatform(link.platform, s.title)) {
+                                  e.preventDefault();
+                                }
+                              }}
+                              title={link.platform ? `${link.platform} uygulamasında aç` : undefined}
                               className="svp-link"
                             >
                               {link.logo ? <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-3 h-3 rounded-sm object-cover"  onError={handleImgFallback}/> : <Icon size={11} />}

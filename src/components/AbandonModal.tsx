@@ -6,7 +6,7 @@ import type { AbandonedProgress } from '../types';
  * SİNEMATİK OTOPSİ (DNF) MODALI
  * Yarım bırakma akışının onay ekranı: ilerleme (opsiyonel), ölüm nedenleri
  * (çoklu çip) ve serbest not toplanır. onSubmit → abandonMedia reducer'ı
- * (+25 XP toast'ı kontextte otomatik tetiklenir).
+ * (bildirim toast'ı kontextte otomatik tetiklenir).
  *
  * Renkler sabit DEĞİL — var() fallback zincirleri (tema motoru uyumlu).
  */
@@ -320,7 +320,7 @@ export default function AbandonModal({
             className={`flex-[2] sm:flex-1 py-3 px-4 min-h-11 rounded-xl font-black text-xs sm:text-sm shadow-xl transition-all flex items-center justify-center gap-1.5 ${
               canSubmit ? 'hover:opacity-90 active:scale-[0.99]' : 'opacity-40 pointer-events-none'
             }`}
-            title="Operasyonu iptal et — bu yapımda yarım bırakılan kaydı işlenir (+25 XP)"
+            title="Operasyonu iptal et — bu yapımda yarım bırakılan kaydı işlenir"
           >
             <Skull size={16} strokeWidth={2.5} />
             <span>Operasyonu İptal Et</span>

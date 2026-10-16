@@ -19,7 +19,7 @@ export default function XpGainOverlay() {
     const startLevel = levelFromXp(xpGainData.oldTotal).level;
     const startTime = performance.now();
     const delay = 250; // Kart üstten yerine oturduktan sonra saymaya başla
-    const duration = 1800; // 1.8 saniye boyunca bar dolsun ve sayılar aksın
+    const duration = 2000; // 2 saniye boyunca bar dolsun ve sayılar aksın
 
     let rafId: number;
 

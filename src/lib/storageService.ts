@@ -24,6 +24,13 @@ export const BOOT_SNAPSHOT_KEYS = [
 /** localStorage'a yazarken büyük kütüphaneyi ATLA (quota hatası + 5MB sınırı önlemek için). */
 const LOCAL_SNAPSHOT_KEY = 'sinevia-v1';
 
+/**
+ * "Önceki hesap" yedeği: Taşıma Kodu ile yeni hesap yüklendiğinde bu cihazdaki
+ * yerel hesap buraya saklanır; "Cihazdan Çıkış Yap" bu yedeğe dönmek için
+ * `sinevia_restore_prev` bayrağını kullanır.
+ */
+export const PREV_ACCOUNT_KEY = 'sinevia_prev_account';
+
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 function openDb(): Promise<IDBDatabase | null> {
