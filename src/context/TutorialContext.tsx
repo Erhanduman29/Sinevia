@@ -23,6 +23,9 @@ export interface TutorialProgress {
   academyStep: number; // 0..11 (ACADEMY_QUESTS.length'e kadar)
   academyDone: string[]; // tamamlanan akademi görevleri
   events: string[]; // tetiklenen eylem olayları (akademi için)
+  /** Her olayın kaç kez tetiklendiği (sayılı tetikleyiciler için). Eski
+   *  kayıtlarda yoksa events'ten tohumlanır. */
+  eventCounts: Record<string, number>;
 }
 
 const defaultProgress: TutorialProgress = {
@@ -35,12 +38,22 @@ const defaultProgress: TutorialProgress = {
   academyStep: 0,
   academyDone: [],
   events: [],
+  eventCounts: {},
 };
 
 function loadProgress(): TutorialProgress {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...defaultProgress, ...JSON.parse(raw) };
+    if (raw) {
+      const merged = { ...defaultProgress, ...JSON.parse(raw) } as TutorialProgress;
+      // Eski kayıtlarda eventCounts yoksa benzersiz events listesinden 1'er kez tohumla.
+      if (!merged.eventCounts || Object.keys(merged.eventCounts).length === 0) {
+        const seeded: Record<string, number> = {};
+        for (const e of merged.events) seeded[e] = (seeded[e] ?? 0) + 1;
+        merged.eventCounts = seeded;
+      }
+      return merged;
+    }
   } catch {}
   return { ...defaultProgress };
 }
@@ -245,14 +258,19 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       }
 
       setProgress((p) => {
-        if (p.events.includes(eventName)) return p;
-        return { ...p, events: [...p.events, eventName] };
+        // Sayaç + olayı benzersiz listede tut (geri-dönük/tohum için).
+        const counts = { ...p.eventCounts, [eventName]: (p.eventCounts[eventName] ?? 0) + 1 };
+        const events = p.events.includes(eventName) ? p.events : [...p.events, eventName];
+        return { ...p, events, eventCounts: counts };
       });
       // Eşleşen aktif akademi görevini tamamla
       setProgress((p) => {
         if (!p.academyStarted || p.academyStep >= ACADEMY_QUESTS.length) return p;
         const quest = ACADEMY_QUESTS[p.academyStep];
         if (quest && quest.trigger === eventName) {
+          // Sayılı tetikleyici: gereken tekrar sayısına ulaşıldı mı?
+          const required = quest.count ?? 1;
+          if ((p.eventCounts[eventName] ?? 0) < required) return p;
           // Bitmiş bir dersi yeniden yapmak da ilerletsin: id zaten listede olsa
           // bile akademi adımı ilerletilir.
           const done = p.academyDone.includes(quest.id)
@@ -290,9 +308,10 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     if (!progress.academyStarted || progress.academyStep >= ACADEMY_QUESTS.length) return;
     const quest = ACADEMY_QUESTS[progress.academyStep];
     if (!quest || progress.academyDone.includes(quest.id)) return;
-    if (!progress.events.includes(quest.trigger)) return;
+    const required = quest.count ?? 1;
+    if ((progress.eventCounts[quest.trigger] ?? 0) < required) return;
     notifyEvent(quest.trigger);
-  }, [progress.academyStarted, progress.academyStep, progress.academyDone, progress.events, notifyEvent]);
+  }, [progress.academyStarted, progress.academyStep, progress.academyDone, progress.eventCounts, notifyEvent]);
 
   /* ------------- Tetikleyiciler ------------- */
   // Akademi sürerken adım-tutorial'lar ertelenir (sıra: karşılama > akademi > sayfa > pencere)

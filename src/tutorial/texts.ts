@@ -381,20 +381,23 @@ export interface AcademyQuestDef {
     | 'badge_equipped'
     | 'ai_message_sent'
     | 'backup_created';
+  /** Görevin tamamlanması için kaç kez tetiklenmeli (default 1).
+   *  Orta zorluk için kolay tekrarlanabilir dersler 2-3 ister. */
+  count?: number;
 }
 
 export const ACADEMY_QUESTS: AcademyQuestDef[] = [
-  { id: 'ac_movie', title: 'Katalogdan Film Ekle', desc: 'Ana sayfadaki "Katalog Ekle" ile katalogdan koleksiyonuna ilk filmini ekle.', trigger: 'movie_added' },
-  { id: 'ac_rate', title: 'Ona Puan Ver', desc: 'İzleme zamanlayıcısı kuralını öğren: puanla ve dengele.', trigger: 'movie_rated' },
-  { id: 'ac_quest', title: 'Bir Görev Kabul Et', desc: 'Görev panosundan sıradaki görevini kabul et.', trigger: 'quest_accepted' },
-  { id: 'ac_plan', title: 'Haftalık Planla', desc: 'Bir filmi haftalık plana ekle, disiplinli kal.', trigger: 'plan_added' },
-  { id: 'ac_stats', title: 'İstatistik Kapsamını Değiştir', desc: 'İstatistiklerde Güncel/Önceden/Tümü kapsamını değiştir; verini farklı gözlerden gör.', trigger: 'stats_mode_changed' },
+  { id: 'ac_movie', title: 'Katalogdan Film Ekle', desc: 'Ana sayfadaki "Katalog Ekle" ile katalogdan koleksiyonuna iki film ekle.', trigger: 'movie_added', count: 2 },
+  { id: 'ac_rate', title: 'Ona Puan Ver', desc: 'İzleme zamanlayıcısı kuralını öğren: iki filmi puanla ve dengele.', trigger: 'movie_rated', count: 2 },
+  { id: 'ac_quest', title: 'Bir Görev Kabul Et', desc: 'Görev panosundan sıradaki iki görevini kabul et.', trigger: 'quest_accepted', count: 2 },
+  { id: 'ac_plan', title: 'Haftalık Planla', desc: 'İki filmi haftalık plana ekle, disiplinli kal.', trigger: 'plan_added', count: 2 },
+  { id: 'ac_stats', title: 'İstatistik Kapsamını Değiştir', desc: 'İstatistiklerde Güncel/Önceden/Tümü üç kapsamı da sırayla dene; verini farklı gözlerden gör.', trigger: 'stats_mode_changed', count: 3 },
   { id: 'ac_dna', title: 'DNA Sentezleyiciyi Dene', desc: 'DNA Sentezleyici ile zevkine göre bir öneri üret.', trigger: 'dna_used' },
-  { id: 'ac_network', title: 'Vitrinini Düzenle', desc: "Sinevia Ağı'nda profil vitrinine film veya dizi ekle — arkadaşların seni buradan tanır.", trigger: 'showcase_updated' },
-  { id: 'ac_series', title: 'Bir Dizi Ekle', desc: 'Sıra dizilerde: Katalogdan bir dizi ekle, sezonlarını takibe al.', trigger: 'series_added' },
-  { id: 'ac_history', title: 'Geçmişte Puanı Düzenle', desc: "Geçmişinde bir puanı düzenle (ör. 10'dan 8'e) — kayıtların anında güncellensin.", trigger: 'history_rating_edited' },
-  { id: 'ac_achievements', title: 'Bir Rozet Tak', desc: 'Görev Panosu\'nda tamamladığın görevlerden birini profil rozeti olarak tak.', trigger: 'badge_equipped' },
-  { id: 'ac_ai', title: "AI Asistan'a Mesaj Yaz", desc: "AI Asistan'a bir soru yaz ve gönder; katalog ve öneri ipuçları kap.", trigger: 'ai_message_sent' },
+  { id: 'ac_network', title: 'Vitrinini Düzenle', desc: "Sinevia Ağı'nda profil vitrinini birkaç kez güncelle — film veya dizi ekleyip çıkar; arkadaşların seni buradan tanır.", trigger: 'showcase_updated', count: 2 },
+  { id: 'ac_series', title: 'Bir Dizi Ekle', desc: 'Sıra dizilerde: Katalogdan iki dizi ekle, sezonlarını takibe al.', trigger: 'series_added', count: 2 },
+  { id: 'ac_history', title: 'Geçmişte Puanı Düzenle', desc: "Geçmişinde iki puanı düzenle (ör. 10'dan 8'e) — kayıtların anında güncellensin.", trigger: 'history_rating_edited', count: 2 },
+  { id: 'ac_achievements', title: 'Bir Rozet Tak', desc: 'Görev Panosu\'nda tamamladığın görevlerden ikisini profil rozeti olarak tak.', trigger: 'badge_equipped', count: 2 },
+  { id: 'ac_ai', title: "AI Asistan'a Mesaj Yaz", desc: "AI Asistan'a iki soru yaz ve gönder; katalog ve öneri ipuçları kap.", trigger: 'ai_message_sent', count: 2 },
   { id: 'ac_backup', title: 'Verini Yedekle', desc: 'Ayarlar → Tam Yedekle bölümünden "Yedek Al" ile verini dosya olarak indir.', trigger: 'backup_created' },
 ];
 
