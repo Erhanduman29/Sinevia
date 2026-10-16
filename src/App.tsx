@@ -26,6 +26,8 @@ import { ACADEMY_QUESTS } from './tutorial/texts';
 // Klavye kısayolları: global dinleyici + sabit yardımcılar (bkz. src/lib/shortcuts.ts)
 import { useShortcuts } from './hooks/useShortcuts';
 import { SHORTCUT_CLOSE_EVENT, focusPageSearch } from './lib/shortcuts';
+import ErrorScreen from './components/ErrorScreen';
+import AppErrorBoundary from './components/AppErrorBoundary';
 
 const ACTIVE_TAB_STORAGE_KEY = 'sinevia_active_tab';
 const VALID_TABS: TabId[] = [
@@ -56,8 +58,18 @@ function getInitialTab(): TabId {
   return 'home';
 }
 
+/** Bilinmeyen hash/sekmeler için 404 tespiti (geçerli sekmeler hariç). */
+function getInitialNotFound(): string | null {
+  try {
+    const hashTab = window.location.hash.replace('#', '').trim();
+    if (hashTab && !isValidTab(hashTab)) return hashTab;
+  } catch {}
+  return null;
+}
+
 function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
+  const [notFoundPath, setNotFoundPath] = useState<string | null>(getInitialNotFound);
   const {
     toasts,
     achievementToasts,
@@ -78,6 +90,24 @@ function AppContent() {
       }
     } catch {}
   }, [activeTab]);
+
+  // Geçerli sekme değiştiğinde 404 ekranını kapat (kısayol/sidebar gezinmeleri dahil)
+  const prevTabRef = useRef<TabId>(activeTab);
+  useEffect(() => {
+    if (prevTabRef.current !== activeTab) {
+      prevTabRef.current = activeTab;
+      setNotFoundPath(null);
+    }
+  }, [activeTab]);
+
+  /** Hata/404 ekranlarından güvenli ana sayfa dönüşü */
+  const handleHomeFromError = () => {
+    setNotFoundPath(null);
+    setActiveTab('home');
+    try {
+      window.history.replaceState(null, '', '#home');
+    } catch {}
+  };
 
   // Global klavye kısayolları (varsayılanlar ve kullanıcı atamaları için
   // bkz. src/lib/shortcuts.ts; ayarlardan değiştirilebilir: Ayarlar → Kısayollar).
@@ -109,6 +139,7 @@ function AppContent() {
   useEffect(() => {
     const handleNavigation = (e: any) => {
       if (isValidTab(e.detail)) {
+        setNotFoundPath(null);
         setActiveTab(e.detail);
       }
     };
@@ -116,7 +147,11 @@ function AppContent() {
     const handleHashChange = () => {
       const hashTab = window.location.hash.replace('#', '').trim();
       if (isValidTab(hashTab)) {
+        setNotFoundPath(null);
         setActiveTab(hashTab);
+      } else if (hashTab) {
+        // Bilinmeyen sekme/yol → 404 hata ekranı (boş/siyah ekran yerine)
+        setNotFoundPath(hashTab);
       }
     };
 
@@ -137,7 +172,13 @@ function AppContent() {
   }, []);
 
   return (
+    <AppErrorBoundary onHome={handleHomeFromError}>
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+      <AppErrorBoundary key={activeTab} onHome={handleHomeFromError}>
+      {notFoundPath ? (
+        <ErrorScreen code={404} onHome={handleHomeFromError} />
+      ) : (
+      <>
       {activeTab === 'home' && <HomePage />}
       {activeTab === 'movies' && <MoviesPage />}
       {activeTab === 'series' && <SeriesPage />}
@@ -148,6 +189,9 @@ function AppContent() {
       {activeTab === 'stats' && <StatsPage />}
       {activeTab === 'settings' && <SettingsPage />}
       {activeTab === 'ai' && <AIPage />}
+      </>
+      )}
+      </AppErrorBoundary>
 
       <TutorialLayer activeTab={activeTab} />
 
@@ -172,6 +216,7 @@ function AppContent() {
         )}
       </div>
     </Layout>
+    </AppErrorBoundary>
   );
 }
 

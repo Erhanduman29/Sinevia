@@ -1290,10 +1290,21 @@ body[data-theme="premium-dark"] #main-scroll {
 }
 
 
-/* Desktop modal backdrop: stronger frosted blur than Tailwind's default sm/md */
+/* Desktop modal backdrop (kullanici talebi):
+   - Daha guclu blur (Tailwind sm/md varsayilaninin ustunde)
+   - Tam siyah yerine saydam "donuk cam" perde: arka plan (ust layout dahil)
+     flu gorunsun, tamamen kararmasin. Yalnizca >=640px (masaustu). */
 @media (min-width: 640px) {
   .fixed.inset-0.backdrop-blur-sm { backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); }
   .fixed.inset-0.backdrop-blur-md { backdrop-filter: blur(36px); -webkit-backdrop-filter: blur(36px); }
+  .fixed.inset-0.backdrop-blur-xl { backdrop-filter: blur(44px); -webkit-backdrop-filter: blur(44px); }
+  .fixed.inset-0.backdrop-blur-3xl { backdrop-filter: blur(56px); -webkit-backdrop-filter: blur(56px); }
+  .fixed.inset-0.backdrop-blur-sm,
+  .fixed.inset-0.backdrop-blur-md,
+  .fixed.inset-0.backdrop-blur-xl,
+  .fixed.inset-0.backdrop-blur-3xl {
+    background-color: color-mix(in srgb, var(--bg-base, #0a0a0e) 55%, transparent) !important;
+  }
 }
 
 
