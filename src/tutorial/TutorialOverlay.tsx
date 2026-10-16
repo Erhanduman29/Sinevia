@@ -193,17 +193,33 @@ export default function TutorialOverlay() {
   const isInteractive = activeStepType === 'direct' || activeStepType === 'action';
   const isLast = activeTutorial ? activeStep === activeTutorial.steps.length - 1 : false;
 
-  // direct adımında hedefe tıklanınca ilerle
+  // direct adımında hedefe tıklanınca ilerle. Hedef GEÇ mount edilebilir
+  // (sayfa akışı, koşullu render) — bu yüzden düzenli aralıklarla yeniden
+  // bağlanır; bağlanan elemanlar Set ile takip edilir, cleanup hepsini söker.
   useEffect(() => {
     if (activeStepType !== 'direct' || !step?.target) return;
-    const els = findVisibleTargets(step.target);
-    if (els.length === 0) return;
+    const target = step.target;
     const handler = () => {
       // Tıklama gerçek uygulamaya da gitsin, sonra ilerle
       setTimeout(() => nextStep(), 50);
     };
-    els.forEach((el) => el.addEventListener('click', handler));
-    return () => els.forEach((el) => el.removeEventListener('click', handler));
+    const attached = new Set<HTMLElement>();
+    const attach = () => {
+      const els = findVisibleTargets(target);
+      for (const el of els) {
+        if (attached.has(el)) continue;
+        el.addEventListener('click', handler);
+        attached.add(el);
+      }
+    };
+    attach();
+    const iv = setInterval(attach, 400);
+    const raf = requestAnimationFrame(attach);
+    return () => {
+      clearInterval(iv);
+      cancelAnimationFrame(raf);
+      attached.forEach((el) => el.removeEventListener('click', handler));
+    };
   }, [activeStepType, step?.target, stepKey, nextStep]);
 
   /* ------------- Ekran boyutu (yeniden boyutlanınca karar tazelensin) ------------- */

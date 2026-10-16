@@ -6,6 +6,7 @@ import {
   Swords, Scale, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { useLibrary, useGamification, useSettings } from '../context/slices';
+import { useTutorial } from '../context/TutorialContext';
 import { useComputedStats } from '../lib/selectorHooks';
 import { ratingBgClass } from '../lib/utils';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
@@ -780,6 +781,12 @@ export default function StatsPage() {
   const [peopleTab, setPeopleTab] = useState<'directors' | 'cast' | 'studios'>('directors');
   const [showWrapped, setShowWrapped] = useState(false);
   const [statsMode, setStatsMode] = useState<StatsScopeMode>('current');
+  const { notifyEvent } = useTutorial();
+  /** Kapsam modu değişimi — akademi dersi (ac_stats) bu gerçek eylemi bekler. */
+  const pickStatsMode = (m: StatsScopeMode) => {
+    setStatsMode(m);
+    notifyEvent('stats_mode_changed');
+  };
   const [showCalibration, setShowCalibration] = useState(false);
 
   const currentMoviesCount = useMemo(
@@ -1050,7 +1057,7 @@ export default function StatsPage() {
           <div className="grid grid-cols-3 sm:flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setStatsMode('current')}
+              onClick={() => pickStatsMode('current')}
               className={`flex items-center justify-center gap-1 px-2 sm:px-3.5 py-2 min-h-11 sm:min-h-0 rounded-xl text-[11px] sm:text-xs font-black transition-all truncate ${
                 statsMode === 'current'
                   ? RED_PILL_ACTIVE
@@ -1062,7 +1069,7 @@ export default function StatsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setStatsMode('past')}
+              onClick={() => pickStatsMode('past')}
               className={`flex items-center justify-center gap-1 px-2 sm:px-3.5 py-2 min-h-11 sm:min-h-0 rounded-xl text-[11px] sm:text-xs font-black transition-all truncate ${
                 statsMode === 'past'
                   ? RED_PILL_ACTIVE
@@ -1074,7 +1081,7 @@ export default function StatsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setStatsMode('all')}
+              onClick={() => pickStatsMode('all')}
               className={`flex items-center justify-center gap-1 px-2 sm:px-3.5 py-2 min-h-11 sm:min-h-0 rounded-xl text-[11px] sm:text-xs font-black transition-all truncate ${
                 statsMode === 'all'
                   ? RED_PILL_ACTIVE

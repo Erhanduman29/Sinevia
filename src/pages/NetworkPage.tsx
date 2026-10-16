@@ -6,6 +6,7 @@ import {
   ExternalLink, FileText, Award, History, Skull
 } from 'lucide-react';
 import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
+import { useTutorial } from '../context/TutorialContext';
 import type { ShowcaseItem } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { uid, ratingBgClass } from '../lib/utils';
@@ -84,6 +85,7 @@ type ProfileTabType = 'stats' | 'chat';
 
 export default function NetworkPage() {
   const { data, showToast, addMovie, addSeries, updateShowcase } = useApp();
+  const { notifyEvent } = useTutorial();
 
   // SİNEMATİK OTOPSİ LOOKUP: log'ta abandoned alanı yok → başlık üzerinden
   // kütüphanemdeki film/dizi kayıtlarından abandoned türetilir.
@@ -410,6 +412,7 @@ export default function NetworkPage() {
 
   const handleSaveShowcase = async (newShowcase: ShowcaseItem[]) => {
     updateShowcase(newShowcase);
+    notifyEvent('showcase_updated');
     setShowShowcaseModal(false);
     if (data.agentId) {
       await supabase.from('profiles').update({ showcase: newShowcase }).eq('agent_id', data.agentId);

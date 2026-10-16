@@ -56,7 +56,7 @@ export const WELCOME_TUTORIAL: TutorialDef = {
       type: 'spotlight',
       target: 'home-actions',
       title: 'Hızlı erişim butonları',
-      desc: 'Kararsız kaldığında "Ne İzlesem?" çarkı, zevkine özel öneri için DNA Sentezle, hazır listeler için Katalog Ekle ve planın için Planlayıcı — hepsi tek dokunuş uzağında.',
+      desc: 'Kararsız kaldığında "Ne İzlesem?" çarkı, zevkine özel öneri için DNA Sentezle, hazır listeler için Katalog Ekle ve plan kurmak için Haftalığa Ekle — hepsi tek dokunuş uzağında.',
     },
     {
       type: 'spotlight',
@@ -373,13 +373,13 @@ export interface AcademyQuestDef {
     | 'movie_rated'
     | 'quest_accepted'
     | 'plan_added'
-    | 'stats_viewed'
+    | 'stats_mode_changed'
     | 'dna_used'
-    | 'network_viewed'
+    | 'showcase_updated'
     | 'series_added'
-    | 'history_viewed'
-    | 'achievements_viewed'
-    | 'ai_viewed'
+    | 'history_rating_edited'
+    | 'badge_equipped'
+    | 'ai_message_sent'
     | 'backup_created';
 }
 
@@ -388,13 +388,13 @@ export const ACADEMY_QUESTS: AcademyQuestDef[] = [
   { id: 'ac_rate', title: 'Ona Puan Ver', desc: 'İzleme zamanlayıcısı kuralını öğren: puanla ve dengele.', trigger: 'movie_rated' },
   { id: 'ac_quest', title: 'Bir Görev Kabul Et', desc: 'Görev panosundan sıradaki görevini kabul et.', trigger: 'quest_accepted' },
   { id: 'ac_plan', title: 'Haftalık Planla', desc: 'Bir filmi haftalık plana ekle, disiplinli kal.', trigger: 'plan_added' },
-  { id: 'ac_stats', title: 'İstatistiklerine Bak', desc: 'İstatistikler bölümünü aç, kişiliğini ve tercihlerini gör.', trigger: 'stats_viewed' },
+  { id: 'ac_stats', title: 'İstatistik Kapsamını Değiştir', desc: 'İstatistiklerde Güncel/Önceden/Tümü kapsamını değiştir; verini farklı gözlerden gör.', trigger: 'stats_mode_changed' },
   { id: 'ac_dna', title: 'DNA Sentezleyiciyi Dene', desc: 'DNA Sentezleyici ile zevkine göre bir öneri üret.', trigger: 'dna_used' },
-  { id: 'ac_network', title: 'Sinevia Ağı\'nı Keşfet', desc: 'Sinevia Ağı bölümüne gir, akışı ve arkadaşlarını gör.', trigger: 'network_viewed' },
+  { id: 'ac_network', title: 'Vitrinini Düzenle', desc: "Sinevia Ağı'nda profil vitrinine film veya dizi ekle — arkadaşların seni buradan tanır.", trigger: 'showcase_updated' },
   { id: 'ac_series', title: 'Bir Dizi Ekle', desc: 'Sıra dizilerde: Katalogdan bir dizi ekle, sezonlarını takibe al.', trigger: 'series_added' },
-  { id: 'ac_history', title: 'Zaman Tünelini Aç', desc: 'Geçmiş sayfasını aç; kronoloji, poster vitrini ve "Önceden" görünümlerini gez.', trigger: 'history_viewed' },
-  { id: 'ac_achievements', title: 'Başarımlarına Bak', desc: 'Kupa vitrinine gir: seviyen, rozetlerin ve rekorların burada sergilenir.', trigger: 'achievements_viewed' },
-  { id: 'ac_ai', title: 'AI Asistan\'a Danış', desc: 'AI Asistan sayfasını aç; katalog ekleme ve öneri sorularını ona sor.', trigger: 'ai_viewed' },
+  { id: 'ac_history', title: 'Geçmişte Puanı Düzenle', desc: "Geçmişinde bir puanı düzenle (ör. 10'dan 8'e) — kayıtların anında güncellensin.", trigger: 'history_rating_edited' },
+  { id: 'ac_achievements', title: 'Bir Rozet Tak', desc: 'Görev Panosu\'nda tamamladığın görevlerden birini profil rozeti olarak tak.', trigger: 'badge_equipped' },
+  { id: 'ac_ai', title: "AI Asistan'a Mesaj Yaz", desc: "AI Asistan'a bir soru yaz ve gönder; katalog ve öneri ipuçları kap.", trigger: 'ai_message_sent' },
   { id: 'ac_backup', title: 'Verini Yedekle', desc: 'Ayarlar → Tam Yedekle bölümünden "Yedek Al" ile verini dosya olarak indir.', trigger: 'backup_created' },
 ];
 

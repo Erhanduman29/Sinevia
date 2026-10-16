@@ -16,7 +16,7 @@ const RARITY_WEIGHTS = {
 
 export default function QuestBoard() {
   const { questState, acceptQuest, rejectActiveQuest, equipBadge, togglePenalty } = useQuests();
-  const { academyStep, academyActive, startAcademy } = useTutorial();
+  const { academyStep, academyActive, startAcademy, notifyEvent } = useTutorial();
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isDrawing, setIsDrawing] = useState(false);
   const [offeredQuestId, setOfferedQuestId] = useState<string | null>(null);
@@ -399,7 +399,10 @@ export default function QuestBoard() {
                       ? 'bg-ink-900 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)] scale-105' 
                       : `bg-ink-950/80 ${RARITY_STYLES[def.rarity].border} hover:bg-ink-900 hover:shadow-lg hover:-translate-y-1`
                   }`}
-                  onClick={() => equipBadge(isEquipped ? null : qId)}
+                  onClick={() => {
+                    if (!isEquipped) notifyEvent('badge_equipped');
+                    equipBadge(isEquipped ? null : qId);
+                  }}
                   title="Profilinde sergilemek/gizlemek için tıkla"
                 >
                   {isEquipped && (

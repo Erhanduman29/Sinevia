@@ -32,6 +32,7 @@ import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { WatchHistoryItem, Movie, Series } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 import { useFilteredHistory } from '../lib/selectorHooks';
+import { useTutorial } from '../context/TutorialContext';
 
 type SortMode = 'newest' | 'oldest' | 'rating';
 type FilterType = 'all' | 'movie' | 'series';
@@ -48,6 +49,7 @@ const accent = 'var(--red, var(--color-1, #e8384f))';
 
 export default function HistoryPage() {
   const { data, updateHistoryRating } = useApp();
+  const { notifyEvent } = useTutorial();
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<WatchHistoryItem | null>(null);
@@ -844,6 +846,7 @@ export default function HistoryPage() {
           allowPastWatch={editingItem.kind === 'movie' || editingItem.type === 'movie'}
           onRate={(rating, note, detailedRating, reviewTags, isPastWatch) => {
             updateHistoryRating(editingItem.id, rating, note, detailedRating, reviewTags, isPastWatch);
+            notifyEvent('history_rating_edited');
             setEditingItem(null);
           }}
           onClose={() => setEditingItem(null)}

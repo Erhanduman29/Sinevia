@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, Loader2, Plus, Check, Film, Info } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useTutorial } from '../context/TutorialContext';
 import type { AIMessage } from '../context/AppContext';
 import { handleImgFallback } from '../lib/selectors';
 import '../components/ai-premium.css';
@@ -20,6 +21,7 @@ const formatTime = (ts: number) =>
 
 export default function AIPage() {
   const { data, addMovie, addSeries, updateAIHistory } = useApp();
+  const { notifyEvent } = useTutorial();
   
   const [messages, setMessages] = useState<AIMessage[]>(() => {
     const defaultWelcome: AIMessage = {
@@ -148,6 +150,7 @@ Eğer bir yapım öneriyorsan veya kütüphaneye eklemen gerekiyorsa, cevabını
 
   const handleSend = async () => {
     if (!input.trim() || !GEMINI_API_KEY) return;
+    notifyEvent('ai_message_sent');
 
     const userMessage: AIMessage = { 
       id: Date.now().toString(), 

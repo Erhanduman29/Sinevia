@@ -283,29 +283,35 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     [activeTutorial, activeStepType, activeStep, nextStep]
   );
 
+  // Ders sırası dışında yapılmış eylemleri geriye dönük tamamla: akademi adımı
+  // bir derse oturduğunda o dersin olayı daha önce events'e düşmüşse ders
+  // kendiliğinden tamamlanır (kullanıcının aynı eylemi tekrar yapması gerekmez).
+  useEffect(() => {
+    if (!progress.academyStarted || progress.academyStep >= ACADEMY_QUESTS.length) return;
+    const quest = ACADEMY_QUESTS[progress.academyStep];
+    if (!quest || progress.academyDone.includes(quest.id)) return;
+    if (!progress.events.includes(quest.trigger)) return;
+    notifyEvent(quest.trigger);
+  }, [progress.academyStarted, progress.academyStep, progress.academyDone, progress.events, notifyEvent]);
+
   /* ------------- Tetikleyiciler ------------- */
   // Akademi sürerken adım-tutorial'lar ertelenir (sıra: karşılama > akademi > sayfa > pencere)
   const academyInProgress = progress.academyStarted && progress.academyStep < ACADEMY_QUESTS.length;
 
   const notifyPageVisit = useCallback(
     (page: string) => {
-      // Sayfa ziyaretleri akademi olayı tetikler (akademi sürerken de çalışır)
-      if (page === 'stats') notifyEvent('stats_viewed');
-      if (page === 'network') notifyEvent('network_viewed');
-      if (page === 'history') notifyEvent('history_viewed');
-      if (page === 'achievements') notifyEvent('achievements_viewed');
-      if (page === 'ai') notifyEvent('ai_viewed');
-
       // Karşılama turu önceliklidir: çocuk effect'ler ebeveyn effect'inden önce
       // çalıştığı için ilk ziyaret buradan geçer. Karşılama bitmeden sayfa turu
       // başlatılırsa boot effect onu ezer ve o sayfanın turu hiçbir zaman
       // gösterilmez (ziyaret kaydedildiği için tekrar tetiklenmez). Bu yüzden
       // karşılama sürerken ziyaret kaydedilmiyor.
       if (!progress.welcomeDone) return;
-      // Bir adım-tutorial sürüyorsa bu ziyareti  ertele (sonraya taze kalsın)
+      // Bir adım-tutorial sürüyorsa bu ziyareti ertele (sonraya taze kalsın)
       if (activeId) return;
-      // Akademi sürerken sayfa turu tetiklenmez; ziyaret kaydedilmez ki sonra tetiklensin
-      if (academyInProgress) return;
+      // NOT: Akademi artık sayfa turlarını ENGELLEMEZ — bir sayfaya ilk girişte
+      // karşılama da akademi de sürse sayfa turu başlar (kullanıcı talebi).
+      // Pencere (modal) turlarında akademi kapısı korunur: akademi dersleri
+      // puanlama penceresini açar, iki katman üst üste binmesin.
 
       setProgress((p) => {
         if (p.pageVisited.includes(page)) return p;
