@@ -389,7 +389,7 @@ export default function BulkAddModal({
   const activeGenres = activeTab === 'movie' ? MOVIE_GENRES : TV_GENRES;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 overscroll-none" onTouchMove={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-0 overscroll-none" onTouchMove={(e) => e.stopPropagation()}>
       <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-[40px] animate-fade-in" onClick={handleSafeClose} />
 
       {showCloseConfirm && (
@@ -412,7 +412,7 @@ export default function BulkAddModal({
         </div>
       )}
 
-      <div className="relative z-10 w-full max-w-6xl h-[90svh] md:h-[90dvh] bg-ink-900/80 backdrop-blur-md border border-ink-700/50 rounded-2xl md:rounded-3xl shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
+      <div className="relative z-10 w-full max-w-6xl h-[90svh] md:h-full md:max-w-none bg-ink-900/80 backdrop-blur-md border border-ink-700/50 md:border-0 rounded-2xl md:rounded-none shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
         <div className="flex items-center justify-between p-4 md:p-6 border-b border-ink-800/50 bg-ink-900/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 flex items-center justify-center border border-gold-500/20">

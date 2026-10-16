@@ -85,7 +85,7 @@ export default function TutorialCenter({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[210] flex items-center justify-center p-3 sm:p-4 bg-ink-950/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[210] flex items-center justify-center p-3 sm:p-4 bg-ink-950/35 animate-fade-in"
       onClick={onClose}
     >
       <div

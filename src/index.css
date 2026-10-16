@@ -1292,8 +1292,8 @@ body[data-theme="premium-dark"] #main-scroll {
 
 /* Desktop modal backdrop (kullanici talebi):
    - Daha guclu blur (Tailwind sm/md varsayilaninin ustunde)
-   - Karanlik perde YOK: arka plan bulanik gorunsun ama kararmasin ->
-     acik, sutlu "buzlu cam" perde (%14 beyaz). Yalnizca >=640px. */
+   - Koyu, bulanik perde (kullanici tercihi: "bulanik ve siyah olmali") ->
+     sicak beyaz yerine koyu cam perde (siyah + guclu blur). Yalnizca >=640px. */
 @media (min-width: 640px) {
   .fixed.inset-0.backdrop-blur-sm { backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); }
   .fixed.inset-0.backdrop-blur-md { backdrop-filter: blur(36px); -webkit-backdrop-filter: blur(36px); }
@@ -1303,7 +1303,7 @@ body[data-theme="premium-dark"] #main-scroll {
   .fixed.inset-0.backdrop-blur-md,
   .fixed.inset-0.backdrop-blur-xl,
   .fixed.inset-0.backdrop-blur-3xl {
-    background-color: rgba(255, 255, 255, 0.14) !important;
+    background-color: rgba(0, 0, 0, 0.58) !important;
   }
 }
 

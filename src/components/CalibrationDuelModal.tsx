@@ -14,6 +14,7 @@ import {
 import { useActions, useLibrary } from '../context/slices';
 import { calculateEloDelta, pickDuelPair } from '../lib/calibrationEngine';
 import { handleImgFallback } from '../lib/selectors';
+import { ratingBgClass } from '../lib/utils';
 import { isTypingTarget } from '../lib/shortcuts';
 import { useShortcuts } from '../hooks/useShortcuts';
 import type { Movie } from '../types';
@@ -127,10 +128,9 @@ function DuelSide({
         {/* Okunurluk perdesi */}
         <div className="absolute inset-0" style={{ background: POSTER_SCRIM }} />
 
-        {/* Puan rozeti — afişin sol üstünde */}
+        {/* Puan rozeti — afişin sol üstünde (Geçmiş'teki ratingBgClass paleti) */}
         <span
-          style={{ background: RED, color: ON_RED }}
-          className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 text-[11px] sm:text-sm font-black px-2 py-1 rounded-lg flex items-center gap-1 tabular-nums shadow-lg"
+          className={`absolute top-2.5 left-2.5 sm:top-3 sm:left-3 text-[11px] sm:text-sm font-black px-2 py-1 rounded-lg flex items-center gap-1 tabular-nums shadow-lg ${ratingBgClass(movie.rating ?? 0)}`}
         >
           <Star size={11} fill="currentColor" /> {movie.rating ?? '—'}
         </span>
@@ -655,9 +655,9 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                   style={{ color: MUTED }}
                   className="flex items-center justify-between text-[9.5px] sm:text-[10px] font-black uppercase tracking-widest mb-1.5"
                 >
-                  <span className="tabular-nums">Puan {aRating || '—'}</span>
+                  <span className={`tabular-nums px-1.5 py-0.5 rounded ${ratingBgClass(aRating || 0)}`}>Puan {aRating || '—'}</span>
                   <span>Karşılaştırma</span>
-                  <span className="tabular-nums">{bRating || '—'} Puan</span>
+                  <span className={`tabular-nums px-1.5 py-0.5 rounded ${ratingBgClass(bRating || 0)}`}>{bRating || '—'} Puan</span>
                 </div>
                 <div
                   style={{ background: LINE }}

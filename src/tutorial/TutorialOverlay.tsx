@@ -313,7 +313,7 @@ export default function TutorialOverlay() {
       ) : (
         isBlocking && (
           <div
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/25"
             style={{ zIndex: 285 }}
           />
         )
