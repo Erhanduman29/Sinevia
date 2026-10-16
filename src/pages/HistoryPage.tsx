@@ -7,6 +7,7 @@ import {
   StickyNote,
   Clock,
   Search,
+  ArrowRight,
   Star as StarIcon,
   Edit2,
   Calendar,
@@ -545,9 +546,8 @@ export default function HistoryPage() {
                   </div>
 
                   {item.rating !== null && (
-                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-xl text-xs font-black tabular-nums shadow-lg flex items-center gap-1 ${ratingBgClass(item.rating)}`}>
-                      <PrevRatingHint previousRating={item.previousRating} />
-                      <span>★ {item.rating}</span>
+                    <div className="absolute top-2 right-2 flex items-center">
+                      <RatingChangeChip rating={item.rating} previousRating={item.previousRating} size="sm" />
                     </div>
                   )}
 
@@ -735,11 +735,7 @@ export default function HistoryPage() {
                           <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-2.5 sm:pt-0 border-t border-[color:var(--line,var(--border-dim))] sm:border-0 flex-shrink-0">
                             <div className="flex items-center gap-1.5">
                               {item.rating !== null && (
-                                <div className={`px-3 py-1 rounded-xl font-black text-sm sm:text-base shadow-lg flex items-center gap-1 tabular-nums ${ratingBgClass(item.rating)}`}>
-                                  <PrevRatingHint previousRating={item.previousRating} />
-                                  <StarIcon size={13} className="fill-current" />
-                                  <span>{item.rating}</span>
-                                </div>
+                                <RatingChangeChip rating={item.rating} previousRating={item.previousRating} size="md" />
                               )}
                               {avgEpRating !== null && eps.length > 1 && (
                                 <div className="text-[11px] font-bold bg-[color:var(--surface,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] text-ink-300 px-2 py-1 rounded-xl tabular-nums">
@@ -782,9 +778,7 @@ export default function HistoryPage() {
 
                                       <div className="flex items-center gap-1.5 flex-shrink-0">
                                         {ep.rating !== null && (
-                                          <span className={`text-xs px-2 py-0.5 rounded-lg font-black tabular-nums ${ratingBgClass(ep.rating)}`}>
-                                            ★ {ep.rating}
-                                          </span>
+                                          <RatingChangeChip rating={ep.rating} previousRating={ep.previousRating} size="xs" />
                                         )}
                                         <button
                                           onClick={() => setEditingItem(ep)}
@@ -1030,13 +1024,52 @@ function DnfBadge() {
   );
 }
 
-/** Geçmiş puanı rozeti — "10 →" soluk; yeni puan renkli çipte kalır (puan değişimi belirtisi). */
-function PrevRatingHint({ previousRating }: { previousRating?: number }) {
-  if (previousRating == null) return null;
+/** Puan değişim göstergesi — ayrı eski/yeni çipler (her biri kendi puan renginde),
+ *  ok çiplerin DIŞINDA; ek olarak "Puan değişti" rozeti gösterilir. */
+const CHIP_SIZE = {
+  xs: { pill: 'text-xs px-2 py-0.5 rounded-lg font-black tabular-nums', arrow: 10, marker: 10 },
+  sm: { pill: 'text-xs px-2 py-0.5 rounded-xl font-black tabular-nums', arrow: 10, marker: 10 },
+  md: { pill: 'px-3 py-1 rounded-xl text-sm sm:text-base font-black tabular-nums', arrow: 12, marker: 12 },
+  lg: { pill: 'px-3 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl text-base sm:text-xl font-black tabular-nums', arrow: 14, marker: 13 },
+};
+
+function RatingChangeChip({ rating, previousRating, size = 'md' }: { rating: number; previousRating?: number; size?: keyof typeof CHIP_SIZE }) {
+  const s = CHIP_SIZE[size];
+  const star = size === 'md' || size === 'lg'
+    ? <StarIcon size={size === 'lg' ? 15 : 13} className="fill-current" />
+    : <span aria-hidden>★</span>;
+  const gap = size === 'md' || size === 'lg' ? 'gap-1.5' : 'gap-1';
+
+  // Değişim yoksa: eskisi gibi tek renkli çip
+  if (previousRating == null || previousRating === rating) {
+    return (
+      <div className={`${s.pill} shadow-lg flex items-center gap-1 ${ratingBgClass(rating)}`}>
+        {star}
+        <span>{rating}</span>
+      </div>
+    );
+  }
+
+  // Değişim varsa: [eski kendi rengi] → [yeni kendi rengi] [Puan değişti]
   return (
-    <span className="text-[10px] sm:text-[11px] font-black tabular-nums opacity-70">
-      {previousRating} →
-    </span>
+    <div className={`flex items-center ${gap}`}>
+      <div className={`${s.pill} shadow-lg flex items-center gap-1 ${ratingBgClass(previousRating)}`}>
+        {star}
+        <span>{previousRating}</span>
+      </div>
+      <ArrowRight size={s.arrow} className="shrink-0 opacity-70" />
+      <div className={`${s.pill} shadow-lg flex items-center gap-1 ${ratingBgClass(rating)}`}>
+        {star}
+        <span>{rating}</span>
+      </div>
+      <span
+        title="Puan değişti"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/60 border border-white/15 text-white/75 text-[9px] sm:text-[10px] font-black uppercase tracking-wider whitespace-nowrap"
+      >
+        <History size={s.marker} />
+        {(size === 'md' || size === 'lg') && <span className="hidden sm:inline">Puan değişti</span>}
+      </span>
+    </div>
   );
 }
 
@@ -1185,11 +1218,7 @@ function MovieHistoryCard({
 
         <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-2.5 sm:pt-0 border-t border-[color:var(--line,var(--border-dim))] sm:border-0 flex-shrink-0">
           {item.rating !== null && (
-            <div className={`px-3 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl font-black text-base sm:text-xl shadow-lg flex items-center gap-1 tabular-nums ${ratingBgClass(item.rating)}`}>
-              <PrevRatingHint previousRating={item.previousRating} />
-              <StarIcon size={15} className="fill-current" />
-              <span>{item.rating}</span>
-            </div>
+            <RatingChangeChip rating={item.rating} previousRating={item.previousRating} size="lg" />
           )}
 
           <div className="flex items-center gap-1.5">
