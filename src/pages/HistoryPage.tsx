@@ -31,8 +31,6 @@ import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { WatchHistoryItem, Movie, Series } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 import { useFilteredHistory } from '../lib/selectorHooks';
-import VirtualList, { chunkArray, useMediaColumns } from '../components/VirtualList';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 type SortMode = 'newest' | 'oldest' | 'rating';
 type FilterType = 'all' | 'movie' | 'series';
@@ -56,7 +54,6 @@ export default function HistoryPage() {
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
 
   const [search, setSearch] = useState('');
-  const searchDeb = useDebouncedValue(search, 180);
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [onlyWithNotes, setOnlyWithNotes] = useState(false);
@@ -127,81 +124,65 @@ export default function HistoryPage() {
   }, [regularHistory]);
 
   const processedItems = useFilteredHistory(
-    activeBaseHistory, viewMode, filterType, onlyWithNotes, onlyHighRated, selectedTagFilter, searchDeb, sortMode
+    activeBaseHistory, viewMode, filterType, onlyWithNotes, onlyHighRated, selectedTagFilter, search, sortMode
   );
 
-  const seriesGroups = useMemo(() => {
-    const seriesGroups = new Map<string, WatchHistoryItem[]>();
-    processedItems
-      .filter((h) => h.kind === 'series' || h.type === 'series')
-      .forEach((h) => {
-        const sid = h.seriesId || h.itemId || h.id;
-        const arr = seriesGroups.get(sid) || [];
-        arr.push(h);
-        seriesGroups.set(sid, arr);
-      });
-    return seriesGroups;
-  }, [processedItems]);
+  const seriesGroups = new Map<string, WatchHistoryItem[]>();
+  processedItems
+    .filter((h) => h.kind === 'series' || h.type === 'series')
+    .forEach((h) => {
+      const sid = h.seriesId || h.itemId || h.id;
+      const arr = seriesGroups.get(sid) || [];
+      arr.push(h);
+      seriesGroups.set(sid, arr);
+    });
 
-  const latestPerSeries = useMemo(() => {
-    const latestPerSeries = new Map<string, WatchHistoryItem>();
-    processedItems
-      .filter((h) => h.kind === 'series' || h.type === 'series')
-      .forEach((h) => {
-        const sid = h.seriesId || h.itemId || h.id;
-        const existing = latestPerSeries.get(sid);
-        if (!existing || new Date(h.watchedAt) > new Date(existing.watchedAt)) {
-          latestPerSeries.set(sid, h);
-        }
-      });
-    return latestPerSeries;
-  }, [processedItems]);
+  const latestPerSeries = new Map<string, WatchHistoryItem>();
+  processedItems
+    .filter((h) => h.kind === 'series' || h.type === 'series')
+    .forEach((h) => {
+      const sid = h.seriesId || h.itemId || h.id;
+      const existing = latestPerSeries.get(sid);
+      if (!existing || new Date(h.watchedAt) > new Date(existing.watchedAt)) {
+        latestPerSeries.set(sid, h);
+      }
+    });
 
-  const displayItems = useMemo(() => {
-    const displayItems: { type: 'movie' | 'series'; item: WatchHistoryItem; seriesId?: string }[] = [];
-    const seenSeries = new Set<string>();
+  const displayItems: { type: 'movie' | 'series'; item: WatchHistoryItem; seriesId?: string }[] = [];
+  const seenSeries = new Set<string>();
 
-    for (const item of processedItems) {
-      if (item.kind === 'movie' || item.type === 'movie') {
-        displayItems.push({ type: 'movie', item });
-      } else {
-        const sid = item.seriesId || item.itemId || hIdFallback(item);
-        if (!seenSeries.has(sid)) {
-          seenSeries.add(sid);
-          const latest = latestPerSeries.get(sid)!;
-          displayItems.push({ type: 'series', item: latest, seriesId: sid });
-        }
+  for (const item of processedItems) {
+    if (item.kind === 'movie' || item.type === 'movie') {
+      displayItems.push({ type: 'movie', item });
+    } else {
+      const sid = item.seriesId || item.itemId || hIdFallback(item);
+      if (!seenSeries.has(sid)) {
+        seenSeries.add(sid);
+        const latest = latestPerSeries.get(sid)!;
+        displayItems.push({ type: 'series', item: latest, seriesId: sid });
       }
     }
-    return displayItems;
-  }, [processedItems, latestPerSeries]);
+  }
 
   function hIdFallback(item: WatchHistoryItem) {
     return item.seriesId || item.itemId || item.id;
   }
 
-  const groupedByDate = useMemo(() => {
-    const groupedByDate = new Map<
-      string,
-      { type: 'movie' | 'series'; item: WatchHistoryItem; seriesId?: string }[]
-    >();
-    displayItems.forEach((d) => {
-      const dateKey = new Date(d.item.watchedAt).toLocaleDateString('tr-TR', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        weekday: 'long',
-      });
-      const arr = groupedByDate.get(dateKey) || [];
-      arr.push(d);
-      groupedByDate.set(dateKey, arr);
+  const groupedByDate = new Map<
+    string,
+    { type: 'movie' | 'series'; item: WatchHistoryItem; seriesId?: string }[]
+  >();
+  displayItems.forEach((d) => {
+    const dateKey = new Date(d.item.watchedAt).toLocaleDateString('tr-TR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      weekday: 'long',
     });
-    return groupedByDate;
-  }, [displayItems]);
-
-  const groupedEntries = useMemo(() => Array.from(groupedByDate.entries()), [groupedByDate]);
-  const gridCols = useMediaColumns('0:2,640:3,768:4,1024:5', 2);
-  const gridRows = useMemo(() => chunkArray(displayItems, gridCols), [displayItems, gridCols]);
+    const arr = groupedByDate.get(dateKey) || [];
+    arr.push(d);
+    groupedByDate.set(dateKey, arr);
+  });
 
   const toggleSeries = (sid: string) => {
     setExpandedSeries((prev) => {
@@ -502,14 +483,8 @@ export default function HistoryPage() {
           </p>
         </div>
       ) : viewMode === 'past' ? (
-        <VirtualList
-          className="relative animate-fade-in"
-          items={displayItems}
-          getKey={(d) => d.item.id}
-          gap={14}
-          estimateHeight={190}
-          overscan={500}
-          renderItem={({ item }) => {
+        <div className="space-y-3 sm:space-y-4 animate-fade-in">
+          {displayItems.map(({ item }) => {
             const movieData = data.movies.find((m) => m.id === (item.itemId || item.id));
             return (
               <MovieHistoryCard
@@ -523,12 +498,11 @@ export default function HistoryPage() {
                 onSelectDetail={() => openMovieDetail(item, movieData)}
               />
             );
-          }}
-        />
+          })}
+        </div>
       ) : viewMode === 'grid' ? (
-        <VirtualList items={gridRows} getKey={(_row, i) => i} gap={16} estimateHeight={340} overscan={500} renderItem={(row) => (
-          <div className="grid gap-3 sm:gap-4 animate-fade-in" style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}>
-          {row.map(({ type, item, seriesId }) => {
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 animate-fade-in">
+          {displayItems.map(({ type, item, seriesId }) => {
             const isMovie = type === 'movie';
             const movieData = isMovie
               ? data.movies.find((m) => m.id === (item.itemId || item.id))
@@ -637,13 +611,11 @@ export default function HistoryPage() {
             );
           })}
         </div>
-        )}
-        />
       ) : (
-        <div className="relative pl-2.5 sm:pl-6">
+        <div className="relative pl-2.5 sm:pl-6 space-y-6 sm:space-y-8">
           <div className="absolute left-0.5 sm:left-2.5 top-3 bottom-3 w-px bg-gradient-to-b from-[color:var(--red, var(--color-1, #e8384f))] via-[color:var(--line-2,var(--border-dim))] to-transparent pointer-events-none" />
 
-          <VirtualList items={groupedEntries} getKey={(entry) => entry[0]} gap={24} estimateHeight={260} overscan={700} renderItem={([dateLabel, items]) => (
+          {Array.from(groupedByDate.entries()).map(([dateLabel, items]) => (
             <div key={dateLabel} className="relative animate-fade-in-up">
               <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                 <div className="absolute -left-[10px] sm:-left-[20px] w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[color:var(--bg-base,#0a0a0d)] border-2 border-[color:var(--red, var(--color-1, #e8384f))] shadow-[0_0_10px_var(--red, var(--color-1, #e8384f))]" />
@@ -854,8 +826,7 @@ export default function HistoryPage() {
                 })}
               </div>
             </div>
-          )}
-          />
+          ))}
         </div>
       )}
 

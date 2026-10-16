@@ -11,8 +11,6 @@ import { ratingBgClass, getNextUnwatchedEpisode, uid } from '../lib/utils';
 import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDBSeries } from '../lib/tmdb';
 import { useFilteredSeries } from '../lib/selectorHooks';
-import VirtualList from '../components/VirtualList';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
 import AddSeriesModal from '../components/AddSeriesModal';
 import RatingModal from '../components/RatingModal';
@@ -732,7 +730,6 @@ export default function SeriesPage() {
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('az');
   const [search, setSearch] = useState('');
-  const searchDeb = useDebouncedValue(search, 180);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -858,7 +855,7 @@ export default function SeriesPage() {
     graveyardView ? graveyardSeries : data.series,
     graveyardView ? null : watchedFilter,
     selectedGenres,
-    searchDeb,
+    search,
     sortMode
   );
 
@@ -1159,13 +1156,8 @@ export default function SeriesPage() {
           <p className="svp-mono">{graveyardView ? 'Mezarlıkta yarım bırakılan dizi yok.' : watchedFilter === true ? 'Tamamen bitirdiğin bir dizi yok.' : watchedFilter === false ? 'Bölümleri kalan (izlenecek) dizi yok.' : 'Aramaya uygun dizi bulunamadı.'}</p>
         </div>
       ) : (
-        <VirtualList
-          items={sortedSeries}
-          getKey={(s) => s.id}
-          gap={12}
-          estimateHeight={280}
-          overscan={700}
-          renderItem={(s) => {
+        <div className="space-y-3 sm:space-y-4">
+          {sortedSeries.map((s) => {
             const isExpanded = expandedSeries.has(s.id);
             const seasons = Array.from(new Set(s.episodes.map((e) => e.season))).sort((a, b) => a - b);
             const watchedCount = s.episodes.filter((e) => e.watched).length;
@@ -1498,8 +1490,8 @@ export default function SeriesPage() {
                 )}
               </div>
             );
-          }}
-        />
+          })}
+        </div>
       )}
 
       {/* ARKADAŞA TAVSİYE MODALI (TEKLİ & ÇOKLU DİZİ DESTEKLİ, GRID TASARIMLI) */}
