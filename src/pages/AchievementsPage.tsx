@@ -5,6 +5,7 @@ import { ACHIEVEMENT_DEFS, TIER_ORDER, AchievementIcon } from '../lib/achievemen
 import { levelFromXp } from '../lib/xp';
 import { RANK_TIERS } from '../lib/rankTiers';
 import QuestBoard from '../components/QuestBoard';
+import TitleGallery from '../components/TitleGallery';
 
 // ============================================================
 // CANLI GERÇEK METAL & MÜCEVHER KADEME PALETİ
@@ -279,7 +280,7 @@ const ACHV_SOLID_CSS = `
 
 type SortMode = 'newest' | 'oldest' | 'az' | 'za';
 type FilterMode = 'all' | 'unlocked' | 'locked';
-type ViewTab = 'trophies' | 'quests';
+type ViewTab = 'trophies' | 'quests' | 'titles';
 
 export default function AchievementsPage() {
   const { data } = useApp();
@@ -298,6 +299,7 @@ export default function AchievementsPage() {
         sessionStorage.removeItem('sinevia_search_action');
         if (action === 'quests') setActiveTab('quests');
         else if (action === 'trophies') setActiveTab('trophies');
+        else if (action === 'titles') setActiveTab('titles');
       } catch {
         /* sessionStorage kapalıysa normal açılış */
       }
@@ -485,7 +487,7 @@ export default function AchievementsPage() {
 
         <div
           data-tutorial="ach-tabs"
-          className="grid grid-cols-2 sm:flex p-1 rounded-xl w-full sm:w-auto bg-[#0D0D12] border border-[#22222C]"
+          className="grid grid-cols-3 sm:flex p-1 rounded-xl w-full sm:w-auto bg-[#0D0D12] border border-[#22222C]"
         >
           <button
             onClick={() => setActiveTab('trophies')}
@@ -507,8 +509,21 @@ export default function AchievementsPage() {
           >
             <Icons.Target size={14} /> GÖREV PANOSU
           </button>
+          <button
+            onClick={() => setActiveTab('titles')}
+            className={`sm:w-36 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-black transition-all ${
+              activeTab === 'titles'
+                ? 'bg-rose-600 text-white'
+                : 'text-ink-400 hover:text-ink-200'
+            }`}
+          >
+            <Icons.Crown size={14} /> SOY KÜTÜĞÜ
+          </button>
         </div>
       </div>
+
+      {/* SOY KÜTÜĞÜ (UNVANLAR) SEKME İÇERİĞİ */}
+      {activeTab === 'titles' && <TitleGallery />}
 
       {/* GÖREV PANOSU SEKME İÇERİĞİ */}
       {activeTab === 'quests' && <QuestBoard />}

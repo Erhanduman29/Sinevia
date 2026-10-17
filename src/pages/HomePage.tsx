@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
-  Shuffle, Tv, Sparkles, Star, Search,
-  Clock, Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
+  Shuffle, Sparkles, Star, Search,
+  Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
   ChevronRight, Target, Film, RefreshCw, Users, Lock,
-  Timer, Play, Pause, X, Compass, ShieldAlert, Copy, Crown, Swords, Clapperboard
+  Timer, Play, Pause, X, ShieldAlert, Copy, Crown, Swords, Clapperboard
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
@@ -23,14 +23,14 @@ import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
 import { RANK_TIERS } from '../lib/rankTiers';
 
 // ============================================================
-// PREMIUM HOME STILLERİ (Masaüstü Monolith + Mobil Ultra-Kompakt)
+// PREMIUM HOME STILLERİ (Ferah & Büyük Sinevia Kartı + Mobil Tam Görünüm)
 // ============================================================
 const HOME_PREMIUM_CSS = `
 .hn-sec{display:flex;flex-direction:column;gap:16px}
 .hn-sec-t{display:flex;align-items:center;gap:14px}
 .hn-sec-t h2{font-family:inherit;font-size:17px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;color:var(--text-main,#f4f4f2);margin:0}
 .hn-sec-t .ln{flex:1;height:1px;background:linear-gradient(90deg,var(--line-2,var(--border-dim,rgba(244,244,242,.13))),transparent)}
-.hn-idx{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.18em;color:#fff;background:linear-gradient(135deg,var(--red,var(--color-1,#e8384f)),var(--red-deep,var(--color-3,#8e1220)));padding:5px 10px;border-radius:8px;box-shadow:0 4px 14px -4px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.3)}
+.hn-idx{font-family:inherit;font-variant-numeric:tabular-nums;font-size:10px;font-weight:900;letter-spacing:.18em;color:#fff;background:linear-gradient(135deg,var(--red,var(--color-1,#e8384f)),var(--red-deep,var(--color-3,#8e1220)));padding:5px 10px;border-radius:8px;box-shadow:0 4px 14px -4px var(--red,var(--color-1,#e8384f)),inset 0 1px 0 rgba(255,255,255,.3)}
 .hn-more{font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);background:none;border:0;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:4px;padding:4px 0}
 .hn-more:hover{color:var(--red-hi,var(--color-2,#ff6b7a));transform:translateX(3px)}
 .hp-rec{
@@ -47,416 +47,574 @@ const HOME_PREMIUM_CSS = `
 }
 
 /* ============================================================
-   01 · SİNEVİA KARTI (Masaüstü Rafine Monolith Mimari)
+   01 · SİNEVİA KARTI (GENİŞLETİLMİŞ GRAND COMMAND DECK MİMARİSİ)
+   Tüm veriler tam, kesintisiz ve sayfa fontuyla %100 uyumlu
    ============================================================ */
 .snv-id-card{
   position:relative;
-  border-radius:24px;
-  background:#0a0a0f;
-  border:1px solid rgba(255,255,255,.11);
-  box-shadow:0 34px 90px -32px rgba(0,0,0,.96), inset 0 1px 0 rgba(255,255,255,.08);
+  font-family:inherit;
+  border-radius:26px;
+  background:var(--bg-card,#09090f);
+  border:1px solid var(--border-dim,rgba(255,255,255,.13));
+  box-shadow:0 36px 96px -28px rgba(0,0,0,.96), inset 0 1px 0 color-mix(in srgb, var(--text-main,#f4f4f2) 12%, transparent);
   overflow:hidden;
   isolation:isolate;
 }
 .snv-id-card::before{
   content:'';
   position:absolute;
-  top:0;left:8%;right:8%;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);
+  top:0;left:6%;right:6%;height:2px;
+  background:linear-gradient(90deg,transparent,var(--red,var(--color-1,#e8384f)),#fbbf24,var(--red,var(--color-1,#e8384f)),transparent);
+  opacity:.75;
   pointer-events:none;
-  z-index:2;
-}
-.snv-id-backdrop{
-  position:absolute;
-  inset:0;
-  z-index:-2;
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  opacity:.12;
-  filter:grayscale(30%) contrast(115%);
-  pointer-events:none;
-}
-.snv-id-backdrop img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
+  z-index:3;
 }
 .snv-id-overlay{
   position:absolute;
   inset:0;
   z-index:-1;
   background:
-    radial-gradient(760px 320px at 0% 0%, rgba(232,56,79,.15), transparent 70%),
-    radial-gradient(640px 280px at 100% 0%, rgba(255,255,255,.035), transparent 70%),
-    linear-gradient(90deg, #0a0a0f 20%, rgba(10,10,15,.85) 62%, #0a0a0f 100%),
-    linear-gradient(180deg, rgba(10,10,15,.35) 0%, #0a0a0f 92%);
+    radial-gradient(800px 360px at 0% 0%, var(--blob-1,rgba(232,56,79,.18)), transparent 70%),
+    radial-gradient(650px 320px at 100% 0%, color-mix(in srgb, #fbbf24 9%, transparent), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-base,#09090f) 55%, transparent) 0%, color-mix(in srgb, var(--bg-base,#09090f) 92%, transparent) 60%, var(--bg-card,#09090f) 100%);
   pointer-events:none;
 }
 
-/* 1. KATMAN: ÜST KİMLİK + SAĞDA ROZET / SERİ / XP VİTRİNİ */
-.snv-id-main{
+/* 1. KATMAN: ÜST KİMLİK & BÜYÜK SEVİYE / SERİ / XP GÖSTERGELERİ */
+.snv-hero-top{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:32px;
-  padding:34px 40px 30px;
+  gap:28px;
+  padding:30px 34px 26px;
   flex-wrap:wrap;
 }
-.snv-id-left{
+.snv-hero-identity{
   display:flex;
   align-items:center;
-  gap:26px;
+  gap:24px;
   min-width:0;
-  flex:1;
+  flex:1 1 420px;
 }
-.snv-id-monogram{
+.snv-crest-orb{
   position:relative;
-  width:94px;
-  height:94px;
+  width:112px;
+  height:112px;
   flex-shrink:0;
   display:grid;
   place-items:center;
-  filter:drop-shadow(0 12px 24px rgba(0,0,0,.6));
 }
-.snv-id-monogram svg{
+.snv-crest-ring{
   position:absolute;
   inset:0;
-  width:94px;
-  height:94px;
+  width:112px;
+  height:112px;
   transform:rotate(-90deg);
+  pointer-events:none;
 }
-.snv-id-letter{
-  width:76px;
-  height:76px;
+.snv-crest-core{
+  width:92px;
+  height:92px;
   border-radius:50%;
-  background:radial-gradient(circle at 30% 25%, rgba(255,255,255,.08), rgba(14,14,20,.95) 75%);
-  border:1px solid rgba(255,255,255,.12);
+  background:radial-gradient(circle at 30% 25%, rgba(255,255,255,.12), rgba(10,10,16,.96) 75%);
+  border:1.5px solid rgba(255,255,255,.16);
   display:grid;
   place-items:center;
-  font-size:32px;
-  font-weight:900;
-  color:#fff;
-  letter-spacing:-.03em;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.15);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 14px 32px -10px rgba(0,0,0,.9);
 }
-.snv-id-lv-tag{
+.snv-crest-lv{
   position:absolute;
-  bottom:-5px;
-  background:linear-gradient(135deg,#1e1e2a,#111118);
-  border:1px solid rgba(255,255,255,.24);
+  bottom:-6px;
+  background:linear-gradient(135deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));
+  border:1.5px solid rgba(255,255,255,.38);
   color:#fff;
-  font-size:10px;
+  font-family:inherit;
+  font-size:11px;
   font-variant-numeric:tabular-nums;
-  font-weight:800;
+  font-weight:900;
   letter-spacing:.14em;
-  padding:2.5px 11px;
+  text-transform:uppercase;
+  padding:3.5px 13px;
   border-radius:99px;
-  box-shadow:0 6px 14px rgba(0,0,0,.75);
+  box-shadow:0 8px 18px rgba(0,0,0,.85);
 }
 
-.snv-id-titles{
+.snv-hero-titles{
   display:flex;
   flex-direction:column;
   gap:6px;
   min-width:0;
+  flex:1;
 }
-.snv-id-kicker{
+.snv-hero-badges{
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:8px;
   flex-wrap:wrap;
-  font-family:'JetBrains Mono',monospace;
-  font-size:11px;
-  font-weight:700;
-  letter-spacing:.18em;
-  text-transform:uppercase;
-  color:var(--red-hi,var(--color-2,#ff6b7a));
 }
-.snv-id-kicker .sep{
-  color:rgba(255,255,255,.22);
-}
-.snv-id-code-btn{
+.snv-title-pill{
   display:inline-flex;
   align-items:center;
   gap:6px;
-  background:rgba(255,255,255,.045);
-  border:1px solid rgba(255,255,255,.1);
-  padding:3.5px 10px;
-  border-radius:7px;
-  font-family:'JetBrains Mono',monospace;
-  font-size:10.5px;
-  letter-spacing:.1em;
+  padding:5px 12px;
+  border-radius:9px;
+  font-family:inherit;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  background:linear-gradient(135deg,color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 22%, transparent),color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 8%, transparent));
+  border:1px solid color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 50%, transparent);
+  color:var(--text-main,#f4f4f2);
+  box-shadow:0 6px 18px -8px color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 60%, transparent);
+  cursor:pointer;
+  transition:.2s cubic-bezier(.2,.7,.3,1);
+}
+.snv-title-pill:hover{
+  transform:translateY(-1px);
+  border-color:color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 85%, transparent);
+  background:linear-gradient(135deg,color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 34%, transparent),color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 14%, transparent));
+}
+.snv-title-pill svg{
+  color:#fbbf24;
+}
+.snv-code-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.13);
+  padding:5px 11px;
+  border-radius:9px;
+  font-family:inherit;
+  font-variant-numeric:tabular-nums;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.08em;
   color:var(--muted,#9a9a96);
   cursor:pointer;
   transition:.2s;
 }
-.snv-id-code-btn:hover{
+.snv-code-btn:hover{
   color:#fff;
-  border-color:rgba(255,255,255,.28);
-  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.32);
+  background:rgba(255,255,255,.1);
 }
-.snv-id-name{
+.snv-hero-name{
   font-family:inherit;
-  font-size:42px;
+  font-size:38px;
   font-weight:900;
-  letter-spacing:-.035em;
-  line-height:1.02;
-  background:linear-gradient(100deg,#ffffff 45%,#b4b4be 100%);
+  letter-spacing:-.03em;
+  line-height:1.06;
+  background:linear-gradient(100deg,var(--text-main,#f4f4f2) 65%,color-mix(in srgb, var(--text-main,#f4f4f2) 65%, #7c7c85) 100%);
   -webkit-background-clip:text;
   background-clip:text;
   color:transparent;
   margin:2px 0;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+  word-break:break-word;
 }
-.snv-id-submeta{
-  font-size:13px;
-  color:var(--muted,#9a9a96);
-  font-weight:500;
-  letter-spacing:.01em;
-}
-
-/* Sağ Taraf: Büyük Rozet + Günlük Seri + Deneyim Puanı */
-.snv-id-right{
-  display:flex;
-  align-items:center;
-  gap:28px;
-  flex-shrink:0;
-}
-.snv-id-readout-divider{
-  width:1px;
-  height:56px;
-  background:linear-gradient(180deg,transparent,rgba(255,255,255,.14),transparent);
-}
-
-/* Büyütülmüş Rozet Vitrin Bloğu */
-.snv-badge-showcase{
-  display:flex;
-  align-items:center;
-  gap:15px;
-  background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
-  border:1px solid rgba(255,255,255,.12);
-  padding:11px 18px 11px 12px;
-  border-radius:16px;
-  cursor:pointer;
-  transition:.24s cubic-bezier(.2,.7,.3,1);
-  text-align:left;
+.snv-hero-sub{
   font-family:inherit;
-  color:inherit;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
-}
-.snv-badge-showcase:hover{
-  border-color:var(--red,var(--color-1,#e8384f));
-  background:linear-gradient(135deg,rgba(232,56,79,.14),rgba(255,255,255,.025));
-  transform:translateY(-2px);
-  box-shadow:0 14px 30px -14px rgba(232,56,79,.5);
-}
-.snv-badge-emblem{
-  width:54px;
-  height:54px;
-  border-radius:14px;
-  background:radial-gradient(circle at 30% 25%,rgba(232,56,79,.26),rgba(10,10,14,.94));
-  border:1px solid rgba(232,56,79,.45);
-  display:grid;
-  place-items:center;
-  font-size:26px;
-  color:var(--red-hi,var(--color-2,#ff6b7a));
-  flex-shrink:0;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.2);
-}
-.snv-badge-emblem.empty{
-  background:rgba(255,255,255,.03);
-  border:1px dashed rgba(255,255,255,.18);
+  font-size:13.5px;
   color:var(--muted,#9a9a96);
-}
-.snv-badge-meta{
-  display:flex;
-  flex-direction:column;
-  gap:3px;
-  min-width:0;
-}
-.snv-badge-kicker{
-  font-family:'JetBrains Mono',monospace;
-  font-size:9.5px;
-  font-weight:700;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  color:var(--red-hi,var(--color-2,#ff6b7a));
-}
-.snv-badge-title{
-  font-size:15.5px;
-  font-weight:800;
-  letter-spacing:-.01em;
-  color:#fff;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  max-width:175px;
-}
-.snv-badge-sub{
-  font-size:11px;
-  color:var(--muted,#9a9a96);
-  font-weight:500;
+  font-weight:600;
+  line-height:1.45;
 }
 
-.snv-id-readout{
+/* Sağ Üst: Günlük Seri ve Deneyim Puanı Kutuları */
+.snv-hero-readouts{
+  display:flex;
+  align-items:stretch;
+  gap:14px;
+  flex-shrink:0;
+}
+.snv-readout-box{
+  min-width:170px;
+  padding:14px 20px;
+  border-radius:18px;
+  background:linear-gradient(145deg,color-mix(in srgb, var(--text-main,#f4f4f2) 4.5%, transparent),color-mix(in srgb, var(--text-main,#f4f4f2) 1.5%, transparent));
+  border:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 12%, transparent);
+  box-shadow:inset 0 1px 0 color-mix(in srgb, var(--text-main,#f4f4f2) 8%, transparent);
   display:flex;
   flex-direction:column;
-  align-items:flex-end;
+  justify-content:space-between;
+  gap:4px;
 }
-.snv-id-readout-label{
-  display:inline-flex;
+.snv-readout-top{
+  display:flex;
   align-items:center;
-  gap:5px;
-  font-family:'JetBrains Mono',monospace;
-  font-size:9.5px;
-  font-weight:700;
-  letter-spacing:.18em;
+  justify-content:space-between;
+  gap:8px;
+  font-family:inherit;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.14em;
   text-transform:uppercase;
   color:var(--muted,#9a9a96);
-  margin-bottom:4px;
 }
-.snv-id-readout-label .flame{
-  color:#fb923c;
+.snv-readout-top .flame{color:#fb923c}
+.snv-readout-top .xp-pct{
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+  font-variant-numeric:tabular-nums;
 }
-.snv-id-readout-val{
+.snv-readout-num{
   display:flex;
   align-items:baseline;
   gap:6px;
+  margin:2px 0;
 }
-.snv-id-readout-val b{
-  font-size:38px;
+.snv-readout-num b{
+  font-family:inherit;
   font-variant-numeric:tabular-nums;
-  font-weight:800;
-  letter-spacing:-.04em;
+  font-size:32px;
+  font-weight:900;
+  letter-spacing:-.035em;
   line-height:1;
-  color:#fff;
+  color:var(--text-main,#f4f4f2);
 }
-.snv-id-readout-val em{
+.snv-readout-num em{
   font-style:normal;
+  font-family:inherit;
   font-size:11px;
-  font-weight:800;
-  letter-spacing:.14em;
+  font-weight:900;
+  letter-spacing:.12em;
   text-transform:uppercase;
   color:var(--red-hi,var(--color-2,#ff6b7a));
 }
-.snv-id-readout-val em.warm{
-  color:#fb923c;
-}
-.snv-id-readout-sub{
+.snv-readout-num em.warm{color:#fb923c}
+.snv-readout-foot{
+  font-family:inherit;
+  font-variant-numeric:tabular-nums;
   font-size:11px;
+  font-weight:700;
   color:var(--muted,#9a9a96);
-  margin-top:4px;
 }
 
-/* 2. KATMAN: LAZER XP İLERLEME ÇİZGİSİ (3px + Parlak Uç) */
+/* 2. KATMAN: İKİ BÜYÜK PRESTİJ VİTRİNİ (UNVAN YOLU & AKTİF ROZET) */
+.snv-showcase-deck{
+  display:grid;
+  grid-template-columns:1.18fr 1fr;
+  gap:18px;
+  padding:0 34px 26px;
+}
+.snv-deck-panel{
+  position:relative;
+  border-radius:20px;
+  padding:20px 24px;
+  background:linear-gradient(155deg, color-mix(in srgb, var(--text-main,#f4f4f2) 5%, transparent) 0%, color-mix(in srgb, var(--text-main,#f4f4f2) 1.5%, transparent) 100%);
+  border:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 12%, transparent);
+  box-shadow:inset 0 1px 0 color-mix(in srgb, var(--text-main,#f4f4f2) 10%, transparent), 0 16px 36px -20px rgba(0,0,0,.85);
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  gap:16px;
+  cursor:pointer;
+  transition:.25s cubic-bezier(.2,.7,.3,1);
+  text-align:left;
+  font-family:inherit;
+  color:inherit;
+}
+.snv-deck-panel:hover{
+  transform:translateY(-2px);
+  border-color:color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 50%, transparent);
+  background:linear-gradient(155deg, color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 10%, transparent) 0%, color-mix(in srgb, var(--text-main,#f4f4f2) 2.5%, transparent) 100%);
+  box-shadow:inset 0 1px 0 color-mix(in srgb, var(--text-main,#f4f4f2) 15%, transparent), 0 20px 42px -18px color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 35%, transparent);
+}
+.snv-deck-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.snv-deck-title{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  font-family:inherit;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.15em;
+  text-transform:uppercase;
+  color:#fbbf24;
+}
+.snv-deck-title.rose{
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+}
+.snv-deck-pill{
+  font-family:inherit;
+  font-variant-numeric:tabular-nums;
+  font-size:10.5px;
+  font-weight:800;
+  letter-spacing:.06em;
+  color:var(--text-main,#f4f4f5);
+  background:color-mix(in srgb, var(--bg-base,#09090f) 45%, transparent);
+  border:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 14%, transparent);
+  padding:4px 11px;
+  border-radius:99px;
+}
+
+/* Sol Vitrin İçeriği: Karşılıklı Büyük Unvan Armaları */
+.snv-rank-road{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  gap:14px;
+}
+.snv-rank-Endpoint{
+  display:flex;
+  align-items:center;
+  gap:13px;
+  min-width:0;
+}
+.snv-rank-Endpoint.target{
+  justify-content:flex-end;
+  text-align:right;
+}
+.snv-rank-pedestal{
+  width:64px;
+  height:64px;
+  border-radius:16px;
+  background:radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--text-main,#f4f4f2) 10%, transparent), color-mix(in srgb, var(--bg-base,#09090f) 55%, transparent));
+  border:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 14%, transparent);
+  display:grid;
+  place-items:center;
+  flex-shrink:0;
+  box-shadow:inset 0 1px 0 color-mix(in srgb, var(--text-main,#f4f4f2) 15%, transparent);
+}
+.snv-rank-Endpoint.target .snv-rank-pedestal{
+  background:radial-gradient(circle at 50% 30%, rgba(251,191,36,.2), color-mix(in srgb, var(--bg-base,#09090f) 55%, transparent));
+  border-color:rgba(251,191,36,.45);
+}
+.snv-rank-info{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.snv-rank-info small{
+  font-family:inherit;
+  font-size:9.5px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--muted,#9a9a96);
+}
+.snv-rank-info b{
+  font-family:inherit;
+  font-size:15.5px;
+  font-weight:900;
+  letter-spacing:-.015em;
+  color:var(--text-main,#f4f4f2);
+  line-height:1.2;
+}
+.snv-rank-Endpoint.target .snv-rank-info b{
+  color:#fde047;
+}
+.snv-rank-info span{
+  font-family:inherit;
+  font-variant-numeric:tabular-nums;
+  font-size:11px;
+  font-weight:700;
+  color:var(--muted,#9a9a96);
+}
+.snv-rank-arrow{
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  background:color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 16%, transparent);
+  border:1px solid color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 40%, transparent);
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+  display:grid;
+  place-items:center;
+  flex-shrink:0;
+}
+
+.snv-rank-progress-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.snv-rank-progress-labels{
+  display:flex;
+  justify-content:space-between;
+  font-family:inherit;
+  font-variant-numeric:tabular-nums;
+  font-size:11px;
+  font-weight:800;
+  color:color-mix(in srgb, var(--text-main,#f4f4f2) 82%, transparent);
+}
+.snv-rank-progress-labels b{
+  color:#fde047;
+}
+.snv-rank-bar{
+  height:8px;
+  border-radius:99px;
+  background:color-mix(in srgb, var(--bg-base,#09090f) 60%, transparent);
+  border:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 8%, transparent);
+  overflow:hidden;
+  position:relative;
+}
+.snv-rank-bar i{
+  position:absolute;
+  inset:0 auto 0 0;
+  border-radius:99px;
+  background:linear-gradient(90deg,var(--red,var(--color-1,#e8384f)),#fbbf24);
+  box-shadow:0 0 14px rgba(251,191,36,.6);
+  transition:width .8s ease;
+}
+
+/* Sağ Vitrin İçeriği: Kuşanılan Özel Görev Arması Detaylı Kart */
+.snv-badge-body{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  min-width:0;
+}
+.snv-badge-pedestal{
+  width:72px;
+  height:72px;
+  border-radius:18px;
+  background:radial-gradient(circle at 35% 25%, color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 24%, transparent), color-mix(in srgb, var(--bg-base,#09090f) 60%, transparent));
+  border:1px solid color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 45%, transparent);
+  display:grid;
+  place-items:center;
+  flex-shrink:0;
+  color:var(--red-hi,var(--color-2,#ff6b7a));
+  box-shadow:inset 0 1px 0 color-mix(in srgb, var(--text-main,#f4f4f2) 18%, transparent);
+}
+.snv-badge-pedestal.empty{
+  background:color-mix(in srgb, var(--text-main,#f4f4f2) 3%, transparent);
+  border:1px dashed color-mix(in srgb, var(--text-main,#f4f4f2) 20%, transparent);
+  color:var(--muted,#9a9a96);
+}
+.snv-badge-info{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+  flex:1;
+}
+.snv-badge-info b{
+  font-family:inherit;
+  font-size:17px;
+  font-weight:900;
+  letter-spacing:-.015em;
+  color:var(--text-main,#f4f4f2);
+  line-height:1.2;
+}
+.snv-badge-info p{
+  font-family:inherit;
+  font-size:12px;
+  font-weight:500;
+  color:var(--muted,#9a9a96);
+  line-height:1.45;
+  margin:0;
+}
+.snv-badge-foot{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding-top:10px;
+  border-top:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 8%, transparent);
+  font-family:inherit;
+  font-variant-numeric:tabular-nums;
+  font-size:11px;
+  font-weight:800;
+  color:var(--muted,#9a9a96);
+}
+.snv-badge-foot strong{
+  color:#34d399;
+}
+
+/* LAZER XP İLERLEME ÇİZGİSİ */
 .snv-id-laser-wrap{
   position:relative;
   height:3px;
-  background:rgba(255,255,255,.07);
+  background:color-mix(in srgb, var(--text-main,#f4f4f2) 7%, transparent);
   width:100%;
   overflow:hidden;
 }
 .snv-id-laser-fill{
   position:absolute;
   top:0;bottom:0;left:0;
-  background:linear-gradient(90deg,rgba(232,56,79,.35),var(--red,var(--color-1,#e8384f)) 45%,var(--red-hi,var(--color-2,#ff6b7a)) 92%,#ffffff 100%);
+  background:linear-gradient(90deg,color-mix(in srgb, var(--red,var(--color-1,#e8384f)) 35%, transparent),var(--red,var(--color-1,#e8384f)) 45%,var(--red-hi,var(--color-2,#ff6b7a)) 92%,#ffffff 100%);
   box-shadow:0 0 18px var(--red,var(--color-1,#e8384f));
   transition:width 1s cubic-bezier(.2,.8,.2,1);
 }
 
-/* 3. KATMAN: MASAÜSTÜ YENİLENMİŞ ALT KONSOL */
+/* 3. KATMAN: ALT KONSOL (5'Lİ KARİYER METRİĞİ + 6'LI KUPA KADEMESİ) */
 .snv-id-footer{
   display:grid;
-  grid-template-columns:auto 1fr;
+  grid-template-columns:1fr 1.25fr;
   align-items:stretch;
-  gap:0;
-  padding:0;
-  background:linear-gradient(180deg, rgba(255,255,255,.022) 0%, rgba(0,0,0,.28) 100%);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--text-main,#f4f4f2) 2.5%, transparent) 0%, color-mix(in srgb, var(--bg-base,#09090f) 40%, transparent) 100%);
 }
-
-/* Sol Konsol: 5'li Kariyer İstatistikleri */
 .snv-id-metrics{
   display:grid;
-  grid-template-columns:repeat(5, minmax(74px, auto));
+  grid-template-columns:repeat(5, 1fr);
   align-items:center;
-  padding:18px 28px;
-  border-right:1px solid rgba(255,255,255,.08);
-  gap:0;
+  gap:8px;
+  padding:16px 26px;
+  border-right:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 8%, transparent);
 }
 .snv-id-mitem{
   display:flex;
   flex-direction:column;
-  align-items:flex-start;
+  align-items:center;
   justify-content:center;
+  text-align:center;
   gap:3px;
-  padding:2px 18px;
-  border-left:1px solid rgba(255,255,255,.07);
-}
-.snv-id-mitem:first-child{
-  padding-left:0;
-  border-left:0;
-}
-.snv-id-mitem:last-child{
-  padding-right:0;
+  padding:10px 6px;
+  border-radius:12px;
+  background:color-mix(in srgb, var(--text-main,#f4f4f2) 2.5%, transparent);
+  border:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 6%, transparent);
 }
 .snv-id-mitem b{
-  font-size:23px;
+  font-family:inherit;
+  font-size:22px;
   font-variant-numeric:tabular-nums;
   font-weight:900;
   letter-spacing:-.03em;
   line-height:1.05;
-  color:#fff;
+  color:var(--text-main,#f4f4f2);
 }
 .snv-id-mitem span{
-  font-family:'JetBrains Mono',monospace;
-  font-size:9.5px;
-  font-weight:700;
-  letter-spacing:.15em;
+  font-family:inherit;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.12em;
   text-transform:uppercase;
   color:var(--muted,#9a9a96);
 }
 
-/* Sağ Konsol: Kademeler + Unvan Evrimi */
-.snv-id-right-foot{
-  display:grid;
-  grid-template-columns:1fr minmax(330px, 390px);
-  align-items:center;
-  gap:0;
-  min-width:0;
-}
-
-/* Orta Modül: Kademe Koleksiyon Vitrini */
 .snv-id-tiers{
   display:grid;
-  grid-template-columns:repeat(6, minmax(0, 1fr));
+  grid-template-columns:repeat(6, 1fr);
   align-items:center;
   gap:8px;
-  padding:16px 24px;
+  padding:16px 26px;
 }
 .snv-id-tier{
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:4px;
-  padding:9px 8px;
+  gap:5px;
+  padding:10px 6px;
   border-radius:12px;
-  background:rgba(255,255,255,.025);
-  border:1px solid rgba(255,255,255,.07);
+  background:color-mix(in srgb, var(--text-main,#f4f4f2) 2.8%, transparent);
+  border:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 8%, transparent);
   color:inherit;
   font-family:inherit;
   cursor:pointer;
   transition:.22s cubic-bezier(.2,.7,.3,1);
-  position:relative;
-  overflow:hidden;
 }
 .snv-id-tier:hover{
-  background:rgba(255,255,255,.065);
-  border-color:rgba(255,255,255,.2);
+  background:color-mix(in srgb, var(--text-main,#f4f4f2) 7%, transparent);
+  border-color:color-mix(in srgb, var(--text-main,#f4f4f2) 24%, transparent);
   transform:translateY(-2px);
-  box-shadow:0 10px 22px -12px rgba(0,0,0,.85);
 }
 .snv-id-tier-top{
   display:flex;
@@ -464,163 +622,38 @@ const HOME_PREMIUM_CSS = `
   gap:6px;
 }
 .snv-id-tier i{
-  width:7px;
-  height:7px;
+  width:8px;
+  height:8px;
   border-radius:50%;
   flex-shrink:0;
 }
 .snv-id-tier b{
-  font-size:16px;
+  font-family:inherit;
+  font-size:18px;
   font-variant-numeric:tabular-nums;
   font-weight:900;
-  color:#fff;
+  color:var(--text-main,#f4f4f2);
   line-height:1;
 }
 .snv-id-tier span{
-  font-size:9.5px;
+  font-family:inherit;
+  font-size:10px;
   font-weight:800;
   letter-spacing:.1em;
   text-transform:uppercase;
-  color:#c4c4cc;
+  color:color-mix(in srgb, var(--text-main,#f4f4f2) 80%, transparent);
 }
 
-/* Sağ Modül: Yenilenmiş Unvan Evrim Kartı */
-.snv-rank-evolution{
-  height:100%;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  gap:9px;
-  padding:16px 28px;
-  border-left:1px solid rgba(255,255,255,.08);
-  background:
-    radial-gradient(260px 120px at 100% 50%, rgba(232,56,79,.13), transparent 75%),
-    rgba(255,255,255,.015);
-}
-.snv-re-top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-}
-.snv-re-tag{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  font-family:'JetBrains Mono',monospace;
-  font-size:9.5px;
-  font-weight:800;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  color:var(--red-hi,var(--color-2,#ff6b7a));
-}
-.snv-re-rem{
-  font-family:'JetBrains Mono',monospace;
-  font-size:9.5px;
-  font-variant-numeric:tabular-nums;
-  font-weight:700;
-  color:#e4e4e7;
-  background:rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.12);
-  padding:2.5px 9px;
-  border-radius:99px;
-  white-space:nowrap;
-}
-.snv-re-Flow{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-}
-.snv-re-node{
-  display:inline-flex;
-  align-items:center;
-  gap:7px;
-  min-width:0;
-}
-.snv-re-node-ic{
-  width:24px;
-  height:24px;
-  border-radius:7px;
-  background:rgba(255,255,255,.05);
-  border:1px solid rgba(255,255,255,.1);
-  display:grid;
-  place-items:center;
-  color:var(--muted,#9a9a96);
-  flex-shrink:0;
-}
-.snv-re-node.target .snv-re-node-ic{
-  background:rgba(232,56,79,.16);
-  border-color:rgba(232,56,79,.4);
-  color:var(--red-hi,var(--color-2,#ff6b7a));
-}
-.snv-re-cur{
-  color:var(--muted,#9a9a96);
-  font-size:12.5px;
-  font-weight:700;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-.snv-re-connector{
-  flex:1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  min-width:20px;
-  position:relative;
-}
-.snv-re-connector::before{
-  content:'';
-  position:absolute;
-  left:0;right:0;
-  height:1px;
-  background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(232,56,79,.5),rgba(255,255,255,.08));
-}
-.snv-re-arrow{
-  position:relative;
-  z-index:1;
-  background:#111118;
-  padding:0 3px;
-  color:var(--red-hi,var(--color-2,#ff6b7a));
-  flex-shrink:0;
-}
-.snv-re-next{
-  color:#fff;
-  font-size:13.5px;
-  font-weight:900;
-  letter-spacing:-.01em;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-.snv-re-bar-row{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-.snv-re-bar{
-  flex:1;
-  height:5px;
-  border-radius:99px;
-  background:rgba(255,255,255,.07);
-  overflow:hidden;
-  position:relative;
-}
-.snv-re-bar i{
-  position:absolute;
-  inset:0 auto 0 0;
-  border-radius:99px;
-  background:linear-gradient(90deg,var(--red,var(--color-1,#e8384f)),var(--red-hi,var(--color-2,#ff6b7a)));
-  box-shadow:0 0 10px var(--red,var(--color-1,#e8384f));
-  transition:width .8s ease;
-}
-.snv-re-pct{
-  font-family:'JetBrains Mono',monospace;
-  font-size:10px;
-  font-weight:800;
-  color:var(--red-hi,var(--color-2,#ff6b7a));
-  flex-shrink:0;
+/* Tema kontrast override: açık temalarda altın metinleri koyulaştır */
+body[data-theme="light"] .snv-deck-title,
+body[data-theme="sepia"] .snv-deck-title,
+body[data-theme="light"] .snv-rank-Endpoint.target .snv-rank-info b,
+body[data-theme="sepia"] .snv-rank-Endpoint.target .snv-rank-info b,
+body[data-theme="light"] .snv-rank-progress-labels b,
+body[data-theme="sepia"] .snv-rank-progress-labels b,
+body[data-theme="light"] .snv-title-pill svg,
+body[data-theme="sepia"] .snv-title-pill svg{
+  color:#a16207;
 }
 
 /* ---------- HIZLI ERİŞİM + ZAMANLAYICI ---------- */
@@ -691,7 +724,7 @@ const HOME_PREMIUM_CSS = `
 .hn-rate{position:absolute;top:14px;right:14px;z-index:2;font-weight:900;font-variant-numeric:tabular-nums;font-size:15px;background:rgba(10,10,13,.85);border:1px solid rgba(255,255,255,.22);padding:6px 12px;border-radius:11px;color:#fff;backdrop-filter:blur(10px);box-shadow:0 8px 22px -10px rgba(0,0,0,.9)}
 .hn-sp-body{padding:34px 38px;display:flex;flex-direction:column;gap:18px;min-width:0;overflow:hidden}
 .hn-sp-head{display:flex;flex-direction:column;gap:14px;min-width:0}
-.hn-sp-kick{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.26em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
+.hn-sp-kick{font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.26em;color:var(--red-hi,var(--color-2,#ff6b7a));text-transform:uppercase}
 .hn-sp-body h2{font-family:inherit;font-size:40px;font-weight:900;text-transform:uppercase;letter-spacing:-.035em;line-height:.98;margin:0;background:linear-gradient(100deg,#fff 35%,#9C9CA1);-webkit-background-clip:text;background-clip:text;color:transparent;overflow-wrap:anywhere;min-width:0}
 .hn-meta-chips{display:flex;gap:8px;flex-wrap:wrap;width:fit-content;max-width:100%;min-width:0}
 .hn-meta-chips span{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:8px 14px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));border-radius:99px;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -721,14 +754,14 @@ const HOME_PREMIUM_CSS = `
 .hn-sinfo h4{font-family:inherit;font-size:15.5px;font-weight:900;text-transform:uppercase;letter-spacing:-.015em;margin:0;color:var(--text-main,#f4f4f2)}
 .hn-next-ep{display:inline-block;width:fit-content;margin-top:8px;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);padding:5px 10px;border-radius:99px}
 .hn-next-ep b{color:var(--red-hi,var(--color-2,#ff6b7a))}
-.hn-prog-lab{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:15px}
+.hn-prog-lab{display:flex;justify-content:space-between;font-family:inherit;font-variant-numeric:tabular-nums;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:15px}
 .hn-prog-lab i{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a))}
 .hn-prog{height:8px;background:rgba(0,0,0,.5);border-radius:99px;margin-top:6px;position:relative;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
 .hn-prog i{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 12px var(--red,var(--color-1,#e8384f))}
 .hn-rate-btn{margin-top:15px;width:100%;padding:11px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));color:var(--muted,#9a9a96);font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;transition:.24s;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
 .hn-rate-btn:hover{background:linear-gradient(150deg,var(--red-hi,var(--color-2,#ff6b7a)),var(--red-deep,var(--color-3,#8e1220)));border-color:transparent;color:#fff;box-shadow:0 10px 26px -8px var(--red,var(--color-1,#e8384f));transform:translateY(-2px)}
 
-/* ---------- ROZETLER + SİNEVİA AĞI (Afişli Tasarım) ---------- */
+/* ---------- ROZETLER + SİNEVİA AĞI ---------- */
 .hn-duo{display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
 .hn-panel{padding:26px 28px}
 .hn-panel + .hn-panel{border-left:1px solid var(--line,rgba(244,244,242,.07))}
@@ -745,7 +778,7 @@ const HOME_PREMIUM_CSS = `
 .hn-an b{display:block;font-family:inherit;font-size:13px;font-weight:900;text-transform:uppercase;color:var(--text-main,#f4f4f2)}
 .hn-an span{font-size:11px;color:var(--muted,#9a9a96);font-weight:500}
 .hn-axp{font-size:10px;font-variant-numeric:tabular-nums;font-weight:900;letter-spacing:.08em;color:var(--red-hi,var(--color-2,#ff6b7a));background:rgba(232,56,79,.14);border:1px solid rgba(232,56,79,.45);padding:5px 10px;white-space:nowrap;border-radius:99px}
-.hn-pl{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:13px}
+.hn-pl{display:flex;justify-content:space-between;font-family:inherit;font-variant-numeric:tabular-nums;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:13px}
 .hn-pl i{font-style:normal;color:var(--text-main,#f4f4f2)}
 .hn-pt{height:8px;background:rgba(0,0,0,.5);border-radius:99px;margin-top:6px;position:relative;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
 .hn-pt i{position:absolute;top:0;bottom:0;left:0;border-radius:99px;background:linear-gradient(90deg,var(--red-deep,var(--color-3,#8e1220)),var(--red-hi,var(--color-2,#ff6b7a)));box-shadow:0 0 12px var(--red,var(--color-1,#e8384f))}
@@ -790,7 +823,7 @@ const HOME_PREMIUM_CSS = `
 .hn-agent-who b{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--red-hi,var(--color-2,#ff6b7a));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
 .hn-agent-who span{font-size:10px;color:var(--muted,#9a9a96);font-weight:600}
 .hn-agent-title{font-family:inherit;font-size:13.5px;font-weight:900;color:var(--text-main,#f4f4f2);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hn-agent-time{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;color:var(--muted,#9a9a96);letter-spacing:.06em;text-transform:uppercase}
+.hn-agent-time{font-family:inherit;font-variant-numeric:tabular-nums;font-size:9.5px;font-weight:600;color:var(--muted,#9a9a96);letter-spacing:.06em;text-transform:uppercase}
 .hn-st{margin-left:auto;font-size:9.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:5px 10px;color:var(--muted,#9a9a96);border-radius:99px;white-space:nowrap;flex-shrink:0}
 .hn-st.on{color:#67E39B;border-color:rgba(78,203,142,.5);background:rgba(78,203,142,.1);box-shadow:0 0 14px -5px rgba(78,203,142,.7)}
 .hn-agents-loading{text-align:center;padding:26px 10px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted,#9a9a96);animation:hnPulse 1.6s ease-in-out infinite}
@@ -812,7 +845,7 @@ const HOME_PREMIUM_CSS = `
 .hp-rec-rate{position:absolute;top:10px;right:10px;z-index:2;font-size:11px;font-weight:900;padding:4px 9px;border-radius:99px;font-variant-numeric:tabular-nums;box-shadow:0 6px 16px -6px rgba(0,0,0,.7)}
 .hp-rec-tx{display:block;padding:13px 15px 15px;min-width:0}
 .hp-rec-tx b{display:block;font-family:inherit;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;color:var(--text-main,#f4f4f2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hp-rec-tx span{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hp-rec-tx span{display:block;font-family:inherit;font-variant-numeric:tabular-nums;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted,#9a9a96);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hp-rec-tx span i{font-style:normal;color:var(--red-hi,var(--color-2,#ff6b7a))}
 
 /* ---------- BENTO (Nasıl Çalışır) ---------- */
@@ -826,20 +859,12 @@ const HOME_PREMIUM_CSS = `
 .hn-bento-card p{font-family:inherit;font-size:12.5px;line-height:1.7;color:var(--muted,#9a9a96);margin:0}
 
 /* ============================================================
-   RESPONSIVE & MOBİL ULTRA-KOMPAKT OPTİMİZASYON
+   RESPONSIVE & MOBİL TAM GÖRÜNÜM OPTİMİZASYONU
    ============================================================ */
-@media (max-width:1280px) and (min-width:768px){
+@media (max-width:1180px) and (min-width:768px){
+  .snv-showcase-deck{grid-template-columns:1fr}
   .snv-id-footer{grid-template-columns:1fr}
-  .snv-id-metrics{border-right:0;border-bottom:1px solid rgba(255,255,255,.08);justify-content:space-between}
-}
-@media (max-width:1180px){
-  .snv-id-right{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)}
-  .snv-id-readout{align-items:flex-start}
-}
-@media (max-width:1080px) and (min-width:768px){
-  .snv-id-main{padding:28px;gap:24px}
-  .snv-id-right-foot{grid-template-columns:1fr}
-  .snv-rank-evolution{border-left:0;border-top:1px solid rgba(255,255,255,.08)}
+  .snv-id-metrics{border-right:0;border-bottom:1px solid color-mix(in srgb, var(--text-main,#f4f4f2) 8%, transparent)}
 }
 @media (max-width:1080px){
   .hp-recent{grid-template-columns:repeat(3,1fr)}
@@ -850,7 +875,7 @@ const HOME_PREMIUM_CSS = `
   .hn-panel + .hn-panel{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
 }
 @media (max-width:767px){
-  /* Bölüm Başlıkları — Zarif ve Küçük */
+  /* Bölüm Başlıkları */
   .hn-sec{gap:8px}
   .hn-sec-t{gap:7px;flex-wrap:wrap}
   .hn-sec-t h2{font-size:12.5px;letter-spacing:0}
@@ -858,122 +883,109 @@ const HOME_PREMIUM_CSS = `
   .hn-idx{padding:2.5px 6px;font-size:8px;border-radius:5px;letter-spacing:.14em}
   .hn-more{padding:2px 0;font-size:8.5px;letter-spacing:.1em}
 
-  /* Genel Mobil Butonlar & Hızlı Erişim */
+  /* Genel Mobil Butonlar */
   .hn-btn{padding:7px 10px;font-size:9px;letter-spacing:.05em;gap:4px;min-height:34px;border-radius:9px;justify-content:center}
   .hn-planned{padding:7px 10px;font-size:9px;letter-spacing:.05em;min-height:34px;border-radius:9px}
   .hn-action{min-height:34px;padding:7px 8px;font-size:9px}
 
-  /* 01 · SİNEVİA KARTI — MOBİLDE MİNİMAL & ZARİF */
-  .snv-id-card{border-radius:14px}
-  .snv-id-main{padding:11px 12px;gap:10px}
-  .snv-id-left{gap:10px;width:100%}
-  .snv-id-monogram{width:48px;height:48px}
-  .snv-id-monogram svg{width:48px;height:48px}
-  .snv-id-letter{width:39px;height:39px;font-size:16px}
-  .snv-id-lv-tag{font-size:7.5px;padding:1px 6px;bottom:-3px;letter-spacing:.08em}
-  .snv-id-titles{gap:1px}
-  .snv-id-kicker{font-size:8px;letter-spacing:.1em;gap:5px}
-  .snv-id-code-btn{font-size:8px;padding:1.5px 5px;border-radius:5px}
-  .snv-id-name{font-size:17.5px;line-height:1.1;margin:1px 0}
-  .snv-id-submeta{display:none}
+  /* 01 · SİNEVİA KARTI — MOBİLDE TÜM VERİLER TAM VE OKUNAKLI */
+  .snv-id-card{border-radius:18px}
+  .snv-hero-top{
+    padding:16px 14px 14px;
+    gap:14px;
+  }
+  .snv-hero-identity{
+    gap:14px;
+    flex:1 1 100%;
+  }
+  .snv-crest-orb{width:76px;height:76px}
+  .snv-crest-ring{width:76px;height:76px}
+  .snv-crest-core{width:62px;height:62px}
+  .snv-crest-lv{font-size:9px;padding:2px 9px;bottom:-4px}
 
-  .snv-id-right{
+  .snv-hero-titles{gap:4px}
+  .snv-hero-badges{gap:6px}
+  .snv-title-pill{font-size:9.5px;padding:3.5px 8px;border-radius:7px}
+  .snv-code-btn{font-size:9.5px;padding:3.5px 8px;border-radius:7px}
+  .snv-hero-name{font-size:24px;line-height:1.1}
+  .snv-hero-sub{font-size:11.5px;line-height:1.35}
+
+  .snv-hero-readouts{
     width:100%;
     display:grid;
     grid-template-columns:1fr 1fr;
-    gap:6px;
-    padding-top:8px;
-    border-top:1px solid rgba(255,255,255,.06);
-  }
-  .snv-id-readout-divider{display:none}
-  .snv-badge-showcase{
-    grid-column:1 / -1;
-    padding:6px 9px;
     gap:8px;
-    border-radius:10px;
   }
-  .snv-badge-emblem{width:30px;height:30px;border-radius:8px;font-size:14px}
-  .snv-badge-kicker{font-size:7.5px;letter-spacing:.1em}
-  .snv-badge-title{font-size:11px;max-width:210px}
-  .snv-badge-sub{display:none}
-
-  .snv-id-readout{
-    align-items:flex-start;
-    background:rgba(255,255,255,.022);
-    border:1px solid rgba(255,255,255,.06);
-    padding:6px 9px;
-    border-radius:9px;
+  .snv-readout-box{
+    min-width:0;
+    padding:10px 12px;
+    border-radius:13px;
   }
-  .snv-id-readout-label{font-size:7.5px;letter-spacing:.1em;margin-bottom:1px}
-  .snv-id-readout-val{gap:4px}
-  .snv-id-readout-val b{font-size:16px}
-  .snv-id-readout-val em{font-size:8px;letter-spacing:.08em}
-  .snv-id-readout-sub{font-size:8px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .snv-readout-top{font-size:8.5px;letter-spacing:.1em}
+  .snv-readout-num b{font-size:22px}
+  .snv-readout-num em{font-size:9.5px}
+  .snv-readout-foot{font-size:9.5px}
 
-  .snv-id-footer{display:flex;flex-wrap:wrap;padding:9px 12px;gap:8px}
+  /* Mobil Orta Vitrin: Unvan Yolu & Aktif Rozet Alt Alta Tam Görünüm */
+  .snv-showcase-deck{
+    grid-template-columns:1fr;
+    gap:10px;
+    padding:0 14px 14px;
+  }
+  .snv-deck-panel{
+    padding:13px 14px;
+    border-radius:15px;
+    gap:11px;
+  }
+  .snv-deck-title{font-size:9.5px;letter-spacing:.12em}
+  .snv-deck-pill{font-size:9.5px;padding:3px 9px}
+
+  .snv-rank-road{gap:8px}
+  .snv-rank-Endpoint{gap:8px}
+  .snv-rank-pedestal{width:46px;height:46px;border-radius:12px}
+  .snv-rank-info small{font-size:8px;letter-spacing:.08em}
+  .snv-rank-info b{font-size:12.5px}
+  .snv-rank-info span{font-size:9.5px}
+  .snv-rank-arrow{width:26px;height:26px}
+  .snv-rank-progress-labels{font-size:9.5px}
+  .snv-rank-bar{height:6px}
+
+  .snv-badge-body{gap:12px}
+  .snv-badge-pedestal{width:54px;height:54px;border-radius:14px}
+  .snv-badge-info b{font-size:14px}
+  .snv-badge-info p{font-size:11px;line-height:1.35}
+  .snv-badge-foot{font-size:10px;padding-top:8px}
+
+  /* Mobil Alt Konsol: 5'li Metrik + 6'lı Kupa Kademesi */
+  .snv-id-footer{
+    grid-template-columns:1fr;
+    padding:12px 14px 14px;
+    gap:10px;
+  }
   .snv-id-metrics{
-    width:100%;
-    display:grid;
-    grid-template-columns:repeat(5,1fr);
-    gap:3.5px;
     padding:0;
     border-right:0;
-    text-align:center;
+    gap:5px;
   }
   .snv-id-mitem{
-    flex-direction:column;
-    align-items:center;
-    gap:1px;
-    background:rgba(255,255,255,.018);
-    border:1px solid rgba(255,255,255,.05);
-    padding:4.5px 2px;
-    border-radius:7px;
+    padding:7px 4px;
+    border-radius:9px;
   }
-  .snv-id-mitem:first-child{border-left:1px solid rgba(255,255,255,.05);padding-left:2px}
-  .snv-id-mitem:last-child{padding-right:2px}
-  .snv-id-mitem b{font-size:12.5px;line-height:1.1}
-  .snv-id-mitem span{font-size:6.8px;letter-spacing:.06em}
+  .snv-id-mitem b{font-size:15px}
+  .snv-id-mitem span{font-size:8px;letter-spacing:.06em}
 
-  .snv-id-right-foot{display:flex;flex-wrap:wrap;width:100%;gap:8px}
   .snv-id-tiers{
-    width:100%;
-    display:grid;
-    grid-template-columns:repeat(6,1fr);
-    gap:3.5px;
     padding:0;
+    gap:5px;
   }
   .snv-id-tier{
-    flex-direction:column;
-    justify-content:center;
-    gap:1.5px;
-    padding:4px 2px;
-    border-radius:7px;
-    text-align:center;
-  }
-  .snv-id-tier-top{flex-direction:row;gap:3.5px}
-  .snv-id-tier i{width:4.5px;height:4.5px}
-  .snv-id-tier b{font-size:10.5px}
-  .snv-id-tier span{font-size:6.8px;letter-spacing:.03em}
-
-  .snv-rank-evolution{
-    width:100%;
-    min-width:0;
-    padding:7px 10px;
-    gap:4px;
+    padding:7px 4px;
     border-radius:9px;
-    background:linear-gradient(135deg,rgba(232,56,79,.09),rgba(255,255,255,.015));
-    border:1px solid rgba(232,56,79,.26);
+    gap:3px;
   }
-  .snv-re-node-ic{display:none}
-  .snv-re-connector::before{display:none}
-  .snv-re-connector{flex:0 0 auto;min-width:0}
-  .snv-re-arrow{background:transparent;padding:0}
-  .snv-re-Flow{justify-content:flex-start;font-size:10px;gap:5px}
-  .snv-re-cur,.snv-re-next{font-size:10px}
-  .snv-re-tag{font-size:7.5px;letter-spacing:.12em}
-  .snv-re-rem{font-size:7.5px;padding:1px 6px}
-  .snv-re-bar{height:3.5px}
-  .snv-re-pct{font-size:8.5px}
+  .snv-id-tier i{width:6px;height:6px}
+  .snv-id-tier b{font-size:13.5px}
+  .snv-id-tier span{font-size:7.5px;letter-spacing:.04em}
 
   /* Canlı Sayaç */
   .hn-timer{padding:10px 12px;gap:8px;border-radius:14px}
@@ -985,7 +997,7 @@ const HOME_PREMIUM_CSS = `
   .hn-timer-btns .hn-btn{flex:1;min-height:31px;padding:6px 8px;font-size:8.5px}
   .hn-timer-x{width:31px;height:31px;border-radius:8px;flex-shrink:0}
 
-  /* 02 · GÜNÜN SİNEMA KARTI — MOBİLDE YAN YANA KOMPAKT & MİNİMAL */
+  /* 02 · GÜNÜN SİNEMA KARTI */
   .hn-spotlight{
     grid-template-columns:84px minmax(0,1fr);
     gap:10px;
@@ -1003,14 +1015,8 @@ const HOME_PREMIUM_CSS = `
   .hn-filmbadge{display:none}
   .hn-rate{top:5px;right:5px;font-size:9px;padding:1.5px 5px;border-radius:5px}
   .hn-big-letter{font-size:40px}
-  .hn-sp-body{
-    display:contents;
-  }
-  .hn-sp-head{
-    grid-column:2;
-    gap:4.5px;
-    min-width:0;
-  }
+  .hn-sp-body{display:contents}
+  .hn-sp-head{grid-column:2;gap:4.5px;min-width:0}
   .hn-sp-kick{font-size:7.5px;letter-spacing:.12em}
   .hn-sp-body h2{font-size:15px;line-height:1.12;letter-spacing:-.02em}
   .hn-meta-chips{gap:3.5px}
@@ -1044,10 +1050,7 @@ const HOME_PREMIUM_CSS = `
     justify-content:center;
     width:100%;
   }
-  .hn-links{
-    grid-column:1 / -1;
-    gap:4px;
-  }
+  .hn-links{grid-column:1 / -1;gap:4px}
   .hn-link-chip{font-size:7.5px;padding:3.5px 7px;letter-spacing:.04em;gap:4px}
   .hn-link-logo{width:10px;height:10px}
 
@@ -1114,6 +1117,14 @@ const TIER_INK: Record<string, string> = {
   bronze: '#FF7A2F', silver: '#E2E8F0', gold: '#FFC800', platinum: '#A5F3FC', emerald: '#00E676', diamond: '#00D2FF',
 };
 
+const RARITY_TR: Record<string, string> = {
+  common: 'Yaygın',
+  rare: 'Nadir',
+  epic: 'Destansı',
+  legendary: 'Efsanevi',
+  mythic: 'Gizli Boss',
+};
+
 function timeAgo(dateString: string) {
   const date = new Date(dateString);
   const now = new Date();
@@ -1131,7 +1142,7 @@ export default function HomePage() {
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, showToast
   } = useApp();
 
-  const { questState } = useQuests(); 
+  const { questState } = useQuests();
 
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
   const [showPick, setShowPick] = useState(false);
@@ -1321,21 +1332,6 @@ export default function HomePage() {
       });
   }, [data.history, data.movies, data.series]);
 
-  const backdropPosters = useMemo(() => {
-    const urls: string[] = [];
-    for (const item of recentWatched) {
-      if (item.posterUrl && !urls.includes(item.posterUrl)) urls.push(item.posterUrl);
-      if (urls.length >= 4) break;
-    }
-    if (urls.length < 4) {
-      for (const m of data.movies) {
-        if (m.posterUrl && !urls.includes(m.posterUrl)) urls.push(m.posterUrl);
-        if (urls.length >= 4) break;
-      }
-    }
-    return urls;
-  }, [recentWatched, data.movies]);
-
   const [posterErrors, setPosterErrors] = useState<Record<string, boolean>>({});
 
   // Sinevia Ağı için poster çözücü
@@ -1372,12 +1368,18 @@ export default function HomePage() {
     return Math.min(100, Math.max(6, Math.round((done / span) * 100)));
   }, [nextRank, userPersona.minLevel, lvl.level, lvl.progress]);
 
-  const circleRadius = 43;
+  const circleRadius = 51;
   const circleCircumference = 2 * Math.PI * circleRadius;
   const circleOffset = circleCircumference - (Math.min(100, Math.max(0, lvl.progress)) / 100) * circleCircumference;
 
   const navigateTo = (tabId: string) => {
     window.dispatchEvent(new CustomEvent('navigate-tab', { detail: tabId }));
+  };
+
+  const goToAchievements = (action: 'trophies' | 'quests' | 'titles') => {
+    try { sessionStorage.setItem('sinevia_search_action', action); } catch { /* depolama kapalıysa yok say */ }
+    window.dispatchEvent(new Event('sinevia-search-action'));
+    navigateTo('achievements');
   };
 
   const getMovieWatchLinks = (movie: Movie) => {
@@ -1439,7 +1441,7 @@ export default function HomePage() {
       <style>{HOME_PREMIUM_CSS}</style>
 
       {/* =========================================================
-          01 · SİNEVİA KARTI
+          01 · SİNEVİA KARTI (GENİŞLETİLMİŞ GRAND COMMAND DECK)
           ========================================================= */}
       <section className="hn-sec">
         <div className="hn-sec-t">
@@ -1452,190 +1454,260 @@ export default function HomePage() {
         </div>
 
         <div className="snv-id-card" data-tutorial="home-hero">
-          {backdropPosters.length > 0 && (
-            <div className="snv-id-backdrop" aria-hidden="true">
-              {backdropPosters.map((url, i) => (
-                <img key={i} src={url} alt="" />
-              ))}
-            </div>
-          )}
           <div className="snv-id-overlay" aria-hidden="true" />
 
-          {/* 1. ÜST KATMAN */}
-          <div className="snv-id-main">
-            <div className="snv-id-left">
-              <div className="snv-id-monogram">
-                <svg viewBox="0 0 92 92" aria-hidden="true">
-                  <circle cx="46" cy="46" r={circleRadius} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="2.5" />
-                  <circle cx="46" cy="46" r={circleRadius} fill="none" stroke={userPersona.strokeColor} strokeWidth="2.5" strokeDasharray={circleCircumference} strokeDashoffset={circleOffset} strokeLinecap="round" />
+          {/* 1. ÜST KİMLİK & BÜYÜK DENEYİM / SERİ GÖSTERGELERİ */}
+          <div className="snv-hero-top">
+            <div className="snv-hero-identity">
+              <div className="snv-crest-orb">
+                <svg className="snv-crest-ring" viewBox="0 0 112 112" aria-hidden="true">
+                  <circle cx="56" cy="56" r={circleRadius} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="3.5" />
+                  <circle
+                    cx="56"
+                    cy="56"
+                    r={circleRadius}
+                    fill="none"
+                    stroke={userPersona.strokeColor}
+                    strokeWidth="3.5"
+                    strokeDasharray={circleCircumference}
+                    strokeDashoffset={circleOffset}
+                    strokeLinecap="round"
+                  />
                 </svg>
-                <div className="snv-id-letter">
-                  {data.nickname?.[0]?.toUpperCase() || 'U'}
+                <div className="snv-crest-core">
+                  <CurrentRankIcon size={62} />
                 </div>
-                <span className="snv-id-lv-tag">SV.{lvl.level}</span>
+                <span className="snv-crest-lv">SV.{lvl.level}</span>
               </div>
 
-              <div className="snv-id-titles">
-                <div className="snv-id-kicker">
-                  <span>{userPersona.title}</span>
-                  <span className="sep">/</span>
+              <div className="snv-hero-titles">
+                <div className="snv-hero-badges">
                   <button
                     type="button"
-                    className="snv-id-code-btn"
-                    title="Ağ kodunu kopyala"
-                    onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }}
+                    className="snv-title-pill"
+                    title="Unvan Kütüğünü Aç"
+                    onClick={() => goToAchievements('titles')}
                   >
-                    {data.agentId} <Copy size={10} />
+                    <Crown size={12} /> {userPersona.title}
+                  </button>
+                  <button
+                    type="button"
+                    className="snv-code-btn"
+                    title="Ajan kodunu kopyala"
+                    onClick={() => {
+                      navigator.clipboard.writeText(data.agentId || '');
+                      showToast('Kod kopyalandı!', 'success');
+                    }}
+                  >
+                    {data.agentId} <Copy size={11} />
                   </button>
                 </div>
 
-                <h1 className="snv-id-name">{data.nickname}</h1>
-
-                <div className="snv-id-submeta">
-                  <span>{userPersona.subtitle}</span>
-                </div>
+                <h1 className="snv-hero-name">{data.nickname}</h1>
+                <div className="snv-hero-sub">{userPersona.subtitle}</div>
               </div>
             </div>
 
-            <div className="snv-id-right">
-              {/* ROZET VİTRİNİ */}
-              <button
-                type="button"
-                className="snv-badge-showcase"
-                onClick={() => navigateTo('achievements')}
-                title={activeBadgeDef ? `${activeBadgeDef.title} (${activeBadgeDef.rarity})` : 'Koleksiyonundan bir rozet kuşan'}
-              >
-                <div className={`snv-badge-emblem${activeBadgeDef ? '' : ' empty'}`}>
-                  {activeBadgeDef ? <QuestIcon questId={activeBadgeDef.id} size={22} /> : <ShieldAlert size={18} />}
-                </div>
-                <div className="snv-badge-meta">
-                  <span className="snv-badge-kicker">
-                    {activeBadgeDef ? `Aktif Rozet · ${activeBadgeDef.rarity}` : 'Rozet Yuvası Boş'}
-                  </span>
-                  <b className="snv-badge-title">
-                    {activeBadgeDef ? activeBadgeDef.title : 'Rozet Kuşan'}
-                  </b>
-                  <span className="snv-badge-sub">
-                    {activeBadgeDef ? 'Değiştirmek için tıkla' : 'Koleksiyondan seç'}
+            <div className="snv-hero-readouts">
+              {/* Günlük Seri Kutusu */}
+              <div className="snv-readout-box" data-tutorial="home-streak">
+                <div className="snv-readout-top">
+                  <span className="inline-flex items-center gap-1">
+                    <Flame size={12} className="flame" /> Günlük Seri
                   </span>
                 </div>
-              </button>
-
-              <div className="snv-id-readout-divider" />
-
-              {/* GÜNLÜK SERİ */}
-              <div className="snv-id-readout" data-tutorial="home-streak">
-                <span className="snv-id-readout-label">
-                  <Flame size={11} className="flame" /> Günlük Seri
-                </span>
-                <div className="snv-id-readout-val">
+                <div className="snv-readout-num">
                   <b>{data.dailyStreak || 0}</b>
                   <em className="warm">Gün</em>
                 </div>
-                <span className="snv-id-readout-sub">
+                <div className="snv-readout-foot">
                   {data.dailyStreak > 0 ? 'Seri aktif devam ediyor' : 'Bugün bir yapım izle'}
-                </span>
+                </div>
               </div>
 
-              <div className="snv-id-readout-divider" />
-
-              {/* DENEYİM PUANI */}
-              <div className="snv-id-readout">
-                <span className="snv-id-readout-label">Deneyim Puanı</span>
-                <div className="snv-id-readout-val">
+              {/* Toplam Deneyim Kutusu */}
+              <div className="snv-readout-box">
+                <div className="snv-readout-top">
+                  <span>Deneyim Puanı</span>
+                  <span className="xp-pct">%{Math.floor(lvl.progress)}</span>
+                </div>
+                <div className="snv-readout-num">
                   <b>{(data.totalXp || 0).toLocaleString('tr-TR')}</b>
                   <em>XP</em>
                 </div>
-                <span className="snv-id-readout-sub">
-                  Sv. {lvl.level + 1} için {xpToNext.toLocaleString('tr-TR')} XP
-                </span>
+                <div className="snv-readout-foot">
+                  Sv.{lvl.level + 1} için {xpToNext.toLocaleString('tr-TR')} XP kaldı
+                </div>
               </div>
             </div>
           </div>
 
-          {/* 2. ORTA KATMAN: LAZER XP İLERLEME HATTI */}
+          {/* 2. ORTA PRESTİJ VİTRİNİ: UNVAN EVRİM SAHNESİ & AKTİF GÖREV ARMASI */}
+          <div className="snv-showcase-deck">
+            {/* Sol Vitrin: Unvan Yolu & Rütbe Evrimi */}
+            <button
+              type="button"
+              className="snv-deck-panel"
+              onClick={() => goToAchievements('titles')}
+              title="Unvan Yolu ve Rütbe İlerlemesini Gör"
+            >
+              <div className="snv-deck-head">
+                <span className="snv-deck-title">
+                  <Crown size={13} /> Unvan Evrim Yolu
+                </span>
+                <span className="snv-deck-pill">
+                  {nextRank
+                    ? `Hedef: Seviye ${nextRank.minLevel} (${nextRank.minLevel - lvl.level} Seviye Kaldı)`
+                    : 'Maksimum Unvan Kademesi'}
+                </span>
+              </div>
+
+              {nextRank ? (
+                <div className="snv-rank-road">
+                  <div className="snv-rank-Endpoint">
+                    <div className="snv-rank-pedestal">
+                      <CurrentRankIcon size={44} />
+                    </div>
+                    <div className="snv-rank-info">
+                      <small>Mevcut Unvan</small>
+                      <b>{userPersona.title}</b>
+                      <span>Sv. {userPersona.minLevel}–{userPersona.maxLevel}</span>
+                    </div>
+                  </div>
+
+                  <div className="snv-rank-arrow">
+                    <ChevronRight size={16} />
+                  </div>
+
+                  <div className="snv-rank-Endpoint target">
+                    <div className="snv-rank-info">
+                      <small>Sıradaki Unvan</small>
+                      <b>{nextRank.title}</b>
+                      <span>Sv. {nextRank.minLevel}+</span>
+                    </div>
+                    <div className="snv-rank-pedestal">
+                      <NextRankIcon size={44} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="snv-rank-road">
+                  <div className="snv-rank-Endpoint">
+                    <div className="snv-rank-pedestal">
+                      <CurrentRankIcon size={48} />
+                    </div>
+                    <div className="snv-rank-info">
+                      <small>Ebedi Zirve Unvanı</small>
+                      <b>{userPersona.title}</b>
+                      <span>{userPersona.subtitle}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="snv-rank-progress-wrap">
+                <div className="snv-rank-progress-labels">
+                  <span>Unvan Tamamlanma Oranı</span>
+                  <b>%{rankProgressPct}</b>
+                </div>
+                <div className="snv-rank-bar">
+                  <i style={{ width: `${rankProgressPct}%` }} />
+                </div>
+              </div>
+            </button>
+
+            {/* Sağ Vitrin: Kuşanılan Özel Görev Arması */}
+            <button
+              type="button"
+              className="snv-deck-panel"
+              onClick={() => goToAchievements('quests')}
+              title={
+                activeBadgeDef
+                  ? `${activeBadgeDef.title} armasını değiştirmek için tıkla`
+                  : 'Koleksiyonundan özel bir görev arması kuşan'
+              }
+            >
+              <div className="snv-deck-head">
+                <span className="snv-deck-title rose">
+                  <ShieldAlert size={13} /> Kuşanılan Görev Arması
+                </span>
+                <span className="snv-deck-pill">
+                  {activeBadgeDef
+                    ? `${RARITY_TR[activeBadgeDef.rarity] || activeBadgeDef.rarity} Kademe`
+                    : `${quickMetrics.questsCompleted} / ${QUEST_DEFS.length} Açıldı`}
+                </span>
+              </div>
+
+              <div className="snv-badge-body">
+                <div className={`snv-badge-pedestal${activeBadgeDef ? '' : ' empty'}`}>
+                  {activeBadgeDef ? (
+                    <QuestIcon questId={activeBadgeDef.id} size={46} />
+                  ) : (
+                    <ShieldAlert size={28} />
+                  )}
+                </div>
+
+                <div className="snv-badge-info">
+                  <b>{activeBadgeDef ? activeBadgeDef.title : 'Henüz Bir Arma Kuşanmadın'}</b>
+                  <p>
+                    {activeBadgeDef
+                      ? activeBadgeDef.description
+                      : 'Görev Panosundaki kontratları tamamlayarak özel tasarım armalar kazanabilir ve burada sergileyebilirsin.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="snv-badge-foot">
+                <span>
+                  {activeBadgeDef ? 'Değiştirmek için vitrine git' : 'Arma seçmek için tıkla'}
+                </span>
+                <strong>
+                  {activeBadgeDef
+                    ? `+${activeBadgeDef.xpReward} XP Kontrat Ödülü`
+                    : `${quickMetrics.questsCompleted} Kontrat Tamamlandı`}
+                </strong>
+              </div>
+            </button>
+          </div>
+
+          {/* 3. LAZER XP İLERLEME HATTI */}
           <div className="snv-id-laser-wrap" title={`Seviye İlerlemesi: %${Math.floor(lvl.progress)}`}>
             <div className="snv-id-laser-fill" style={{ width: `${Math.max(2, lvl.progress)}%` }} />
           </div>
 
-          {/* 3. ALT KATMAN */}
+          {/* 4. ALT KONSOL: 5'Lİ KARİYER METRİĞİ & 6'LI KUPA KADEMELERİ */}
           <div className="snv-id-footer">
             <div className="snv-id-metrics">
               <div className="snv-id-mitem"><b>{quickMetrics.watchedMoviesCount}</b><span>Film</span></div>
               <div className="snv-id-mitem"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span>Dizi</span></div>
               <div className="snv-id-mitem"><b>{quickMetrics.watchedEpsCount}</b><span>Bölüm</span></div>
-              <div className="snv-id-mitem"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Rozet</span></div>
-              <div className="snv-id-mitem"><b>{quickMetrics.questsCompleted}</b><span>Görev</span></div>
+              <div className="snv-id-mitem"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Kupa</span></div>
+              <div className="snv-id-mitem"><b>{quickMetrics.questsCompleted}</b><span>Kontrat</span></div>
             </div>
 
-            <div className="snv-id-right-foot">
-              <div className="snv-id-tiers">
-                {([
-                  ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
-                  ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
-                  ['gold', 'Altın', quickMetrics.tierCounts.gold],
-                  ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
-                  ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
-                  ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
-                ] as const).map(([tier, label, count]) => (
-                  <button key={tier} type="button" className="snv-id-tier" onClick={() => navigateTo('achievements')} title={`${label} kademesi`}>
-                    <div className="snv-id-tier-top">
-                      <i style={{ background: TIER_INK[tier], boxShadow: `0 0 8px ${TIER_INK[tier]}` }} />
-                      <b>{count}</b>
-                    </div>
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-
-              {nextRank ? (
-                <div className="snv-rank-evolution">
-                  <div className="snv-re-top">
-                    <span className="snv-re-tag"><Crown size={11} /> Unvan Evrimi</span>
-                    <span className="snv-re-rem">
-                      Hedef Sv.{nextRank.minLevel} · {nextRank.minLevel - lvl.level} Sv. Kaldı
-                    </span>
+            <div className="snv-id-tiers">
+              {([
+                ['bronze', 'Bronz', quickMetrics.tierCounts.bronze],
+                ['silver', 'Gümüş', quickMetrics.tierCounts.silver],
+                ['gold', 'Altın', quickMetrics.tierCounts.gold],
+                ['platinum', 'Platin', quickMetrics.tierCounts.platinum],
+                ['emerald', 'Zümrüt', quickMetrics.tierCounts.emerald],
+                ['diamond', 'Elmas', quickMetrics.tierCounts.diamond],
+              ] as const).map(([tier, label, count]) => (
+                <button
+                  key={tier}
+                  type="button"
+                  className="snv-id-tier"
+                  onClick={() => navigateTo('achievements')}
+                  title={`${label} kademesi kupalar`}
+                >
+                  <div className="snv-id-tier-top">
+                    <i style={{ background: TIER_INK[tier], boxShadow: `0 0 8px ${TIER_INK[tier]}` }} />
+                    <b>{count}</b>
                   </div>
-                  <div className="snv-re-Flow">
-                    <span className="snv-re-node">
-                      <span className="snv-re-node-ic"><CurrentRankIcon size={13} /></span>
-                      <span className="snv-re-cur">{userPersona.title}</span>
-                    </span>
-                    <span className="snv-re-connector">
-                      <ChevronRight size={13} className="snv-re-arrow" />
-                    </span>
-                    <span className="snv-re-node target">
-                      <span className="snv-re-node-ic"><NextRankIcon size={13} /></span>
-                      <span className="snv-re-next">{nextRank.title}</span>
-                    </span>
-                  </div>
-                  <div className="snv-re-bar-row">
-                    <div className="snv-re-bar">
-                      <i style={{ width: `${rankProgressPct}%` }} />
-                    </div>
-                    <span className="snv-re-pct">%{rankProgressPct}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="snv-rank-evolution">
-                  <div className="snv-re-top">
-                    <span className="snv-re-tag"><Crown size={11} /> Nihai Unvan</span>
-                    <span className="snv-re-rem">Maksimum Kademe</span>
-                  </div>
-                  <div className="snv-re-Flow">
-                    <span className="snv-re-node target">
-                      <span className="snv-re-node-ic"><CurrentRankIcon size={13} /></span>
-                      <span className="snv-re-next">{userPersona.title}</span>
-                    </span>
-                  </div>
-                  <div className="snv-re-bar-row">
-                    <div className="snv-re-bar">
-                      <i style={{ width: '100%' }} />
-                    </div>
-                    <span className="snv-re-pct">%100</span>
-                  </div>
-                </div>
-              )}
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
