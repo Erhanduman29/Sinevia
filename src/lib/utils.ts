@@ -19,8 +19,13 @@ export function uid(): string {
 export function ratingBgClass(rating: number): string {
   if (rating >= 10) return 'bg-gradient-to-br from-blue-500 to-blue-600 text-white';
   if (rating >= 8) return 'bg-gradient-to-br from-green-500 to-green-600 text-white';
-  if (rating >= 5.5) return 'bg-gradient-to-br from-yellow-400 to-yellow-500 text-ink-950';
-  if (rating >= 3.5) return 'bg-gradient-to-br from-orange-400 to-orange-500 text-white';
+  // Not: /100 (opaklık) eki bilinçli — index.css MOTOR v2.1 "A" kuralı
+  // [class*="from-yellow"]:not([class*="/"]) ile sarıyı tema rengine çeviriyor;
+  // "/" eklenince tema remap'i atlar ve puan bandı HER TEMADA gerçek sarı kalır.
+  if (rating >= 5.5) return 'bg-gradient-to-br from-yellow-400/100 to-yellow-500/100 text-ink-950';
+  // Turuncu bant bilinçli olarak orange-500→600: orange-400 sarımsı duruyordu
+  // (kullanıcı "4 puan sarı görünüyordu" şikâyeti), 500-600 net turuncu.
+  if (rating >= 3.5) return 'bg-gradient-to-br from-orange-500 to-orange-600 text-white';
   if (rating >= 1) return 'bg-gradient-to-br from-red-500 to-red-600 text-white';
   return 'bg-ink-600 text-white';
 }
