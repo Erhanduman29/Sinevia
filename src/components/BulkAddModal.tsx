@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Search, X, Check, Film, Tv, ShoppingCart, FolderPlus, Sparkles,
-  Plus, Trash2, ChevronDown, ChevronUp, Filter, ArrowUpDown, AlertTriangle, User, CheckCircle2, History,
+  Plus, Trash2, ChevronDown, ChevronUp, Filter, ArrowUpDown, User, CheckCircle2, History,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { normalize } from '../lib/utils';
 import { handleImgFallback } from '../lib/selectors';
+import ConfirmDialog from './ConfirmDialog';
 
 const MOVIE_GENRES = [
   { id: 28, name: 'Aksiyon' },
@@ -393,23 +394,14 @@ export default function BulkAddModal({
       <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-[40px] animate-fade-in" onClick={handleSafeClose} />
 
       {showCloseConfirm && (
-        <div className="absolute inset-0 z-[150] flex items-center justify-center bg-ink-950/60 backdrop-blur-[36px] animate-fade-in px-4">
-          <div className="bg-ink-900 border border-ink-700 rounded-2xl p-5 md:p-6 shadow-2xl max-w-sm w-full text-center animate-fade-in-up">
-            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-              <AlertTriangle className="text-red-500" size={28} />
-            </div>
-            <h3 className="text-lg md:text-xl font-bold text-white mb-2">Emin misiniz?</h3>
-            <p className="text-xs md:text-sm text-ink-400 mb-6">Sepetinizde seçili yapımlar var. Kapatırsanız bu seçimler silinecek.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowCloseConfirm(false)} className="flex-1 min-h-11 md:min-h-0 py-2.5 md:py-3 rounded-xl bg-ink-800 text-white font-bold hover:bg-ink-700 border border-ink-700 transition-colors text-sm">
-                Vazgeç
-              </button>
-              <button onClick={onClose} className="flex-1 min-h-11 md:min-h-0 py-2.5 md:py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold shadow-lg shadow-red-500/20 transition-colors text-sm">
-                Evet, Kapat
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Pencereyi Kapat"
+          message="Sepetinde seçili yapımlar var. Kapatırsan bu seçimler silinecek. Kapatmak istediğine emin misin?"
+          confirmLabel="Evet, Kapat"
+          cancelLabel="Vazgeç"
+          onConfirm={onClose}
+          onCancel={() => setShowCloseConfirm(false)}
+        />
       )}
 
       <div className="relative z-10 w-full max-w-6xl h-[90svh] md:h-full md:max-w-none bg-ink-900/80 backdrop-blur-md border border-ink-700/50 md:border-0 rounded-2xl md:rounded-none shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">

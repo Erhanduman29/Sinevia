@@ -10,14 +10,14 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useActions, useLibrary, useSettings } from '../context/slices';
-import { ratingBgClass, formatDateShort, normalize, uid } from '../lib/utils';
+import { ratingBgClass, formatDateShort, normalize } from '../lib/utils';
 import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDB } from '../lib/tmdb';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import { useFilteredMovies } from '../lib/selectorHooks';
 import { openPlatform, listLibraryPlatforms } from '../lib/platformLinks';
-import { supabase } from '../lib/supabase';
 import AddMovieModal from '../components/AddMovieModal';
+import SendRecommendationModal from '../components/SendRecommendationModal';
 import RatingModal from '../components/RatingModal';
 import EditMovieModal from '../components/EditMovieModal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -85,14 +85,9 @@ export default function MoviesPage() {
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [highlightedMovieId, setHighlightedMovieId] = useState<string | null>(null);
 
-  // ARKADAŞA TAVSİYE (TEKLİ & TOPLU) MODAL STATELERİ
+  // ARKADAŞA TAVSİYE MODALI (ortak SendRecommendationModal — tek kaynak)
   const [showSendModal, setShowSendModal] = useState(false);
-  const [friendsList, setFriendsList] = useState<any[]>([]);
-  const [selectedFriendId, setSelectedFriendId] = useState('');
-  const [selectedMovieIdsForSend, setSelectedMovieIdsForSend] = useState<Set<string>>(new Set());
-  const [sendListTitle, setSendListTitle] = useState('');
-  const [sendMovieSearch, setSendMovieSearch] = useState('');
-  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [sendInitial, setSendInitial] = useState<{ title?: string; selectedIds?: string[] }>({});
 
   const [collectionTargetMovie, setCollectionTargetMovie] = useState<Movie | null>(null);
   const [newCollectionName, setNewCollectionName] = useState('');
@@ -401,85 +396,15 @@ export default function MoviesPage() {
     showToast(`${pastMoveSelectedIds.size} film "${destLabel}" koleksiyonuna taşındı!`, 'success'); setShowMoveFromPastModal(false); setPastMoveSelectedIds(new Set());
   };
 
-  const openSendModal = async (singleMovie?: Movie) => {
+  const openSendModal = (singleMovie?: Movie) => {
     if (!agentId) { showToast('Lütfen önce ayarlardan Sinevia Ağı kimliğinizi oluşturun!', 'error'); return; }
-
     if (singleMovie) {
-      setSelectedMovieIdsForSend(new Set([singleMovie.id]));
-      setSendListTitle(`Tavsiye: ${singleMovie.title}`);
+      setSendInitial({ title: `Tavsiye: ${singleMovie.title}`, selectedIds: [singleMovie.id] });
     } else {
-      setSelectedMovieIdsForSend(new Set());
-      setSendListTitle('Özel Film Tavsiyeleri');
+      setSendInitial({ title: 'Özel Film Tavsiyeleri' });
     }
-
-    setSendMovieSearch('');
     setShowSendModal(true);
-    setLoadingFriends(true);
-
-    try {
-      const { data: fData } = await supabase.from('friendships').select('*').or(`requester_id.eq.${agentId},receiver_id.eq.${agentId}`).eq('status', 'accepted');
-      const friendIds = (fData || []).map(f => f.requester_id === agentId ? f.receiver_id : f.requester_id);
-
-      if (friendIds.length > 0) {
-        const { data: pData } = await supabase.from('profiles').select('*').in('agent_id', friendIds);
-        setFriendsList(pData || []);
-        if (pData && pData.length > 0) setSelectedFriendId(pData[0].agent_id);
-      } else {
-        setFriendsList([]);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Arkadaş listesi alınamadı.', 'error');
-    } finally {
-      setLoadingFriends(false);
-    }
   };
-
-  const handleSendRecommendations = async () => {
-    if (!selectedFriendId) { showToast('Lütfen bir arkadaş seç!', 'error'); return; }
-    if (selectedMovieIdsForSend.size === 0) { showToast('En az bir film seçmelisin!', 'warning'); return; }
-
-    const selectedMovies = libMovies.filter(m => selectedMovieIdsForSend.has(m.id));
-    const items = selectedMovies.map(m => ({
-      id: m.id,
-      title: m.title,
-      type: 'movie',
-      poster: m.posterUrl || null,
-      genres: m.genres,
-      year: m.year || ''
-    }));
-
-    try {
-      await supabase.from('recommendations').insert([{
-        id: uid(),
-        sender_id: agentId,
-        receiver_id: selectedFriendId,
-        list_title: sendListTitle.trim() || 'Film Tavsiyeleri',
-        items: items,
-        status: 'pending'
-      }]);
-      showToast(`${items.length} film arkadaşına başarıyla gönderildi!`, 'success');
-      setShowSendModal(false);
-      setSelectedFriendId('');
-      setSelectedMovieIdsForSend(new Set());
-    } catch {
-      showToast('Gönderilirken hata oluştu!', 'error');
-    }
-  };
-
-  const toggleSelectMovieForSend = (id: string) => {
-    setSelectedMovieIdsForSend(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const filteredMoviesForModal = useMemo(() => {
-    const q = sendMovieSearch.trim().toLowerCase();
-    if (!q) return libMovies;
-    return libMovies.filter(m => m.title.toLowerCase().includes(q));
-  }, [libMovies, sendMovieSearch]);
 
   // Kalibre mod lib SortMode'a girmediği için filtreme 'added' ile yapılır,
   // dürüst sıralama yerel karşılaştırıcıyla Memo içinde uygulanır.
@@ -902,7 +827,7 @@ export default function MoviesPage() {
                               <button onClick={() => setCollectionTargetMovie(m)} className="mpx-btn mpx-btn-s mpx-btn-xs flex-1" title="Koleksiyona Ata">
                                 <Boxes size={12} />
                               </button>
-                              <button onClick={() => setDetailMovieId(m.id)} className="mpx-btn mpx-btn-s mpx-btn-xs flex-1" title="Detaylar">
+                              <button onClick={() => setDetailMovieId(m.id)} className="mpx-btn mpx-btn-s mpx-btn-xs flex-1" title="Künye">
                                 <Eye size={12} />
                               </button>
                             </div>
@@ -1220,129 +1145,14 @@ export default function MoviesPage() {
         </div>
       )}
 
-      {/* ARKADAŞA TAVSİYE MODALI */}
-      {showSendModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in" onClick={() => setShowSendModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-4xl h-[85dvh] flex flex-col">
-            <div className="mpx-modal-bar p-4 flex items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center border border-violet-500/30 shrink-0"><Send size={15} /></div>
-                <h2 className="text-sm font-extrabold uppercase tracking-tight text-white truncate">Arkadaşına Film Tavsiyesi Gönder</h2>
-              </div>
-              <button onClick={() => setShowSendModal(false)} className="mpx-ibtn shrink-0"><X size={17} /></button>
-            </div>
-
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-              <div className="w-full md:w-64 p-4 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/20 flex flex-col gap-4 overflow-y-auto custom-scrollbar flex-shrink-0">
-                {loadingFriends ? (
-                  <div className="text-center py-6 text-xs text-ink-500 animate-pulse">Arkadaşların yükleniyor...</div>
-                ) : friendsList.length === 0 ? (
-                  <div className="mpx-empty text-xs">
-                    Ağında ekli arkadaşın bulunamadı.
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-widest mb-1.5">1. Kime Gidecek?</label>
-                      <select
-                        value={selectedFriendId}
-                        onChange={(e) => setSelectedFriendId(e.target.value)}
-                        className="mpx-input"
-                      >
-                        <option value="">-- Arkadaş Seç --</option>
-                        {friendsList.map(f => (
-                          <option key={f.agent_id} value={f.agent_id}>{f.nickname}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-widest mb-1.5">2. Liste Başlığı</label>
-                      <input
-                        type="text"
-                        value={sendListTitle}
-                        onChange={(e) => setSendListTitle(e.target.value)}
-                        placeholder="Örn: Bu Haftanın Önerileri"
-                        className="mpx-input"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div className="pt-2 border-t border-ink-800">
-                  <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-widest mb-2">3. Listende Ara</label>
-                  <div className="relative flex-1">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500 z-10" />
-                    <input
-                      type="text"
-                      placeholder="Film adı yaz..."
-                      value={sendMovieSearch}
-                      onChange={(e) => setSendMovieSearch(e.target.value)}
-                      className="mpx-input has-icon"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 flex flex-col overflow-hidden bg-ink-950 relative">
-                <div className="p-3 border-b border-ink-800 flex items-center justify-between bg-ink-900/40">
-                  <span className="mpx-mono text-[10px] font-bold text-ink-400 tracking-widest">Kütüphanen</span>
-                  <span className="mpx-idx whitespace-nowrap">
-                    {selectedMovieIdsForSend.size} Film Seçildi
-                  </span>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-3 sm:p-4 custom-scrollbar">
-                  {filteredMoviesForModal.length === 0 ? (
-                    <div className="text-center py-6 text-xs text-ink-500">Film bulunamadı.</div>
-                  ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 p-1">
-                      {filteredMoviesForModal.map(m => {
-                        const isChecked = selectedMovieIdsForSend.has(m.id);
-                        return (
-                          <div
-                            key={m.id}
-                            onClick={() => toggleSelectMovieForSend(m.id)}
-                            className={`mpx-poster aspect-[2/3] cursor-pointer group ${isChecked ? 'is-sel' : ''}`}
-                          >
-                            {m.posterUrl ? (
-                              <img loading="lazy" decoding="async" src={m.posterUrl} alt="" className="w-full h-full object-cover"  onError={handleImgFallback}/>
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-ink-700">
-                                <Film size={24} />
-                              </div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
-                              <h3 className="text-[9px] font-bold text-white line-clamp-2 leading-tight">{m.title}</h3>
-                              <div className="text-[8px] text-ink-400 mt-0.5 truncate">{m.year || 'Yıl yok'}</div>
-                            </div>
-                            <div className={`absolute inset-0 z-[2] bg-violet-500/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity ${isChecked ? 'opacity-100' : 'opacity-0'}`}>
-                              <div className="w-8 h-8 rounded-full bg-violet-500 text-white flex items-center justify-center shadow-lg">
-                                <Check size={18} strokeWidth={4} />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="mpx-modal-bar p-4 flex flex-wrap gap-2 shrink-0 border-t">
-              <button onClick={() => setShowSendModal(false)} className="mpx-btn mpx-btn-g mpx-btn-xs">Vazgeç</button>
-              <button
-                onClick={handleSendRecommendations}
-                disabled={!selectedFriendId || selectedMovieIdsForSend.size === 0}
-                className="mpx-btn mpx-btn-p flex-1 min-w-[180px]"
-              >
-                <Send size={14} /> <span className="truncate">Tavsiye Listesini Gönder ({selectedMovieIdsForSend.size})</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ARKADAŞA TAVSİYE MODALI (ORTAK BİLEŞEN — TEK KAYNAK) */}
+      <SendRecommendationModal
+        open={showSendModal}
+        onClose={() => setShowSendModal(false)}
+        mode="movie"
+        initialTitle={sendInitial.title}
+        initialSelectedIds={sendInitial.selectedIds}
+      />
 
       {/* TOPLU KOLEKSİYONA EKLEME MODALI */}
       {addMoviesToCollectionId && (() => {

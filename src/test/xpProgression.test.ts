@@ -5,10 +5,10 @@ import { levelFromXp } from '../lib/xp';
 // XP / SEVİYE ARİTMETİĞİ — Sıfır noktasından sınır değerlere kadar
 // ============================================================================
 
-// Dokümante edilmiş kural: Seviye 2 = 250 XP, sonraki her seviye +30 XP
+// Dokümante edilmiş kural: Seviye 2 = 250 XP, sonraki her seviye +25 XP
 function specGap(level: number): number {
   if (level <= 1) return 0;
-  return 250 + (level - 2) * 30;
+  return 250 + (level - 2) * 25;
 }
 
 function specLevel(totalXp: number): { level: number; currentLevelXp: number; nextLevelXp: number } {
@@ -39,27 +39,27 @@ describe('XP İLERLEME (LEVELING) SINIR DEĞER TESTLERİ', () => {
     const atThreshold = levelFromXp(250);
     expect(atThreshold.level).toBe(2);
     expect(atThreshold.currentLevelXp).toBe(0);
-    expect(atThreshold.nextLevelXp).toBe(280); // 2. seviye sonrası ilk boşluk 280
+    expect(atThreshold.nextLevelXp).toBe(275); // 2. seviye sonrası ilk boşluk 275
     expect(atThreshold.progress).toBe(0);
   });
 
-  test('İkinci eşik: 250 + 280 = 530 XP tam seviye 3 olmalı', () => {
-    expect(levelFromXp(529).level).toBe(2);
-    expect(levelFromXp(529).currentLevelXp).toBe(279);
+  test('İkinci eşik: 250 + 275 = 525 XP tam seviye 3 olmalı', () => {
+    expect(levelFromXp(524).level).toBe(2);
+    expect(levelFromXp(524).currentLevelXp).toBe(274);
 
-    const lvl3 = levelFromXp(530);
+    const lvl3 = levelFromXp(525);
     expect(lvl3.level).toBe(3);
     expect(lvl3.currentLevelXp).toBe(0);
-    expect(lvl3.nextLevelXp).toBe(310);
+    expect(lvl3.nextLevelXp).toBe(300);
   });
 
-  test('seviye boşlukları her adımda tam +30 XP artmalı', () => {
-    // 1 → 2: 250, 2 → 3: 280, 3 → 4: 310 ... 10 → 11: 520
+  test('seviye boşlukları her adımda tam +25 XP artmalı', () => {
+    // 1 → 2: 250, 2 → 3: 275, 3 → 4: 300 ... 10 → 11: 475
     for (let level = 1; level <= 20; level++) {
       const { nextLevelXp } = levelFromXp(
         Array.from({ length: level - 1 }, (_, i) => specGap(i + 2)).reduce((a, b) => a + b, 0)
       );
-      expect(nextLevelXp).toBe(250 + (level - 1) * 30);
+      expect(nextLevelXp).toBe(250 + (level - 1) * 25);
     }
   });
 

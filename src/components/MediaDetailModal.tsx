@@ -26,9 +26,11 @@ const QUICK_ACTION_ICONS: Record<string, LucideIcon> = {
 interface MediaDetailModalProps {
   target: DetailModalTarget;
   onClose: () => void;
+  /** Arkadaş tavsiyesinden geldiyse gönderenin verdiği puan (violet rozet gösterilir). */
+  senderRating?: number | null;
 }
 
-export default function MediaDetailModal({ target, onClose }: MediaDetailModalProps) {
+export default function MediaDetailModal({ target, onClose, senderRating }: MediaDetailModalProps) {
   const {
     data: appData, startWatchingMovie, togglePauseWatchingMovie,
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, updateHistoryRating,
@@ -245,7 +247,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl bg-ink-900/95 border border-ink-700/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[min(90svh,100%)] sm:max-h-[min(90dvh,100%)] animate-fade-in-up"
+        className={`relative w-full max-w-4xl bg-ink-900/95 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[min(90svh,100%)] sm:max-h-[min(90dvh,100%)] animate-fade-in-up ${senderRating != null ? 'border border-gold-500/40' : 'border border-ink-700/80'}`}
       >
         {posterUrl && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
@@ -296,6 +298,11 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                     {isInPastQueue && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-2.5 py-0.5 rounded-full">
                         <History size={11} /> Eskiden İzlenenler Sırasında
+                      </span>
+                    )}
+                    {senderRating != null && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-violet-300 bg-violet-500/20 border border-violet-500/35 px-2.5 py-0.5 rounded-full">
+                        <Star size={11} className="fill-current" /> Tavsiye Edenin Puanı: {senderRating}/10
                       </span>
                     )}
                   </div>
@@ -364,7 +371,7 @@ export default function MediaDetailModal({ target, onClose }: MediaDetailModalPr
                                 : 'bg-ink-800 hover:bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
                             }`}
                           >
-                            {anotherTimerActive ? <Lock size={13} /> : <Play size={13} className="fill-current" />} Sayacı Başlat
+                            {anotherTimerActive ? <Lock size={13} /> : <Play size={13} className="fill-current" />} Başlat
                           </button>
                         )
                       )}

@@ -1,16 +1,15 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import * as Icons from 'lucide-react';
 import {
-  Shuffle, Tv, Sparkles, Trophy, Star, Search,
+  Shuffle, Tv, Sparkles, Star, Search,
   Clock, Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
   ChevronRight, Target, Film, RefreshCw, Users, Lock,
-  Timer, Play, Pause, X, Compass, ShieldAlert, Copy, Crown, Swords
+  Timer, Play, Pause, X, Compass, ShieldAlert, Copy, Crown, Swords, Clapperboard
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
-import { QUEST_DEFS } from '../lib/quests';
+import { QUEST_DEFS, QuestIcon } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
-import { ACHIEVEMENT_DEFS } from '../lib/achievements';
+import { ACHIEVEMENT_DEFS, AchievementIcon } from '../lib/achievements';
 import { getNextUnwatchedEpisode, formatDateShort, todayStr, normalize, ratingBgClass } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import PickModal from '../components/PickModal';
@@ -1111,16 +1110,8 @@ const HOME_PREMIUM_CSS = `
 `;
 
 // Canlı Kademe Renkleri
-const TIER_TINT: Record<string, string> = {
-  bronze: 'rgba(255,122,47,.14)', silver: 'rgba(226,232,240,.13)', gold: 'rgba(255,200,0,.15)',
-  platinum: 'rgba(165,243,252,.14)', emerald: 'rgba(0,230,118,.14)', diamond: 'rgba(0,210,255,.15)',
-};
 const TIER_INK: Record<string, string> = {
   bronze: '#FF7A2F', silver: '#E2E8F0', gold: '#FFC800', platinum: '#A5F3FC', emerald: '#00E676', diamond: '#00D2FF',
-};
-const TIER_EDGE: Record<string, string> = {
-  bronze: 'rgba(255,122,47,.48)', silver: 'rgba(226,232,240,.45)', gold: 'rgba(255,200,0,.52)',
-  platinum: 'rgba(165,243,252,.48)', emerald: 'rgba(0,230,118,.48)', diamond: 'rgba(0,210,255,.52)',
 };
 
 function timeAgo(dateString: string) {
@@ -1292,7 +1283,7 @@ export default function HomePage() {
 
   const closestAchievements = useMemo(() => {
     const progMap = new Map((data.achievements || []).map((a) => [a.achievementId, a]));
-    const candidates: { id: string; name: string; desc: string; icon: string; tier: string; current: number; target: number; pct: number; xp: number }[] = [];
+    const candidates: { id: string; name: string; desc: string; achievementId: string; tier: string; current: number; target: number; pct: number; xp: number }[] = [];
 
     ACHIEVEMENT_DEFS.forEach((def: any) => {
       if (def.secret && !data.showLockedNames) return;
@@ -1308,7 +1299,7 @@ export default function HomePage() {
           id: `${def.id}_${nextTier.tier}`,
           name: nextTier.name || def.name,
           desc: def.description.replace('{threshold}', String(nextTier.threshold)),
-          icon: def.icon, tier: nextTier.tier, current, target: nextTier.threshold, pct, xp: nextTier.xp,
+          achievementId: def.id, tier: nextTier.tier, current, target: nextTier.threshold, pct, xp: nextTier.xp,
         });
       }
     });
@@ -1515,7 +1506,7 @@ export default function HomePage() {
                 title={activeBadgeDef ? `${activeBadgeDef.title} (${activeBadgeDef.rarity})` : 'Koleksiyonundan bir rozet kuşan'}
               >
                 <div className={`snv-badge-emblem${activeBadgeDef ? '' : ' empty'}`}>
-                  {activeBadgeDef ? activeBadgeDef.icon : <ShieldAlert size={18} />}
+                  {activeBadgeDef ? <QuestIcon questId={activeBadgeDef.id} size={22} /> : <ShieldAlert size={18} />}
                 </div>
                 <div className="snv-badge-meta">
                   <span className="snv-badge-kicker">
@@ -1655,13 +1646,13 @@ export default function HomePage() {
           ============================== */}
       <div data-tutorial="home-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
         <button type="button" className="hn-btn hn-btn-p hn-action" onClick={() => setShowPick(true)}>
-          <Shuffle size={13} /> Ne İzlesem?
+          <Shuffle size={13} /> Ne İzlesem
         </button>
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowDnaModal(true)}>
           <Dna size={13} /> DNA Sentezle
         </button>
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowBulkAdd('movie')}>
-          <Compass size={13} /> Katalog Ekle
+          <Clapperboard size={13} /> Katalog
         </button>
         <button type="button" className="hn-btn hn-btn-s hn-action" onClick={() => setShowCalibration(true)}>
           <Swords size={13} /> Düelloya Başla
@@ -1687,7 +1678,7 @@ export default function HomePage() {
             </div>
             <div className="hn-timer-btns">
               <button type="button" className="hn-btn hn-btn-g" onClick={() => togglePauseWatchingMovie(activeTimerMovie.id)}>
-                {info.isPaused ? <><Play size={12} className="hn-btn-ic" /> Devam Et</> : <><Pause size={12} className="hn-btn-ic" /> Duraklat</>}
+                {info.isPaused ? <><Play size={12} className="hn-btn-ic" /> Devam</> : <><Pause size={12} className="hn-btn-ic" /> Duraklat</>}
               </button>
               <button
                 type="button"
@@ -1778,7 +1769,7 @@ export default function HomePage() {
                     <Star size={12} className="hn-btn-ic" /> Puanla
                   </button>
                   <button type="button" className="hn-btn hn-btn-s" onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}>
-                    <Eye size={12} className="hn-btn-ic" /> Sinema Kartı
+                    <Eye size={12} className="hn-btn-ic" /> Künye
                   </button>
                   {!isSpotlightTimerActive && (
                     <button
@@ -1787,14 +1778,14 @@ export default function HomePage() {
                       onClick={() => startWatchingMovie(spotlightMovie.id, false)}
                       disabled={Boolean(activeTimerMovie)}
                     >
-                      <Play size={12} className="hn-btn-ic" /> Geri Sayım
+                      <Play size={12} className="hn-btn-ic" /> Başlat
                     </button>
                   )}
                   {isSpotlightPlanned ? (
-                    <span className="hn-planned"><Lock size={11} className="hn-btn-ic" /> Planlandı</span>
+                    <span className="hn-planned"><Lock size={11} className="hn-btn-ic" /> Takvime Planlandı</span>
                   ) : (
                     <button type="button" className="hn-btn hn-btn-g" onClick={() => navigateTo('plan')}>
-                      <Calendar size={12} className="hn-btn-ic" /> Haftalığa Ekle
+                      <Calendar size={12} className="hn-btn-ic" /> Planlayıcıya Git
                     </button>
                   )}
                 </div>
@@ -1878,20 +1869,10 @@ export default function HomePage() {
               <p className="hn-empty">Rozet eşiğine yakın bir izleme yok. Koleksiyonunu büyüt, ilk kademeni aç.</p>
             ) : (
               closestAchievements.map((ach) => {
-                const AchIcon = (Icons as any)[ach.icon] || Trophy;
                 return (
                   <div key={ach.id} className="hn-ach">
                     <div className="top">
-                      <div
-                        className="hn-ai"
-                        style={{
-                          color: TIER_INK[ach.tier] || '#9A9A96',
-                          background: TIER_TINT[ach.tier] || 'rgba(255,255,255,.05)',
-                          borderColor: TIER_EDGE[ach.tier] || 'var(--line-2, rgba(244,244,242,.13))',
-                        }}
-                      >
-                        <AchIcon size={18} />
-                      </div>
+                      <AchievementIcon achievementId={ach.achievementId} tier={ach.tier} size={22} />
                       <div className="hn-an"><b>{ach.name}</b><span>{ach.desc}</span></div>
                       <span className="hn-axp">+{ach.xp} XP</span>
                     </div>

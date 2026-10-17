@@ -4,7 +4,7 @@ import {
   Film, Sparkles, Play, Pause, Timer, Lock, Edit2,
   CheckCircle2, Hourglass, ArrowRight, CalendarDays,
   LayoutList, Activity, AlertCircle, GripVertical, CalendarPlus,
-  Target, Zap, Flame
+  Target, Zap, Flame, Shuffle
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import { ratingBgClass } from '../lib/utils';
@@ -771,10 +771,11 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
                 <button
                   type="button"
                   onClick={() => setShowPick(true)}
+                  title="Ne İzlesem"
                   className="w-full wp-card flex items-center justify-center gap-2 py-2.5 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gold-300 hover:text-gold-200 hover:border-gold-500/50 transition-all"
                 >
-                  <Sparkles size={14} />
-                  Kararsız mısın? Ne İzlesem ile seç
+                  <Shuffle size={14} />
+                  Ne İzlesem
                 </button>
               )}
 

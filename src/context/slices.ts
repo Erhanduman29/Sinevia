@@ -51,6 +51,8 @@ export interface SettingsSlice {
   shareWatchedInFeed: boolean;
   sharePastWatchedInFeed: boolean;
   showLockedNames: boolean;
+  /** Rozet vitrininde isim/açıklama/XP detayları görünsün mü. */
+  showBadgeDetails: boolean;
   altWatchTemplate: string;
   /** Hızlı aksiyon köprüsü şablonları (SettingsPage yönetimi + kart butonları). */
   externalActions: NonNullable<ExtendedAppData['externalActions']>;

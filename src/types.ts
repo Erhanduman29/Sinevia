@@ -186,6 +186,8 @@ export interface AppData {
   dailyStreak: number;
   dailyStreakDate: string | null;
   showLockedNames?: boolean;
+  /** Rozet vitrininde isim/açıklama/XP detayları görünsün mü. */
+  showBadgeDetails?: boolean;
   altWatchTemplate?: string;
   weeklyPlan?: WeeklyPlanItem[];
   /** Çoklu hızlı aksiyon köprüsü şablonları (varsa altWatchTemplate'i temsil eder). */

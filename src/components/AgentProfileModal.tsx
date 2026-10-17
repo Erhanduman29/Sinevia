@@ -676,7 +676,7 @@ export default function AgentProfileModal({
 
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <span className="bg-gold-500 text-ink-950 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-lg">
-                            <Eye size={13} /> Film Kartını Aç
+                            <Eye size={13} /> Künye
                           </span>
                         </div>
 
@@ -859,7 +859,7 @@ export default function AgentProfileModal({
                           </div>
                           <div className="absolute inset-0 bg-ink-950/65 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center">
                             <Eye size={20} className="text-gold-400 mb-1" />
-                            <span className="text-[9px] font-black uppercase tracking-wider text-white">Film Kartını Aç</span>
+                            <span className="text-[9px] font-black uppercase tracking-wider text-white">Künye</span>
                           </div>
                         </div>
                         <div className="p-2.5 flex-1 flex flex-col justify-between">
@@ -1502,7 +1502,7 @@ export default function AgentProfileModal({
                       onClick={() => setDetailMovie(myMovie)}
                       className="px-4 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 border border-ink-700 text-gold-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
                     >
-                      <Eye size={15} /> Sinema Künyesini Gör
+                      <Eye size={15} /> Künye
                     </button>
                   )}
 

@@ -187,7 +187,7 @@ function defaultData(): ExtendedAppData {
       { id: 'crit_3', name: 'Görsel Yönetim', weight: 7, appliesTo: 'both', genres: [] }
     ],
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
-    showLockedNames: false, aiChatHistory: [], theme: 'premium-dark',
+    showLockedNames: false, showBadgeDetails: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
     externalActions: [], bonusXp: 0, totalDuelsCompleted: 0, giantSlayerWins: 0,
     weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true, sharePastWatchedInFeed: true,
@@ -362,7 +362,7 @@ type Action =
   | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'MERGE_SHARED_LIST'; movies: Movie[]; series: Series[]; collections: Collection[]; genres: string[] }
   | { type: 'HYDRATE_FROM_IDB'; data: ExtendedAppData }
   | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
-  | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'SYNC_ACHIEVEMENTS' }
+  | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'TOGGLE_BADGE_DETAILS' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'SYNC_ACHIEVEMENTS' }
   | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }
   | { type: 'ADD_CRITERION'; criterion: RatingCriterion } | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion } | { type: 'DELETE_CRITERION'; id: string }
   | { type: 'UPDATE_ALT_TEMPLATE'; template: string } | { type: 'SET_THEME'; theme: string } | { type: 'GRANT_XP'; xp: number }
@@ -756,6 +756,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'CLEAR_LEVELUP') return { ...state, pendingLevelUp: undefined };
   if (action.type === 'CLEAR_XP_GAIN') return { ...state, pendingXpGain: undefined };
   if (action.type === 'TOGGLE_LOCKED_NAMES') return { ...state, showLockedNames: !state.showLockedNames };
+  if (action.type === 'TOGGLE_BADGE_DETAILS') return { ...state, showBadgeDetails: !state.showBadgeDetails };
   if (action.type === 'SET_ACHIEVEMENT_PROGRESS') return { ...state, achievements: action.progress };
   if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages };
   if (action.type === 'UPDATE_ALT_TEMPLATE') return { ...state, altWatchTemplate: action.template };
@@ -972,7 +973,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
 }
 
 export interface ToastItem { id: string; message: string; type: 'success' | 'warning' | 'error' | 'info'; }
-export interface AchievementToastItem { id: string; achievementName: string; tier: string; icon: string; description: string; }
+export interface AchievementToastItem { id: string; achievementId?: string; achievementName: string; tier: string; icon: string; description: string; }
 interface LevelUpData { newLevel: number; }
 interface SeasonCompleteData { seriesTitle: string; season: number; }
 
@@ -996,7 +997,7 @@ export interface AppContextValue {
   exportData: () => void; importData: (j: string) => boolean; resetData: () => void; exportShareList: () => void; importShareList: (j: string) => boolean;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void; achievementToasts: AchievementToastItem[];
   levelUpData: LevelUpData | null; seasonCompleteData: SeasonCompleteData | null; dismissLevelUp: () => void; dismissSeasonComplete: () => void;
-  toggleLockedNames: () => void; xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
+  toggleLockedNames: () => void; toggleBadgeDetails: () => void; xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
   updateAIHistory: (messages: AIMessage[]) => void; addCriterion: (criterion: RatingCriterion) => void; editCriterion: (id: string, criterion: RatingCriterion) => void; deleteCriterion: (id: string) => void;
   updateAltWatchTemplate: (template: string) => void; updateTheme: (theme: string) => void;
   weeklyPlan: WeeklyPlanItem[]; addPlanItem: (movie: Movie, date: string, time: string) => boolean; deletePlanItem: (id: string) => void; updatePlanItem: (id: string, date: string, time: string) => boolean;
@@ -1476,13 +1477,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Açılış uzlaşma penceresindeki kuyruk (bayat bulut/hidrasyon kaynaklı) GÖSTERİLMEZ, sessizce tüketilir.
     if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CONSUME_NEXT_TOAST' }); return; }
     isProcessingToastRef.current = true; const nextAchievement = queue[0], remainingCount = queue.length - 1; const comboText = remainingCount > 0 ? ` (+${remainingCount} Sırada)` : '';
-    showAchievementToast({ achievementName: `${nextAchievement.name}${comboText}`, tier: nextAchievement.tier, icon: nextAchievement.icon, description: nextAchievement.description });
+    showAchievementToast({ achievementName: `${nextAchievement.name}${comboText}`, achievementId: nextAchievement.achievementId, tier: nextAchievement.tier, icon: nextAchievement.icon, description: nextAchievement.description });
     import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound()); dispatch({ type: 'CONSUME_NEXT_TOAST' });
     setTimeout(() => { isProcessingToastRef.current = false; setQueueTick((t) => t + 1); }, QUEUE_STEP_DURATION_MS);
   }, [data.pendingToasts, levelUpData, queueTick, showAchievementToast, isQuestCelebrating]);
 
   const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => { const id = uid(); setToasts({ type: 'add', toast: { id, message, type } }); setTimeout(() => setToasts({ type: 'remove', id }), 2800); }, []);
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
+  const toggleBadgeDetails = useCallback(() => dispatch({ type: 'TOGGLE_BADGE_DETAILS' }), []);
   const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []);
   const toggleShareWatched = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_SHARE_WATCHED', enabled }), []);
   const toggleSharePastWatched = useCallback((enabled: boolean) => {
@@ -1705,10 +1707,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     theme: data.theme || 'premium-dark', criteria: data.criteria, reviewTags: data.reviewTags,
     weeklyPlan: data.weeklyPlan || [], notificationsEnabled: !!data.notificationsEnabled,
     shareWatchedInFeed: data.shareWatchedInFeed !== false, sharePastWatchedInFeed: data.sharePastWatchedInFeed !== false,
-    showLockedNames: !!data.showLockedNames, altWatchTemplate: data.altWatchTemplate || '',
+    showLockedNames: !!data.showLockedNames, showBadgeDetails: !!data.showBadgeDetails, altWatchTemplate: data.altWatchTemplate || '',
     externalActions: data.externalActions || [],
     agentId: data.agentId || '',
-  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.altWatchTemplate, data.externalActions, data.agentId]);
+  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.showBadgeDetails, data.altWatchTemplate, data.externalActions, data.agentId]);
 
   // Global tik YOK — sadece aktif timer filmini verir (seyrek değişir); sayfalar kendi
   // yerel nowMs tik'lerini tutmaya devam eder (HomePage dahil — kullanıcıya ait dosya).
@@ -1719,7 +1721,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, toggleBadgeDetails, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
@@ -1731,7 +1733,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue,
     exportData, importData, resetData, exportShareList, importShareList,
-    showToast, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, updateAIHistory,
+    showToast, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, toggleBadgeDetails, updateAIHistory,
     addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme,
     addPlanItem, deletePlanItem, updatePlanItem, grantXp,
     toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification,

@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import * as Icons from 'lucide-react';
 import { X, ChevronLeft, ChevronRight, Sparkles, Clock, Film, Tv, Star, Award, Flame, Crown, Download, Play, Pause, Tag, SlidersHorizontal, User, Users, CalendarDays, Activity, ShieldAlert } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ACHIEVEMENT_DEFS } from '../lib/achievements';
+import { ACHIEVEMENT_DEFS, AchievementIcon } from '../lib/achievements';
 import { formatDateShort } from '../lib/utils';
 import type { WatchHistoryItem } from '../types';
 import { handleImgFallback } from '../lib/selectors';
@@ -210,8 +209,8 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
       .map((a) => {
         const def = ACHIEVEMENT_DEFS.find((d) => d.id === a.achievementId);
         const highestTier = a.unlockedTiers[a.unlockedTiers.length - 1];
-        // İkonu string olarak kaydediyoruz, render ederken Lucide'den çekeceğiz.
-        return { name: def?.name || a.achievementId, iconStr: def?.icon || 'Trophy', tier: highestTier };
+        // Vektörel arma: render'da AchievementIcon (kademe duyarlı zırhlı madalya) kullanılır.
+        return { name: def?.name || a.achievementId, achievementId: a.achievementId, tier: highestTier as string };
       })
       .slice(-4);
 
@@ -799,20 +798,15 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
                 </div>
                 {stats.rareBadges.length > 0 && (
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
-                    {stats.rareBadges.map((b, i) => {
-                      const BadgeIcon = (Icons as any)[b.iconStr] || Icons.Trophy;
-                      return (
-                        <div key={i} className="bg-white/5 rounded-xl p-2 flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-ink-900 flex items-center justify-center flex-shrink-0">
-                            <BadgeIcon size={16} className="text-gold-400" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[11px] font-bold text-white truncate">{b.name}</div>
-                            <div className="text-[9px] font-black uppercase text-gold-400">{b.tier}</div>
-                          </div>
+                    {stats.rareBadges.map((b, i) => (
+                      <div key={i} className="bg-white/5 rounded-xl p-2 flex items-center gap-2">
+                        <AchievementIcon achievementId={b.achievementId} tier={b.tier} size={20} className="flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] font-bold text-white truncate">{b.name}</div>
+                          <div className="text-[9px] font-black uppercase text-gold-400">{b.tier}</div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

@@ -14,6 +14,7 @@ import AgentProfileModal from '../components/AgentProfileModal';
 import ShowcaseEditorModal from '../components/ShowcaseEditorModal';
 import ChatHubModal, { renderChatMessageBubble } from '../components/ChatHubModal';
 import RecommendationModals from '../components/RecommendationModals';
+import ConfirmDialog from '../components/ConfirmDialog';
 import type { Movie } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 import '../components/network-premium.css';
@@ -1674,19 +1675,14 @@ export default function NetworkPage() {
 
       {/* 6. ARKADAŞLIKTAN ÇIKARMA ONAY MODALI */}
       {friendToRemove && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setFriendToRemove(null)}>
-          <div onClick={e => e.stopPropagation()} className="ntw-card p-6 max-w-sm w-full text-center">
-            <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-              <UserPlus size={24} className="rotate-45" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">Ajanı Ağdan Çıkar</h3>
-            <p className="text-sm text-ink-300 mb-6">Bu ajanı ağından çıkarmak istediğine emin misin? İrtibatınız tamamen kesilecek.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setFriendToRemove(null)} className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors">İptal</button>
-              <button onClick={() => { handleRemove(friendToRemove); setFriendToRemove(null); }} className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20">Evet, Çıkar</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Ajanı Ağdan Çıkar"
+          message="Bu ajanı ağından çıkarmak istediğine emin misin? İrtibatınız tamamen kesilecek."
+          confirmLabel="Evet, Çıkar"
+          cancelLabel="İptal"
+          onConfirm={() => { handleRemove(friendToRemove); setFriendToRemove(null); }}
+          onCancel={() => setFriendToRemove(null)}
+        />
       )}
     </div>
   );

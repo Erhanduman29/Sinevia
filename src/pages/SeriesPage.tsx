@@ -7,13 +7,13 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ratingBgClass, getNextUnwatchedEpisode, uid } from '../lib/utils';
+import { ratingBgClass, getNextUnwatchedEpisode } from '../lib/utils';
 import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDBSeries } from '../lib/tmdb';
 import { useFilteredSeries } from '../lib/selectorHooks';
 import { openPlatform, listLibraryPlatforms } from '../lib/platformLinks';
-import { supabase } from '../lib/supabase';
 import AddSeriesModal from '../components/AddSeriesModal';
+import SendRecommendationModal from '../components/SendRecommendationModal';
 import RatingModal from '../components/RatingModal';
 import EditSeriesModal from '../components/EditSeriesModal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -716,14 +716,9 @@ export default function SeriesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Series | null>(null);
   const [deleteEpisodeTarget, setDeleteEpisodeTarget] = useState<{ series: Series; episode: Episode } | null>(null);
 
-  // ARKADAŞA TAVSİYE (TEKLİ & TOPLU) MODAL STATELERİ
+  // ARKADAŞA TAVSİYE MODALI (ortak SendRecommendationModal — tek kaynak)
   const [showSendModal, setShowSendModal] = useState(false);
-  const [friendsList, setFriendsList] = useState<any[]>([]);
-  const [selectedFriendId, setSelectedFriendId] = useState('');
-  const [selectedSeriesIdsForSend, setSelectedSeriesIdsForSend] = useState<Set<string>>(new Set());
-  const [sendListTitle, setSendListTitle] = useState('');
-  const [sendSeriesSearch, setSendSeriesSearch] = useState('');
-  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [sendInitial, setSendInitial] = useState<{ title?: string; selectedIds?: string[] }>({});
 
   const [watchedFilter, setWatchedFilter] = useState<boolean | null>(false);
   const [graveyardView, setGraveyardView] = useState(false);
@@ -871,85 +866,17 @@ export default function SeriesPage() {
   };
 
   // TAVSİYE MODALINI AÇ (TEKİL VEYA TOPLU)
-  const openSendModal = async (singleSeries?: Series) => {
+  const openSendModal = (singleSeries?: Series) => {
     if (!data.agentId) { showToast('Lütfen önce ayarlardan Sinevia Ağı kimliğinizi oluşturun!', 'error'); return; }
-    
+
     if (singleSeries) {
-      setSelectedSeriesIdsForSend(new Set([singleSeries.id]));
-      setSendListTitle(`Tavsiye: ${singleSeries.title}`);
+      setSendInitial({ title: `Tavsiye: ${singleSeries.title}`, selectedIds: [singleSeries.id] });
     } else {
-      setSelectedSeriesIdsForSend(new Set());
-      setSendListTitle('Özel Dizi Tavsiyeleri');
+      setSendInitial({ title: 'Özel Dizi Tavsiyeleri' });
     }
 
-    setSendSeriesSearch('');
     setShowSendModal(true);
-    setLoadingFriends(true);
-
-    try {
-      const { data: fData } = await supabase.from('friendships').select('*').or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).eq('status', 'accepted');
-      const friendIds = (fData || []).map(f => f.requester_id === data.agentId ? f.receiver_id : f.requester_id);
-      
-      if (friendIds.length > 0) {
-        const { data: pData } = await supabase.from('profiles').select('*').in('agent_id', friendIds);
-        setFriendsList(pData || []);
-        if (pData && pData.length > 0) setSelectedFriendId(pData[0].agent_id);
-      } else {
-        setFriendsList([]);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Arkadaş listesi alınamadı.', 'error');
-    } finally {
-      setLoadingFriends(false);
-    }
   };
-
-  const handleSendRecommendations = async () => {
-    if (!selectedFriendId) { showToast('Lütfen bir arkadaş seç!', 'error'); return; }
-    if (selectedSeriesIdsForSend.size === 0) { showToast('En az bir dizi seçmelisin!', 'warning'); return; }
-
-    const selectedSeries = data.series.filter(s => selectedSeriesIdsForSend.has(s.id));
-    const items = selectedSeries.map(s => ({
-      id: s.id,
-      title: s.title,
-      type: 'series',
-      poster: s.posterUrl || null,
-      genres: s.genres,
-      year: s.year || ''
-    }));
-
-    try {
-      await supabase.from('recommendations').insert([{
-        id: uid(),
-        sender_id: data.agentId,
-        receiver_id: selectedFriendId,
-        list_title: sendListTitle.trim() || 'Dizi Tavsiyeleri',
-        items: items,
-        status: 'pending'
-      }]);
-      showToast(`${items.length} dizi arkadaşına başarıyla gönderildi!`, 'success');
-      setShowSendModal(false);
-      setSelectedFriendId('');
-      setSelectedSeriesIdsForSend(new Set());
-    } catch {
-      showToast('Gönderilirken hata oluştu!', 'error');
-    }
-  };
-
-  const toggleSelectSeriesForSend = (id: string) => {
-    setSelectedSeriesIdsForSend(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const filteredSeriesForModal = useMemo(() => {
-    const q = sendSeriesSearch.trim().toLowerCase();
-    if (!q) return data.series;
-    return data.series.filter(s => s.title.toLowerCase().includes(q));
-  }, [data.series, sendSeriesSearch]);
 
   const totalCompleted = data.series.filter((s) => s.episodes.length > 0 && s.episodes.every((e) => e.watched)).length;
   // İzlenecek: yarım bırakılanlar (abandoned) bu sayıya girmez.
@@ -1271,7 +1198,7 @@ export default function SeriesPage() {
                         e.stopPropagation();
                         setDetailSeriesId(s.id);
                       }}
-                      title="Dizi Sinema Kartını Gör"
+                      title="Künye"
                       data-ep={nextEp ? `S${nextEp.season}B${nextEp.episode}` : ''}
                       className="svp-poster w-14 sm:w-16 aspect-[2/3] flex-shrink-0 flex items-center justify-center group/poster cursor-pointer focus:outline-none"
                     >
@@ -1518,129 +1445,14 @@ export default function SeriesPage() {
         </div>
       )}
 
-      {/* ARKADAŞA TAVSİYE MODALI (TEKLİ & ÇOKLU DİZİ DESTEKLİ, GRID TASARIMLI) */}
-      {showSendModal && (
-        <div className="svp-overlay fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 animate-fade-in-up" onClick={() => setShowSendModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="svp-modal w-full max-w-4xl h-[85dvh] rounded-3xl overflow-hidden flex flex-col">
-            <div className="svp-modal-bar p-4 flex items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="svp-modal-tile"><Send size={15} /></div>
-                <h2 className="svp-modal-tag truncate">Arkadaşına Dizi Tavsiyesi Gönder</h2>
-              </div>
-              <button onClick={() => setShowSendModal(false)} title="Kapat" className="svp-x p-2.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 md:p-1 shrink-0"><X size={17} /></button>
-            </div>
-            
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-              <div className="svp-modal-side w-full md:w-64 p-4 border-b md:border-b-0 md:border-r flex flex-col gap-4 overflow-y-auto custom-scrollbar flex-shrink-0">
-                {loadingFriends ? (
-                  <div className="svp-mono text-center py-6 animate-pulse">Arkadaşlar yükleniyor...</div>
-                ) : friendsList.length === 0 ? (
-                  <div className="svp-empty svp-mono text-center py-8 px-3">
-                    Ağında ekli arkadaşın bulunamadı.
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <label className="svp-modal-label mb-1.5">1. Kime Gidecek?</label>
-                      <select 
-                        value={selectedFriendId} 
-                        onChange={(e) => setSelectedFriendId(e.target.value)}
-                        className="svp-modal-select"
-                      >
-                        <option value="">-- Arkadaş Seç --</option>
-                        {friendsList.map(f => (
-                          <option key={f.agent_id} value={f.agent_id}>{f.nickname}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="svp-modal-label mb-1.5">2. Liste Başlığı</label>
-                      <input 
-                        type="text" 
-                        value={sendListTitle}
-                        onChange={(e) => setSendListTitle(e.target.value)}
-                        placeholder="Örn: Bu Sezon Kaçırılmayacaklar"
-                        className="svp-modal-input"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div className="svp-modal-side pt-3 border-t">
-                  <label className="svp-modal-label mb-2">3. Listende Ara</label>
-                  <div className="relative flex-1">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 svp-ic-muted" />
-                    <input 
-                      type="text" 
-                      placeholder="Dizi adı yaz..."
-                      value={sendSeriesSearch}
-                      onChange={(e) => setSendSeriesSearch(e.target.value)}
-                      className="svp-modal-input pl-8"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 flex flex-col overflow-hidden relative">
-                <div className="svp-modal-bar p-3 flex items-center justify-between">
-                  <span className="svp-modal-cap">Kütüphanen</span>
-                  <span className="svp-modal-count">
-                    {selectedSeriesIdsForSend.size} Dizi Seçildi
-                  </span>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-3 sm:p-4 custom-scrollbar">
-                  {filteredSeriesForModal.length === 0 ? (
-                    <div className="svp-mono text-center py-6">Dizi bulunamadı.</div>
-                  ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 p-1">
-                      {filteredSeriesForModal.map(s => {
-                        const isChecked = selectedSeriesIdsForSend.has(s.id);
-                        return (
-                          <div 
-                            key={s.id}
-                            onClick={() => toggleSelectSeriesForSend(s.id)}
-                            className={`svp-modal-card ${isChecked ? 'svp-modal-card-on' : ''}`}
-                          >
-                            {s.posterUrl ? (
-                              <img loading="lazy" decoding="async" src={s.posterUrl} alt="" className="w-full h-full object-cover"  onError={handleImgFallback}/>
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center svp-ic-muted">
-                                <Tv size={24} />
-                              </div>
-                            )}
-                            <div className="svp-modal-ov p-2 pt-6">
-                              <h3 className="text-[9px] font-bold svp-cap-ink line-clamp-2 leading-tight">{s.title}</h3>
-                              <div className="svp-mono mt-0.5 truncate">{s.year || 'Yıl yok'} · {s.episodes.length} bölüm</div>
-                            </div>
-                            <div className={`svp-modal-veil transition-opacity ${isChecked ? 'opacity-100' : 'opacity-0'}`}>
-                              <div className="svp-modal-check">
-                                <Check size={18} strokeWidth={4} />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="svp-modal-foot p-3.5 flex flex-wrap gap-2 shrink-0">
-              <button onClick={() => setShowSendModal(false)} className="svp-btn-s px-4 py-2.5 min-h-11 md:min-h-0">Vazgeç</button>
-              <button 
-                onClick={handleSendRecommendations} 
-                disabled={!selectedFriendId || selectedSeriesIdsForSend.size === 0} 
-                className="svp-btn-p flex-1 min-w-[200px] py-2.5 min-h-11 md:min-h-0"
-              >
-                <Send size={14} /> Tavsiye Listesini Gönder ({selectedSeriesIdsForSend.size})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ARKADAŞA TAVSİYE MODALI (ORTAK BİLEŞEN — TEK KAYNAK) */}
+      <SendRecommendationModal
+        open={showSendModal}
+        onClose={() => setShowSendModal(false)}
+        mode="series"
+        initialTitle={sendInitial.title}
+        initialSelectedIds={sendInitial.selectedIds}
+      />
 
       {showPick && (
         <PickModal

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import * as Icons from 'lucide-react';
 import { DISPLAY_DURATION_MS } from '../context/AppContext';
 import type { AchievementToastItem } from '../context/AppContext';
-import { TIER_COLORS } from '../lib/achievements';
+import { TIER_COLORS, AchievementIcon } from '../lib/achievements';
 
 export default function AchievementToasts({ toasts }: { toasts: AchievementToastItem[] }) {
   return (
@@ -40,13 +40,18 @@ function AchievementToast({ toast }: { toast: AchievementToastItem }) {
         phase === 'show' ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
       } ${tierInfo?.border || 'border-gold-500'}`}
     >
-      <div
-        className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-inner flex-shrink-0 ${
-          tierInfo?.bg || 'bg-gold-500'
-        }`}
-      >
-        <Icon size={22} className={tierInfo?.text || 'text-white'} />
-      </div>
+      {/* Başarım Arması: 3 katmanlı SVG illüstrasyon + kademe duyarlı zırhlı madalya */}
+      {toast.achievementId ? (
+        <AchievementIcon achievementId={toast.achievementId} tier={toast.tier} size={28} className="flex-shrink-0" />
+      ) : (
+        <div
+          className={`w-11 h-11 rounded-xl flex items-center justify-center shadow-inner flex-shrink-0 ${
+            tierInfo?.bg || 'bg-gold-500'
+          }`}
+        >
+          <Icon size={22} className={tierInfo?.text || 'text-white'} />
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="text-[10px] text-ink-400 uppercase tracking-widest font-black flex items-center justify-between">
           <span>🏆 Başarım Kazanıldı!</span>

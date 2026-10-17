@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as Icons from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ACHIEVEMENT_DEFS, TIER_ORDER } from '../lib/achievements';
+import { ACHIEVEMENT_DEFS, TIER_ORDER, AchievementIcon } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
 import { RANK_TIERS } from '../lib/rankTiers';
 import QuestBoard from '../components/QuestBoard';
@@ -117,33 +117,6 @@ interface ClosestLockedTrophy {
   tier: string;
 }
 
-// Her başarım için kendi kimliğini yansıtan zengin ikon çözücü
-function resolveAchievementIcon(def: any): React.ComponentType<any> {
-  if (def?.icon && (Icons as any)[def.icon]) {
-    return (Icons as any)[def.icon];
-  }
-  const text = `${def?.id || ''} ${def?.name || ''} ${def?.category || ''}`.toLocaleLowerCase('tr-TR');
-  if (text.includes('film') || text.includes('movie') || text.includes('sinema')) return Icons.Clapperboard;
-  if (text.includes('dizi') || text.includes('series') || text.includes('sezon') || text.includes('bölüm')) return Icons.Tv;
-  if (text.includes('seri') || text.includes('streak') || text.includes('alev') || text.includes('gün')) return Icons.Flame;
-  if (text.includes('puan') || text.includes('rate') || text.includes('eleştir') || text.includes('yıldız')) return Icons.Star;
-  if (text.includes('yorum') || text.includes('not') || text.includes('inceleme') || text.includes('kalem')) return Icons.Feather;
-  if (text.includes('gece') || text.includes('night') || text.includes('baykuş')) return Icons.Moon;
-  if (text.includes('maraton') || text.includes('hız') || text.includes('süre') || text.includes('saat')) return Icons.Zap;
-  if (text.includes('tür') || text.includes('kaşif') || text.includes('genre')) return Icons.Compass;
-  if (text.includes('koleksiyon') || text.includes('arşiv') || text.includes('kütüphane')) return Icons.Layers;
-  if (text.includes('dna') || text.includes('sentez')) return Icons.Dna;
-  if (text.includes('görev') || text.includes('kontrat') || text.includes('quest')) return Icons.Crosshair;
-  if (text.includes('ağ') || text.includes('sosyal') || text.includes('arkadaş')) return Icons.Users;
-  if (text.includes('korku') || text.includes('gerilim')) return Icons.Skull;
-  if (text.includes('bilim') || text.includes('uzay')) return Icons.Rocket;
-  if (text.includes('romantik') || text.includes('aşk')) return Icons.Heart;
-  if (text.includes('komedi')) return Icons.Smile;
-  if (text.includes('aksiyon') || text.includes('savaş')) return Icons.Swords;
-  if (def?.secret) return Icons.Eye;
-  return Icons.Trophy;
-}
-
 const ACHV_SOLID_CSS = `
 /* ---------- CANLI RENKLİ BAŞARIM KARTI ---------- */
 .achv-card{
@@ -176,44 +149,41 @@ const ACHV_SOLID_CSS = `
   border-left-color:var(--tier-solid);
 }
 
-/* Canlı Metalik/Mücevher İkon Rozeti */
+/* 3 Katmanlı Özel Vektörel Arma Yuvası */
 .achv-medal-wrap{
   position:relative;
-  width:56px;
-  height:56px;
+  width:62px;
+  height:62px;
   flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
 }
-.achv-medal{
-  width:56px;
-  height:56px;
-  border-radius:14px;
-  background:var(--tier-medal-bg);
-  border:1.5px solid var(--tier-medal-border);
-  color:var(--tier-icon);
-  display:grid;
-  place-items:center;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.22);
-  transition:transform .22s ease;
+.achv-emblem-stage{
+  transition:transform .25s ease, opacity .25s ease, filter .25s ease;
 }
-.achv-card:hover .achv-medal{
-  transform:scale(1.05);
+.achv-card:hover .achv-emblem-stage{
+  transform:scale(1.08);
 }
-.achv-card.is-locked .achv-medal{
-  opacity:.72;
+.achv-card.is-locked .achv-emblem-stage{
+  opacity:.68;
+  filter:saturate(.65);
 }
-.achv-card.is-locked:hover .achv-medal{
+.achv-card.is-locked:hover .achv-emblem-stage{
   opacity:1;
+  filter:saturate(1);
 }
 .achv-status-pip{
   position:absolute;
-  bottom:-4px;
-  right:-4px;
+  bottom:-2px;
+  right:-2px;
   width:20px;
   height:20px;
   border-radius:6px;
   display:grid;
   place-items:center;
   border:1.5px solid #0F0F16;
+  z-index:10;
 }
 .achv-status-pip.locked{
   background:#1E1E2A;
@@ -300,10 +270,9 @@ const ACHV_SOLID_CSS = `
 }
 
 @media (max-width: 640px){
-  .achv-medal-wrap, .achv-medal{
-    width:50px;
-    height:50px;
-    border-radius:12px;
+  .achv-medal-wrap{
+    width:54px;
+    height:54px;
   }
 }
 `;
@@ -364,7 +333,6 @@ export default function AchievementsPage() {
   });
 
   ACHIEVEMENT_DEFS.forEach((def: any) => {
-    if (def.secret && !data.showLockedNames) return;
     const prog = progressMap.get(def.id);
     const unlockedTiers = prog?.unlockedTiers || [];
 
@@ -416,7 +384,7 @@ export default function AchievementsPage() {
         const pct = Math.min(99, Math.floor((current / target) * 100));
         if (pct > 0 && (closestLocked === null || pct > closestLocked.pct)) {
           closestLocked = {
-            name: String(a.tier.name || a.def.name || ''),
+            name: data.showLockedNames ? String(a.tier.name || a.def.name || '') : '???',
             pct,
             current,
             target,
@@ -493,7 +461,7 @@ export default function AchievementsPage() {
   };
 
   const totalPossibleTiers = ACHIEVEMENT_DEFS.reduce(
-    (sum: number, def: any) => sum + (!def.secret || data.showLockedNames ? def.tiers.length : 0),
+    (sum: number, def: any) => sum + def.tiers.length,
     0
   );
   const unlockedTiersCount = displayAchievements.filter((a) => a.isUnlocked).length;
@@ -825,11 +793,10 @@ export default function AchievementsPage() {
             {filteredAchievements.map((a) => {
               const tierKey = a.tier.tier as string;
               const vis = TIER_VISUALS[tierKey] || TIER_VISUALS.bronze;
-              const AchIcon = resolveAchievementIcon(a.def);
-              const displayName = a.tier.name || a.def.name;
-              const parsedDesc = a.def.description.replace('{threshold}', String(a.tier.threshold));
               const isLocked = !a.isUnlocked;
               const isSecret = !!a.def.secret;
+              const displayName = isLocked && !isTestMode ? '???' : (a.tier.name || a.def.name);
+              const parsedDesc = a.def.description.replace('{threshold}', String(a.tier.threshold));
 
               const current = Math.min(a.current, a.tier.threshold);
               const target = a.tier.threshold;
@@ -854,11 +821,14 @@ export default function AchievementsPage() {
                 >
                   <div className="p-4 sm:p-5 flex flex-col gap-3.5 h-full justify-between">
                     <div className="flex items-start gap-3.5 sm:gap-4">
-                      {/* Sol: Kademe Renginde Canlı Metalik/Mücevher İkon */}
+                      {/* Sol: 3 Katmanlı Özel Vektörel Başarım Arması */}
                       <div className="achv-medal-wrap">
-                        <div className="achv-medal">
-                          <AchIcon size={26} strokeWidth={2.2} />
-                        </div>
+                        <AchievementIcon
+                          achievementId={a.def.id}
+                          tier={tierKey}
+                          size={44}
+                          className="achv-emblem-stage"
+                        />
                         {isLocked ? (
                           <span className="achv-status-pip locked" title="Kilitli">
                             <Icons.Lock size={11} />
@@ -910,8 +880,8 @@ export default function AchievementsPage() {
                             isLocked ? 'text-zinc-400' : 'text-zinc-300'
                           }`}
                         >
-                          {isLocked && isSecret && !isTestMode
-                            ? 'Bu gizli kupanın sırrını çözmek için keşfetmeye devam et.'
+                          {isLocked && !isTestMode
+                            ? 'Bu kupanın sırrını çözmek için keşfetmeye devam et.'
                             : parsedDesc}
                         </p>
                       </div>

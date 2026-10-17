@@ -7,6 +7,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { uid } from '../lib/utils';
 import { handleImgFallback } from '../lib/selectors';
+import ConfirmDialog from './ConfirmDialog';
 
 // ÖZEL MESAJ VE ANKET KONTROL ÖNEKLERİ
 const MEDIA_PREFIX = '__SNV_MEDIA__:';
@@ -1734,81 +1735,31 @@ export default function ChatHubModal({
 
             {/* GRUPTAN ÜYE ATMA ONAYI */}
             {memberToKick && (
-              <div
-                className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-                onClick={() => setMemberToKick(null)}
-              >
-                <div
-                  onClick={e => e.stopPropagation()}
-                  className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center"
-                >
-                  <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-                    <UserMinus size={24} />
-                  </div>
-                  <h3 className="text-lg font-black text-white mb-2">Ajanı At</h3>
-                  <p className="text-sm text-ink-300 mb-6">
-                    "{memberToKick.name}" adlı ajanı gruptan atmak istediğinize emin misiniz?
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setMemberToKick(null)}
-                      className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors"
-                    >
-                      İptal
-                    </button>
-                    <button
-                      onClick={() => handleKickMemberFromGroup(memberToKick.id)}
-                      className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20"
-                    >
-                      Evet, At
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <ConfirmDialog
+                title="Ajanı At"
+                message={`"${memberToKick.name}" adlı ajanı gruptan atmak istediğine emin misin?`}
+                confirmLabel="Evet, At"
+                cancelLabel="İptal"
+                onConfirm={() => handleKickMemberFromGroup(memberToKick.id)}
+                onCancel={() => setMemberToKick(null)}
+              />
             )}
-          </div>
-        </div>
-      )}
 
-      {/* GRUP SİLME / AYRILMA ONAYI */}
-      {groupActionConf && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-          onClick={() => setGroupActionConf(null)}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            className="bg-ink-950 border border-ink-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center"
-          >
-            <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-              {groupActionConf.action === 'delete' ? (
-                <Trash2 size={24} />
-              ) : (
-                <LogOut size={24} className="ml-1" />
-              )}
-            </div>
-            <h3 className="text-lg font-black text-white mb-2">
-              {groupActionConf.action === 'delete' ? 'Grubu Sil' : 'Gruptan Ayrıl'}
-            </h3>
-            <p className="text-sm text-ink-300 mb-6">
-              {groupActionConf.action === 'delete'
-                ? `"${groupActionConf.name}" grubunu tamamen silmek istediğinize emin misiniz? Tüm mesajlar ve grup silinecektir.`
-                : `"${groupActionConf.name}" grubundan ayrılmak istediğinize emin misiniz?`}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setGroupActionConf(null)}
-                className="flex-1 py-3 rounded-xl bg-ink-900 hover:bg-ink-800 text-white font-bold transition-colors"
-              >
-                İptal
-              </button>
-              <button
-                onClick={executeGroupAction}
-                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-colors shadow-lg shadow-red-500/20"
-              >
-                {groupActionConf.action === 'delete' ? 'Evet, Sil' : 'Evet, Ayrıl'}
-              </button>
-            </div>
+            {/* GRUP SİLME / AYRILMA ONAYI */}
+            {groupActionConf && (
+              <ConfirmDialog
+                title={groupActionConf.action === 'delete' ? 'Grubu Sil' : 'Gruptan Ayrıl'}
+                message={
+                  groupActionConf.action === 'delete'
+                    ? `"${groupActionConf.name}" grubunu tamamen silmek istediğine emin misin? Tüm mesajlar ve grup silinecektir.`
+                    : `"${groupActionConf.name}" grubundan ayrılmak istediğine emin misin?`
+                }
+                confirmLabel={groupActionConf.action === 'delete' ? 'Evet, Sil' : 'Evet, Ayrıl'}
+                cancelLabel="İptal"
+                onConfirm={executeGroupAction}
+                onCancel={() => setGroupActionConf(null)}
+              />
+            )}
           </div>
         </div>
       )}

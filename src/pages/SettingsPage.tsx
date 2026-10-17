@@ -9,6 +9,7 @@ import {
 import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX, ExternalLink, ChevronUp, Star, Search, Info, Film, Play, MonitorPlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
+import { useQuests } from '../context/QuestContext';
 import { useTutorial } from '../context/TutorialContext';
 import type { RatingCriterion, ExternalActionTemplate } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -551,11 +552,12 @@ export default function SettingsPage() {
   const {
     data, addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData,
-    toggleLockedNames, addCriterion, editCriterion,
+    toggleLockedNames, toggleBadgeDetails, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
     setNickname, recoverIdentity, setExternalActions
   } = useApp();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
+  const { questState, togglePenalty } = useQuests();
 
   // Sekme durumu (localStorage'da saklanır); içerik blokları yalnızca bu
   // anahtara göre gruplanır, hiçbir state/handler değişmez.
@@ -1864,15 +1866,48 @@ export default function SettingsPage() {
             title="Geliştirici / Test Ayarları"
             icon={<Wrench size={18} className="text-gold-400 flex-shrink-0" />}
             defaultOpen={false}
-            desc="Henüz kazanılmamış (kilitli) başarımların isimlerini '???' yerine açıkça gösterir."
+            desc="Gizli başarımların görünümü, rozet vitrini detayları ve görev ceza sistemi şalterleri."
           >
-            <button
-              onClick={toggleLockedNames}
-              className={`${data.showLockedNames ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
-              style={data.showLockedNames ? BTN_P_STYLE : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
-            >
-              {data.showLockedNames ? 'Görünürlüğü Kapat (Normal Mod)' : 'Kilitli İsimleri Göster (Test Modu)'}
-            </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <span className="text-xs text-ink-400 font-semibold sm:flex-1">
+                  Kilitli başarımlar isimleriyle mi görünsün?
+                </span>
+                <button
+                  onClick={toggleLockedNames}
+                  className={`${data.showLockedNames ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
+                  style={data.showLockedNames ? BTN_P_STYLE : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
+                >
+                  {data.showLockedNames ? 'Açık — İsimler Görünür' : 'Kapalı — ??? Modu'}
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <span className="text-xs text-ink-400 font-semibold sm:flex-1">
+                  Rozet vitrininde isim/açıklama/XP detayları görünsün mü?
+                </span>
+                <button
+                  onClick={toggleBadgeDetails}
+                  className={`${data.showBadgeDetails ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
+                  style={data.showBadgeDetails ? BTN_P_STYLE : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
+                >
+                  {data.showBadgeDetails ? 'Açık — İsim + XP Görünür' : 'Kapalı — Sadece İkonlar'}
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <span className="text-xs text-ink-400 font-semibold sm:flex-1">
+                  Üst üste 3 görev reddi 24 saatlik kilit (ceza) uygulasın mı?
+                </span>
+                <button
+                  onClick={togglePenalty}
+                  className={`${questState.isPenaltyEnabled ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
+                  style={questState.isPenaltyEnabled ? { ...BTN_P_STYLE, background: 'linear-gradient(135deg, #e8384f, #8e1220)' } : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
+                >
+                  {questState.isPenaltyEnabled ? 'Açık — Ceza Aktif' : 'Kapalı — Serbest Pas'}
+                </button>
+              </div>
+            </div>
           </CollapsibleSection>
 
         </>

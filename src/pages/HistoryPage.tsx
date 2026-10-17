@@ -692,7 +692,7 @@ export default function HistoryPage() {
                                 e.stopPropagation();
                                 openSeriesDetail(item, seriesData);
                               }}
-                              title="Dizi Sinema Kartını Gör"
+                              title="Künye"
                               className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red, var(--color-1, #e8384f))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
                             >
                               {seriesData?.posterUrl ? (
@@ -1113,7 +1113,7 @@ function MovieHistoryCard({
           <button
             type="button"
             onClick={onSelectDetail}
-            title="Sinema Kartını & Detayları Gör"
+            title="Künye"
             className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red, var(--color-1, #e8384f))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
           >
             {movieData?.posterUrl ? (
@@ -1228,9 +1228,10 @@ function MovieHistoryCard({
             <button
               type="button"
               onClick={onSelectDetail}
+              title="Künye"
               className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] text-ink-300 hover:text-white px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-colors"
             >
-              <Eye size={13} /> <span>Kart</span>
+              <Eye size={13} /> <span>Künye</span>
             </button>
             <button
               type="button"

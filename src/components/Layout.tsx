@@ -3,8 +3,8 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Film, Tv, History, Trophy, Settings, BarChart3, Bot,
   Menu, X, LayoutDashboard, Sparkles, CalendarClock, Users,
-  Cloud, CloudOff, RefreshCw, Search, Dices, ArrowRight, CornerDownLeft,
-  Target, Medal, SearchX
+  Cloud, CloudOff, RefreshCw, Search, Shuffle, ArrowRight, CornerDownLeft,
+  Target, Medal, SearchX, Clapperboard
 } from 'lucide-react';
 import WrappedModal from './WrappedModal';
 import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
@@ -366,8 +366,17 @@ function buildSearchGroups(query: string, data: any): SearchGroup[] {
   }
 
   const achievementProgress: any[] = Array.isArray(data?.achievements) ? data.achievements : [];
+  const showLockedAch = !!data?.showLockedNames;
   const achHits: SearchEntry[] = ACHIEVEMENT_DEFS
-    .filter((def) => matchesAllTokens(q, `${def.name} ${def.category || ''} ${def.description || ''}`))
+    .filter((def) => {
+      // Gizli (secret) başarımlar: kilitliyken ve test modu kapalıyken aramada da sızmasın.
+      if (def.secret && !showLockedAch) {
+        const p = achievementProgress.find((a) => a?.achievementId === def.id);
+        const u = Array.isArray(p?.unlockedTiers) ? p.unlockedTiers.length : 0;
+        if (u === 0) return false;
+      }
+      return matchesAllTokens(q, `${def.name} ${def.category || ''} ${def.description || ''}`);
+    })
     .slice(0, 6)
     .map((def) => {
       const prog = achievementProgress.find((a) => a?.achievementId === def.id);
@@ -938,7 +947,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             style={btnSecondaryStyle}
             title="Katalog Ekle"
           >
-            <Film size={13} />
+            <Clapperboard size={13} />
             <span>Katalog</span>
           </button>
 
@@ -949,7 +958,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             style={btnPrimaryStyle}
             title="Ne İzlesem"
           >
-            <Dices size={13} />
+            <Shuffle size={13} />
             <span>Ne İzlesem</span>
           </button>
 
@@ -1176,7 +1185,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-ink-50 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap backdrop-blur-md transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px shrink-0"
             style={btnSecondaryStyle}
           >
-            <Film size={15} /> Katalog
+            <Clapperboard size={15} /> Katalog
           </button>
 
           <button
@@ -1184,7 +1193,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             className="relative overflow-hidden group flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px] active:translate-y-px shrink-0"
             style={btnPrimaryStyle}
           >
-            <Dices size={15} /> Ne İzlesem
+            <Shuffle size={15} /> Ne İzlesem
             <ButtonShimmer />
           </button>
 
