@@ -15,9 +15,11 @@ const COLORS: Record<string, string> = {
   info: 'text-blue-400',
 };
 
-export default function Toasts({ toasts }: { toasts: ToastItem[] }) {
+export default function Toasts({ toasts, stackOffset = 0 }: { toasts: ToastItem[]; stackOffset?: number }) {
   return (
-    <div className="fixed bottom-4 right-4 z-[70] flex flex-col gap-2 items-end">
+    // stackOffset: başarım bildirimleri aynı köşedeyken sıradan toast onların
+    // ÜSTÜNE kaydırılır (zaman kaybı olmadan, çakışma olmadan).
+    <div className="fixed right-4 z-[70] flex flex-col gap-2 items-end" style={{ bottom: 16 + stackOffset }}>
       {toasts.map((t) => {
         const Icon = ICONS[t.type];
         return (

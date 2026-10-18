@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { useApp } from './AppContext'; 
 import { QUEST_DEFS, RARITY_STYLES, QuestIcon } from '../lib/quests';
 import { Sparkles } from 'lucide-react';
@@ -46,7 +46,7 @@ export function useQuests() {
 }
 
 export function QuestProvider({ children }: { children: ReactNode }) {
-  const { data, grantXp, setIsQuestCelebrating } = useApp();
+  const { data, grantXp, setIsQuestCelebrating, levelUpData, seasonCompleteData, xpGainData, achievementToasts, levelUpQueuedRef } = useApp();
 
   const [questState, setQuestState] = useState<QuestState>(() => {
     try {
@@ -66,6 +66,9 @@ export function QuestProvider({ children }: { children: ReactNode }) {
   });
 
   const [celebratingQuestId, setCelebratingQuestId] = useState<string | null>(null);
+  // SIRA: görev tamamlanınca tam ekran kutlama (seviye/sezon) veya XP kartı
+  // AÇIKSA kutlama ertelenir; hepsi bitince sırayla başlatılır.
+  const queuedCelebrationRef = useRef<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(questState));
@@ -145,11 +148,37 @@ export function QuestProvider({ children }: { children: ReactNode }) {
 
     if (isCompleted) {
       completeActiveQuest(questState.activeQuestId);
-      setIsQuestCelebrating(true); 
-      setCelebratingQuestId(questState.activeQuestId);
+      queuedCelebrationRef.current = null;
+      // SIRA: tam ekran seviye/sezon modalı, XP kartı, gecikmeli modal
+      // penceresi VEYA görünen başarım bildirimi varsa rozet kutlaması
+      // sıraya alınır — görseller ve sesler asla üst üste başlamaz.
+      // data.pendingLevelUp: başarım XP'siyle seviye atlama AYNI commit'te
+      // gelir; levelUpData ancak parent effect'te set edilir (commit yarışı).
+      if (levelUpData || seasonCompleteData || xpGainData || data.pendingLevelUp || levelUpQueuedRef.current || achievementToasts.length > 0) {
+        // Meşgul: kutlama sıraya alınır (aşağıdaki flush effect'i başlatır)
+        queuedCelebrationRef.current = questState.activeQuestId;
+      } else {
+        setIsQuestCelebrating(true);
+        setCelebratingQuestId(questState.activeQuestId);
+      }
     }
 
-  }, [data.history, data.movies, questState.activeQuestId, questState.questAcceptedAt, data.dailyStreak]);
+  }, [data.history, data.movies, data.pendingLevelUp, questState.activeQuestId, questState.questAcceptedAt, data.dailyStreak, levelUpData, seasonCompleteData, xpGainData, achievementToasts]);
+
+  // Erteleme bitince bekleyen görev kutlamasını başlat. Kapılar: XP/seviye/
+  // sezon + gecikmeli modal penceresi (levelUpQueuedRef: XP kartı kapanıp
+  // modal açılana kadar True kalır — aradaki 150ms boşluk dahil) + aktif
+  // başarım bildirimi (kart bitmeden rozet kutlaması başlamaz; ses çakışması
+  // önlenir). Kalan kuyruk, kutlama başladıktan sonra isQuestCelebrating
+  // kapısında bekler (ondan kısa).
+  useEffect(() => {
+    const qid = queuedCelebrationRef.current;
+    if (!qid) return;
+    if (levelUpData || seasonCompleteData || xpGainData || data.pendingLevelUp || levelUpQueuedRef.current || achievementToasts.length > 0) return;
+    queuedCelebrationRef.current = null;
+    setIsQuestCelebrating(true);
+    setCelebratingQuestId(qid);
+  }, [levelUpData, seasonCompleteData, xpGainData, data.pendingLevelUp, achievementToasts]);
 
   return (
     <QuestContext.Provider value={{ 

@@ -200,7 +200,7 @@ function AppContent() {
           <XpGainOverlay key={`${xpGainData.oldTotal}-${xpGainData.newTotal}`} />
         )}
 
-        <Toasts toasts={toasts} />
+        <Toasts toasts={toasts} stackOffset={achievementToasts.length > 0 ? achievementToasts.length * 104 : 0} />
         <AchievementToasts toasts={achievementToasts} />
 
         {levelUpData && (

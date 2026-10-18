@@ -8,25 +8,42 @@ import {
 
 // ============================================================================
 // SES MOTORU (SOUND) — Web Audio API davranış testleri (sahte AudioContext)
+// Sinematik motor: BiquadFilter + StereoPan + Reverb(Convolver) + Compressor
+// kullanır; mock bu API'lerin tamamını destekler.
 // ============================================================================
 
 const created = {
   oscillators: [] as any[],
   gains: [] as any[],
+  compressors: [] as any[],
 };
+
+/** setValueAtTime çağıran her parametreye `value` yansır (frekans okumak için). */
+function makeParam(initial = 0) {
+  const p: any = {
+    value: initial,
+    setValueAtTime: vi.fn((v: number) => {
+      p.value = v;
+      return p;
+    }),
+    linearRampToValueAtTime: vi.fn(),
+    exponentialRampToValueAtTime: vi.fn(),
+  };
+  return p;
+}
 
 class FakeAudioContext {
   currentTime = 10; // saniye — deterministik zaman tabanı
+  sampleRate = 48000;
+  state = 'running';
   destination = { name: 'fake-destination' };
+  resume = vi.fn(() => Promise.resolve());
 
   createOscillator() {
     const osc = {
       type: '',
-      frequency: {
-        value: 0,
-        setValueAtTime: vi.fn(),
-        exponentialRampToValueAtTime: vi.fn(),
-      },
+      frequency: makeParam(),
+      detune: makeParam(),
       connect: vi.fn(),
       start: vi.fn(),
       stop: vi.fn(),
@@ -37,18 +54,47 @@ class FakeAudioContext {
 
   createGain() {
     const gain = {
-      gain: {
-        value: 0,
-        setValueAtTime: vi.fn(),
-        linearRampToValueAtTime: vi.fn(),
-        exponentialRampToValueAtTime: vi.fn(),
-      },
+      gain: makeParam(),
       connect: vi.fn(),
     };
     created.gains.push(gain);
     return gain;
   }
+
+  createBiquadFilter() {
+    return { type: '', Q: makeParam(), frequency: makeParam(), connect: vi.fn() };
+  }
+
+  createStereoPanner() {
+    return { pan: makeParam(), connect: vi.fn() };
+  }
+
+  createDynamicsCompressor() {
+    const c = {
+      threshold: makeParam(),
+      knee: makeParam(),
+      ratio: makeParam(),
+      attack: makeParam(),
+      release: makeParam(),
+      connect: vi.fn(),
+    };
+    created.compressors.push(c);
+    return c;
+  }
+
+  createConvolver() {
+    return { buffer: null as AudioBuffer | null, connect: vi.fn() };
+  }
+
+  createBuffer(_channels: number, length: number, _sampleRate: number) {
+    return { getChannelData: () => new Float32Array(length) };
+  }
 }
+
+const freqsOf = (type: string) =>
+  created.oscillators.filter((o) => o.type === type).map((o) => o.frequency.value);
+const startsOf = (o: any) => o.start.mock.calls[0][0] as number;
+const stopsOf = (o: any) => o.stop.mock.calls[0][0] as number;
 
 describe('Penceresiz (Node/SSR) ortamda ses çalmayı DENEmemeli ama çökmemeli', () => {
   test('window yokken 4 ses fonksiyonu da hata fırlatmadan sessizce geri dönmeli', () => {
@@ -76,44 +122,57 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
   beforeEach(() => {
     created.oscillators.length = 0;
     created.gains.length = 0;
+    // compressors sıfırlanmAZ: AudioContext/Compressor engine'de tek seferlik
+    // yaratılır (singleton) — zincir testi ilk yaratımdaki kaydı okur.
   });
 
-  test('playAchievementSound: 4 notalı (C5-E5-G5-C6) sine dalgası üretmeli', () => {
+  test('playAchievementSound: sub + 4 pad + 5 çan = 19 osilatör, kuyruk 4s toast süresi içinde', () => {
     playAchievementSound();
 
-    expect(created.oscillators).toHaveLength(4);
-    expect(created.gains).toHaveLength(4);
+    // 1 sub + 4 pad × 2 (saw+tri) + 5 bell × 2 (sine+tri) = 19
+    expect(created.oscillators).toHaveLength(19);
+    // 2 master bus gain (engine ilk açılışta) + 1 sub + 4 pad env + 5 bell × 2 env = 17
+    expect(created.gains).toHaveLength(17);
 
-    const freqs = created.oscillators.map((o) => o.frequency.value);
-    expect(freqs).toEqual([523.25, 659.25, 783.99, 1046.5]);
-    created.oscillators.forEach((o) => expect(o.type).toBe('sine'));
+    // Cmaj9 pad akoru (sawtooth gövdeleri)
+    const saws = freqsOf('sawtooth');
+    expect(saws).toEqual([130.81, 196.0, 246.94, 329.63]);
 
-    // Notalar 0.1sn arayla başlamalı (currentTime = 10)
-    const startTimes = created.oscillators.map((o) => o.start.mock.calls[0][0]);
-    expect(startTimes.map((t) => Number(t.toFixed(2)))).toEqual([10, 10.1, 10.2, 10.3]);
+    // Kristal kupa arpeji (bell gövdeleri sine): G5 B5 D6 E6 G6
+    const bellBodies = created.oscillators
+      .filter((o) => o.type === 'sine' && o.frequency.value >= 700)
+      .map((o) => o.frequency.value);
+    expect(bellBodies).toEqual([783.99, 987.77, 1174.66, 1318.51, 1567.98]);
 
-    // Her nota 0.3sn sonra durmalı
-    const stopTimes = created.oscillators.map((o) => o.stop.mock.calls[0][0]);
-    expect(stopTimes.map((t) => Number(t.toFixed(2)))).toEqual([10.3, 10.4, 10.5, 10.6]);
-
-    // Her gain hafiflik eğrisi (0 → 0.15 → sönüm) çizmeli
-    created.gains.forEach((g) => {
-      expect(g.gain.setValueAtTime).toHaveBeenCalled();
-      expect(g.gain.linearRampToValueAtTime).toHaveBeenCalled();
-      expect(g.gain.exponentialRampToValueAtTime).toHaveBeenCalled();
-    });
+    // Ses, 4000ms'lik başarım toast'ından UZUN sürmemeli (senkron)
+    const lastStop = Math.max(...created.oscillators.map(stopsOf));
+    expect(lastStop - 10).toBeLessThan(4);
   });
 
-  test('playLevelUpSound: 5 notalı (G4’ten C6’ya) triangle dalgası yükselişi üretmeli', () => {
+  test('playLevelUpSound: vuruş 0.68s (faz 3 arma inişi), son nota 1.45s (faz 5 plaka) — faz senkronu', () => {
     playLevelUpSound();
 
-    expect(created.oscillators).toHaveLength(5);
-    const freqs = created.oscillators.map((o) => o.frequency.value);
-    expect(freqs).toEqual([392, 523.25, 659.25, 783.99, 1046.5]);
-    created.oscillators.forEach((o) => expect(o.type).toBe('triangle'));
+    // 5 sparkle çan (10) + 1 sub + 7 fanfar pad (14) + 5 taç çanı (10) = 35
+    expect(created.oscillators).toHaveLength(35);
+    expect(created.gains).toHaveLength(28); // 1 sub + 7 pad env + 10 sparkle env + 10 taç env
 
-    const startTimes = created.oscillators.map((o) => o.start.mock.calls[0][0]);
-    expect(startTimes.map((t) => Number(t.toFixed(2)))).toEqual([10, 10.08, 10.16, 10.24, 10.32]);
+    // FAZ 3 (680ms): Unvan Arması iniş vuruşu
+    const impact = created.oscillators.find((o) => o.type === 'sine' && o.frequency.value === 150);
+    expect(impact).toBeTruthy();
+    expect(startsOf(impact!)).toBeCloseTo(10.68, 5);
+
+    // Fanfar akoru tam vuruş anında başlamalı
+    const saws = created.oscillators.filter((o) => o.type === 'sawtooth');
+    expect(saws).toHaveLength(7);
+    expect(freqsOf('sawtooth')).toEqual([130.81, 196.0, 261.63, 329.63, 392.0, 493.88, 587.33]);
+    saws.forEach((o) => expect(startsOf(o)).toBeCloseTo(10.68, 5));
+
+    // FAZ 5 (1450ms): nihai zafer notası (G6) plakayla eşzamanlı
+    const finalBell = created.oscillators.find(
+      (o) => o.type === 'sine' && o.frequency.value === 1567.98
+    );
+    expect(finalBell).toBeTruthy();
+    expect(startsOf(finalBell!)).toBeCloseTo(11.45, 5);
   });
 
   test('playLessonDoneSound: 4 nota × (temel + üst harmonik) = 8 osilatör üretmeli', () => {
@@ -122,59 +181,69 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     expect(created.oscillators).toHaveLength(8);
     expect(created.gains).toHaveLength(8);
 
-    // Notalar sırayla: E5, G#5, B5, E6 → her biri sine (temel) + triangle (harmonik)
-    const baseOscs = created.oscillators.filter((_, i) => i % 2 === 0);
-    const harmOscs = created.oscillators.filter((_, i) => i % 2 === 1);
+    const baseOscs = created.oscillators.filter((o) => o.type === 'sine');
+    const harmOscs = created.oscillators.filter((o) => o.type === 'triangle');
 
-    expect(baseOscs.map((o) => o.frequency.value)).toEqual([659.25, 830.61, 987.77, 1318.51]);
-    baseOscs.forEach((o) => expect(o.type).toBe('sine'));
+    expect(baseOscs.map((o) => o.frequency.value)).toEqual([698.46, 880.0, 1046.5, 1318.51]);
 
     // Üst harmonik = temel tonun 2 katı
     harmOscs.forEach((o, i) => {
-      expect(o.type).toBe('triangle');
       expect(o.frequency.value).toBeCloseTo(baseOscs[i].frequency.value * 2, 5);
     });
+
+    // Notalar 0.07-0.08sn arayla başlamalı
+    const startTimes = baseOscs.map(startsOf).map((t) => Number(t.toFixed(2)));
+    expect(startTimes).toEqual([10, 10.07, 10.14, 10.22]);
   });
 
-  test('playQuestCompleteSound: bas + sweep + 5 akor + 4 zafer çınlaması = 11 osilatör', () => {
+  test('playQuestCompleteSound: 3 riser + sub + 9 akor + 5 çan = 32 osilatör, PATLAMA tam 3.0s\'te', () => {
     playQuestCompleteSound();
 
-    expect(created.oscillators).toHaveLength(11);
+    // 3 riser + 1 sub-drop + 9 epic pad × 2 + 5 victory bell × 2 = 32
+    expect(created.oscillators).toHaveLength(32);
 
-    const sawtooth = created.oscillators.filter((o) => o.type === 'sawtooth');
+    const saws = created.oscillators.filter((o) => o.type === 'sawtooth');
     const triangles = created.oscillators.filter((o) => o.type === 'triangle');
     const sines = created.oscillators.filter((o) => o.type === 'sine');
+    expect(saws).toHaveLength(10);  // 1 riser + 9 akor gövdesi
+    expect(triangles).toHaveLength(15); // 1 riser + 9 akor + 5 çan harmoniği
+    expect(sines).toHaveLength(7);  // 1 riser + 1 sub + 5 çan gövdesi
 
-    expect(sawtooth).toHaveLength(1); // Derin bas
-    expect(sawtooth[0].frequency.value).toBeCloseTo(65.41, 2); // C2
-    expect(triangles).toHaveLength(5); // C Majör akoru
-    expect(sines).toHaveLength(5); // Sweep + 4 çınlama
+    // Yükselen riser: C2 → C3 (0 - 3.0s)
+    const riserSaw = saws.find((o) => startsOf(o) === 10);
+    expect(riserSaw).toBeTruthy();
+    expect(riserSaw!.frequency.value).toBeCloseTo(65.41, 2);
+    expect(riserSaw!.frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(
+      130.81,
+      expect.closeTo(12.98, 3)
+    );
 
-    // Yükselen sweep: A3 → A5
-    const sweep = created.oscillators[1];
-    expect(sweep.frequency.setValueAtTime).toHaveBeenCalledWith(220, 10);
-    expect(sweep.frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(880, 13);
+    // Görsel senkron: QuestCelebrationOverlay faz 1 tam 3000ms'de → drop = now+3.0
+    const drop = created.oscillators.find((o) => o.type === 'sine' && o.frequency.value === 160);
+    expect(drop).toBeTruthy();
+    expect(startsOf(drop!)).toBeCloseTo(13, 5);
 
-    // Patlama 3. saniyede (now + 3) vurmalı
-    triangles.forEach((o) => {
-      expect(o.start.mock.calls[0][0]).toBeCloseTo(13, 5);
-    });
+    // Orkestral akor da drop anında (13.0s) başlamalı
+    const chordSaws = saws.filter((o) => startsOf(o) > 12);
+    expect(chordSaws).toHaveLength(9);
+    chordSaws.forEach((o) => expect(startsOf(o)).toBeCloseTo(13, 5));
   });
 
-  test('osilatör → gain → destination zinciri kurulmalı (ses gerçekten çıkışa bağlanmalı)', () => {
+  test('osilatör → gain/node → destination zinciri kurulmalı (ses gerçekten çıkışa bağlanmalı)', () => {
     playAchievementSound();
 
-    created.oscillators.forEach((o, i) => {
-      // Osilatör kendi gain'ine bağlanmalı
-      expect(o.connect).toHaveBeenCalledTimes(1);
-      expect(o.connect).toHaveBeenCalledWith(created.gains[i]);
+    // Her osilatör bir env/gain/filter düğümüne bağlanmalı
+    created.oscillators.forEach((o) => {
+      expect(o.connect).toHaveBeenCalled();
     });
 
+    // Her gain bir sonraki düğüme (panner/master) bağlanmalı
     created.gains.forEach((g) => {
-      // Gain, ortak destination (hoparlör) objesine bağlanmalı
-      expect(g.connect).toHaveBeenCalledTimes(1);
-      const target = g.connect.mock.calls[0][0];
-      expect(target).toEqual({ name: 'fake-destination' });
+      expect(g.connect).toHaveBeenCalled();
     });
+
+    // Master compressor çıkışa (destination) bağlı olmalı
+    expect(created.compressors.length).toBeGreaterThan(0);
+    expect(created.compressors[0].connect).toHaveBeenCalledWith({ name: 'fake-destination' });
   });
 });

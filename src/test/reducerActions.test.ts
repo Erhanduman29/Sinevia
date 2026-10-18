@@ -277,7 +277,28 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     const next = rootReducer(state, { type: 'CONSUME_NEXT_TOAST' } as any);
     expect(next.pendingToasts).toHaveLength(1);
     expect(next.pendingToasts![0].achievementId).toBe('a2');
-    expect(next.pendingXpGain).toEqual({ gained: 100, oldTotal: 200, newTotal: 300 });
+    // Toplam 300 = 150 taban + kuyruktaki 100+50. İlk toast: 150 → 250
+    // (eski beklenti 200→300 idi; 2. toast'ta 250→300 GİDEREK geriye sarkan
+    //  hatalı adımlama üretiyordu).
+    expect(next.pendingXpGain).toEqual({ gained: 100, oldTotal: 150, newTotal: 250 });
+  });
+
+  test('CONSUME_NEXT_TOAST: toplu başarım XP adımlaması 5 → 55 → 70 olmalı', () => {
+    const state = getInitialState();
+    state.totalXp = 70; // unlock anında 5+50+15 birden totalXp'ye yazıldı
+    state.pendingToasts = [
+      { achievementId: 'a1', tier: 'bronze', xp: 5, name: 'X', icon: 'Y', description: 'Z' } as any,
+      { achievementId: 'a2', tier: 'gold', xp: 50, name: 'X', icon: 'Y', description: 'Z' } as any,
+      { achievementId: 'a3', tier: 'silver', xp: 15, name: 'X', icon: 'Y', description: 'Z' } as any,
+    ];
+
+    const s1 = rootReducer(state, { type: 'CONSUME_NEXT_TOAST' } as any);
+    expect(s1.pendingXpGain).toEqual({ gained: 5, oldTotal: 0, newTotal: 5 });
+    const s2 = rootReducer(s1, { type: 'CONSUME_NEXT_TOAST' } as any);
+    expect(s2.pendingXpGain).toEqual({ gained: 50, oldTotal: 5, newTotal: 55 });
+    const s3 = rootReducer(s2, { type: 'CONSUME_NEXT_TOAST' } as any);
+    expect(s3.pendingXpGain).toEqual({ gained: 15, oldTotal: 55, newTotal: 70 });
+    expect(s3.pendingToasts).toHaveLength(0);
   });
 
   test('CONSUME_NEXT_TOAST: kuyruk boşsa state AYNEN geri dönmeli (yeni obje yok)', () => {

@@ -33,7 +33,11 @@ export function isPositiveTag(tag: string, sentiments?: Record<string, 'positive
 }
 
 export const DISPLAY_DURATION_MS = 4000;
-const QUEUE_STEP_DURATION_MS = 4300;
+/** XP barı kartı ne kadar ekranda KALIR: bileşen 3200ms'de çıkış animasyonunu
+ *  başlatır (380ms sürer) → 3200+380+20 tampon. Bu süre context'ten KISA
+ *  kesilirse çıkış animasyonu hiç oynamadan kart yok olur (senkron bozukluğu). */
+export const XP_OVERLAY_DURATION_MS = 3600;
+const QUEUE_STEP_DURATION_MS = 4100; // toast 4000ms görünür + 100ms nefes payı
 // Açılış uzlaşma penceresi: hidrate/bulut senkronu yeniden hesaplamalarının seviye
 // "kutlaması" üretmesi yasak (her yenilemede sahte seviye atlama animasyonu engeli).
 const BOOT_RECONCILE_WINDOW_MS = 5000;
@@ -746,11 +750,18 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     const queue = state.pendingToasts || [];
     if (queue.length === 0) return state;
     const currentToast = queue[0], remainingQueue = queue.slice(1);
-    
+    // Toplu açılmalarda tüm başarım XP'si unlock anında totalXp'ye HEPİSİ birden
+    // yazılır. Barın 5 → 55 → 70 diye ADIM ADIM ilerlemesi için: henüz tüketilmemiş
+    // kuyruk XP'si "açıklanmamış" sayılır → eski = toplam − kuyruk toplamı,
+    // yeni = eski + bu toast'ın xp'si (tek toast'larda eski davranışla aynı).
+    const totalXp = state.totalXp || 0;
+    const queueTotal = queue.reduce((sum, t) => sum + (t.xp || 0), 0);
+    const revealedBefore = Math.max(0, totalXp - queueTotal);
+    const revealedAfter = revealedBefore + (currentToast.xp || 0);
     return {
       ...state,
       pendingToasts: remainingQueue,
-      pendingXpGain: { gained: currentToast.xp || 0, oldTotal: Math.max(0, (state.totalXp || 0) - (currentToast.xp || 0)), newTotal: state.totalXp || 0 }
+      pendingXpGain: { gained: currentToast.xp || 0, oldTotal: revealedBefore, newTotal: revealedAfter }
     };
   }
   if (action.type === 'CLEAR_LEVELUP') return { ...state, pendingLevelUp: undefined };
@@ -980,7 +991,7 @@ interface SeasonCompleteData { seriesTitle: string; season: number; }
 export interface AppContextValue {
   data: ExtendedAppData;
   syncStatus: 'syncing' | 'synced' | 'error'; // YENİ: Eşitleme Durum Sinyali
-  isQuestCelebrating: boolean; setIsQuestCelebrating: (val: boolean) => void; 
+  isQuestCelebrating: boolean; setIsQuestCelebrating: (val: boolean) => void; levelUpQueuedRef: { current: boolean }; // gecikmeli seviye modalı bekliyor (dış flush kapıları için)
   addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => boolean;
   deleteMovie: (id: string) => void; startWatchingMovie: (id: string, silent?: boolean) => void; togglePauseWatchingMovie: (id: string) => void; cancelWatchingMovie: (id: string) => void; canRateMovieWithTimer: (id: string) => boolean;
   watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
@@ -1057,8 +1068,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {} return defaultData();
   });
 
-  const [isQuestCelebrating, setIsQuestCelebrating] = useState(false);
+  const [isQuestCelebrating, setQuestCelebratingState] = useState(false);
   const toastsRef = useRef<ToastItem[]>([]); const achievementToastsRef = useRef<AchievementToastItem[]>([]); const xpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); const isProcessingToastRef = useRef(false); const [queueTick, setQueueTick] = useState(0);
+  // --- SIRALI KUTLAMA MOTORU (animasyonlar asla üst üste binmesin) ---
+  const levelUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // ertelenmiş seviye modalı
+  const levelUpQueuedRef = useRef(false);   // modal zamanlandı VEYA açık (ref, state'ten önce okunur)
+  const seasonQueuedRef = useRef<{ seriesTitle: string; season: number } | null>(null); // bekleyen sezon modalı
+  const levelUpOpenRef = useRef(false); const seasonOpenRef = useRef(false); const xpGainOpenRef = useRef(false); const questCelebratingRef = useRef(false);
+  const toastRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null); // ertelenen sıradan toast
+  // SENKRON AYNA: Görev kutlaması (rozet) ile başarım kuyruğu AYNI commit'te
+  // tetiklenebilir; React state'i commit edilmeden parent etkileri eski değeri
+  // okurdu → setter ref'i ANINDA yazar, kuyruk etkisi bunu görür ve ikisi
+  // asla üst üste başlamaz (sesler de dahil).
+  const setIsQuestCelebrating = useCallback((val: boolean) => { questCelebratingRef.current = val; setQuestCelebratingState(val); }, []);
   
   const lastSyncedStorageHash = useRef<string>(getCleanHashString(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}'), readSyncExtras()));
   // En güncel reducer durumuna ref üzerinden erişim (localStorage artık sadece küçük bir anlık görüntü tutuyor).
@@ -1457,32 +1479,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => { const id = uid(); setAchievementToasts({ type: 'add', toast: { ...item, id } }); setTimeout(() => setAchievementToasts({ type: 'remove', id }), DISPLAY_DURATION_MS); }, []);
 
   useEffect(() => {
+    const inBoot = Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS;
     if (data.pendingXpGain) {
       // Açılış uzlaşma penceresindeki XP kazancı hidrate/bulut senkronu yeniden hesaplamasıdır,
       // gerçek ödül değil → sadece temizle, gösterme (kutlama benzeri sahte animasyonu önle).
-      if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CLEAR_XP_GAIN' }); return; }
-      if (xpTimerRef.current) clearTimeout(xpTimerRef.current); setXpGainData(data.pendingXpGain);
-      xpTimerRef.current = setTimeout(() => { setXpGainData(null); xpTimerRef.current = null; }, DISPLAY_DURATION_MS); dispatch({ type: 'CLEAR_XP_GAIN' });
+      dispatch({ type: 'CLEAR_XP_GAIN' });
+      if (!inBoot) {
+        if (xpTimerRef.current) clearTimeout(xpTimerRef.current); setXpGainData(data.pendingXpGain);
+        xpTimerRef.current = setTimeout(() => { setXpGainData(null); xpTimerRef.current = null; }, XP_OVERLAY_DURATION_MS);
+      }
     }
     if (data.pendingLevelUp) {
       // Açılış uzlaşma penceresi içindeki "artış" hidrate/bulut senkronu yeniden hesaplamasıdır,
       // gerçek kutlama değildir → sadece temizle, gösterme.
-      if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CLEAR_LEVELUP' }); }
-      else { setLevelUpData(data.pendingLevelUp); import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound()); dispatch({ type: 'CLEAR_LEVELUP' }); }
+      dispatch({ type: 'CLEAR_LEVELUP' });
+      if (!inBoot) {
+        // SIRA: XP kartı oynarken tam ekran seviye modalı AÇILMAZ (üst üste binmesin).
+        // XP kartı bitiminden 150ms sonra açılır → kartın çıkış animasyonu da tamamlanır.
+        const xpActive = !!data.pendingXpGain || xpGainOpenRef.current;
+        const delay = xpActive ? XP_OVERLAY_DURATION_MS + 150 : 0;
+        if (levelUpTimerRef.current) clearTimeout(levelUpTimerRef.current);
+        levelUpQueuedRef.current = true;
+        const payload = data.pendingLevelUp;
+        const fire = () => {
+          levelUpTimerRef.current = null; levelUpQueuedRef.current = false;
+          setLevelUpData(payload);
+          import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound());
+        };
+        if (delay > 0) levelUpTimerRef.current = setTimeout(fire, delay); else fire();
+      }
     }
   }, [data.pendingXpGain, data.pendingLevelUp]);
 
+  // Ayna ref'ler: kuyruk etkileri state değişiminden ÖNCE ref okuyabilsin diye
+  // her state değişiminde hemen eşitlenir (bileşen sırası: bu etkiler kuyruk
+  // etkilerinden ÖNCE tanımlı → ilk turda da tazedir).
+  useEffect(() => { levelUpOpenRef.current = !!levelUpData; }, [levelUpData]);
+  useEffect(() => { seasonOpenRef.current = !!seasonCompleteData; }, [seasonCompleteData]);
+  useEffect(() => { xpGainOpenRef.current = xpGainData !== null; }, [xpGainData]);
+  useEffect(() => { questCelebratingRef.current = isQuestCelebrating; }, [isQuestCelebrating]);
+  useEffect(() => () => { if (toastRetryRef.current) clearTimeout(toastRetryRef.current); }, []);
+
+  // Sezon kutlaması: tam ekran bir kutlama/XP barı açıkken AÇILMAZ; hepsi
+  // bitince sırayla kendiliğinden açılır (XP → seviye → sezon önceliği).
+  const requestSeasonComplete = useCallback((payload: { seriesTitle: string; season: number }) => {
+    // Kapı: tam ekran seviye/kutlama penceresi VEYA görünen başarım bildirimi
+    // (sezon modalı kartın üstüne açılıp kaybolmasına yol açmasın).
+    if (levelUpQueuedRef.current || levelUpOpenRef.current || xpGainOpenRef.current || questCelebratingRef.current || seasonOpenRef.current || achievementToasts.length > 0) {
+      seasonQueuedRef.current = payload;
+    } else setSeasonCompleteData(payload);
+  }, [achievementToasts]);
   useEffect(() => {
-    const queue = data.pendingToasts || []; if (queue.length === 0 || levelUpData || isProcessingToastRef.current || isQuestCelebrating) return;
+    if (!seasonQueuedRef.current) return;
+    if (levelUpQueuedRef.current || levelUpOpenRef.current || xpGainOpenRef.current || questCelebratingRef.current || achievementToasts.length > 0) return;
+    const payload = seasonQueuedRef.current; seasonQueuedRef.current = null;
+    setSeasonCompleteData(payload);
+  }, [xpGainData, levelUpData, isQuestCelebrating, achievementToasts]);
+
+  useEffect(() => {
+    const queue = data.pendingToasts || []; if (queue.length === 0 || levelUpData || seasonCompleteData || levelUpQueuedRef.current || seasonOpenRef.current || isProcessingToastRef.current || questCelebratingRef.current) return;
     // Açılış uzlaşma penceresindeki kuyruk (bayat bulut/hidrasyon kaynaklı) GÖSTERİLMEZ, sessizce tüketilir.
     if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CONSUME_NEXT_TOAST' }); return; }
     isProcessingToastRef.current = true; const nextAchievement = queue[0], remainingCount = queue.length - 1; const comboText = remainingCount > 0 ? ` (+${remainingCount} Sırada)` : '';
     showAchievementToast({ achievementName: `${nextAchievement.name}${comboText}`, achievementId: nextAchievement.achievementId, tier: nextAchievement.tier, icon: nextAchievement.icon, description: nextAchievement.description });
     import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound()); dispatch({ type: 'CONSUME_NEXT_TOAST' });
     setTimeout(() => { isProcessingToastRef.current = false; setQueueTick((t) => t + 1); }, QUEUE_STEP_DURATION_MS);
-  }, [data.pendingToasts, levelUpData, queueTick, showAchievementToast, isQuestCelebrating]);
+  }, [data.pendingToasts, levelUpData, seasonCompleteData, queueTick, showAchievementToast, isQuestCelebrating]);
 
-  const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => { const id = uid(); setToasts({ type: 'add', toast: { id, message, type } }); setTimeout(() => setToasts({ type: 'remove', id }), 2800); }, []);
+  const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => {
+    // SIRA: yalnızca TAM EKRAN kutlamalar (seviye/sezon/görev) açıksa/beke-
+    // leniyorsa ertelenir (modal altında kaybolmasın) → 400ms aralıkla dener.
+    // Başarım bildirimleri artık ERTELENMEZ: stackOffset ile üstüne kaydırılır.
+    const attempt = () => {
+      if (levelUpQueuedRef.current || levelUpOpenRef.current || seasonOpenRef.current || seasonQueuedRef.current || questCelebratingRef.current) {
+        toastRetryRef.current = setTimeout(attempt, 400);
+        return;
+      }
+      toastRetryRef.current = null;
+      const id = uid(); setToasts({ type: 'add', toast: { id, message, type } });
+      setTimeout(() => setToasts({ type: 'remove', id }), 2800);
+    };
+    attempt();
+  }, []);
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
   const toggleBadgeDetails = useCallback(() => dispatch({ type: 'TOGGLE_BADGE_DETAILS' }), []);
   const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []);
@@ -1624,7 +1702,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setTimeout(() => {
       const updatedSeries = dataRef.current.series?.find((s: any) => s.id === seriesId);
-      if (updatedSeries) { if (updatedSeries.episodes.filter((e: any) => e.season === ep.season).every((e: any) => e.watched)) setSeasonCompleteData({ seriesTitle: updatedSeries.title, season: ep.season });
+      if (updatedSeries) { if (updatedSeries.episodes.filter((e: any) => e.season === ep.season).every((e: any) => e.watched)) requestSeasonComplete({ seriesTitle: updatedSeries.title, season: ep.season });
       if (updatedSeries.episodes.every((e: any) => e.watched)) { dispatch({ type: 'COMPLETE_SERIES', id: seriesId, title: updatedSeries.title }); showToast(`${updatedSeries.title} tamamlandı!`, 'success'); } }
     }, 200);
   }, [data.series, data.agentId, data.shareWatchedInFeed, showToast]);
@@ -1721,7 +1799,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, toggleBadgeDetails, xpGainData, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, toggleBadgeDetails, xpGainData, levelUpQueuedRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
