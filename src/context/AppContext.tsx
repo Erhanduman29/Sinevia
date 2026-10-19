@@ -226,6 +226,7 @@ function getCleanHashString(stateObj: any, questStateRaw?: any, extrasRaw?: Reco
   delete clean.lastCloudSync;
   delete clean.pendingToasts;
   delete clean.pendingLevelUp;
+  delete clean.pendingLevelUpQueue;
   delete clean.pendingXpGain;
   
   if (questStateRaw || extrasRaw) {
@@ -280,7 +281,11 @@ function applyIncomingExtras(incomingJson: any) {
   }
 }
 
-function synchronizeXPAndLevel(state: ExtendedAppData, isSilent = false): ExtendedAppData {
+function synchronizeXPAndLevel(
+  state: ExtendedAppData,
+  isSilent = false,
+  opts?: { deferLevelUp?: boolean }
+): ExtendedAppData {
   let recalculatedXp = 0;
 
   if (state.achievements && Array.isArray(state.achievements)) {
@@ -325,11 +330,57 @@ function synchronizeXPAndLevel(state: ExtendedAppData, isSilent = false): Extend
     xp: correctedLevelInfo.currentLevelXp
   };
 
-  if (!isSilent && correctedLevelInfo.level > oldLevel) {
-    newState.pendingLevelUp = { newLevel: correctedLevelInfo.level };
+  // Seviye atlama tetiği: her ara seviye ayrı kutlamaya girer (deferLevelUp ile
+  // başarım batch'inde ertelenir — seviyeler XP reveal'ından sırayla enqueue edilir).
+  if (!isSilent && !opts?.deferLevelUp) {
+    const ups = applyLevelUps(newState, oldLevel, correctedLevelInfo.level);
+    newState.pendingLevelUp = ups.pendingLevelUp;
+    newState.pendingLevelUpQueue = ups.pendingLevelUpQueue;
   }
 
   return newState;
+}
+
+/**
+ * Seviye atlama kuyruğu: oldLevel+1..newLevel aralığındaki HER ara seviye ayrı
+ * kutlama olarak yazılır. trigger (pendingLevelUp) sıradaki ilk kutlamadır;
+ * kalanlar pendingLevelUpQueue'da bekler ve modal her dismiss'te PROMOTE_LEVEL_UP
+ * ile sıradaki açılır. existingTop sayesinde sync + reveal kesişiminde çift
+ * kutlama oluşmaz (zaten kuyrukta/beğenilmiş olan seviyeler eklenmez).
+ */
+function applyLevelUps(
+  state: Pick<ExtendedAppData, 'pendingLevelUp' | 'pendingLevelUpQueue'>,
+  oldLevel: number,
+  newLevel: number
+): { pendingLevelUp?: { newLevel: number }; pendingLevelUpQueue?: number[] } {
+  const keep = {
+    pendingLevelUp: state.pendingLevelUp,
+    pendingLevelUpQueue: state.pendingLevelUpQueue
+  };
+  if (newLevel <= oldLevel) return keep;
+
+  const existingTop = Math.max(
+    state.pendingLevelUp?.newLevel ?? 0,
+    ...(state.pendingLevelUpQueue ?? []),
+    0
+  );
+  const fresh: number[] = [];
+  for (let lvl = oldLevel + 1; lvl <= newLevel; lvl++) {
+    if (lvl > existingTop) fresh.push(lvl);
+  }
+  if (fresh.length === 0) return keep;
+
+  if (!state.pendingLevelUp) {
+    const [first, ...rest] = fresh;
+    return {
+      pendingLevelUp: { newLevel: first },
+      pendingLevelUpQueue: [...(state.pendingLevelUpQueue ?? []), ...rest]
+    };
+  }
+  return {
+    pendingLevelUp: state.pendingLevelUp,
+    pendingLevelUpQueue: [...(state.pendingLevelUpQueue ?? []), ...fresh]
+  };
 }
 
 /**
@@ -366,7 +417,7 @@ type Action =
   | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'MERGE_SHARED_LIST'; movies: Movie[]; series: Series[]; collections: Collection[]; genres: string[] }
   | { type: 'HYDRATE_FROM_IDB'; data: ExtendedAppData }
   | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
-  | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'TOGGLE_BADGE_DETAILS' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'SYNC_ACHIEVEMENTS' }
+  | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'TOGGLE_BADGE_DETAILS' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'PROMOTE_LEVEL_UP' } | { type: 'CLEAR_LEVEL_UP_QUEUE' } | { type: 'SYNC_ACHIEVEMENTS' }
   | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }
   | { type: 'ADD_CRITERION'; criterion: RatingCriterion } | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion } | { type: 'DELETE_CRITERION'; id: string }
   | { type: 'UPDATE_ALT_TEMPLATE'; template: string } | { type: 'SET_THEME'; theme: string } | { type: 'GRANT_XP'; xp: number }
@@ -682,7 +733,15 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   }
 
   let stateWithAchievements = { ...state, achievements: newAchievements };
-  stateWithAchievements = synchronizeXPAndLevel(stateWithAchievements, false);
+  // Başarım batch'inde seviye tetiği ERTELENİR: unlock XP'leri totalXp'ye yazılır ama
+  // kutlama tetiklenmez — her toast reveal'ında CONSUME_NEXT_TOAST seviye farkını
+  // kuyruğa yazar (causal sıra: başarım XP'si → o XP'nin seviye atlama animasyonu →
+  // sıradaki başarım → … → sonraki seviye).
+  stateWithAchievements = synchronizeXPAndLevel(
+    stateWithAchievements,
+    false,
+    unlocked.length > 0 ? { deferLevelUp: true } : undefined
+  );
 
   if (unlocked.length > 0) {
     const existingQueue = stateWithAchievements.pendingToasts || [];
@@ -694,6 +753,9 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
 
 export function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'SYNC_FROM_CLOUD_STORAGE') {
+    // Tam hesap silme yarışı: sıfırlama bayrağı ayaktaysa gelen bulut verisi (çekirdek +
+    // görev/rozet deposu) uygulanmaz — silinen hesap geri getirilmesin.
+    if (localStorage.getItem('sinevia_zero_reset') === '1') return state;
     if (action.questData) {
       localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(action.questData));
     }
@@ -704,7 +766,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     });
     // Bulut uzlaşması ne kutlama üretir ne de eski bulut bildirim kuyruğunu içeri alır;
     // bu sadece yerel (genuine) kuyruk korunur.
-    return { ...syncedFromCloud, pendingLevelUp: undefined, pendingToasts: state.pendingToasts || [] };
+    return { ...syncedFromCloud, pendingLevelUp: undefined, pendingLevelUpQueue: undefined, pendingToasts: state.pendingToasts || [] };
   }
 
   if (action.type === 'HYDRATE_FROM_IDB') {
@@ -720,7 +782,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     };
     // Hidrasyon uzlaşması da kutlama üretmemeli (gerçek seviye atlama sadece oyun içindedir).
     const hydrated = applyAchievements(merged);
-    return { ...hydrated, pendingLevelUp: undefined };
+    return { ...hydrated, pendingLevelUp: undefined, pendingLevelUpQueue: undefined };
   }
 
   if (action.type === 'RECOVER_IDENTITY') {
@@ -758,13 +820,28 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     const queueTotal = queue.reduce((sum, t) => sum + (t.xp || 0), 0);
     const revealedBefore = Math.max(0, totalXp - queueTotal);
     const revealedAfter = revealedBefore + (currentToast.xp || 0);
+    // Reveal sırasında seviye atlandıysa HER ara seviye kutlama kuyruğuna girer
+    // (başarım XP reveal'ı ile seviye animasyonu arasında causal bağ).
+    const levelUps = applyLevelUps(state, levelFromXp(revealedBefore).level, levelFromXp(revealedAfter).level);
     return {
       ...state,
       pendingToasts: remainingQueue,
-      pendingXpGain: { gained: currentToast.xp || 0, oldTotal: revealedBefore, newTotal: revealedAfter }
+      pendingXpGain: { gained: currentToast.xp || 0, oldTotal: revealedBefore, newTotal: revealedAfter },
+      ...levelUps
     };
   }
   if (action.type === 'CLEAR_LEVELUP') return { ...state, pendingLevelUp: undefined };
+  // Modal dismiss edilince sıradaki seviye kutlaması açılır (tetik CLEAR ile zaten temizlendi).
+  if (action.type === 'PROMOTE_LEVEL_UP') {
+    if (state.pendingLevelUp || !state.pendingLevelUpQueue?.length) return state;
+    const [nextLevel, ...rest] = state.pendingLevelUpQueue;
+    return { ...state, pendingLevelUp: { newLevel: nextLevel }, pendingLevelUpQueue: rest.length ? rest : undefined };
+  }
+  // Boot/hidrasyon tarafında bekleyen seviye kuyruğunu temizler.
+  if (action.type === 'CLEAR_LEVEL_UP_QUEUE') {
+    if (!state.pendingLevelUpQueue?.length) return state;
+    return { ...state, pendingLevelUpQueue: undefined };
+  }
   if (action.type === 'CLEAR_XP_GAIN') return { ...state, pendingXpGain: undefined };
   if (action.type === 'TOGGLE_LOCKED_NAMES') return { ...state, showLockedNames: !state.showLockedNames };
   if (action.type === 'TOGGLE_BADGE_DETAILS') return { ...state, showBadgeDetails: !state.showBadgeDetails };
@@ -787,7 +864,9 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   switch (action.type) {
     case 'GRANT_XP': {
       const newTotalXp = state.totalXp + action.xp, oldLevel = levelFromXp(state.totalXp).level, levelData = levelFromXp(newTotalXp);
-      return { ...state, totalXp: newTotalXp, xp: levelData.currentLevelXp, level: levelData.level, pendingXpGain: { gained: action.xp, oldTotal: state.totalXp, newTotal: newTotalXp }, pendingLevelUp: levelData.level > oldLevel ? { newLevel: levelData.level } : state.pendingLevelUp };
+      // Çoklu seviye atlamasında HER ara seviye ayrı kutlama kuyruğuna girer.
+      const levelUps = applyLevelUps(state, oldLevel, levelData.level);
+      return { ...state, totalXp: newTotalXp, xp: levelData.currentLevelXp, level: levelData.level, pendingXpGain: { gained: action.xp, oldTotal: state.totalXp, newTotal: newTotalXp }, ...levelUps };
     }
     case 'ABANDON_MEDIA': {
       const nowIso = action.abandonedAt || new Date().toISOString();
@@ -1212,6 +1291,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // AÇILIŞ KONTROLÜ (BOOT CHECK)
   useEffect(() => {
     if (!data.agentId) return;
+    // Tam hesap silme sonrası: sıfırlama bayrağı hâlâ ayaktaysa bulutu ÇEKME
+    // (profil satırı + arşiv JSON silinmiş olsa bile kalan izler geri getirmesin).
+    if (localStorage.getItem('sinevia_zero_reset') === '1') return;
 
     const performStartupCheck = async () => {
       setSyncStatus('syncing');
@@ -1293,6 +1375,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!data.agentId) return;
 
     const syncToStorage = async () => {
+      // Sıfırlama bayrağı: silme sırasında/sonrası tetiklenen flush bu fonksiyonu
+      // çalıştırırsa profil satırı + arşiv JSON yeniden yüklenmesin (silme boşa gitmesin).
+      if (localStorage.getItem('sinevia_zero_reset') === '1') return;
       try {
         const currentQuestState = JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}');
         const jsonData = getCleanHashString(data, currentQuestState, readSyncExtras());
@@ -1539,7 +1624,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const queue = data.pendingToasts || []; if (queue.length === 0 || levelUpData || seasonCompleteData || levelUpQueuedRef.current || seasonOpenRef.current || isProcessingToastRef.current || questCelebratingRef.current) return;
     // Açılış uzlaşma penceresindeki kuyruk (bayat bulut/hidrasyon kaynaklı) GÖSTERİLMEZ, sessizce tüketilir.
-    if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CONSUME_NEXT_TOAST' }); return; }
+    if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CONSUME_NEXT_TOAST' }); dispatch({ type: 'CLEAR_LEVEL_UP_QUEUE' }); return; }
     isProcessingToastRef.current = true; const nextAchievement = queue[0], remainingCount = queue.length - 1; const comboText = remainingCount > 0 ? ` (+${remainingCount} Sırada)` : '';
     showAchievementToast({ achievementName: `${nextAchievement.name}${comboText}`, achievementId: nextAchievement.achievementId, tier: nextAchievement.tier, icon: nextAchievement.icon, description: nextAchievement.description });
     import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound()); dispatch({ type: 'CONSUME_NEXT_TOAST' });
@@ -1758,7 +1843,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'MERGE_SHARED_LIST', movies: newMovies, series: newSeries, collections: newCollections, genres: tempGenres }); showToast(`${newMovies.length} yeni film ve ${newSeries.length} yeni dizi eklendi!`, 'success'); return true;
     } catch { showToast('Geçersiz paylaşım dosyası!', 'error'); return false; }
   }, [data.collections, data.genres, data.movies, data.removedSeriesTitles, data.series, showToast]);
-  const dismissLevelUp = useCallback(() => setLevelUpData(null), []); const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []); const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
+  const dismissLevelUp = useCallback(() => { setLevelUpData(null); dispatch({ type: 'PROMOTE_LEVEL_UP' }); }, []); const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []); const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
   const findPlanConflict = useCallback((date: string, time: string, runtime: number | undefined, excludeId?: string) => { return (data.weeklyPlan || []).find((p) => { if (p.id === excludeId) return false; const refMovie = data.movies.find((m) => m.id === p.movieId); if (refMovie?.watched) return false; return planItemsOverlap(date, time, runtime, p.date, p.time, p.runtime); }); }, [data.weeklyPlan, data.movies]);
   const addPlanItem = useCallback((movie: Movie, date: string, time: string): boolean => { const conflict = findPlanConflict(date, time, movie.runtime); if (conflict) { showToast(`⛔ Bu saat aralığında zaten "${conflict.title}" planlanmış!`, 'warning'); return false; } dispatch({ type: 'ADD_PLAN_ITEM', item: { id: uid(), movieId: movie.id, title: movie.title, year: movie.year, posterUrl: movie.posterUrl, genres: movie.genres, runtime: movie.runtime, date, time, createdAt: new Date().toISOString() } }); showToast(`"${movie.title}" plana eklendi`, 'success'); return true; }, [findPlanConflict, showToast]);
   const deletePlanItem = useCallback((id: string) => { dispatch({ type: 'DELETE_PLAN_ITEM', id }); showToast('Plan silindi', 'info'); }, [showToast]);

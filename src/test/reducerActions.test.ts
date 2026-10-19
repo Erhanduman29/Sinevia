@@ -333,7 +333,55 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     expect(big.totalXp).toBe(100100);
     expect(big.level).toBe(levelFromXp(100100).level);
     expect(big.level).toBeGreaterThan(1);
-    expect(big.pendingLevelUp?.newLevel).toBe(big.level);
+    // Kuyruk semantiği: tetik İLK ara seviye, sonraki seviyeler kuyrukta sırayla.
+    expect(big.pendingLevelUp?.newLevel).toBe(small.level + 1);
+    const expectedQueue: number[] = [];
+    for (let l = small.level + 2; l <= big.level; l++) expectedQueue.push(l);
+    expect(big.pendingLevelUpQueue ?? []).toEqual(expectedQueue);
+  });
+
+  test('CONSUME_NEXT_TOAST: reveal edilen XP seviye atlattıysa her ara seviye kuyruğa girer', () => {
+    const state = getInitialState();
+    state.totalXp = 0;
+    state.pendingToasts = [{ achievementId: 'a1', tier: 'Bronz', xp: 5000, name: 'n', icon: 'i', description: 'd' } as any];
+    const next = rootReducer(state, { type: 'CONSUME_NEXT_TOAST' } as any);
+    expect(next.pendingXpGain).toEqual({ gained: 5000, oldTotal: 0, newTotal: 5000 });
+    // 5000 XP Level 2'yi açar → tetik 2, kalanları kuyrukta (varsa).
+    expect(next.pendingLevelUp?.newLevel).toBe(2);
+    const expected: number[] = [];
+    for (let l = 3; l <= levelFromXp(5000).level; l++) expected.push(l);
+    expect(next.pendingLevelUpQueue ?? []).toEqual(expected);
+    expect(next.pendingToasts).toEqual([]);
+  });
+
+  test('PROMOTE_LEVEL_UP: kuyruktaki sıradaki seviye tetiğe geçer, tükenince noop', () => {
+    // Gerçek akış: effect tetiği açılır açılmaz CLEAR_LEVELUP ile temizler →
+    // dismiss'te PROMOTE sıradakini öne çıkarır → effect yeni tetiği yine temizler.
+    const base = { ...getInitialState(), pendingLevelUpQueue: [3, 4] } as any;
+    const p1 = rootReducer(base, { type: 'PROMOTE_LEVEL_UP' } as any);
+    expect(p1.pendingLevelUp?.newLevel).toBe(3);
+    expect(p1.pendingLevelUpQueue).toEqual([4]);
+    const c1 = rootReducer(p1, { type: 'CLEAR_LEVELUP' } as any);
+    expect(c1.pendingLevelUp).toBeUndefined();
+    const p2 = rootReducer(c1, { type: 'PROMOTE_LEVEL_UP' } as any);
+    expect(p2.pendingLevelUp?.newLevel).toBe(4);
+    expect(p2.pendingLevelUpQueue).toBeUndefined();
+    const p3 = rootReducer(p2, { type: 'PROMOTE_LEVEL_UP' } as any);
+    expect(p3).toBe(p2);
+    // Tetik hâlâ açıksa PROMOTE geçmez (kutlama atlanmaz).
+    const gated = rootReducer(
+      { ...getInitialState(), pendingLevelUp: { newLevel: 5 }, pendingLevelUpQueue: [6] } as any,
+      { type: 'PROMOTE_LEVEL_UP' } as any
+    );
+    expect(gated.pendingLevelUp?.newLevel).toBe(5);
+    expect(gated.pendingLevelUpQueue).toEqual([6]);
+  });
+
+  test('CLEAR_LEVELUP: tetiği temizler ama seviye kuyruğunu korur', () => {
+    const base = { ...getInitialState(), pendingLevelUp: { newLevel: 2 }, pendingLevelUpQueue: [3] } as any;
+    const cleared = rootReducer(base, { type: 'CLEAR_LEVELUP' } as any);
+    expect(cleared.pendingLevelUp).toBeUndefined();
+    expect(cleared.pendingLevelUpQueue).toEqual([3]);
   });
 
   test('FORCE_XP_SYNC: XP yalnızca başarım kademeleri + tamamlanan görevlerden yeniden hesaplanmalı', () => {

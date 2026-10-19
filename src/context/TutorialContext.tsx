@@ -43,6 +43,8 @@ const defaultProgress: TutorialProgress = {
 
 function loadProgress(): TutorialProgress {
   try {
+    // "Her şeyi sil" sonrası: yeniden yüklemede eski eğitim ilerlemesi geri gelmesin.
+    if (localStorage.getItem('sinevia_zero_reset') === '1') return { ...defaultProgress };
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const merged = { ...defaultProgress, ...JSON.parse(raw) } as TutorialProgress;
@@ -121,6 +123,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   // İlerleme kaydı
   useEffect(() => {
+    // "Her şeyi sil" bayrağı aktifken eski veriyi geri yazma (mount'ta üzerine yazılmasın).
+    if (localStorage.getItem('sinevia_zero_reset') === '1') return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
     } catch {}

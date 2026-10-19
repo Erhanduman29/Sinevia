@@ -18,6 +18,7 @@ import { useTutorial } from '../context/TutorialContext';
 import Sini from '../tutorial/Sini';
 import { describeCombo, loadBindings } from '../lib/shortcuts';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
+import { useLazyImageActivator } from '../hooks/useLazyImageActivator';
 
 export type TabId = 'home' | 'movies' | 'series' | 'network' | 'plan' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
 
@@ -698,6 +699,9 @@ function GlobalSearch({
 }
 
 export default function Layout({ children, activeTab, onTabChange }: LayoutProps) {
+  // Opera/Chromium türevlerinde loading="lazy" + iç içe scroller tuzağına
+  // karşı: konteynere yaklaşan tembel görselleri erken aktive et
+  useLazyImageActivator();
   const appCtx = useApp() as any;
   const syncStatus: 'syncing' | 'synced' | 'error' = appCtx.syncStatus || 'synced';
   const { watchMovie, watchEpisode } = appCtx;

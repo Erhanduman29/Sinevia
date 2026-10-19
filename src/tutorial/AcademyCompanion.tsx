@@ -14,6 +14,8 @@ interface CompanionUiState {
 
 function loadUiState(): CompanionUiState {
   try {
+    // "Her şeyi sil" sonrası: eski arayüz durumu geri yüklenmesin.
+    if (localStorage.getItem('sinevia_zero_reset') === '1') return {};
     const raw = localStorage.getItem(UI_STATE_KEY);
     return raw ? (JSON.parse(raw) as CompanionUiState) : {};
   } catch {
@@ -23,6 +25,7 @@ function loadUiState(): CompanionUiState {
 
 function saveUiState(state: CompanionUiState) {
   try {
+    if (localStorage.getItem('sinevia_zero_reset') === '1') return;
     localStorage.setItem(UI_STATE_KEY, JSON.stringify(state));
   } catch {
     /* kota dolu olabilir — sessizce geç */

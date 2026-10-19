@@ -53,7 +53,11 @@ describe('⚔️ SİNEVİA SEVİYE (LEVELING) VE XP SİSTEMİ', () => {
 
       // Ekranda "Seviye Atladın!" kutlaması için pendingLevelUp objesi oluşturulmalı
       expect(newState.pendingLevelUp).toBeDefined(); 
-      expect(newState.pendingLevelUp?.newLevel).toBe(newState.level);
+      // Tetik ilk ara seviye (Level 2); sonraki seviyeler kuyrukta sırayla açılır.
+      expect(newState.pendingLevelUp?.newLevel).toBe(2);
+      const expectedQueue: number[] = [];
+      for (let l = 3; l <= newState.level; l++) expectedQueue.push(l);
+      expect(newState.pendingLevelUpQueue ?? []).toEqual(expectedQueue);
     });
 
     test('Ufak XP kazanımları (Level atlatmayacak kadar) sadece totalXp yi artırmalı', () => {

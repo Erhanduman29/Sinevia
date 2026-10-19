@@ -6,17 +6,25 @@ import { evaluateQuestCompletion } from '../lib/questLogic';
 const acceptedAt = new Date('2026-10-04T12:00:00').getTime();
 
 // Film ve dizi üreticilere varsayılan 'watchedAt' (15:00 - Görevden 3 saat sonra) eklendi
-const mockH = (overrides: any = {}) => [{ itemId: 'm1', kind: 'movie', watchedAt: '2026-10-04T15:00:00', ...overrides }];
-const mockM = (overrides: any = {}) => [{ id: 'm1', watched: true, watchedAt: '2026-10-04T15:00:00', ...overrides }];
+// 2026-10-04 bir PAZAR günüdür.
+const DEFAULT_WATCHED_AT = '2026-10-04T15:00:00';
 
-const mockEp = (overrides: any = {}) => [{ itemId: 'e1', kind: 'series', watchedAt: '2026-10-04T15:00:00', ...overrides }];
+const mockH = (overrides: any = {}) => [{ itemId: 'm1', kind: 'movie', watchedAt: DEFAULT_WATCHED_AT, ...overrides }];
+const mockM = (overrides: any = {}) => [{ id: 'm1', watched: true, watchedAt: DEFAULT_WATCHED_AT, ...overrides }];
 
-const mockHMulti = (count: number, kind: 'movie' | 'series' = 'movie') => 
-  Array.from({ length: count }, (_, i) => ({ itemId: `m${i}`, kind, watchedAt: '2026-10-04T15:00:00' }));
-const mockMMulti = (count: number, overrides: any = {}) => 
-  Array.from({ length: count }, (_, i) => ({ id: `m${i}`, watched: true, watchedAt: '2026-10-04T15:00:00', ...overrides }));
+const mockEp = (overrides: any = {}) => [{ itemId: 'e1', kind: 'series', watchedAt: DEFAULT_WATCHED_AT, ...overrides }];
 
-const checkQuest = (id: string, h: any[], m: any[], streak = 0) => evaluateQuestCompletion(id, acceptedAt, h, m, streak);
+const mockHMulti = (count: number, kind: 'movie' | 'series' = 'movie') =>
+  Array.from({ length: count }, (_, i) => ({ itemId: `m${i}`, kind, watchedAt: DEFAULT_WATCHED_AT }));
+const mockMMulti = (count: number, overrides: any = {}) =>
+  Array.from({ length: count }, (_, i) => ({ id: `m${i}`, watched: true, watchedAt: DEFAULT_WATCHED_AT, ...overrides }));
+
+// Aynı diziden (s1) aynı gün izlenen bölümler
+const mockSeriesEps = (count: number, overrides: any = {}) =>
+  Array.from({ length: count }, (_, i) => ({ itemId: `e${i}`, seriesId: 's1', kind: 'series', watchedAt: DEFAULT_WATCHED_AT, ...overrides }));
+
+const checkQuest = (id: string, h: any[], m: any[], streak = 0, series: any[] = []) =>
+  evaluateQuestCompletion(id, acceptedAt, h, m, streak, series);
 
 describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
 
@@ -28,7 +36,11 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
       // Görev öğlen 12'de alındı, film sabah 10'da izlenmiş
       const h = [{ itemId: 'm1', kind: 'movie', watchedAt: '2026-10-04T10:00:00' }];
       const m = [{ id: 'm1', watched: true, watchedAt: '2026-10-04T10:00:00', runtime: 80 }];
-      expect(checkQuest('c_short_movie', h, m)).toBe(false); 
+      expect(checkQuest('c_short_movie', h, m)).toBe(false);
+    });
+
+    test('Bilinmeyen görev kimliği tamamlanmamalı (güvenli varsayılan)', () => {
+      expect(checkQuest('bilinmeyen_gorev_xyz', mockHMulti(5), mockMMulti(5, { rating: 10 }))).toBe(false);
     });
   });
 
@@ -78,18 +90,25 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
     test('Gün Görevleri: Hafta Sonu ve Pazartesi', () => {
       const hWeekend = [{ itemId: 'm1', kind: 'movie', watchedAt: '2026-10-04T15:00:00' }]; // Pazar
       const mWeekend = [{ id: 'm1', watched: true, watchedAt: '2026-10-04T15:00:00' }];
-      
+
       const hWeekday = [{ itemId: 'm1', kind: 'movie', watchedAt: '2026-10-05T15:00:00' }]; // Pazartesi
       const mWeekday = [{ id: 'm1', watched: true, watchedAt: '2026-10-05T15:00:00' }];
-      
+
       expect(checkQuest('c_weekend', hWeekend, mWeekend)).toBe(true);
       expect(checkQuest('c_weekday', hWeekday, mWeekday)).toBe(true);
     });
 
-    test('Dizi Görevleri: Kısa bölüm, İlk bölüm, 2 Bölüm izleme', () => {
-      expect(checkQuest('c_short_series', mockEp({ actualRuntime: 25 }), [])).toBe(true);
+    test('Dizi Görevleri: Bölüm puanlama, İlk bölüm, Aynı gün 2 Bölüm', () => {
+      // Eski "kısa bölüm" (runtime verisi yok) görevi yerine bölüm puanlama görevi
+      expect(checkQuest('c_episode_rating', mockEp({ rating: 8 }), [])).toBe(true);
+      expect(checkQuest('c_episode_rating', mockEp({ rating: 7 }), [])).toBe(false);
       expect(checkQuest('c_series_pilot', mockEp({ season: 1, episode: 1 }), [])).toBe(true);
-      expect(checkQuest('c_series_double', mockHMulti(2, 'series'), [])).toBe(true);
+      // Aynı gün 2 bölüm -> tamamlanır; farklı günler -> tamamlanmaz
+      expect(checkQuest('c_series_double', mockSeriesEps(2), [])).toBe(true);
+      expect(checkQuest('c_series_double', [
+        { itemId: 'e1', seriesId: 's1', kind: 'series', watchedAt: '2026-10-05T15:00:00' },
+        { itemId: 'e2', seriesId: 's1', kind: 'series', watchedAt: '2026-10-06T15:00:00' },
+      ], [])).toBe(false);
     });
   });
 
@@ -121,12 +140,30 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
     });
 
     test('r_consistent: 3 Günlük Seri (Streak)', () => {
-      expect(checkQuest('r_consistent', mockH(), mockM(), 3)).toBe(true); 
+      expect(checkQuest('r_consistent', mockH(), mockM(), 3)).toBe(true);
     });
 
-    test('Çoklu İzleme: Varyete(2), Dizi Kurdu(3), Çifte Aksiyon/Korku(2)', () => {
-      expect(checkQuest('r_variety', mockHMulti(2), mockMMulti(2))).toBe(true);
-      expect(checkQuest('r_series_wolf', mockHMulti(3, 'series'), [])).toBe(true);
+    test('r_variety: AYNI GÜN farklı türlerde 2 film (aynı tür 2 film sayılmaz)', () => {
+      const m = [
+        { id: 'm0', watched: true, watchedAt: DEFAULT_WATCHED_AT, genres: ['Aksiyon'] },
+        { id: 'm1', watched: true, watchedAt: DEFAULT_WATCHED_AT, genres: ['Komedi'] },
+      ];
+      expect(checkQuest('r_variety', mockHMulti(2), m)).toBe(true);
+      // İki film de aynı birincil türde -> tamamlanmamalı
+      expect(checkQuest('r_variety', mockHMulti(2), mockMMulti(2, { genres: ['Aksiyon'] }))).toBe(false);
+    });
+
+    test('r_series_wolf: AYNI diziden AYNI GÜN 3 bölüm', () => {
+      expect(checkQuest('r_series_wolf', mockSeriesEps(3), [])).toBe(true);
+      // 3 farklı dizi -> tamamlanmamalı
+      expect(checkQuest('r_series_wolf', [
+        { itemId: 'e0', seriesId: 's1', kind: 'series', watchedAt: DEFAULT_WATCHED_AT },
+        { itemId: 'e1', seriesId: 's2', kind: 'series', watchedAt: DEFAULT_WATCHED_AT },
+        { itemId: 'e2', seriesId: 's3', kind: 'series', watchedAt: DEFAULT_WATCHED_AT },
+      ], [])).toBe(false);
+    });
+
+    test('r_double_action / r_double_horror: AYNI GÜN 2 tür filmi', () => {
       expect(checkQuest('r_double_action', mockHMulti(2), mockMMulti(2, { genres: ['Aksiyon'] }))).toBe(true);
       expect(checkQuest('r_double_horror', mockHMulti(2), mockMMulti(2, { genres: ['Korku'] }))).toBe(true);
     });
@@ -141,10 +178,28 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
       expect(checkQuest('r_long_movie', mockH(), mockM({ runtime: 160 }))).toBe(true);
     });
 
-    test('r_perfect_pair & r_indecisive & r_second_chance', () => {
+    test('r_perfect_pair: AYNI GÜN 2 filme de 9+ puan', () => {
       expect(checkQuest('r_perfect_pair', mockHMulti(2), mockMMulti(2, { rating: 9 }))).toBe(true);
-      expect(checkQuest('r_indecisive', mockH(), mockM({ rating: 5 }))).toBe(true);
-      expect(checkQuest('r_second_chance', mockH(), mockM())).toBe(true);
+      // Sadece 1 film 9 alırsa -> tamamlanmamalı
+      expect(checkQuest('r_perfect_pair', mockHMulti(2), [
+        { id: 'm0', watched: true, watchedAt: DEFAULT_WATCHED_AT, rating: 9 },
+        { id: 'm1', watched: true, watchedAt: DEFAULT_WATCHED_AT, rating: 5 },
+      ])).toBe(false);
+    });
+
+    test('r_indecisive: İzledikten sonra puanı revize etme', () => {
+      const revised = mockH({ previousRating: 4, rating: 6, ratingChangedAt: '2026-10-04T16:00:00' });
+      expect(checkQuest('r_indecisive', revised, mockM({ rating: 6 }))).toBe(true);
+      // Hiç revize edilmemiş -> tamamlanmamalı
+      expect(checkQuest('r_indecisive', mockH({ rating: 6 }), mockM({ rating: 6 }))).toBe(false);
+    });
+
+    test('r_second_chance: 5 altı puanı 7+ seviyesine yükseltme', () => {
+      const revised = mockH({ previousRating: 3, rating: 8, ratingChangedAt: '2026-10-04T16:00:00' });
+      expect(checkQuest('r_second_chance', revised, mockM({ rating: 8 }))).toBe(true);
+      // Puan yükselmiş ama eski puan zaten iyi (5+) -> tamamlanmamalı
+      const notLow = mockH({ previousRating: 6, rating: 9, ratingChangedAt: '2026-10-04T16:00:00' });
+      expect(checkQuest('r_second_chance', notLow, mockM({ rating: 9 }))).toBe(false);
     });
   });
 
@@ -152,8 +207,9 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
   // EPIC (DESTANSI) GÖREVLER (TÜMÜ)
   // ==========================================
   describe('🟣 Epic (Destansı) Görevler', () => {
-    test('e_series_killer: 5 Dizi bölümü', () => {
-      expect(checkQuest('e_series_killer', mockHMulti(5, 'series'), [])).toBe(true);
+    test('e_series_killer: AYNI diziden AYNI GÜN 5 bölüm', () => {
+      expect(checkQuest('e_series_killer', mockSeriesEps(5), [])).toBe(true);
+      expect(checkQuest('e_series_killer', mockSeriesEps(4), [])).toBe(false);
     });
 
     test('e_old_school: 1960 ve altı', () => {
@@ -164,9 +220,53 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
       expect(checkQuest('e_heavy_novel', mockH(), mockM({ note: 'A'.repeat(1005) }))).toBe(true);
     });
 
-    test('e_marathon_3 & e_perfect_3: 3 Film veya 3 İyi Puanlı Film', () => {
+    test('e_marathon_3 & e_perfect_3: AYNI GÜN 3 Film / 3 İyi Puanlı Film', () => {
       expect(checkQuest('e_marathon_3', mockHMulti(3), mockMMulti(3))).toBe(true);
       expect(checkQuest('e_perfect_3', mockHMulti(3), mockMMulti(3, { rating: 8 }))).toBe(true);
+      // Farklı günlerde 3 film -> tamamlanmamalı
+      expect(checkQuest('e_marathon_3', [
+        { itemId: 'm0', kind: 'movie', watchedAt: '2026-10-05T15:00:00' },
+        { itemId: 'm1', kind: 'movie', watchedAt: '2026-10-06T15:00:00' },
+        { itemId: 'm2', kind: 'movie', watchedAt: '2026-10-07T15:00:00' },
+      ], [
+        { id: 'm0', watched: true, watchedAt: '2026-10-05T15:00:00' },
+        { id: 'm1', watched: true, watchedAt: '2026-10-06T15:00:00' },
+        { id: 'm2', watched: true, watchedAt: '2026-10-07T15:00:00' },
+      ])).toBe(false);
+    });
+
+    test('e_culture_envoy: AYNI GÜN 3 FARKLI türde film', () => {
+      const m = [
+        { id: 'm0', watched: true, watchedAt: DEFAULT_WATCHED_AT, genres: ['Aksiyon'] },
+        { id: 'm1', watched: true, watchedAt: DEFAULT_WATCHED_AT, genres: ['Komedi'] },
+        { id: 'm2', watched: true, watchedAt: DEFAULT_WATCHED_AT, genres: ['Dram'] },
+      ];
+      expect(checkQuest('e_culture_envoy', mockHMulti(3), m)).toBe(true);
+      // Hepsi aynı türde -> tamamlanmamalı
+      expect(checkQuest('e_culture_envoy', mockHMulti(3), mockMMulti(3, { genres: ['Aksiyon'] }))).toBe(false);
+    });
+
+    test('e_weekday_warrior: Hafta içi 5 gün üst üste her gün 1 film', () => {
+      const days = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09']; // Pzt-Cuma
+      const h = days.map((d, i) => ({ itemId: `m${i}`, kind: 'movie', watchedAt: `${d}T15:00:00` }));
+      const m = days.map((d, i) => ({ id: `m${i}`, watched: true, watchedAt: `${d}T15:00:00` }));
+      expect(checkQuest('e_weekday_warrior', h, m)).toBe(true);
+      // Bir gün eksik (Cuma yok) -> tamamlanmamalı
+      const hMissing = h.slice(0, 4);
+      const mMissing = m.slice(0, 4);
+      expect(checkQuest('e_weekday_warrior', hMissing, mMissing)).toBe(false);
+    });
+
+    test('e_season_finale: Yalnızca sezonun SON bölümü izlenince tamamlanır', () => {
+      const series = [{ id: 's1', episodes: [
+        { season: 1, episode: 1 },
+        { season: 1, episode: 2 },
+        { season: 1, episode: 3 },
+      ] }];
+      // Sezon finali (bölüm 3) izlenince -> tamamlanır
+      expect(checkQuest('e_season_finale', mockEp({ seriesId: 's1', season: 1, episode: 3 }), [], 0, series)).toBe(true);
+      // Aradaki bölüm (bölüm 2) izlenince -> TAMAMLANMAMALI (kullanıcının bildirdiği hata)
+      expect(checkQuest('e_season_finale', mockEp({ seriesId: 's1', season: 1, episode: 2 }), [], 0, series)).toBe(false);
     });
   });
 
@@ -178,10 +278,31 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
       expect(checkQuest('l_directors_cut', mockH(), mockM({ runtime: 185 }))).toBe(true);
     });
 
-    test('l_weekend_massacre & l_flawless_selection & l_marathon_5', () => {
+    test('l_weekend_massacre: Cuma-Pazar penceresinde toplam 4 film', () => {
+      // Pazar günü 4 film -> pencerede 4 film
       expect(checkQuest('l_weekend_massacre', mockHMulti(4), mockMMulti(4))).toBe(true);
+      // Hafta içi (Salı) 4 film -> tamamlanmamalı
+      const hTue = Array.from({ length: 4 }, (_, i) => ({ itemId: `m${i}`, kind: 'movie', watchedAt: '2026-10-06T15:00:00' }));
+      const mTue = Array.from({ length: 4 }, (_, i) => ({ id: `m${i}`, watched: true, watchedAt: '2026-10-06T15:00:00' }));
+      expect(checkQuest('l_weekend_massacre', hTue, mTue)).toBe(false);
+    });
+
+    test('l_flawless_selection: Arka arkaya 4 filme 9+ puan', () => {
       expect(checkQuest('l_flawless_selection', mockHMulti(4), mockMMulti(4, { rating: 9 }))).toBe(true);
+      // Araya düşük puanlı film girerse -> tamamlanmamalı
+      const m = [
+        { id: 'm0', watched: true, watchedAt: '2026-10-05T15:00:00', rating: 9 },
+        { id: 'm1', watched: true, watchedAt: '2026-10-06T15:00:00', rating: 9 },
+        { id: 'm2', watched: true, watchedAt: '2026-10-07T15:00:00', rating: 5 },
+        { id: 'm3', watched: true, watchedAt: '2026-10-08T15:00:00', rating: 9 },
+      ];
+      const h = m.map((x) => ({ itemId: x.id, kind: 'movie', watchedAt: x.watchedAt }));
+      expect(checkQuest('l_flawless_selection', h, m)).toBe(false);
+    });
+
+    test('l_marathon_5: AYNI GÜN 5 film', () => {
       expect(checkQuest('l_marathon_5', mockHMulti(5), mockMMulti(5))).toBe(true);
+      expect(checkQuest('l_marathon_5', mockHMulti(4), mockMMulti(4))).toBe(false);
     });
 
     test('l_sinevia_god: 7 Günlük Streak', () => {
@@ -193,12 +314,27 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
   // MYTHIC (GİZLİ BOSS) GÖREVLER (TÜMÜ)
   // ==========================================
   describe('🔴 Mythic (Gizli) Görevler', () => {
-    test('m_hater: Peş peşe 3 filme <=3 puan verme', () => {
+    test('m_hater: Arka arkaya 3 filme <=3 puan verme', () => {
       expect(checkQuest('m_hater', mockHMulti(3), mockMMulti(3, { rating: 2 }))).toBe(true);
+      // Araya iyi bir film girerse -> tamamlanmamalı
+      const m = [
+        { id: 'm0', watched: true, watchedAt: '2026-10-05T15:00:00', rating: 2 },
+        { id: 'm1', watched: true, watchedAt: '2026-10-06T15:00:00', rating: 9 },
+        { id: 'm2', watched: true, watchedAt: '2026-10-07T15:00:00', rating: 2 },
+      ];
+      const h = m.map((x) => ({ itemId: x.id, kind: 'movie', watchedAt: x.watchedAt }));
+      expect(checkQuest('m_hater', h, m)).toBe(false);
     });
 
-    test('Tanımlanmamış Diğer Görevler (Fallback Default): Sadece içerik izleyince tamamlanmalı', () => {
-      expect(checkQuest('m_impatient', mockH(), mockM())).toBe(true); 
+    test('m_impatient: Filmi ilk 15 dakikada iptal etme (Otopsi)', () => {
+      const abandoned = [{ id: 'm1', abandoned: true, abandonedAt: '2026-10-04T15:00:00', abandonedProgress: { unit: 'minute', value: 10 } }];
+      expect(checkQuest('m_impatient', [], abandoned)).toBe(true);
+      // 15 dakikadan sonra bırakılırsa -> tamamlanmamalı
+      const late = [{ id: 'm1', abandoned: true, abandonedAt: '2026-10-04T15:00:00', abandonedProgress: { unit: 'minute', value: 40 } }];
+      expect(checkQuest('m_impatient', [], late)).toBe(false);
+      // Görevden önce bırakılırsa -> tamamlanmamalı
+      const before = [{ id: 'm1', abandoned: true, abandonedAt: '2026-10-04T10:00:00', abandonedProgress: { unit: 'minute', value: 5 } }];
+      expect(checkQuest('m_impatient', [], before)).toBe(false);
     });
   });
 

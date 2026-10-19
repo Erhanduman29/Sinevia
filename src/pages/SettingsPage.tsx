@@ -746,6 +746,8 @@ export default function SettingsPage() {
   
   const [confirmResetStage, setConfirmResetStage] = useState<0 | 1>(0);
   const [showResetModal, setShowResetModal] = useState(false);
+  // Bulut silme başarısızsa modalda gösterilir (kullanıcı SQL kodunu girip tekrar denesin).
+  const [resetCloudError, setResetCloudError] = useState<string | null>(null);
   
   // YENİ: Çıkış Yapma Modalı için State
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -1087,18 +1089,99 @@ export default function SettingsPage() {
   };
 
   const handleExecuteFullReset = async () => {
-    try {
-      if (data.agentId) {
-        await supabase.from('profiles').delete().eq('agent_id', data.agentId);
+    setResetCloudError(null);
+    // 0) Sıfırlama bayrağı ÖNCE yazılır: silme sırasında tetiklenen pagehide/visibility
+    //    flush'ları (syncToStorage yükleyicisi) ve senkron çekicileri silinen hesabı
+    //    yeniden yaratmasın (rozet/arşiv geri geliyorsa kök neden buydu).
+    try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
+
+    const agentId = data.agentId;
+    const cloudErrors: string[] = [];
+
+    if (agentId) {
+      const secret = localStorage.getItem('sinevia_secret_token') || '';
+      // 1. yol: security-definer RPC — tüm tablolar + arşiv JSON (sinevia_saves) tek seferde,
+      //    RLS'ten bağımsız. Kod henüz Supabase'e girilmediyse "fonksiyon yok" hatası → fallback.
+      let rpcOk = false;
+      try {
+        const { error } = await supabase.rpc('sinevia_delete_account', {
+          p_agent_id: agentId,
+          p_secret: secret,
+        });
+        rpcOk = !error;
+        if (error) console.warn('sinevia_delete_account RPC hatası — istemci fallback deneniyor:', error.message);
+      } catch (e) {
+        console.warn('sinevia_delete_account RPC erişilemedi — fallback deneniyor:', e);
       }
-    } catch (e) {
-      console.error("Buluttan silme hatası", e);
+
+      if (!rpcOk) {
+        // 2. yol: istemci fallback'i — arşiv JSON + tüm agent-keyed tablolar tek tek.
+        // Kullanıcının KURDUĞU grupların kimlikleri: grup sohbet mesajları da silinsin;
+        // aksi halde başka üyelerin attığı mesajlar bulutta yetim kalır (RPC ile aynı davranış).
+        let ownedGroupIds: string[] = [];
+        try {
+          const { data: ownedGroups } = await supabase.from('chat_groups').select('id').eq('created_by', agentId);
+          ownedGroupIds = ((ownedGroups as { id: string }[] | null) || []).map((g) => g.id);
+        } catch { /* yoksay — grup yoksa mesaj temizliği atlanır */ }
+
+        const tasks: Promise<unknown>[] = [
+          supabase.storage.from('sinevia_saves').remove([`${agentId}.json`]),
+          supabase.from('profiles').delete().eq('agent_id', agentId),
+          supabase.from('network_logs').delete().eq('agent_id', agentId),
+          supabase.from('messages').delete().or(`sender_id.eq.${agentId},receiver_id.eq.${agentId}`),
+          supabase.from('friendships').delete().or(`requester_id.eq.${agentId},receiver_id.eq.${agentId}`),
+          supabase.from('recommendations').delete().or(`sender_id.eq.${agentId},receiver_id.eq.${agentId}`),
+          supabase.from('chat_group_members').delete().eq('agent_id', agentId),
+        ];
+        const labels = ['arşiv JSON (storage)', 'profiles', 'network_logs', 'messages (bireysel)', 'friendships', 'recommendations', 'chat_group_members'];
+        if (ownedGroupIds.length > 0) {
+          tasks.push(supabase.from('messages').delete().in('group_id', ownedGroupIds));
+          labels.push('messages (kurduğu gruplar)');
+          tasks.push(supabase.from('chat_group_members').delete().in('group_id', ownedGroupIds));
+          labels.push('chat_group_members (kurduğu gruplar)');
+        }
+        tasks.push(supabase.from('chat_groups').delete().eq('created_by', agentId));
+        labels.push('chat_groups');
+
+        const checks = await Promise.allSettled(tasks);
+        checks.forEach((r, i) => {
+          if (r.status === 'rejected') {
+            const reason = (r as PromiseRejectedResult).reason;
+            cloudErrors.push(`${labels[i]}: ${reason?.message || String(reason)}`);
+          } else {
+            const err = (r.value as { error?: { message?: string } | null } | undefined)?.error;
+            if (err) cloudErrors.push(`${labels[i]}: ${err.message}`);
+          }
+        });
+      }
     }
-    
+
+    if (cloudErrors.length > 0) {
+      // Bulut silinemedi → yerel de SİLİNMEZ (silinse bile boot açılışında buluttan
+      // geri gelirdi ve kullanıcı "silindi" sanırdı). Modal açık kalır, tekrar denenir.
+      console.error('Bulut silme hataları (hesap buluttan SİLİNMEDİ):', cloudErrors);
+      try { localStorage.removeItem('sinevia_zero_reset'); } catch { /* kota */ }
+      setResetCloudError(
+        'Bulut tarafı silinemedi — rozetler ve görevler geri gelebilir. Supabase SQL Editor’da verilen ' +
+        'sinevia_delete_account kodunu çalıştırıp tekrar onaylayın. Ayrıntılar tarayıcı konsolunda.'
+      );
+      return;
+    }
+
     // Yerel kütüphane IndexedDB'de — bayrak init'te onu da temizler.
     // Tam sıfırlamada yerel hesap yedeği de silinir (geri dönecek hesap yok).
     try { await idbDel(PREV_ACCOUNT_KEY); } catch { /* kota */ }
     await clearLocalDeviceData(true);
+
+    // "Her şeyi sil" kesin temizlik: context sağlayıcıları (QuestProvider,
+    // TutorialProvider) AppProvider'ın çocuğu olduğundan, yeniden yüklemede
+    // mount sırasında eski localStorage kayıtlarını okuyup belleğe alabilirler.
+    // Bu anahtarları reload'dan ÖNCE senkron silerek onları tamamen sıfırla.
+    try {
+      localStorage.removeItem('sinevia-quests-v1');
+      localStorage.removeItem('sinevia-tutorial-v1');
+      localStorage.removeItem('sinevia-academy-ui-v1');
+    } catch { /* kota */ }
 
     setShowResetModal(false);
     setConfirmResetStage(0);
@@ -1577,7 +1660,7 @@ export default function SettingsPage() {
                 ) : (
                   <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-[var(--r,16px)] bg-red-950/40 border border-red-800/60 animate-fade-in">
                     <span className="text-xs sm:text-sm text-red-400 font-bold w-full sm:w-auto mb-1 sm:mb-0">Emin misin? Bu işlemin geri dönüşü yok!</span>
-                    <button onClick={() => setShowResetModal(true)} className={`${BTN_P} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm`} style={BTN_P_STYLE}>
+                    <button onClick={() => { setResetCloudError(null); setShowResetModal(true); }} className={`${BTN_P} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm`} style={BTN_P_STYLE}>
                       <AlertTriangle size={14} /> Evet, Eminim (Buluttan Sil)
                     </button>
                     <button onClick={() => setConfirmResetStage(0)} className={`${BTN_S} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm text-ink-200`} style={BTN_S_STYLE}>
@@ -2251,9 +2334,13 @@ export default function SettingsPage() {
       {showResetModal && (
         <ConfirmDialog
           title="SON UYARI! HER ŞEY SİLİNECEK!"
-          message="Kullanıcı kimliğin, ağ ismin, kurtarma anahtarın dahil tüm verilerin tamamen silinecek. Sinevia sanki cihaza yeni kurulmuş gibi sıfırdan başlayacak. Onaylıyor musun?"
+          message={
+            resetCloudError
+              ? `⚠ ${resetCloudError}`
+              : "Kullanıcı kimliğin, ağ ismin, kurtarma anahtarın dahil tüm verilerin tamamen silinecek. Sinevia sanki cihaza yeni kurulmuş gibi sıfırdan başlayacak. Onaylıyor musun?"
+          }
           onConfirm={handleExecuteFullReset}
-          onCancel={() => { setShowResetModal(false); setConfirmResetStage(0); }}
+          onCancel={() => { setShowResetModal(false); setConfirmResetStage(0); setResetCloudError(null); }}
         />
       )}
 

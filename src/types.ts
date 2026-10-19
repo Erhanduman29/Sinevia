@@ -207,5 +207,7 @@ export interface AppData {
     description: string;
   }[];
   pendingLevelUp?: { newLevel: number };
+  /** Sıradaki seviye kutlamaları (tetikten sonraki ara seviyeler; PROMOTE_LEVEL_UP ile sırayla açılır). */
+  pendingLevelUpQueue?: number[];
   pendingXpGain?: { gained: number; oldTotal: number; newTotal: number };
 }

@@ -64,7 +64,9 @@ class FakeAudioContext {
   }
 
   createBiquadFilter() {
-    return { type: '', Q: makeParam(), frequency: makeParam(), connect: vi.fn() };
+    // `gain`: peaking/notch filtre parametresi (ör. playCinematicBrass formant) —
+    // gerçek WebAudio BiquadFilter'da AudioParam olarak vardır.
+    return { type: '', Q: makeParam(), frequency: makeParam(), gain: makeParam(), connect: vi.fn() };
   }
 
   createStereoPanner() {
@@ -243,6 +245,31 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     const chordSaws = saws.filter((o) => startsOf(o) > 12);
     expect(chordSaws).toHaveLength(6);
     chordSaws.forEach((o) => expect(startsOf(o)).toBeCloseTo(13, 5));
+  });
+
+  test('playQuestCompleteSound: 5 tier 5 FARKLI beste üretir (regresyon: hepsi aynı ses)', () => {
+    const tiers = ['common', 'rare', 'epic', 'legendary', 'mythic'] as const;
+    const signatures: string[] = [];
+
+    for (const tier of tiers) {
+      created.oscillators.length = 0;
+      created.gains.length = 0;
+      playQuestCompleteSound(tier);
+
+      // Her tier gerçek bir beste çalmalı (boş/pas sessizlik yok)
+      expect(created.oscillators.length).toBeGreaterThan(8);
+
+      // Osilatör imzası: tip + frekans (bestenin parmak izi)
+      signatures.push(
+        created.oscillators
+          .map((o) => `${o.type}:${Math.round(o.frequency.value * 100)}`)
+          .join('|')
+      );
+    }
+
+    // "5 varyant ama hepsi aynı ses" regresyonunu yakalar:
+    // Common/Rare/Epic/Legendary/Mythic besteleri birbirinden FARKLI olmalı
+    expect(new Set(signatures).size).toBe(5);
   });
 
   test('osilatör → gain/node → destination zinciri kurulmalı (ses gerçekten çıkışa bağlanmalı)', () => {

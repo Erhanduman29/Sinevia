@@ -40,7 +40,7 @@ export const QUEST_DEFS: QuestDef[] = [
   { id: 'c_new_movie', title: 'Vizyon Nabzı', description: 'İçinde bulunduğumuz yıla ait yeni bir film izle.', rarity: 'common', icon: '✨', xpReward: 50 },
   { id: 'c_weekend', title: 'Hafta Sonu Matinesi', description: 'Cumartesi veya Pazar günü bir film bitir.', rarity: 'common', icon: '🎉', xpReward: 40 },
   { id: 'c_weekday', title: 'Pazartesi Sendromu', description: 'Pazartesi günü bir film bitir.', rarity: 'common', icon: '☕', xpReward: 40 },
-  { id: 'c_short_series', title: 'Mikro Sekans', description: 'Süresi 30 dakikanın altında olan bir dizi bölümü izle.', rarity: 'common', icon: '⏱️', xpReward: 40 },
+  { id: 'c_episode_rating', title: 'Bölüm Eleştirmeni', description: 'Bir dizi bölümüne 8 ve üzeri puan ver.', rarity: 'common', icon: '⭐', xpReward: 40 },
   { id: 'c_series_pilot', title: 'Açılış Sekansı', description: 'Herhangi bir dizinin 1. sezon 1. bölümünü izle.', rarity: 'common', icon: '🎬', xpReward: 40 },
   { id: 'c_series_double', title: 'İkili Gösterim', description: 'Aynı gün içinde peş peşe 2 dizi bölümü izle.', rarity: 'common', icon: '📺', xpReward: 50 },
 
@@ -56,10 +56,10 @@ export const QUEST_DEFS: QuestDef[] = [
   { id: 'r_friday_joy', title: 'Cuma Galası', description: 'Cuma akşamı 20:00 ile 23:59 arası bir film bitir.', rarity: 'rare', icon: '🍕', xpReward: 100 },
   { id: 'r_double_action', title: 'Çifte Barut', description: 'Aynı gün içinde 2 Aksiyon filmi bitir.', rarity: 'rare', icon: '🔥', xpReward: 120 },
   { id: 'r_double_horror', title: 'Karanlık İkili', description: 'Aynı gün içinde 2 Korku filmi bitir.', rarity: 'rare', icon: '👻', xpReward: 120 },
-  { id: 'r_second_chance', title: 'Dibe Yolculuk', description: 'Daha önce 5\'in altında puan verdiğin bir filme tekrar şans ver (Aynı gün 2. çöp film).', rarity: 'rare', icon: '♻️', xpReward: 100 },
+  { id: 'r_second_chance', title: 'Dibe Yolculuk', description: 'Daha önce 5\'in altında puan verdiğin bir filme tekrar şans ver: puanını 7 ve üzerine yükselt.', rarity: 'rare', icon: '♻️', xpReward: 100 },
   { id: 'r_long_movie', title: 'Geniş Perspektif', description: 'Süresi 150 dakikayı (2.5 Saat) geçen bir film izle.', rarity: 'rare', icon: '👁️', xpReward: 110 },
   { id: 'r_perfect_pair', title: 'Çifte Şaheser', description: 'Aynı gün izlediğin 2 filme de 9 veya 10 tam puan ver.', rarity: 'rare', icon: '🥂', xpReward: 130 },
-  { id: 'r_indecisive', title: 'Kanaat Revizyonu', description: 'Bir filmin puanını izledikten sonra 3 kez değiştir.', rarity: 'rare', icon: '🤔', xpReward: 100 },
+  { id: 'r_indecisive', title: 'Kanaat Revizyonu', description: 'İzlediğin bir filme verdiğin puanı sonradan değiştir (revize et).', rarity: 'rare', icon: '🤔', xpReward: 100 },
 
   // --- DESTANSI (EPIC) - 8 Görev ---
   { id: 'e_series_killer', title: 'Sezon İmhası', description: 'Herhangi bir dizinin peş peşe tam 5 bölümünü aynı gün bitir.', rarity: 'epic', icon: '☠️', xpReward: 300 },
@@ -199,8 +199,8 @@ const QUEST_ILLUSTRATIONS: Record<string, ArtLayers> = {
     line: 'M4.5 8.5H16.5V14.5C16.5 18 14 20.2 10.5 20.2C7 20.2 4.5 18 4.5 14.5V8.5Z M16.5 9.8H19C20.5 9.8 21.5 10.8 21.5 12.3C21.5 13.8 20.5 14.8 19 14.8H16.5 M3.5 21.2H17.5',
     core: 'M8 3.5C7.2 5 9.5 5.5 8.5 7 M12.5 3C11.7 4.5 14 5 13 6.5',
   },
-  // 18. Mikro Sekans: Taktiksel kronometre ve iç yıldırım
-  c_short_series: {
+  // 18. Bölüm Eleştirmeni: Taktiksel kronometre ve iç yıldırım
+  c_episode_rating: {
     base: 'M12 5.5A7.8 7.8 0 1 0 12 21.1A7.8 7.8 0 1 0 12 5.5Z',
     line: 'M12 5.5A7.8 7.8 0 1 0 12 21.1A7.8 7.8 0 1 0 12 5.5Z M9.5 2.8H14.5 M12 2.8V5.5 M17.8 6.2L19.8 4.2',
     core: 'M13 8.8L9.5 13.8H12.5L11 18L14.5 13H11.5L13 8.8Z',
