@@ -132,7 +132,7 @@ export default function AddMovieModal({ onClose }: Props) {
           <h2 className="text-lg font-semibold text-ink-100 flex items-center gap-2">
             <Plus size={20} className="text-gold-400" /> Film Ekle
           </h2>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-200 transition-colors">
+          <button onClick={onClose} data-snd="close" className="text-ink-400 hover:text-ink-200 transition-colors">
             <X size={22} />
           </button>
         </div>

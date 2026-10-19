@@ -61,7 +61,20 @@ export function formatDateTime(iso: string): string {
 }
 
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  // YEREL gün anahtarı — Türkiye'de gün 00.00'da değişir (UTC 03.00 değil).
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * ISO tarih/yazılım damgasını YEREL takvim gününe çevirir (YYYY-MM-DD).
+ * watchedAt UTC olduğu için slice(0,10) yerine kullanılmalı — yoksa TR'de
+ * gece 00.00–03.00 arası izlemeler bir önceki güne yazılır ve seri kayar.
+ */
+export function localDayKey(iso: string | Date): string {
+  const d = typeof iso === 'string' ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return typeof iso === 'string' ? iso.slice(0, 10) : '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export function daysBetween(d1: string, d2: string): number {

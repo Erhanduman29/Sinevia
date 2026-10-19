@@ -744,7 +744,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
             <div className="w-6 h-6 rounded border border-gold-500/30 bg-gold-500/10 text-gold-400 flex items-center justify-center"><Sparkles size={12} /></div>
             Maraton Kurulumu
           </h3>
-          <button onClick={onClose} className="text-ink-400 hover:text-white p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-full hover:bg-ink-800 transition-colors"><X size={16} /></button>
+          <button onClick={onClose} data-snd="close" className="text-ink-400 hover:text-white p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-full hover:bg-ink-800 transition-colors"><X size={16} /></button>
         </div>
 
         <div className="p-3.5 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar flex-1">
@@ -948,7 +948,7 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
             <div className="w-6 h-6 rounded border border-gold-500/30 bg-gold-500/10 text-gold-400 flex items-center justify-center"><Edit2 size={12} /></div>
             Maratonu Düzenle / Taşı
           </h3>
-          <button onClick={onClose} className="text-ink-400 hover:text-white p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-full hover:bg-ink-800 transition-colors"><X size={16} /></button>
+          <button onClick={onClose} data-snd="close" className="text-ink-400 hover:text-white p-1.5 min-h-11 min-w-11 md:min-h-0 md:min-w-0 flex items-center justify-center rounded-full hover:bg-ink-800 transition-colors"><X size={16} /></button>
         </div>
 
         <div className="p-3.5 sm:p-4 space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar flex-1">

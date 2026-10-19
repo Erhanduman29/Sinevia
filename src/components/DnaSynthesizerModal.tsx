@@ -128,16 +128,30 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         : selectionTab === 'past'
         ? pastWatchedMovies
         : data.movies;
-        
-    if (!search.trim()) return sourceList;
+
+    // Akıllı sıralama: puanlı/izlenenler önce (sentez adayları için daha
+    // anlamlı), eşitlikte en yeni eklenen önce.
+    const bySmart = [...sourceList].sort((a, b) => {
+      const aw = a.watched ? 1 : 0;
+      const bw = b.watched ? 1 : 0;
+      if (aw !== bw) return bw - aw;
+      const ar = typeof a.rating === 'number' ? a.rating : -1;
+      const br = typeof b.rating === 'number' ? b.rating : -1;
+      if (ar !== br) return br - ar;
+      return (b.addedAt || '').localeCompare(a.addedAt || '');
+    });
+    if (!search.trim()) return bySmart;
     const q = search.toLocaleLowerCase('tr-TR').trim();
-    return sourceList.filter(
+    return bySmart.filter(
       (m) =>
         m.title.toLocaleLowerCase('tr-TR').includes(q) ||
         (m.directors && m.directors.some((d) => d.toLocaleLowerCase('tr-TR').includes(q))) ||
         (m.cast && m.cast.some((c) => c.toLocaleLowerCase('tr-TR').includes(q)))
     );
   }, [data.movies, currentWatchedMovies, pastWatchedMovies, selectionTab, search]);
+
+  // Diğer slotta seçili olan film (aynı film iki kez seçilemez — ayrım rozeti)
+  const otherSlotMovieId = selectingSlot === 'A' ? movieBId : movieAId;
 
   const sharedParentGenes = useMemo(() => {
     if (!movieA || !movieB) return [];
@@ -284,6 +298,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
     if (!movieA || !movieB || eligibleUnwatchedMovies.length === 0) return;
 
     setStep('synthesizing');
+    import('../lib/sound').then(({ playDnaSynthSound }) => playDnaSynthSound());
+    // Sahneler tam oynasın: DNA animasyonu + sesi ~6sn; hızlı API dönüşlerinde
+    // synthesizing fazı bu süreden kısa ekranda kalmaz.
+    const synthStartedAt = performance.now();
+    const MIN_SYNTH_MS = 6200;
     // Akademi dersi: sentez GERÇEKTE başlatılınca tamamlanır (sadece pencere
     // açıldığında değil).
     notifyEvent('dna_used');
@@ -321,9 +340,13 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
       // YENİ: SADECE BEYNİ (FONKSİYONU) ÇAĞIRIYORUZ! Yüzlerce satır matematik gitti.
       const scoredCandidates = calculateDnaSynthesis(activeA, activeB, updatedCandidates, mutationRate);
 
-      setVariants(scoredCandidates.slice(0, 3));
-      setActiveVariantIdx(0);
-      setStep('result');
+      // Animasyon + ses tam oynasın: kalan süre kadar daha sahnede tut
+      const remaining = Math.max(400, MIN_SYNTH_MS - (performance.now() - synthStartedAt));
+      setTimeout(() => {
+        setVariants(scoredCandidates.slice(0, 3));
+        setActiveVariantIdx(0);
+        setStep('result');
+      }, remaining);
     }, 500);
   };
 
@@ -562,14 +585,27 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[55svh] overflow-y-auto pr-1 custom-scrollbar">
+                {filteredMovies.length === 0 && (
+                  <div className="col-span-full py-10 text-center">
+                    <p className="text-sm font-bold text-ink-300">Eşleşen film yok.</p>
+                    <p className="text-xs text-ink-500 mt-1">Arama terimini değiştir veya üstteki sekmeleri dene.</p>
+                  </div>
+                )}
                 {filteredMovies.map((m) => {
                   const hasCast = Array.isArray(m.cast) && m.cast.length > 0;
                   const hasDirs = Array.isArray(m.directors) && m.directors.length > 0;
+                  const isOtherSlot = m.id === otherSlotMovieId;
                   return (
                     <button
                       key={m.id}
-                      onClick={() => handleSelectMovie(m)}
-                      className="flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl border border-ink-800/90 bg-ink-900/50 hover:bg-ink-800/80 hover:border-emerald-500/40 transition-all text-left group relative overflow-hidden"
+                      onClick={() => !isOtherSlot && handleSelectMovie(m)}
+                      disabled={isOtherSlot}
+                      title={isOtherSlot ? 'Bu film diğer slotta seçili — sentez için farklı bir film seç' : undefined}
+                      className={`flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl border transition-all text-left group relative overflow-hidden ${
+                        isOtherSlot
+                          ? 'opacity-45 border-ink-800/60 bg-ink-950/40 cursor-not-allowed'
+                          : 'border-ink-800/90 bg-ink-900/50 hover:bg-ink-800/80 hover:border-emerald-500/40'
+                      }`}
                     >
                       <div className="w-12 sm:w-14 aspect-[2/3] bg-ink-950 rounded-xl overflow-hidden flex-shrink-0 border border-ink-700/60 shadow-md">
                         {m.posterUrl ? (
@@ -587,6 +623,11 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
                             {m.title}
                           </span>
                           <div className="flex items-center gap-1 flex-shrink-0">
+                            {isOtherSlot && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-ink-700/60 text-ink-300 border border-ink-600/60 font-bold">
+                                Diğer Slotta
+                              </span>
+                            )}
                             {m.isPastWatch && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 font-bold">
                                 Önceden
@@ -856,12 +897,57 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           )}
 
           {!selectingSlot && step === 'synthesizing' && (
-            <div className="flex flex-col items-center justify-center py-16 animate-fade-in space-y-5">
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
-                <div className="absolute inset-0 rounded-full border-4 border-emerald-500/20" />
-                <div className="absolute inset-0 rounded-full border-4 border-emerald-400 border-t-transparent animate-spin" />
-                <Dna size={36} className="text-emerald-400 animate-pulse" />
+            <div className="flex flex-col items-center justify-center py-14 animate-fade-in space-y-6">
+              {/* DNA ÇİFT SARMAL SAHNESİ — iki film helixe bağlanıyor (2B, hep görünür) */}
+              <div className="flex items-center justify-center gap-5 sm:gap-8">
+                {/* Ebeveyn A */}
+                <div className="dna-parent flex flex-col items-center gap-2">
+                  <div className="w-14 h-20 sm:w-16 sm:h-24 rounded-xl overflow-hidden border-2 border-emerald-500/60 shadow-[0_0_18px_-4px_rgba(16,185,129,0.5)]">
+                    {movieA?.posterUrl ? (
+                      <img src={movieA.posterUrl} alt={movieA.title} className="w-full h-full object-cover" onError={handleImgFallback} />
+                    ) : (
+                      <div className="w-full h-full bg-ink-800 grid place-items-center"><Dna size={20} className="text-emerald-500/60" /></div>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400/80 max-w-[80px] truncate">{movieA?.title}</span>
+                </div>
+
+                {/* Çift sarmal + çekirdek ışıma + tarama süpürmesi + nükleotid parıltıları */}
+                <div className="relative w-36 h-24 sm:w-52 sm:h-32 shrink-0">
+                  <div className="dna-core" />
+                  <div className="absolute inset-0 overflow-hidden rounded-xl">
+                    <div className="dna-scan" />
+                  </div>
+                  <svg viewBox="0 0 140 96" className="dna-helix relative w-full h-full" aria-hidden>
+                    <path className="dna-strand dna-strand--a" d="M4,24 C24,4 44,44 64,24 C84,4 104,44 124,24 C132,16 136,20 136,24" fill="none" stroke="#34d399" strokeWidth="3.2" strokeLinecap="round" />
+                    <path className="dna-strand dna-strand--b" d="M4,72 C24,92 44,52 64,72 C84,92 104,52 124,72 C132,80 136,76 136,72" fill="none" stroke="#22d3ee" strokeWidth="3.2" strokeLinecap="round" />
+                    {/* Nükleotid basamakları (A-T, C-G) */}
+                    {[24, 44, 64, 84, 104, 124].map((x, i) => (
+                      <line key={x} className="dna-rung" x1={x} y1={30 + (i % 2) * 6} x2={x} y2={66 - (i % 2) * 6} stroke={i % 2 === 0 ? '#6ee7b7' : '#67e8f9'} strokeWidth="2.5" strokeLinecap="round" style={{ animationDelay: `${i * 0.14}s` }} />
+                    ))}
+                    {/* Yükselen nükleotid parıltıları */}
+                    {[
+                      { x: 30, d: '0s' }, { x: 58, d: '0.8s' }, { x: 86, d: '1.6s' },
+                      { x: 110, d: '2.4s' }, { x: 44, d: '3.2s' },
+                    ].map((p) => (
+                      <circle key={p.x} className="dna-particle" cx={p.x} cy={74} r="2.2" fill="#6ee7b7" style={{ animationDelay: p.d }} />
+                    ))}
+                  </svg>
+                </div>
+
+                {/* Ebeveyn B */}
+                <div className="dna-parent dna-parent--b flex flex-col items-center gap-2">
+                  <div className="w-14 h-20 sm:w-16 sm:h-24 rounded-xl overflow-hidden border-2 border-cyan-500/60 shadow-[0_0_18px_-4px_rgba(34,211,238,0.5)]">
+                    {movieB?.posterUrl ? (
+                      <img src={movieB.posterUrl} alt={movieB.title} className="w-full h-full object-cover" onError={handleImgFallback} />
+                    ) : (
+                      <div className="w-full h-full bg-ink-800 grid place-items-center"><Dna size={20} className="text-cyan-500/60" /></div>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-cyan-400/80 max-w-[80px] truncate">{movieB?.title}</span>
+                </div>
               </div>
+
               <div className="text-center space-y-2 max-w-md px-4">
                 <h3 className="text-lg sm:text-xl font-black text-white tracking-wider uppercase">
                   Genetik Matris Hesaplanıyor...

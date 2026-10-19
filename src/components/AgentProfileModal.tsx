@@ -8,6 +8,7 @@ import {
 import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import type { ShowcaseItem } from '../context/AppContext';
 import { ratingBgClass, formatDateShort } from '../lib/utils';
+import { levelFromXp } from '../lib/xp';
 import RatingModal from './RatingModal';
 import MediaDetailModal from './MediaDetailModal';
 import type { Movie } from '../types';
@@ -466,14 +467,14 @@ export default function AgentProfileModal({
                   </span>
                 )}
                 <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-400 text-ink-950 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-lg whitespace-nowrap border border-ink-950">
-                  LVL {profile?.level || 1}
+                  LVL {levelFromXp(profile?.total_xp || 0).level}
                 </div>
               </div>
 
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-azure-500/15 text-azure-300 border border-azure-500/30 flex items-center gap-1">
-                    <ShieldAlert size={11} /> {getAgentRankTitle(profile?.level || 1)}
+                    <ShieldAlert size={11} /> {getAgentRankTitle(levelFromXp(profile?.total_xp || 0).level)}
                   </span>
                   <span className="text-[10px] font-semibold text-ink-400 bg-ink-900/90 px-2 py-0.5 rounded-md border border-ink-800">
                     {viewingProfileId}
@@ -815,7 +816,7 @@ export default function AgentProfileModal({
               ) : (
                 <div className="bg-ink-900/50 border border-ink-800 rounded-3xl p-5 flex flex-col justify-center items-center text-center">
                   <Award size={36} className="text-gold-400 mb-2" />
-                  <div className="text-sm font-black text-white mb-1">Ajan Rütbesi: {getAgentRankTitle(profile?.level || 1)}</div>
+                  <div className="text-sm font-black text-white mb-1">Ajan Rütbesi: {getAgentRankTitle(levelFromXp(profile?.total_xp || 0).level)}</div>
                   <p className="text-xs text-ink-400 max-w-xs">
                     Toplam {cinemaDna.ratingsCount} yapıma puan verdin ve yaklaşık {cinemaDna.estHours} saatini sinema evreninde geçirdin.
                   </p>

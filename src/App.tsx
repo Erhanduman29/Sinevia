@@ -171,6 +171,29 @@ function AppContent() {
     return () => document.removeEventListener('visibilitychange', sync);
   }, []);
 
+  // PREMIUM MİKRO-ETKİLEŞİM: global buton tık sesi (stereo, 60ms).
+  // Yakalama fazında + 40ms throttle; ses terbiyesi sound.ts içindeki
+  // isSoundEnabled kontrolüne saygılıdır.
+  useEffect(() => {
+    let lastAt = 0;
+    const onPointerDown = (e: PointerEvent) => {
+      const el = (e.target as HTMLElement | null)?.closest?.<HTMLElement>('button, [role="button"]');
+      if (!el || (el as HTMLButtonElement).disabled) return;
+      // GRUPLAMA: data-snd="primary|secondary|nav|rating" olan butonlar sesli.
+      // Kapatma butonları data-snd="close" ile İMZALANIR → asla ses yok.
+      // Attribute yoksa da ses yok (her butonda ses istenmiyor).
+      const snd = el.getAttribute('data-snd');
+      if (!snd || snd === 'close') return;
+      if (snd !== 'primary' && snd !== 'secondary' && snd !== 'nav' && snd !== 'rating') return;
+      const now = performance.now();
+      if (now - lastAt < 40) return;
+      lastAt = now;
+      import('./lib/sound').then(({ playUiClickSound }) => playUiClickSound(snd));
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, []);
+
   return (
     <AppErrorBoundary onHome={handleHomeFromError}>
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>

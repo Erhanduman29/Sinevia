@@ -17,7 +17,13 @@ import ShareImportModal from '../components/ShareImportModal';
 import ShortcutsPanel from '../components/ShortcutsPanel';
 import { uid } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { isSoundEnabled, setSoundEnabled } from '../lib/sound';
+import {
+  isSoundEnabled, setSoundEnabled,
+  // GEÇİCİ-SES-OYNATICI importları (kaldırılacak):
+  playAchievementSound, playLevelUpSound, playLessonDoneSound, playQuestCompleteSound,
+  playPickSpinSound, playPickRevealSound, playDuelSelectSound, playDnaSynthSound,
+  playUiClickSound, playRatingArpSound,
+} from '../lib/sound';
 import { ACTION_BRIDGE_PRESETS, newActionId, resolveActionUrl, extractPlaceholders } from '../lib/actionBridge';
 import { idbGet, idbSet, idbDel, PREV_ACCOUNT_KEY } from '../lib/storageService';
 
@@ -548,6 +554,145 @@ function ActionBridgeSection({
   );
 }
 
+// ── GEÇİCİ-SES-OYNATICI ── BAŞLANGIÇ ─────────────────────────────────────────
+// Ses denemeleri için geçici önizleme paneli — sonraki turda TAMAMEN KALDIRILACAK.
+// Kaldırırken şu üç nokta silinecek: (1) bu blok, (2) yukarıdaki import içindeki
+// GEÇİCİ-SES-OYNATICI importları, (3) notifications sekmesindeki <TempSoundPlayer />.
+type TempSoundPreview = {
+  label: string;
+  desc: string;
+  run: () => void;
+  variants?: { label: string; run: () => void }[];
+};
+
+const TEMP_SOUNDS: TempSoundPreview[] = [
+  { label: 'Başarım / Kupa', desc: 'Başarım kazanma jinglesı (~4s)', run: () => playAchievementSound() },
+  { label: 'Seviye Atlama', desc: 'Arma inişi + zafer akoru (~1.5s)', run: () => playLevelUpSound() },
+  { label: 'Ders Tamamlandı', desc: '4 notalı yükselen çan arpeji', run: () => playLessonDoneSound() },
+  {
+    label: 'Görev Tamamlama',
+    desc: '5 tier özel beste (ana buton = varsayılan Common)',
+    run: () => playQuestCompleteSound(),
+    variants: [
+      { label: 'Common', run: () => playQuestCompleteSound('common') },
+      { label: 'Rare', run: () => playQuestCompleteSound('rare') },
+      { label: 'Epic', run: () => playQuestCompleteSound('epic') },
+      { label: 'Legendary', run: () => playQuestCompleteSound('legendary') },
+      { label: 'Mythic', run: () => playQuestCompleteSound('mythic') },
+    ],
+  },
+  { label: 'Seçim Çarkı (Spin)', desc: 'PickModal dönme sesi (~2.2s)', run: () => playPickSpinSound() },
+  { label: 'Seçim Açılışı (Reveal)', desc: 'Kazanan seçim reveal sesi', run: () => playPickRevealSound() },
+  { label: 'Düello Seçimi', desc: 'Düello kartı seçilme vuruşu', run: () => playDuelSelectSound() },
+  { label: 'DNA Sentezi', desc: 'Uzun sinematik sentez (~6.2s)', run: () => playDnaSynthSound() },
+  {
+    label: 'Arayüz Tıklama',
+    desc: 'Micro-UI tıklama sesleri (ana buton = primary)',
+    run: () => playUiClickSound('primary'),
+    variants: [
+      { label: 'Primary', run: () => playUiClickSound('primary') },
+      { label: 'Secondary', run: () => playUiClickSound('secondary') },
+      { label: 'Nav', run: () => playUiClickSound('nav') },
+      { label: 'Rating', run: () => playUiClickSound('rating') },
+    ],
+  },
+  { label: 'Puanlama Arpeji', desc: 'Yükselen E5→G5→B5→E6 Lydian arpeji', run: () => playRatingArpSound() },
+];
+
+/** Ses anahtarı kapalıyken de önizleme çalışsın diye çalma anında geçici açar,
+ *  ses başladıktan (gate geçildikten) sonra anahtarı eski haline döndürür. */
+function tempPreviewPlay(run: () => void) {
+  const wasOn = isSoundEnabled();
+  if (!wasOn) setSoundEnabled(true);
+  try {
+    run();
+  } finally {
+    if (!wasOn) setSoundEnabled(false);
+  }
+}
+
+function TempSoundPlayer() {
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current); }, []);
+
+  const play = (key: string, run: () => void) => {
+    tempPreviewPlay(run);
+    setActiveKey(key);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setActiveKey(null), 900);
+  };
+
+  return (
+    <CollapsibleSection
+      title="Geçici Ses Oynatıcı"
+      defaultOpen
+      icon={<Play size={18} className="text-amber-400 flex-shrink-0" />}
+      badge={
+        <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1 flex-shrink-0">
+          Geçici · Kaldırılacak
+        </span>
+      }
+      desc="Sesleri denemek için geçici oynatıcı — sonraki turda tamamen kaldırılacak. Ses efektleri anahtarı kapalıyken bile önizleme çalışır; yanıp sönen buton çalan sesi gösterir."
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {TEMP_SOUNDS.map((s, i) => {
+          const mainKey = `main-${i}`;
+          return (
+            <div key={s.label} className="p-3 space-y-2" style={premiumRowStyle}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs sm:text-sm font-extrabold text-white">{s.label}</div>
+                  <div className="text-[11px] text-ink-400 truncate">{s.desc}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => play(mainKey, s.run)}
+                  aria-label={`${s.label} sesini dinle`}
+                  className={`${BTN_S} px-3 py-2 text-[11px] flex-shrink-0`}
+                  style={
+                    activeKey === mainKey
+                      ? { ...BTN_S_STYLE, borderColor: 'var(--red-hi, #ff6b7a)', color: 'var(--red-hi, #ff6b7a)' }
+                      : BTN_S_STYLE
+                  }
+                >
+                  <Play size={13} /> Dinle
+                </button>
+              </div>
+
+              {s.variants && (
+                <div className="flex flex-wrap gap-1.5">
+                  {s.variants.map((v) => {
+                    const vKey = `${i}-${v.label}`;
+                    const isActive = activeKey === vKey;
+                    return (
+                      <button
+                        key={v.label}
+                        type="button"
+                        onClick={() => play(vKey, v.run)}
+                        aria-label={`${s.label}: ${v.label} sürümünü dinle`}
+                        className="px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-colors hover:bg-white/[.06]"
+                        style={{
+                          borderColor: isActive ? 'var(--red-hi, #ff6b7a)' : PREMIUM_LINE_SOFT,
+                          color: isActive ? 'var(--red-hi, #ff6b7a)' : 'var(--muted, #9a9a96)',
+                        }}
+                      >
+                        {v.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </CollapsibleSection>
+  );
+}
+// ── GEÇİCİ-SES-OYNATICI ── BİTİŞ ───────────────────────────────────────────
+
 export default function SettingsPage() {
   const {
     data, addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
@@ -617,6 +762,7 @@ export default function SettingsPage() {
   const [deleteReviewTagTarget, setDeleteReviewTagTarget] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const shareFileRef = useRef<HTMLInputElement>(null);
   const [shareImportJson, setShareImportJson] = useState<string | null>(null);
 
   const [critName, setCritName] = useState('');
@@ -828,6 +974,61 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = () => importData(reader.result as string);
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  /* --- Manuel Liste Paylaşımı (JSON) — izlenen/izlenmemiş film & dizi
+         listesini hafif payload olarak indir; gelen listeyi ShareImportModal
+         ile önizleyip aktar. --- */
+  const handleShareExport = () => {
+    const payload = {
+      sineviaShare: 1,
+      exportedAt: new Date().toISOString(),
+      nickname: data.nickname || '',
+      collections: (data.collections || []).map((c) => ({ id: c.id, name: c.name })),
+      movies: (data.movies || []).map((m) => ({
+        id: m.id, title: m.title, year: m.year, genres: m.genres, posterUrl: m.posterUrl,
+        tmdbId: m.tmdbId, imdbId: m.imdbId, runtime: m.runtime,
+        directors: m.directors, cast: m.cast, studios: m.studios,
+        collectionId: m.collectionId, watched: m.watched, rating: m.rating,
+        isPastWatch: Boolean(m.isPastWatch),
+      })),
+      series: (data.series || []).map((s) => ({
+        id: s.id, title: s.title, year: s.year, genres: s.genres, posterUrl: s.posterUrl,
+        tmdbId: s.tmdbId,
+        episodes: (s.episodes || []).map((ep) => ({
+          season: ep.season, episode: ep.episode, watched: ep.watched, rating: ep.rating,
+        })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sinevia-liste-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    const w = (data.movies || []).filter((m) => m.watched).length;
+    showToast(`Liste indirildi: ${(data.movies || []).length} film (${w} izlendi), ${(data.series || []).length} dizi.`, 'success');
+  };
+
+  const handleShareImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      try {
+        const parsed = JSON.parse(text);
+        if (!parsed || (!Array.isArray(parsed.movies) && !Array.isArray(parsed.series))) {
+          showToast('Bu dosya Sinevia liste formatı değil.', 'error');
+          return;
+        }
+        setShareImportJson(text);
+      } catch {
+        showToast('JSON okunamadı — dosya bozuk olabilir.', 'error');
+      }
+    };
     reader.readAsText(file);
     e.target.value = '';
   };
@@ -1275,6 +1476,35 @@ export default function SettingsPage() {
             />
           </CollapsibleSection>
 
+          {/* --- MANUEL LİSTE PAYLAŞIMI (JSON indir / yükle) --- */}
+          <CollapsibleSection
+            title="Liste Paylaş (JSON)"
+            icon={<Film size={18} className="text-violet-400 flex-shrink-0" />}
+            defaultOpen={false}
+            desc="Film ve dizi listeni (izlenen / izlenmemiş durumlarıyla) hafif bir JSON dosyası olarak indir; birinden gelen liste dosyasını da yükleyip eksikleri seçerek aktarabilirsin."
+          >
+            <div className="grid grid-cols-2 sm:flex gap-2.5">
+              <button
+                onClick={handleShareExport}
+                className={`${BTN_P} px-4 py-2.5 text-xs sm:text-sm`}
+                style={BTN_P_STYLE}
+              >
+                <Download size={16} /> Listeyi İndir
+              </button>
+              <button
+                onClick={() => shareFileRef.current?.click()}
+                className={`${BTN_S} px-4 py-2.5 text-xs sm:text-sm text-ink-200`}
+                style={BTN_S_STYLE}
+              >
+                <Upload size={16} /> Liste Yükle
+              </button>
+              <input ref={shareFileRef} type="file" accept="application/json" onChange={handleShareImportFile} className="hidden" />
+            </div>
+            <p className="text-[11px] text-ink-500 mt-2.5">
+              İndirilen dosya sadece liste verisini taşır (puanlar, izleme durumu, koleksiyonlar) — tam yedekten küçüktür.
+            </p>
+          </CollapsibleSection>
+
           {/* --- KRTİK İŞLEMLER BÖLÜMÜ (EN ALTA ALINDI) --- */}
           <CollapsibleSection
             title="Tam Yedekle / Geri Yükle"
@@ -1576,6 +1806,9 @@ export default function SettingsPage() {
               </button>
             </div>
           </CollapsibleSection>
+
+          {/* GEÇİCİ-SES-OYNATICI: geçici panel çağrısı (kaldırılacak) */}
+          <TempSoundPlayer />
 
         </>
       )}

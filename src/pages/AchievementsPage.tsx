@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as Icons from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS, TIER_ORDER, AchievementIcon } from '../lib/achievements';
@@ -131,22 +131,63 @@ const ACHV_SOLID_CSS = `
   display:flex;
   flex-direction:column;
   justify-content:space-between;
+  /* MOBİL PERFORMANS: 200+ kartta yerleşim/çizim bütçesini düşür — ekranda
+     olmayan kartlar atlanır (kaydırma kasma düzeltmesi). auto yüksekliği
+     son çizilen değerden hatırlar → scrollbar zıplamaz. */
+  content-visibility:auto;
+  contain-intrinsic-size:auto 210px;
 }
-.achv-card:hover{
-  transform:translateY(-3px);
-  background:#14141E;
-  border-color:var(--tier-medal-border);
-  border-left-color:var(--tier-solid);
-  box-shadow:0 16px 36px -18px rgba(0,0,0,.95);
+/* Dokunmatikte kaydırma sırasında parmak değen karta :hover yapışır; transform
+   + box-shadow + background repaint'i mobilde kasma üretiyordu → hover efektleri
+   yalnızca fare/trackpad olan cihazlarda. */
+@media (hover:hover) and (pointer:fine){
+  .achv-card:hover{
+    transform:translateY(-3px);
+    background:#14141E;
+    border-color:var(--tier-medal-border);
+    border-left-color:var(--tier-solid);
+    box-shadow:0 16px 36px -18px rgba(0,0,0,.95);
+  }
+  .achv-card.is-locked:hover{
+    background:#0F0F17;
+    border-color:#2D2D3F;
+    border-left-color:var(--tier-solid);
+  }
+  .achv-card:hover .achv-emblem-stage{
+    transform:scale(1.08);
+  }
+  .achv-card.is-locked:hover .achv-emblem-stage{
+    opacity:1;
+    filter:saturate(1);
+  }
+  /* PREMIUM: kazanılan kupada tek seferlik altın ışık süpürmesi */
+  .achv-card.is-open:hover::after{
+    animation:achv-shine .9s ease;
+  }
+}
+/* PREMIUM: kazanılan kupanın altın ışık süpürmesi katmanı */
+.achv-card.is-open::after{
+  content:'';
+  position:absolute;
+  top:0;
+  left:-80%;
+  width:55%;
+  height:100%;
+  background:linear-gradient(105deg, transparent 0%, rgba(255,255,255,.06) 45%, rgba(255,255,255,.13) 50%, transparent 100%);
+  transform:skewX(-18deg);
+  pointer-events:none;
+  opacity:0;
+  z-index:5;
+}
+@keyframes achv-shine{
+  0%{ left:-80%; opacity:0; }
+  15%{ opacity:1; }
+  85%{ opacity:1; }
+  100%{ left:130%; opacity:0; }
 }
 .achv-card.is-locked{
   background:#0A0A0F;
   border-color:#1B1B26;
-  border-left-color:var(--tier-solid);
-}
-.achv-card.is-locked:hover{
-  background:#0F0F17;
-  border-color:#2D2D3F;
   border-left-color:var(--tier-solid);
 }
 
@@ -163,16 +204,9 @@ const ACHV_SOLID_CSS = `
 .achv-emblem-stage{
   transition:transform .25s ease, opacity .25s ease, filter .25s ease;
 }
-.achv-card:hover .achv-emblem-stage{
-  transform:scale(1.08);
-}
 .achv-card.is-locked .achv-emblem-stage{
   opacity:.68;
   filter:saturate(.65);
-}
-.achv-card.is-locked:hover .achv-emblem-stage{
-  opacity:1;
-  filter:saturate(1);
 }
 .achv-status-pip{
   position:absolute;
@@ -281,6 +315,41 @@ const ACHV_SOLID_CSS = `
 type SortMode = 'newest' | 'oldest' | 'az' | 'za';
 type FilterMode = 'all' | 'unlocked' | 'locked';
 type ViewTab = 'trophies' | 'quests' | 'titles';
+
+/**
+ * PREMIUM MİKRO-ETKİLEŞİM: istatistik sayılarını yumuşakça saydırır.
+ * prefers-reduced-motion açıkken anında hedefe oturur.
+ */
+function useCountUp(target: number, duration = 700): number {
+  const [val, setVal] = useState(0);
+  const fromRef = useRef(0);
+
+  useEffect(() => {
+    const reduce =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const from = fromRef.current;
+    if (reduce || from === target) {
+      fromRef.current = target;
+      setVal(target);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setVal(Math.round(from + (target - from) * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else fromRef.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+
+  return val;
+}
 
 export default function AchievementsPage() {
   const { data } = useApp();
@@ -456,6 +525,8 @@ export default function AchievementsPage() {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
       }).format(new Date(dateString));
     } catch {
       return '';
@@ -469,6 +540,10 @@ export default function AchievementsPage() {
   const unlockedTiersCount = displayAchievements.filter((a) => a.isUnlocked).length;
   const lockedTiersCount = Math.max(0, totalPossibleTiers - unlockedTiersCount);
   const trophyCompletionPct = totalPossibleTiers > 0 ? Math.round((unlockedTiersCount / totalPossibleTiers) * 100) : 0;
+  // PREMIUM: sayaç animasyonları (veri değişince yeni değere yumuşak geçiş)
+  const animatedTrophyCount = useCountUp(unlockedTiersCount);
+  const animatedCompletionPct = useCountUp(trophyCompletionPct);
+  const animatedTotalXp = useCountUp(data.totalXp || 0, 900);
   const isTestMode = data.showLockedNames;
   const closestTrophy = trophyVaultInsights.closestLocked;
 
@@ -580,7 +655,7 @@ export default function AchievementsPage() {
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-widest text-ink-400 block">Toplam Deneyim Puanı</span>
                     <div className="text-base sm:text-2xl font-black text-white flex items-baseline gap-1.5 mt-0.5">
-                      <span>{(data.totalXp || 0).toLocaleString('tr-TR')} XP</span>
+                      <span>{animatedTotalXp.toLocaleString('tr-TR')} XP</span>
                       <span className="text-[10px] sm:text-xs font-bold text-ink-400">(%{Math.floor(lvl.progress)})</span>
                     </div>
                   </div>
@@ -619,7 +694,7 @@ export default function AchievementsPage() {
                     </span>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className="text-2xl sm:text-3xl font-black text-white leading-none font-mono">
-                        {unlockedTiersCount}
+                        {animatedTrophyCount}
                       </span>
                       <span className="text-xs sm:text-sm font-bold text-ink-400 font-mono">
                         / {totalPossibleTiers} Kupa
@@ -629,7 +704,7 @@ export default function AchievementsPage() {
 
                   <div className="flex flex-col items-end gap-1">
                     <div className="px-2.5 py-1 rounded-md bg-[#2B2205] border border-[#9A7B1C] text-[#FFE047] text-xs font-black font-mono">
-                      %{trophyCompletionPct} Tamamlandı
+                      %{animatedCompletionPct} Tamamlandı
                     </div>
                     <span className="text-[10px] font-bold text-ink-400 font-mono">
                       +{trophyVaultInsights.earnedTrophyXp.toLocaleString('tr-TR')} XP Kazanıldı

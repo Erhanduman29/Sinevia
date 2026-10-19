@@ -1324,3 +1324,14 @@ body[data-theme="premium-dark"] #main-scroll {
 
 /* Arka plan durgunlu�u (onayl�): sekme gizlenince animasyonlar duraklar */
 body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after { animation-play-state: paused !important; }
+
+/* ============================================================
+   PREMIUM MIKRO-ETKILESIM: buton basma hissi
+   (sayfanin sonuna ekleme — tema remap kurallarina DOKUNULMADI)
+   - translate/scale: bagimsiz CSS ozellikleri → Tailwind transform
+     siniflariyla CAKISMAZ.
+   - touch-action:manipulation: mobilde cift-dokunma-zoom gecikmesini
+     kaldirir (daha aninda his).
+   ============================================================ */
+button:not(:disabled) { touch-action: manipulation; }
+button:not(:disabled):active { translate: 0 1px; scale: 0.985; }

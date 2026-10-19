@@ -216,7 +216,8 @@ function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClai
   useEffect(() => {
     // YENİ: Sinematik müziği ekran açıldığı an başlatıyoruz.
     // Fonksiyon kendi içinde 3 saniye boyunca yükselecek ve tam Phase 1'de patlayacak!
-    playQuestCompleteSound();
+    // Görevin nadirliğine göre doğru tier bestesi seçilsin (common/rare/epic/legendary/mythic).
+    playQuestCompleteSound(def?.rarity);
     
     const t1 = setTimeout(() => setPhase(1), 3000);
     const t2 = setTimeout(() => setPhase(2), 5000);

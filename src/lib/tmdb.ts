@@ -47,6 +47,27 @@ const GENRE_MAP: Record<number, string> = {
   10770: 'TV Filmi', 53: 'Gerilim', 10752: 'Savaş', 37: 'Vahşi Batı'
 };
 
+/**
+ * Dizinin TMDB'deki güncel sezon/bölüm yapısı — "Eksikleri Bul" taraması için.
+ * air_date filtrelenmez: gelecek bölümler de listede görünsün isteniyor.
+ */
+export async function fetchSeriesSeasonCounts(
+  tmdbId: number
+): Promise<{ season: number; episodes: number }[]> {
+  try {
+    const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&language=tr-TR`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const seasons: { season_number?: number; episode_count?: number }[] = Array.isArray(data?.seasons) ? data.seasons : [];
+    return seasons
+      .filter((s) => (s.season_number ?? 0) > 0 && (s.episode_count ?? 0) > 0)
+      .map((s) => ({ season: s.season_number as number, episodes: s.episode_count as number }))
+      .sort((a, b) => a.season - b.season);
+  } catch {
+    return [];
+  }
+}
+
 export async function searchTMDB(query: string): Promise<TMDBResult[]> {
   if (!TMDB_API_KEY) {
     console.error("TMDB API Key eksik!");

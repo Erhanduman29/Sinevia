@@ -10,6 +10,7 @@ import { useTutorial } from '../context/TutorialContext';
 import type { ShowcaseItem } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { uid, ratingBgClass } from '../lib/utils';
+import { levelFromXp } from '../lib/xp';
 import AgentProfileModal from '../components/AgentProfileModal';
 import ShowcaseEditorModal from '../components/ShowcaseEditorModal';
 import ChatHubModal, { renderChatMessageBubble } from '../components/ChatHubModal';
@@ -525,7 +526,7 @@ export default function NetworkPage() {
 
     return [...baseList].sort((a: any, b: any) => {
       if (leaderboardCategory === 'xp') return (b.total_xp || 0) - (a.total_xp || 0);
-      if (leaderboardCategory === 'level') return (b.level || 0) - (a.level || 0);
+      if (leaderboardCategory === 'level') return levelFromXp(b.total_xp || 0).level - levelFromXp(a.total_xp || 0).level;
       if (leaderboardCategory === 'movies') return (b.movies_watched || 0) - (a.movies_watched || 0);
       if (leaderboardCategory === 'past_movies') return (b.past_movies_watched || 0) - (a.past_movies_watched || 0);
       if (leaderboardCategory === 'episodes') return (b.episodes_watched || 0) - (a.episodes_watched || 0);
@@ -537,7 +538,7 @@ export default function NetworkPage() {
 
   const getLeaderboardScoreText = (user: any) => {
     if (leaderboardCategory === 'xp') return `${user.total_xp || 0} XP`;
-    if (leaderboardCategory === 'level') return `Lvl ${user.level || 1}`;
+    if (leaderboardCategory === 'level') return `Lvl ${levelFromXp(user.total_xp || 0).level}`;
     if (leaderboardCategory === 'movies') return `${user.movies_watched || 0} Güncel Film`;
     if (leaderboardCategory === 'past_movies') return `${user.past_movies_watched || 0} Önc. Film`;
     if (leaderboardCategory === 'episodes') return `${user.episodes_watched || 0} Bölüm`;
@@ -1155,7 +1156,7 @@ export default function NetworkPage() {
                             </span>
                           ) : (
                             <span className="ntw-st">
-                              LVL {user.level || 1}
+                              LVL {levelFromXp(user.total_xp || 0).level}
                             </span>
                           )}
                         </div>
@@ -1280,7 +1281,7 @@ export default function NetworkPage() {
                               {user.nickname}
                             </span>
                             <span className="ntw-st">
-                              Lvl {user.level || 1}
+                              Lvl {levelFromXp(user.total_xp || 0).level}
                             </span>
                             {isMe && (
                               <span className="hidden sm:inline-block text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded uppercase font-black border border-emerald-500/30">
@@ -1403,7 +1404,7 @@ export default function NetworkPage() {
                           <div className="leading-tight truncate flex-1">
                             <div className="text-base font-bold text-white truncate mb-1">{f.nickname}</div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[10px] bg-ink-900 px-2 py-0.5 rounded border border-ink-800 text-gold-400 font-bold">Lvl {f.level}</span>
+                              <span className="text-[10px] bg-ink-900 px-2 py-0.5 rounded border border-ink-800 text-gold-400 font-bold">Lvl {levelFromXp(f.total_xp || 0).level}</span>
                               {liveStatus ? (
                                 <span className="text-[10px] bg-red-500/15 border border-red-500/30 text-red-400 px-2 py-0.5 rounded font-bold truncate max-w-[180px]">
                                   🔴 {liveStatus.title} ({liveStatus.elapsedMins}. dk)

@@ -507,6 +507,7 @@ export default function RatingModal({
                     type="button"
                     onMouseEnter={() => setHoverRating(starVal)}
                     onClick={() => setRating(starVal)}
+                    data-snd="rating"
                     className="p-1 sm:p-1.5 min-h-11 sm:min-h-0 rounded-lg transition-transform active:scale-125 sm:hover:scale-125 focus:outline-none"
                     title={`${starVal} Puan`}
                   >
@@ -543,6 +544,7 @@ export default function RatingModal({
                       onMouseEnter={() => setHoverRating(num)}
                       onMouseLeave={() => setHoverRating(null)}
                       onClick={() => setRating(num)}
+                      data-snd="rating"
                       className={`py-1.5 sm:py-2 min-h-11 sm:min-h-0 rounded-xl text-xs transition-all border ${
                         num === 10 ? 'col-span-1 sm:col-span-2 font-black' : isWhole ? 'font-black' : 'font-bold'
                       } ${

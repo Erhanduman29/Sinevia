@@ -88,6 +88,7 @@ export default function PickModal({
     spinTimeoutsRef.current = [];
 
     setPhase('spinning');
+    import('../lib/sound').then(({ playPickSpinSound }) => playPickSpinSound());
     const finalWinner = candidatePool[Math.floor(Math.random() * candidatePool.length)];
 
     const totalSteps = 22;
@@ -103,6 +104,7 @@ export default function PickModal({
           setWinner(finalWinner);
           const finishTimer = setTimeout(() => {
             setPhase('result');
+            import('../lib/sound').then(({ playPickRevealSound }) => playPickRevealSound());
           }, 320);
           spinTimeoutsRef.current.push(finishTimer);
         } else {

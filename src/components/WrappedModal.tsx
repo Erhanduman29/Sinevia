@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Sparkles, Clock, Film, Tv, Star, Award, Flame, Crown, Download, Play, Pause, Tag, SlidersHorizontal, User, Users, CalendarDays, Activity, ShieldAlert } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS, AchievementIcon } from '../lib/achievements';
-import { formatDateShort } from '../lib/utils';
+import { formatDateShort, localDayKey } from '../lib/utils';
 import type { WatchHistoryItem } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 
@@ -164,7 +164,7 @@ export default function WrappedModal({ onClose }: WrappedModalProps) {
       if (hr >= 0 && hr < 5) nightCount++;
       if (day === 0 || day === 6) weekendCount++;
       
-      const ds = h.watchedAt.slice(0, 10);
+      const ds = localDayKey(h.watchedAt);
       dayCounts[ds] = (dayCounts[ds] || 0) + 1;
       
       if (!dayItems[ds]) dayItems[ds] = [];

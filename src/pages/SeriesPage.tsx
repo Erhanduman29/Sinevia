@@ -9,7 +9,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, getNextUnwatchedEpisode } from '../lib/utils';
 import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
-import { searchTMDBSeries } from '../lib/tmdb';
+import { searchTMDBSeries, fetchSeriesSeasonCounts } from '../lib/tmdb';
 import { useFilteredSeries } from '../lib/selectorHooks';
 import { openPlatform, listLibraryPlatforms } from '../lib/platformLinks';
 import AddSeriesModal from '../components/AddSeriesModal';
@@ -220,6 +220,13 @@ const SERIES_PREMIUM_CSS = `
   border-color: rgba(255, 255, 255, .3);
 }
 .svp-btn-p:disabled, .svp-btn-s:disabled { opacity: .4; pointer-events: none; }
+/* Kompakt birincil — izleme çipleriyle aynı ölçü/ritim (svp-link ile hizalı) */
+.svp-btn-p.svp-btn-p--xs {
+  font-size: 10px; padding: .25rem .55rem; border-radius: 8px;
+  gap: .3rem; letter-spacing: .04em;
+  box-shadow: 0 6px 16px -10px var(--svp-t70), inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 -1px 3px rgba(0, 0, 0, .2);
+}
+.svp-btn-p.svp-btn-p--xs:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -10px var(--svp-t85), inset 0 1px 0 rgba(255, 255, 255, .35); }
 .svp-btn-ghost {
   display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
   border-radius: 12px; border: 1px solid var(--svp-line2);
@@ -702,7 +709,7 @@ function saveKeptRatings(map: Record<string, number>) {
 }
 
 export default function SeriesPage() {
-  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia } = useApp();
+  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia, addEpisodes } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
   const [pickedSeriesItem, setPickedSeriesItem] = useState<{ series: Series; episode: Episode } | null>(null);
@@ -791,12 +798,14 @@ export default function SeriesPage() {
       (s) => !s.tmdbId || !s.posterUrl || !s.imdbId || !s.watchProviders || !s.creators || s.creators.length === 0 || !s.cast || s.cast.length === 0
     );
     let syncedCount = 0;
+    const resolvedTmdb = new Map<string, number>();
 
     for (const s of seriesToSync) {
       try {
         const results = await searchTMDBSeries(s.title);
         if (results.length > 0) {
           const match = results[0];
+          resolvedTmdb.set(s.id, match.id);
           const newGenres = Array.from(new Set([...s.genres, ...match.genres]));
 
           editSeries(
@@ -812,9 +821,32 @@ export default function SeriesPage() {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
+    // FAZ 2 — Sezon & bölüm taraması: TMDB'de yeni sezon/var olan sezonda yeni
+    // bölüm varsa listeye ekle (mevcut max+1'ten devam eder, silent — tek toast).
+    let addedEpisodes = 0;
+    for (const s of data.series) {
+      const tmdbId = resolvedTmdb.get(s.id) ?? s.tmdbId;
+      if (!tmdbId) continue;
+      try {
+        const remote = await fetchSeriesSeasonCounts(tmdbId);
+        for (const { season, episodes } of remote) {
+          const inSeason = s.episodes.filter((e) => e.season === season);
+          const maxEp = inSeason.length > 0 ? Math.max(...inSeason.map((e) => e.episode)) : 0;
+          if (episodes > maxEp) {
+            addEpisodes(s.id, season, episodes - maxEp, true);
+            addedEpisodes += episodes - maxEp;
+          }
+        }
+      } catch (e) {
+        console.error(`Bölüm taraması hatası (${s.title}):`, e);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 180));
+    }
+
     setIsSyncing(false);
-    if (syncedCount > 0) { showToast(`${syncedCount} diziye Sinema Kartı eklendi!`, 'success'); } 
-    else { showToast('Tüm künyeler güncel.', 'info'); }
+    if (addedEpisodes > 0) { showToast(`${syncedCount} künye · ${addedEpisodes} yeni bölüm eklendi!`, 'success'); }
+    else if (syncedCount > 0) { showToast(`${syncedCount} diziye Sinema Kartı eklendi!`, 'success'); }
+    else { showToast('Tüm künyeler ve bölümler güncel.', 'info'); }
   };
 
   const nextEpisodes = useMemo(() => {
@@ -1238,11 +1270,11 @@ export default function SeriesPage() {
                         </div>
                       )}
 
-                      <div className="flex gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         {watchLinks.map((link, idx) => {
                           const Icon = link.icon;
                           if (link.primary) {
-                            // Birincil harici aksiyon — vurgulu buton, yeni sekmede açılır
+                            // Birincil harici aksiyon — kompakt vurgulu çip (svp-link ile aynı ölçü)
                             return (
                               <a
                                 key={idx}
@@ -1251,7 +1283,7 @@ export default function SeriesPage() {
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
                                 title={`${link.text} — yeni sekmede açılır`}
-                                className="svp-btn-p px-3 py-1.5"
+                                className="svp-btn-p svp-btn-p--xs"
                               >
                                 <Icon size={11} />
                                 <span>{link.text}</span>

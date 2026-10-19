@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { formatDateTime, formatDateShort, todayStr, daysBetween, ratingBorderClass, ratingBgClass, normalize, uid } from '../lib/utils';
+import { formatDateTime, formatDateShort, todayStr, localDayKey, daysBetween, ratingBorderClass, ratingBgClass, normalize, uid } from '../lib/utils';
 
 // ============================================================================
 // UTILS — Tarih/saat formatlama ve ek yardımcı davranışlar
@@ -20,10 +20,20 @@ describe('UTILS — TARİH & SAAT FORMATLAMA', () => {
     expect(formatDateTime(iso).length).toBeGreaterThan(formatDateShort(iso).length);
   });
 
-  test('todayStr: bugünü YYYY-AA-GG (ISO) biçiminde dönmeli', () => {
+  test('todayStr: bugünü YYYY-AA-GG biçiminde YEREL gün olarak dönmeli', () => {
     const today = todayStr();
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(today).toBe(new Date().toISOString().slice(0, 10));
+    const d = new Date();
+    const localKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(today).toBe(localKey);
+  });
+
+  test('localDayKey: gün sınırı yerel 00.00\'da değişir (streak için kritik)', () => {
+    // 18.10 20.00 izlemesi → 18; 19.10 00.25 izlemesi → 19 (aradan 2 sa geçse de)
+    expect(localDayKey(new Date(2026, 9, 18, 20, 0))).toBe('2026-10-18');
+    expect(localDayKey(new Date(2026, 9, 19, 0, 25))).toBe('2026-10-19');
+    // ISO damgalı girdi de yerel güne çevrilmeli
+    expect(localDayKey('2026-10-18T21:30:00.000Z')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   test('daysBetween: negatif fark (ters yönde) ve aynı ay günleri', () => {

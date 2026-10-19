@@ -597,7 +597,7 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
                     </div>
                   ) : (
                     <span className="text-ink-400 text-[11px] truncate">
-                      Her satır bir ayı, dikey çubuklar ise o ayın günlerini (1–31) gösterir. Detay için çubukların üzerine gel.
+                      Her satır bir ayı, mini hücreler o ayın günlerini (1–31) gösterir. Hücre üzerine gel.
                     </span>
                   )}
                 </div>
@@ -619,8 +619,8 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
                 </div>
               </div>
 
-              {/* 12 Ay Satır Listesi (Masaüstünde 2 Sütun, Mobilde 1 Sütun) */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-2.5">
+              {/* 12 AYLIK KOMPAKT HEATMAP (GitHub tarzı mini hücreler) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-0.5">
                 {yearMonthStrips.map((mItem) => {
                   const hasActivity = mItem.totalCount > 0;
                   const isPeak = hasActivity && mItem.totalCount === maxMonthTotalInYear;
@@ -628,45 +628,36 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
                   return (
                     <div
                       key={mItem.key}
-                      className={`flex items-center gap-2.5 sm:gap-3 px-3 py-2 rounded-xl border transition-all ${
+                      className={`flex items-center gap-2 px-2 py-[3px] rounded-lg transition-colors ${
                         isPeak
-                          ? 'bg-gradient-to-r from-red-950/35 via-ink-900/70 to-ink-900/50 border-rose-500/45 shadow-[0_6px_20px_-10px_rgba(232,56,79,0.5)]'
-                          : hasActivity
-                          ? 'bg-ink-900/50 border-ink-800/80 hover:border-ink-700'
-                          : 'bg-ink-950/35 border-ink-800/40 opacity-60 hover:opacity-100'
+                          ? 'bg-gradient-to-r from-red-950/35 to-transparent border border-rose-500/25'
+                          : 'hover:bg-white/[0.03]'
                       }`}
                     >
-                      {/* Sol: Ay Adı & Yıl */}
-                      <div className="w-20 sm:w-24 shrink-0">
-                        <div className="flex items-center gap-1">
-                          {isPeak && <Crown size={11} className="text-amber-300 fill-current shrink-0" />}
-                          <span
-                            className={`text-xs font-black uppercase tracking-tight truncate ${
-                              mItem.isCurrentMonth ? 'text-gold-400' : 'text-ink-100'
-                            }`}
-                          >
-                            {mItem.monthName}
-                          </span>
-                        </div>
-                        <div className="text-[10px] font-semibold text-ink-500 flex items-center gap-1">
-                          <span>{mItem.yearNum}</span>
-                          <span>•</span>
-                          <span className={mItem.activeDays > 0 ? 'text-ink-400' : 'text-ink-600'}>
-                            {mItem.activeDays}g aktif
-                          </span>
-                        </div>
-                      </div>
+                      {/* Ay etiketi (kısa) */}
+                      <span
+                        className={`w-9 sm:w-10 shrink-0 text-[10px] font-black uppercase tracking-tight ${
+                          mItem.isCurrentMonth ? 'text-gold-400' : isPeak ? 'text-rose-300' : 'text-ink-400'
+                        }`}
+                        title={`${mItem.monthName} ${mItem.yearNum}`}
+                      >
+                        {mItem.monthShort}
+                      </span>
 
-                      {/* Orta: 1'den 31'e Günlük Nabız Çubukları (Equalizer) */}
-                      <div className="flex-1 flex items-end gap-[2px] sm:gap-[3px] h-7 bg-ink-950/70 border border-ink-800/60 rounded-lg px-2 py-1">
+                      {/* Gün hücreleri (1–31) */}
+                      <div className="flex-1 flex items-center gap-[2px] min-w-0 overflow-hidden">
                         {mItem.days.map((d) => {
+                          let cell = 'bg-ink-900/60';
                           if (d.isFuture) {
-                            return (
-                              <div
-                                key={d.dayNum}
-                                className="flex-1 h-1 rounded-full bg-white/[0.02]"
-                              />
-                            );
+                            cell = 'bg-white/[0.02]';
+                          } else if (d.count === 1) {
+                            cell = 'bg-rose-500/70';
+                          } else if (d.count === 2) {
+                            cell = 'bg-rose-500';
+                          } else if (d.count === 3 || d.count === 4) {
+                            cell = 'bg-red-500';
+                          } else if (d.count >= 5) {
+                            cell = 'bg-gradient-to-br from-red-500 to-amber-300';
                           }
 
                           const formatted = d.date.toLocaleDateString('tr-TR', {
@@ -676,23 +667,6 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
                             weekday: 'short',
                           });
 
-                          let barHeight = '22%';
-                          let barColor = 'bg-white/[0.08] hover:bg-white/30';
-
-                          if (d.count === 1) {
-                            barHeight = '52%';
-                            barColor = 'bg-rose-500/75 hover:bg-rose-400';
-                          } else if (d.count === 2) {
-                            barHeight = '70%';
-                            barColor = 'bg-red-500 hover:bg-rose-400 shadow-[0_0_6px_rgba(232,56,79,0.5)]';
-                          } else if (d.count === 3 || d.count === 4) {
-                            barHeight = '86%';
-                            barColor = 'bg-gradient-to-t from-red-600 to-rose-400 shadow-[0_0_8px_rgba(232,56,79,0.7)]';
-                          } else if (d.count >= 5) {
-                            barHeight = '100%';
-                            barColor = 'bg-gradient-to-t from-rose-500 to-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.85)]';
-                          }
-
                           return (
                             <div
                               key={d.dayNum}
@@ -700,38 +674,27 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
                                 setHoveredDetail({
                                   label: formatted,
                                   count: d.count,
-                                  badge: d.isToday ? 'Bugün' : undefined,
+                                  badge: d.isToday ? 'Bugün' : isPeak ? 'Zirve Ay' : undefined,
                                 })
                               }
                               onMouseLeave={() => setHoveredDetail(null)}
                               title={`${formatted}: ${d.count} yapım`}
-                              className="flex-1 h-full flex items-end cursor-pointer group/day"
-                            >
-                              <div
-                                style={{ height: barHeight }}
-                                className={`w-full rounded-[2px] transition-all duration-150 group-hover/day:scale-y-110 ${barColor} ${
-                                  d.isToday ? 'ring-1 ring-amber-300' : ''
-                                }`}
-                              />
-                            </div>
+                              className={`w-[7px] h-[7px] sm:w-2 sm:h-2 rounded-[2px] shrink-0 cursor-pointer transition-transform hover:scale-[1.6] ${cell} ${
+                                d.isToday ? 'ring-1 ring-amber-300' : ''
+                              }`}
+                            />
                           );
                         })}
                       </div>
 
-                      {/* Sağ: Ay Toplam Sayısı */}
-                      <div className="w-12 sm:w-14 text-right shrink-0">
-                        <span
-                          className={`${PREMIUM_NUM} inline-block text-xs sm:text-sm px-2 py-0.5 rounded-lg font-black ${
-                            isPeak
-                              ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
-                              : hasActivity
-                              ? 'bg-red-500/15 text-rose-300 border border-red-500/30'
-                              : 'bg-ink-900/70 text-ink-600'
-                          }`}
-                        >
-                          {mItem.totalCount}
-                        </span>
-                      </div>
+                      {/* Ay toplamı */}
+                      <span
+                        className={`shrink-0 w-7 text-right text-[10px] font-black px-1 rounded ${
+                          isPeak ? 'text-amber-300 bg-amber-400/15' : hasActivity ? 'text-rose-300/90' : 'text-ink-600'
+                        }`}
+                      >
+                        {mItem.totalCount}
+                      </span>
                     </div>
                   );
                 })}

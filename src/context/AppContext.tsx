@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useReducer, useCallback, useRef, useState, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion, WatchProvider, WeeklyPlanItem, ExternalActionTemplate, AbandonedProgress } from '../types';
-import { normalize, uid, todayStr, daysBetween, withRetry, enqueueLogOp, dequeueLogOp, readLogQueue } from '../lib/utils';
+import { normalize, uid, todayStr, daysBetween, localDayKey, withRetry, enqueueLogOp, dequeueLogOp, readLogQueue } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { QUEST_DEFS } from '../lib/quests';
 import { levelFromXp } from '../lib/xp';
@@ -429,7 +429,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   const seriesHistory = validHistory.filter((h) => h.type === 'series' || h.kind === 'series');
 
   const calcMaxStreak = (hist: any[], typeMatch?: string) => {
-    const dates = hist.filter((h) => !typeMatch || h.type === typeMatch || h.kind === typeMatch).map((h) => h.watchedAt.slice(0, 10));
+    const dates = hist.filter((h) => !typeMatch || h.type === typeMatch || h.kind === typeMatch).map((h) => localDayKey(h.watchedAt));
     const unique = Array.from(new Set(dates)).sort();
     let max = 0, current = 0;
     for (let i = 0; i < unique.length; i++) {
@@ -488,11 +488,11 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'night_owl': currentVal = validHistory.filter((h) => { const hr = new Date(h.watchedAt).getHours(); return hr >= 0 && hr < 5; }).length; break;
       case 'weekend_watcher': currentVal = validHistory.filter((h) => { const d = new Date(h.watchedAt).getDay(); return d === 0 || d === 6; }).length; break;
       case 'marathon': {
-        const days: any = {}; validHistory.forEach((h) => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d] || 0) + 1; });
+        const days: any = {}; validHistory.forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
         currentVal = Object.values(days).filter((c: any) => c >= 3).length; break;
       }
       case 'secret_binge': {
-        const days: any = {}; seriesHistory.forEach((h) => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d] || 0) + 1; });
+        const days: any = {}; seriesHistory.forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
         currentVal = Math.max(0, ...Object.values(days as Record<string, number>)); break;
       }
       case 'season_complete': {
@@ -513,7 +513,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
         currentVal = c; break;
       }
       case 'caveman': {
-        const days: any = {}; validHistory.forEach((h) => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d] || 0) + 1; });
+        const days: any = {}; validHistory.forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
         let streak = 0, maxS = 0; const sortedDays = Object.keys(days).sort();
         for (let i = 0; i < sortedDays.length; i++) {
           if (days[sortedDays[i]] >= 5) {
@@ -539,7 +539,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       }
       case 'cinephile': currentVal = seriesHistory.length > 0 ? 0 : moviesHistory.length; break;
       case 'short_day_profit': {
-        const days: any = {}; moviesHistory.forEach((h) => { const d = h.watchedAt.slice(0, 10); days[d] = (days[d] || 0) + 1; });
+        const days: any = {}; moviesHistory.forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
         currentVal = Object.values(days).filter((c: any) => c >= 3).length; break;
       }
       case 'selective_critic': {
@@ -562,7 +562,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'patience_stone': currentVal = state.series.filter((s) => s.episodes && s.episodes.length > 0 && Math.max(...s.episodes.map((e) => e.season)) >= 8 && s.episodes.every((e) => e.watched)).length; break;
       case 'loyalty_test': {
         let maxL = 0; const byS: any = {};
-        seriesHistory.forEach((h) => { const sid = h.seriesId || h.itemId || h.id; if (!byS[sid]) byS[sid] = new Set(); byS[sid].add(h.watchedAt.slice(0, 10)); });
+        seriesHistory.forEach((h) => { const sid = h.seriesId || h.itemId || h.id; if (!byS[sid]) byS[sid] = new Set(); byS[sid].add(localDayKey(h.watchedAt)); });
         Object.values(byS).forEach((dSet: any) => {
           const dates = Array.from(dSet).sort() as string[];
           if (dates.length === 0) return;
@@ -625,7 +625,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
         moviesHistory.forEach((h) => {
           const movie = state.movies.find((m) => m.id === (h.itemId || h.id));
           const mins = h.actualRuntime || movie?.actualRuntime || movie?.runtime;
-          if (mins) { const d = h.watchedAt.slice(0, 10); daysRuntime[d] = (daysRuntime[d] || 0) + mins; }
+          if (mins) { const d = localDayKey(h.watchedAt); daysRuntime[d] = (daysRuntime[d] || 0) + mins; }
         });
         currentVal = Object.values(daysRuntime).filter((minutes: any) => minutes > 300).length; break;
       }
@@ -997,7 +997,7 @@ export interface AppContextValue {
   watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   unwatchMovie: (id: string) => void; updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => boolean;
-  deleteSeries: (id: string) => void; addEpisodes: (sId: string, s: number, ec: number) => void;
+  deleteSeries: (id: string) => void; addEpisodes: (sId: string, s: number, ec: number, silent?: boolean) => void;
   watchEpisode: (sId: string, eId: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[]) => void;
   canWatchEpisode: (sId: string, eId: string) => boolean; unwatchEpisode: (sId: string, eId: string) => void; deleteEpisode: (sId: string, eId: string) => void;
   addGenre: (g: string) => void; deleteGenre: (g: string) => void; renameGenre: (o: string, n: string) => void;
@@ -1671,9 +1671,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .catch(() => { enqueueLogOp({ id: row.id, kind: 'insert', row, createdAt: Date.now() }); });
     }
     if (finalIsPastWatch) showToast(`"${movie.title}" puanlandı ve Geçmiş'e eklendi`, 'info'); else if (movie.startedAt && actualRuntime < info.maxMins) showToast(`Film ${actualRuntime} dk'da bitti! (${info.maxMins - actualRuntime} dk kazandın ⚡)`, 'success');
+    // PREMIUM RİTÜEL: puanlama arp sesi (stereo, kısa)
+    import('../lib/sound').then(({ playRatingArpSound }) => playRatingArpSound());
   }, [data.movies, data.agentId, data.shareWatchedInFeed, showToast]);
 
-  const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => { dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags, isPastWatch }); showToast('Puan güncellendi'); }, [showToast]);
+  const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => { dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags, isPastWatch }); showToast('Puan güncellendi'); import('../lib/sound').then(({ playRatingArpSound }) => playRatingArpSound()); }, [showToast]);
 
   const addSeries = useCallback((title: string, genres: string[], seasons: number[], posterUrl?: string | null, overview?: string, tmdbId?: number, year?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData): boolean => {
     if (data.removedSeriesTitles.some((t) => normalize(t) === normalize(title))) { showToast('Daha önce tamamlandı!', 'warning'); return false; }
@@ -1705,12 +1707,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (updatedSeries) { if (updatedSeries.episodes.filter((e: any) => e.season === ep.season).every((e: any) => e.watched)) requestSeasonComplete({ seriesTitle: updatedSeries.title, season: ep.season });
       if (updatedSeries.episodes.every((e: any) => e.watched)) { dispatch({ type: 'COMPLETE_SERIES', id: seriesId, title: updatedSeries.title }); showToast(`${updatedSeries.title} tamamlandı!`, 'success'); } }
     }, 200);
+    // PREMIUM RİTÜEL: puanlama arp sesi (stereo, kısa)
+    import('../lib/sound').then(({ playRatingArpSound }) => playRatingArpSound());
   }, [data.series, data.agentId, data.shareWatchedInFeed, showToast]);
 
   const deleteMovie = useCallback((id: string) => dispatch({ type: 'DELETE_MOVIE', id }), []);
   const unwatchMovie = useCallback((id: string) => dispatch({ type: 'UNWATCH_MOVIE', id }), []);
   const deleteSeries = useCallback((id: string) => dispatch({ type: 'DELETE_SERIES', id }), []);
-  const addEpisodes = useCallback((sId: string, s: number, ec: number) => { const series = data.series.find((x) => x.id === sId); if (!series) return; const startEp = series.episodes.filter((e) => e.season === s).length > 0 ? Math.max(...series.episodes.filter((e) => e.season === s).map((e) => e.episode)) + 1 : 1; dispatch({ type: 'ADD_EPISODES', seriesId: sId, episodes: Array.from({ length: ec }, (_, i) => ({ id: uid(), season: s, episode: startEp + i, watched: false, rating: null, note: '', watchedAt: null })) }); showToast(`${ec} bölüm eklendi`); }, [data.series, showToast]);
+  const addEpisodes = useCallback((sId: string, s: number, ec: number, silent = false) => { const series = data.series.find((x) => x.id === sId); if (!series) return; const startEp = series.episodes.filter((e) => e.season === s).length > 0 ? Math.max(...series.episodes.filter((e) => e.season === s).map((e) => e.episode)) + 1 : 1; dispatch({ type: 'ADD_EPISODES', seriesId: sId, episodes: Array.from({ length: ec }, (_, i) => ({ id: uid(), season: s, episode: startEp + i, watched: false, rating: null, note: '', watchedAt: null })) }); if (!silent) showToast(`${ec} bölüm eklendi`); }, [data.series, showToast]);
   const canWatchEpisode = useCallback((sId: string, eId: string): boolean => { const series = data.series.find((s) => s.id === sId); if (!series) return false; const ep = series.episodes.find((e) => e.id === eId); if (!ep || ep.watched) return false; return [...series.episodes].sort((a, b) => a.season - b.season || a.episode - b.episode).find((e) => !e.watched)?.id === eId; }, [data.series]);
   const unwatchEpisode = useCallback((sId: string, eId: string) => dispatch({ type: 'UNWATCH_EPISODE', seriesId: sId, episodeId: eId }), []);
   const deleteEpisode = useCallback((sId: string, eId: string) => dispatch({ type: 'DELETE_EPISODE', seriesId: sId, episodeId: eId }), []);

@@ -1,6 +1,6 @@
 import { ExtendedAppData, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { WatchHistoryItem, Movie } from '../types';
-import { normalize } from './utils';
+import { normalize, localDayKey } from './utils';
 
 export type StatsScopeMode = 'current' | 'past' | 'all';
 
@@ -123,9 +123,30 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
     else ratingPersona = { label: 'Acımasız Yargıç 💀', color: 'text-red-400' };
   }
 
+  // Şeref Kürsüsü: 10→1 puan sırası korunur; DÜELLOLARIN AMACI aynı puandaki
+  // filmleri kendi arasında sıralamak — aynı puanda en çok düello kazanan
+  // önce gelir. Hiç kazanan yoksa (veya 6'dan az slot kalırsa) aynı puandaki
+  // filmler rastgele sıralanır: önce Fisher-Yates karıştır, rating+wins
+  // kararlı sırala (eşitlikte karışık sıra korunur).
+  const duelWinsByMovieId = new Map(data.movies.map((m) => [m.id, m.duelWins || 0]));
+  const duelWinsOf = (h: WatchHistoryItem): number => {
+    if (h.kind === 'movie' || h.type === 'movie') return duelWinsByMovieId.get(h.itemId || h.id) || 0;
+    return 0;
+  };
+  const shuffledTop = scopedHistory.filter((h) => h.rating !== null);
+  for (let i = shuffledTop.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledTop[i], shuffledTop[j]] = [shuffledTop[j], shuffledTop[i]];
+  }
+  shuffledTop.sort((a, b) => {
+    const rd = (b.rating || 0) - (a.rating || 0);
+    if (rd !== 0) return rd;
+    return duelWinsOf(b) - duelWinsOf(a);
+  });
+
   const uniqueTopItems: WatchHistoryItem[] = [];
   const seenTopKeys = new Set<string>();
-  const sortedByRating = [...scopedHistory].filter((h) => h.rating !== null).sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  const sortedByRating = shuffledTop;
 
   for (const item of sortedByRating) {
     const key = item.kind === 'series' || item.type === 'series' ? `series_${item.seriesId || item.title}` : `movie_${item.itemId || item.id}`;
@@ -222,7 +243,7 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
   const dailyCountMap = new Map<string, number>();
   scopedHistory.forEach((h) => {
     if (!h.watchedAt) return;
-    const dateStr = h.watchedAt.slice(0, 10);
+    const dateStr = localDayKey(h.watchedAt);
     dailyCountMap.set(dateStr, (dailyCountMap.get(dateStr) || 0) + 1);
   });
 
@@ -230,7 +251,7 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
   const todayObj = new Date();
   for (let i = 13; i >= 0; i--) {
     const d = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate() - i);
-    const iso = d.toISOString().slice(0, 10);
+    const iso = localDayKey(d);
     const label = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
     last14Days.push({ date: iso, label, count: dailyCountMap.get(iso) || 0 });
   }

@@ -9,10 +9,18 @@ interface Props {
 }
 
 export default function EditSeriesModal({ series, onClose }: Props) {
-  const { data, editSeries } = useApp();
+  const { data, editSeries, addEpisodes } = useApp();
   const [title, setTitle] = useState(series.title);
   const [selectedGenres, setSelectedGenres] = useState<string[]>(series.genres);
   const [customUrl, setCustomUrl] = useState<string>(series.customUrl || '');
+
+  // Manuel sezon/bölüm yönetimi — canlı veri (addEpisodes sonrası taze kalır)
+  const liveSeries = data.series.find((x) => x.id === series.id) ?? series;
+  const seasons = Array.from(new Set(liveSeries.episodes.map((e) => e.season))).sort((a, b) => a - b);
+  const nextSeasonNo = seasons.length > 0 ? seasons[seasons.length - 1] + 1 : 1;
+  const [seasonAmounts, setSeasonAmounts] = useState<Record<number, string>>({});
+  const [newSeasonCount, setNewSeasonCount] = useState(8);
+  const clampAmt = (v: string) => Math.min(99, Math.max(1, Math.floor(Number(v)) || 1));
 
   const toggleGenre = (g: string) => {
     setSelectedGenres((prev) =>
@@ -50,7 +58,7 @@ export default function EditSeriesModal({ series, onClose }: Props) {
       >
         <div className="flex items-center justify-between p-5 border-b border-ink-700 sticky top-0 bg-ink-900 z-10">
           <h2 className="text-lg font-semibold text-ink-100">Dizi Düzenle</h2>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-200 transition-colors">
+          <button onClick={onClose} data-snd="close" className="text-ink-400 hover:text-ink-200 transition-colors">
             <X size={22} />
           </button>
         </div>
@@ -99,6 +107,65 @@ export default function EditSeriesModal({ series, onClose }: Props) {
                   {g}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* MANUEL SEZON & BÖLÜM YÖNETİMİ */}
+          <div>
+            <label className="block text-sm font-medium text-ink-300 mb-2">Sezon & Bölümler</label>
+            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+              {seasons.map((n) => {
+                const eps = liveSeries.episodes.filter((e) => e.season === n);
+                const watched = eps.filter((e) => e.watched).length;
+                return (
+                  <div key={n} className="flex items-center gap-2 bg-ink-800/70 border border-ink-700 rounded-lg px-3 py-2">
+                    <span className="text-xs font-black text-gold-400 tabular-nums w-8 shrink-0">S{n}</span>
+                    <span className="text-[11px] text-ink-400 flex-1 min-w-0 truncate">
+                      {eps.length} bölüm{watched > 0 ? ` · ${watched} izlendi` : ''}
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={seasonAmounts[n] ?? '1'}
+                      onChange={(e) => setSeasonAmounts((p) => ({ ...p, [n]: e.target.value }))}
+                      className="w-14 bg-ink-900 border border-ink-700 rounded px-2 py-1 text-xs text-ink-100 text-center focus:outline-none focus:border-gold-500"
+                    />
+                    <button
+                      onClick={() => addEpisodes(liveSeries.id, n, clampAmt(seasonAmounts[n] ?? '1'))}
+                      className="px-2.5 py-1 rounded-lg bg-gold-500 text-ink-950 text-[11px] font-bold hover:bg-gold-400 transition-colors shrink-0"
+                    >
+                      Ekle
+                    </button>
+                  </div>
+                );
+              })}
+              {seasons.length === 0 && (
+                <p className="text-[11px] text-ink-500 bg-ink-800/50 border border-dashed border-ink-700 rounded-lg px-3 py-3 text-center">
+                  Henüz sezon/bölüm yok — aşağıdaki alandan ilk sezonu ekleyin.
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-2 bg-ink-800/70 border border-gold-500/30 rounded-lg px-3 py-2">
+              <span className="text-xs font-black text-gold-400 tabular-nums shrink-0">S{nextSeasonNo}</span>
+              <span className="text-[11px] text-ink-400 flex-1 min-w-0 truncate">Yeni sezon ({newSeasonCount} bölüm)</span>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={String(newSeasonCount)}
+                onChange={(e) => setNewSeasonCount(clampAmt(e.target.value))}
+                className="w-14 bg-ink-900 border border-ink-700 rounded px-2 py-1 text-xs text-ink-100 text-center focus:outline-none focus:border-gold-500"
+              />
+              <button
+                onClick={() => {
+                  addEpisodes(liveSeries.id, nextSeasonNo, newSeasonCount);
+                  setNewSeasonCount(8);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-gold-500 to-gold-600 text-ink-950 text-[11px] font-black hover:from-gold-400 hover:to-gold-500 transition-colors shrink-0"
+              >
+                Sezon Ekle
+              </button>
             </div>
           </div>
         </div>

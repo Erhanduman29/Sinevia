@@ -258,6 +258,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
 
   const pickWinner = (side: 'a' | 'b') => {
     if (!pair || reveal) return;
+    import('../lib/sound').then(({ playDuelSelectSound }) => playDuelSelectSound());
     const winner = side === 'a' ? pair.a : pair.b;
     const loser = side === 'a' ? pair.b : pair.a;
     const wOld = winner.calibratedScore ?? winner.rating ?? 5;

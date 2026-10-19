@@ -555,6 +555,22 @@ body[data-theme='paper-light'] .mpx-tag.is-warn { color: #b45309; }
   background: color-mix(in srgb, var(--mpx-a1) 12%, transparent);
   transform: translateY(-1px);
 }
+/* Birincil varyant — aynı kompakt ölçülerde vurgulu köprü */
+.mpx-link-p {
+  color: var(--mpx-on-acc);
+  border-color: color-mix(in srgb, var(--mpx-a1) 45%, transparent);
+  background: linear-gradient(150deg, var(--mpx-a2) -10%, var(--mpx-a1) 55%, var(--mpx-a3) 135%);
+  box-shadow:
+    0 6px 16px -8px color-mix(in srgb, var(--mpx-a1) 70%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.mpx-link-p:hover {
+  color: var(--mpx-on-acc);
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 22px -8px color-mix(in srgb, var(--mpx-a1) 90%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
 body[data-theme='light'] .mpx-link:hover,
 body[data-theme='paper-light'] .mpx-link:hover {
   color: color-mix(in srgb, var(--mpx-a1) 72%, #000);

@@ -959,9 +959,17 @@ export default function MoviesPage() {
                                 <ImageIcon size={12} className="text-ink-600" />
                               </div>
                             )}
-                            {m.watched && (
+                            {m.watched && !m.abandoned && (
                               <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-[1px]">
                                 <Check size={16} strokeWidth={3} className="text-green-400 drop-shadow-lg" />
+                              </div>
+                            )}
+                            {m.abandoned && (
+                              <div className="absolute inset-0 bg-black/65 flex items-center justify-center backdrop-blur-[1px]">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <Skull size={13} strokeWidth={2.5} className="text-amber-400 drop-shadow-lg" />
+                                  <span className="text-[6.5px] font-black uppercase tracking-wider text-amber-300">Mezarlık</span>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1739,7 +1747,8 @@ function MovieRow({
             {movie.genres.length > 0 && <span className="truncate max-w-[180px] sm:max-w-none">{movie.genres.join(', ')}</span>}
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap mt-auto">
+          {/* izleme köprüleri — 4px ızgara oranlı aralık (gap-2) */}
+          <div className="flex items-center gap-2 flex-wrap mt-auto">
             {movie.watched && movie.rating !== null && (
               <div className="flex items-center gap-1 mr-1">
                 <span className={`mpx-rate ${ratingBgClass(movie.rating)}`}>{movie.rating}</span>
@@ -1752,7 +1761,7 @@ function MovieRow({
             {watchLinks.map((link, idx) => {
               const Icon = link.icon;
               if (link.primary) {
-                // Birincil harici aksiyon — vurgulu buton, yeni sekmede açılır
+                // Birincil harici aksiyon — kompakt vurgulu köprü, yeni sekmede açılır
                 return (
                   <a
                     key={idx}
@@ -1761,10 +1770,9 @@ function MovieRow({
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     title={`${link.text} — yeni sekmede açılır`}
-                    className="mpx-btn mpx-btn-p mpx-btn-xs"
-                    style={{ minHeight: 34 }}
+                    className="mpx-link mpx-link-p"
                   >
-                    <Icon size={11} />
+                    <Icon size={10} />
                     <span>{link.text}</span>
                   </a>
                 );
@@ -1795,7 +1803,7 @@ function MovieRow({
 
       {/* Sağ Kısım: Aksiyon Butonları */}
       <div className="flex flex-wrap items-center justify-between md:justify-end gap-2 sm:gap-2 w-full md:w-auto bg-ink-950/40 md:bg-transparent p-2 md:p-0 rounded-xl md:rounded-none border border-ink-800/40 md:border-0 flex-shrink-0">
-        <div className="flex items-center gap-1.5 w-full md:w-auto md:flex-none">
+        <div className="flex items-center gap-2 w-full md:w-auto md:flex-none">
           {movie.abandoned ? (
             <button
               onClick={() => onRevive(movie)}
@@ -1868,12 +1876,12 @@ function MovieRow({
           )}
         </div>
 
-        <div className="flex items-center gap-1 md:gap-1 flex-shrink-0 w-full md:w-auto justify-end md:pl-2 md:border-l md:border-ink-800/60">
+        <div className="flex items-center gap-2 flex-shrink-0 w-full md:w-auto justify-end">
           {!movie.abandoned && !movie.watched && (
             <button
               onClick={() => onAbandon(movie)}
               title="Yarım Bırak (Sinematik Otopsi)"
-              className="mpx-btn mpx-btn-s mpx-btn-xs text-red-400/90 hover:text-red-300 mr-auto md:mr-1"
+              className="mpx-btn mpx-btn-s mpx-btn-xs text-red-400/90 hover:text-red-300"
             >
               <Skull size={11} /> Yarım Bırak
             </button>

@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ratingBgClass, formatDateTime, formatDateShort } from '../lib/utils';
+import { ratingBgClass, formatDateTime, formatDateShort, localDayKey } from '../lib/utils';
 import RatingModal from '../components/RatingModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
@@ -115,7 +115,7 @@ export default function HistoryPage() {
     const episodes = total - movies;
     const withNotes = regularHistory.filter((h) => h.note && h.note.trim().length > 0).length;
     const uniqueDays = new Set(
-      regularHistory.map((h) => (h.watchedAt ? h.watchedAt.slice(0, 10) : '')).filter(Boolean)
+      regularHistory.map((h) => (h.watchedAt ? localDayKey(h.watchedAt) : '')).filter(Boolean)
     ).size;
     const rated = regularHistory.filter((h) => h.rating !== null);
     const avgRating =
@@ -271,13 +271,14 @@ export default function HistoryPage() {
       {data.history.length > 0 && (
         <div
           data-tutorial="history-stats"
-          className="grid grid-cols-2 sm:grid-cols-5 rounded-2xl overflow-hidden border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--glass, var(--bg-card))] shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))]"
+          className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-2 rounded-2xl border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--glass, var(--bg-card))] shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))]"
         >
-          <StatCell icon={<Sparkles size={15} className="text-[color:var(--red-hi,var(--color-1))]" />} value={diaryStats.total} label="Toplam Kayıt" accent />
-          <StatCell icon={<Film size={15} className="text-amber-400" />} value={diaryStats.movies} label="İzlenen Film" />
-          <StatCell icon={<Tv size={15} className="text-azure-400" />} value={diaryStats.episodes} label="Dizi Bölümü" />
-          <StatCell icon={<StickyNote size={15} className="text-emerald-400" />} value={diaryStats.withNotes} label="İnceleme" />
+          <StatCell tone="red" icon={<Sparkles size={15} className="text-[color:var(--red-hi,var(--color-1))]" />} value={diaryStats.total} label="Toplam Kayıt" accent />
+          <StatCell tone="amber" icon={<Film size={15} className="text-amber-400" />} value={diaryStats.movies} label="İzlenen Film" />
+          <StatCell tone="azure" icon={<Tv size={15} className="text-azure-400" />} value={diaryStats.episodes} label="Dizi Bölümü" />
+          <StatCell tone="emerald" icon={<StickyNote size={15} className="text-emerald-400" />} value={diaryStats.withNotes} label="İnceleme" />
           <StatCell
+            tone="violet"
             icon={<Calendar size={15} className="text-violet-400" />}
             value={diaryStats.uniqueDays}
             label="Aktif Gün & Ort."
@@ -862,6 +863,22 @@ export default function HistoryPage() {
 
 /* ---------- Küçük premium bileşenler ---------- */
 
+/* İstatistik tonları — her hücre kendi renk kimliğiyle bağımsız cam kart */
+const STAT_TONES = {
+  red: 'bg-gradient-to-br from-red-500/[0.14] to-transparent hover:border-red-500/40',
+  amber: 'bg-gradient-to-br from-amber-400/[0.14] to-transparent hover:border-amber-400/40',
+  azure: 'bg-gradient-to-br from-azure-400/[0.14] to-transparent hover:border-azure-400/40',
+  emerald: 'bg-gradient-to-br from-emerald-400/[0.14] to-transparent hover:border-emerald-400/40',
+  violet: 'bg-gradient-to-br from-violet-400/[0.14] to-transparent hover:border-violet-400/40',
+} as const;
+const STAT_TILES = {
+  red: 'bg-red-500/10 border-red-500/30',
+  amber: 'bg-amber-400/10 border-amber-400/30',
+  azure: 'bg-azure-500/10 border-azure-500/30',
+  emerald: 'bg-emerald-500/10 border-emerald-500/30',
+  violet: 'bg-violet-500/10 border-violet-500/30',
+} as const;
+
 function StatCell({
   icon,
   value,
@@ -869,6 +886,7 @@ function StatCell({
   suffix,
   accent,
   className = '',
+  tone = 'red',
 }: {
   icon: React.ReactNode;
   value: number;
@@ -876,26 +894,29 @@ function StatCell({
   suffix?: React.ReactNode;
   accent?: boolean;
   className?: string;
+  tone?: keyof typeof STAT_TONES;
 }) {
   return (
     <div
-      className={`relative overflow-hidden p-3 sm:p-4 flex items-center gap-2.5 border-l border-t sm:border-t-0 first:border-l-0 [&:nth-child(odd)]:border-l-0 sm:[&:nth-child(odd)]:border-l transition-colors hover:bg-[color:var(--surface2,var(--bg-card))] ${className}`}
+      className={`relative overflow-hidden p-3 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-all duration-300 hover:-translate-y-0.5 ${STAT_TONES[tone]} ${className}`}
     >
-      <div
-        className={`w-9 h-9 rounded-lg border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--surface,var(--bg-surface))] flex items-center justify-center flex-shrink-0 ${
-          accent ? 'shadow-[0_0_16px_-6px_var(--red, var(--color-1, #e8384f))]' : ''
-        }`}
-      >
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-lg sm:text-xl font-black text-ink-50 leading-none tabular-nums">
-          {value}
-          {suffix && <span className="text-xs font-bold ml-1">{suffix}</span>}
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div
+          className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${STAT_TILES[tone]} ${
+            accent ? 'shadow-[0_0_16px_-6px_var(--red, var(--color-1, #e8384f))]' : ''
+          }`}
+        >
+          {icon}
         </div>
-        <div className={`${monoLabel} text-ink-400 mt-1 truncate`}>{label}</div>
+        <div className="min-w-0">
+          <div className="text-xl sm:text-2xl font-black text-ink-50 leading-none tabular-nums">
+            {value}
+            {suffix && <span className="text-xs font-bold ml-1">{suffix}</span>}
+          </div>
+          <div className={`${monoLabel} text-ink-400 mt-1 truncate`}>{label}</div>
+        </div>
       </div>
-      <span className="absolute right-0 bottom-[-6px] font-black text-4xl text-[color:var(--ink,var(--text-main))] opacity-[0.04] select-none pointer-events-none">
+      <span className="absolute right-1 bottom-[-8px] font-black text-4xl text-[color:var(--ink,var(--text-main))] opacity-[0.05] select-none pointer-events-none">
         {value}
       </span>
     </div>

@@ -4,6 +4,8 @@ import {
   playLevelUpSound,
   playLessonDoneSound,
   playQuestCompleteSound,
+  playUiClickSound,
+  playRatingArpSound,
 } from '../lib/sound';
 
 // ============================================================================
@@ -69,6 +71,15 @@ class FakeAudioContext {
     return { pan: makeParam(), connect: vi.fn() };
   }
 
+  /** Analog sıcaklık katmanı (WaveShaper) — engine init'i mock'ta da kurabilsin. */
+  createWaveShaper() {
+    return {
+      curve: null as Float32Array | null,
+      oversample: 'none',
+      connect: vi.fn(),
+    };
+  }
+
   createDynamicsCompressor() {
     const c = {
       threshold: makeParam(),
@@ -126,23 +137,25 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     // yaratılır (singleton) — zincir testi ilk yaratımdaki kaydı okur.
   });
 
-  test('playAchievementSound: sub + 4 pad + 5 çan = 19 osilatör, kuyruk 4s toast süresi içinde', () => {
+  test('playAchievementSound: 2 sub + 4 pad + 5 çan × 3 katman = 25 osilatör, kuyruk 4s toast süresi içinde', () => {
     playAchievementSound();
 
-    // 1 sub + 4 pad × 2 (saw+tri) + 5 bell × 2 (sine+tri) = 19
-    expect(created.oscillators).toHaveLength(19);
-    // 2 master bus gain (engine ilk açılışta) + 1 sub + 4 pad env + 5 bell × 2 env = 17
-    expect(created.gains).toHaveLength(17);
+    // 2 sub (stereo çift) + 4 pad × 2 (saw+tri) + 5 bell × 3 (gövde+harmonik+parıltı) = 25
+    expect(created.oscillators).toHaveLength(25);
+    // 2 master bus gain (engine ilk açılışta) + 2 sub + 4 pad env + 5 bell × 3 env = 23
+    expect(created.gains).toHaveLength(23);
 
     // Cmaj9 pad akoru (sawtooth gövdeleri)
     const saws = freqsOf('sawtooth');
     expect(saws).toEqual([130.81, 196.0, 246.94, 329.63]);
 
     // Kristal kupa arpeji (bell gövdeleri sine): G5 B5 D6 E6 G6
+    // Üst oktav parıltısı (×3) ayrı sine — sadece tam gövde frekansları filtrelenir
+    const bodyFreqs = [783.99, 987.77, 1174.66, 1318.51, 1567.98];
     const bellBodies = created.oscillators
-      .filter((o) => o.type === 'sine' && o.frequency.value >= 700)
+      .filter((o) => o.type === 'sine' && bodyFreqs.includes(o.frequency.value))
       .map((o) => o.frequency.value);
-    expect(bellBodies).toEqual([783.99, 987.77, 1174.66, 1318.51, 1567.98]);
+    expect(bellBodies).toEqual(bodyFreqs);
 
     // Ses, 4000ms'lik başarım toast'ından UZUN sürmemeli (senkron)
     const lastStop = Math.max(...created.oscillators.map(stopsOf));
@@ -152,9 +165,9 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
   test('playLevelUpSound: vuruş 0.68s (faz 3 arma inişi), son nota 1.45s (faz 5 plaka) — faz senkronu', () => {
     playLevelUpSound();
 
-    // 5 sparkle çan (10) + 1 sub + 7 fanfar pad (14) + 5 taç çanı (10) = 35
-    expect(created.oscillators).toHaveLength(35);
-    expect(created.gains).toHaveLength(28); // 1 sub + 7 pad env + 10 sparkle env + 10 taç env
+    // 5 sparkle çan (15) + 2 sub (stereo) + 7 fanfar pad (14) + 5 taç çanı (15) = 46
+    expect(created.oscillators).toHaveLength(46);
+    expect(created.gains).toHaveLength(39); // 2 sub + 7 pad env + 10 bell × 3 env
 
     // FAZ 3 (680ms): Unvan Arması iniş vuruşu
     const impact = created.oscillators.find((o) => o.type === 'sine' && o.frequency.value === 150);
@@ -175,16 +188,20 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     expect(startsOf(finalBell!)).toBeCloseTo(11.45, 5);
   });
 
-  test('playLessonDoneSound: 4 nota × (temel + üst harmonik) = 8 osilatör üretmeli', () => {
+  test('playLessonDoneSound: 4 nota × (gövde + harmonik + parıltı) = 12 osilatör üretmeli', () => {
     playLessonDoneSound();
 
-    expect(created.oscillators).toHaveLength(8);
-    expect(created.gains).toHaveLength(8);
+    expect(created.oscillators).toHaveLength(12);
+    expect(created.gains).toHaveLength(12); // 4 bell × 3 env
 
-    const baseOscs = created.oscillators.filter((o) => o.type === 'sine');
+    // Gövde sine'leri (üst oktav parıltısı ×3 sine'lerinden tam frekansla ayrılır)
+    const bodyFreqs = [698.46, 880.0, 1046.5, 1318.51];
+    const baseOscs = created.oscillators.filter(
+      (o) => o.type === 'sine' && bodyFreqs.includes(o.frequency.value)
+    );
     const harmOscs = created.oscillators.filter((o) => o.type === 'triangle');
 
-    expect(baseOscs.map((o) => o.frequency.value)).toEqual([698.46, 880.0, 1046.5, 1318.51]);
+    expect(baseOscs.map((o) => o.frequency.value)).toEqual(bodyFreqs);
 
     // Üst harmonik = temel tonun 2 katı
     harmOscs.forEach((o, i) => {
@@ -196,36 +213,35 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     expect(startTimes).toEqual([10, 10.07, 10.14, 10.22]);
   });
 
-  test('playQuestCompleteSound: 3 riser + sub + 9 akor + 5 çan = 32 osilatör, PATLAMA tam 3.0s\'te', () => {
+  test('playQuestCompleteSound (Common tier): 7 marimba + 2 riser + 2 sub + 6 pad × 2 + 6 bell × 3 = 48 osilatör, PATLAMA tam 3.0s\'te', () => {
     playQuestCompleteSound();
 
-    // 3 riser + 1 sub-drop + 9 epic pad × 2 + 5 victory bell × 2 = 32
-    expect(created.oscillators).toHaveLength(32);
+    expect(created.oscillators).toHaveLength(48);
 
     const saws = created.oscillators.filter((o) => o.type === 'sawtooth');
     const triangles = created.oscillators.filter((o) => o.type === 'triangle');
     const sines = created.oscillators.filter((o) => o.type === 'sine');
-    expect(saws).toHaveLength(10);  // 1 riser + 9 akor gövdesi
-    expect(triangles).toHaveLength(15); // 1 riser + 9 akor + 5 çan harmoniği
-    expect(sines).toHaveLength(7);  // 1 riser + 1 sub + 5 çan gövdesi
+    expect(saws).toHaveLength(6);       // 6 pad saw gövdesi (Cmaj9)
+    expect(triangles).toHaveLength(20); // 7 marimba harm + 1 riser + 6 pad + 6 bell harm
+    expect(sines).toHaveLength(22);     // 7 marimba + 1 riser + 2 sub + 6 bell gövde + 6 bell parıltı
 
-    // Yükselen riser: C2 → C3 (0 - 3.0s)
-    const riserSaw = saws.find((o) => startsOf(o) === 10);
-    expect(riserSaw).toBeTruthy();
-    expect(riserSaw!.frequency.value).toBeCloseTo(65.41, 2);
-    expect(riserSaw!.frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(
-      130.81,
-      expect.closeTo(12.98, 3)
+    // Yükselen riser: C3 → C4 (0 - 2.96s) — ilk nabız 0.18s'te başlar, riser 10.0s'te
+    const riserSine = sines.find((o) => startsOf(o) === 10 && o.frequency.value === 130.81);
+    expect(riserSine).toBeTruthy();
+    expect(riserSine!.frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(
+      261.63,
+      expect.closeTo(12.9, 2)
     );
 
     // Görsel senkron: QuestCelebrationOverlay faz 1 tam 3000ms'de → drop = now+3.0
-    const drop = created.oscillators.find((o) => o.type === 'sine' && o.frequency.value === 160);
-    expect(drop).toBeTruthy();
-    expect(startsOf(drop!)).toBeCloseTo(13, 5);
+    // (stereo sub çifti 115 Hz'den açılır)
+    const dropSines = sines.filter((o) => o.frequency.value === 115);
+    expect(dropSines).toHaveLength(2);
+    dropSines.forEach((o) => expect(startsOf(o)).toBeCloseTo(13, 5));
 
-    // Orkestral akor da drop anında (13.0s) başlamalı
+    // Sıcak pad akoru da drop anında (13.0s) başlamalı
     const chordSaws = saws.filter((o) => startsOf(o) > 12);
-    expect(chordSaws).toHaveLength(9);
+    expect(chordSaws).toHaveLength(6);
     chordSaws.forEach((o) => expect(startsOf(o)).toBeCloseTo(13, 5));
   });
 
@@ -245,5 +261,58 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     // Master compressor çıkışa (destination) bağlı olmalı
     expect(created.compressors.length).toBeGreaterThan(0);
     expect(created.compressors[0].connect).toHaveBeenCalledWith({ name: 'fake-destination' });
+  });
+
+  test('playUiClickSound: her grup farklı frekans/karakter — primary/secondary/nav/rating', () => {
+    // primary: sıcak kadifemsi mallet (220 + 440 üst parlaklık)
+    playUiClickSound('primary');
+    expect(created.oscillators).toHaveLength(2);
+    expect(created.oscillators.map((o) => o.frequency.value)).toEqual([220 * 1.06, 440 * 1.06]);
+
+    // secondary: ince cam tick (523.25 + 783.99) — primary'den tamamen farklı
+    playUiClickSound('secondary');
+    const sec = created.oscillators.slice(2).map((o) => o.frequency.value);
+    expect(sec).toEqual([523.25 * 1.06, 783.99 * 1.06]);
+
+    // nav: yumuşak nefes (329.63 + 493.88)
+    playUiClickSound('nav');
+    const nav = created.oscillators.slice(4).map((o) => o.frequency.value);
+    expect(nav).toEqual([329.63 * 1.06, 493.88 * 1.06]);
+
+    // rating: cam pırıltı (587.33 + 880) — puanlama, diğer gruplardan farklı
+    playUiClickSound('rating');
+    const rating = created.oscillators.slice(6).map((o) => o.frequency.value);
+    expect(rating).toEqual([587.33 * 1.06, 880 * 1.06]);
+
+    // Mikro süre: hiçbir grup kutlama sesini ezmemeli (en uzun primary 150ms)
+    const durations = created.oscillators.map((o) => stopsOf(o) - startsOf(o));
+    expect(Math.max(...durations)).toBeLessThanOrEqual(0.18);
+  });
+
+  test('playRatingArpSound: yükselen E5→G5→B5→E6 Lydian arpeji, zirve notası en uzun', () => {
+    playRatingArpSound();
+
+    // 4 bell × 3 (gövde sine + harmonik triangle + üst oktav parıltısı) = 12 osilatör
+    expect(created.oscillators).toHaveLength(12);
+
+    // Gövde sine'leri (parıltı ×3 sine'lerinden tam frekansla ayrılır)
+    const bodyFreqs = [659.25, 783.99, 987.77, 1318.51];
+    const bodies = created.oscillators.filter(
+      (o) => o.type === 'sine' && bodyFreqs.includes(o.frequency.value)
+    );
+    expect(bodies.map((o) => o.frequency.value)).toEqual(bodyFreqs);
+
+    // 65ms arpej aralığı
+    const starts = bodies.map(startsOf);
+    expect(starts[1] - starts[0]).toBeCloseTo(0.065, 5);
+    expect(starts[2] - starts[1]).toBeCloseTo(0.065, 5);
+    expect(starts[3] - starts[2]).toBeCloseTo(0.07, 5);
+
+    // Zirve notası (E6) en uzun sürelidir
+    const bodyDurs = bodies.map((o) => stopsOf(o) - startsOf(o));
+    expect(bodyDurs[3]).toBeGreaterThan(bodyDurs[2]);
+
+    // Gövde + harmonikler, panner üzerinden dry+wet'e bağlı (stereo yayılım)
+    created.oscillators.forEach((o) => expect(o.connect).toHaveBeenCalled());
   });
 });
