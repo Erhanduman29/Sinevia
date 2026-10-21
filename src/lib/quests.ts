@@ -10,6 +10,10 @@ export interface QuestDef {
   rarity: QuestRarity;
   icon: string;
   xpReward: number;
+  /** XP'ye ek olarak verilecek SineCoin (verilmezse rarity ödülü kullanılır). */
+  coinReward?: number;
+  /** XP'ye ek olarak envantere eklenecek pazar item'ı. */
+  itemReward?: string;
 }
 
 export const RARITY_STYLES: Record<QuestRarity, { color: string; border: string; bg: string; shadow: string }> = {
@@ -20,7 +24,7 @@ export const RARITY_STYLES: Record<QuestRarity, { color: string; border: string;
   mythic: { color: 'text-red-500', border: 'border-red-600/70', bg: 'bg-red-600/20', shadow: 'shadow-[0_0_25px_rgba(220,38,38,0.6)]' },
 };
 
-// TOPLAM 50 GÖREV: 20 Common, 15 Rare, 8 Epic, 5 Legendary, 2 Mythic
+// TOPLAM 65 GÖREV: 24 Common, 19 Rare, 11 Epic, 7 Legendary, 4 Mythic
 export const QUEST_DEFS: QuestDef[] = [
   // --- YAYGIN (COMMON) - 20 Görev ---
   { id: 'c_picky_taste', title: 'Hassas Kalibrasyon', description: 'Bir filme küsuratlı olarak tam "7.5" veya "8.5" puan ver.', rarity: 'common', icon: '⚖️', xpReward: 40 },
@@ -81,6 +85,23 @@ export const QUEST_DEFS: QuestDef[] = [
   // --- GİZLİ (MYTHIC - BOSS) - 2 Görev ---
   { id: 'm_hater', title: 'Kıyamet Jürisi', description: 'Arka arkaya izlediğin 3 filme de 3 ve altı puan verdin!', rarity: 'mythic', icon: '🧨', xpReward: 500 },
   { id: 'm_impatient', title: 'Acil Tahliye', description: 'Sayacı başlayan bir filmi ilk 15 dakikasında iptal ettin!', rarity: 'mythic', icon: '🏃', xpReward: 500 },
+
+  // --- GENİŞLETİLMİŞ GÖREV SETİ (+15) ---
+  { id: 'c_night_series', title: 'Gece Nöbeti', description: 'Gece 22:00 ile 04:00 arasında bir dizi bölümü izle.', rarity: 'common', icon: '🌙', xpReward: 50, coinReward: 25 },
+  { id: 'c_series_note', title: 'Bölüm Karnesi', description: 'Bir dizi bölümüne 7+ puan ver ve en az 30 karakterlik not yaz.', rarity: 'common', icon: '📝', xpReward: 55, itemReward: 'card_first_screening' },
+  { id: 'c_three_genres', title: 'Tür Atlası', description: 'Görevi aldıktan sonra 3 farklı türde film izle.', rarity: 'common', icon: '🧭', xpReward: 50, coinReward: 30 },
+  { id: 'c_short_episode', title: 'Kısa Bölüm', description: 'Süresi 30 dakika veya altında olan bir dizi bölümü izle.', rarity: 'common', icon: '⏱️', xpReward: 50, itemReward: 'util_contract_reroll' },
+  { id: 'r_series_marathon', title: 'Dörtlü Bölüm', description: 'Aynı diziden aynı gün 4 bölüm izle.', rarity: 'rare', icon: '📺', xpReward: 120, coinReward: 60 },
+  { id: 'r_movie_series_day', title: 'Çift Format', description: 'Aynı gün 1 film ve 2 dizi bölümü izle.', rarity: 'rare', icon: '🎭', xpReward: 130, itemReward: 'frame_silver' },
+  { id: 'r_documentary_pair', title: 'Belgesel İkizi', description: 'Görevi aldıktan sonra 2 belgesel film bitir.', rarity: 'rare', icon: '📚', xpReward: 110, coinReward: 55 },
+  { id: 'r_series_high', title: 'Yüksek Bölüm', description: '3 dizi bölümüne 9 veya üzeri puan ver.', rarity: 'rare', icon: '🌟', xpReward: 140, itemReward: 'badge_popcorn' },
+  { id: 'e_season_binge', title: 'Sezon Yüklemesi', description: 'Aynı gün içinde 6 dizi bölümü izle.', rarity: 'epic', icon: '🚀', xpReward: 320, coinReward: 140 },
+  { id: 'e_weekend_binge', title: 'Hafta Sonu Kuşağı', description: 'Cuma, Cumartesi veya Pazar günü 6 dizi bölümü izle.', rarity: 'epic', icon: '🛋️', xpReward: 340, itemReward: 'frame_neon' },
+  { id: 'e_genre_marathon', title: 'Tür Maratonu', description: 'Aynı gün aynı türden 4 film bitir.', rarity: 'epic', icon: '🎯', xpReward: 330, coinReward: 130 },
+  { id: 'l_series_devotion', title: 'Dizi Adanmışı', description: 'Görevi aldıktan sonra toplam 15 dizi bölümü izle.', rarity: 'legendary', icon: '🏵️', xpReward: 800, itemReward: 'title_culture' },
+  { id: 'l_cinema_century', title: 'On Film Yemini', description: 'Görevi aldıktan sonra 10 film bitir.', rarity: 'legendary', icon: '🎞️', xpReward: 900, coinReward: 300 },
+  { id: 'm_series_hater', title: 'Dizi Celladı', description: 'Arka arkaya 3 dizi bölümüne 3 veya altı puan ver.', rarity: 'mythic', icon: '🥶', xpReward: 1000, itemReward: 'card_cult' },
+  { id: 'm_binge_queen', title: 'Binge Kraliçesi', description: 'Aynı gün içinde 10 dizi bölümü izle.', rarity: 'mythic', icon: '👑', xpReward: 1100, itemReward: 'frame_cosmic' },
 ];
 
 /* ══════════════════════════════════════════════════════════════════════════

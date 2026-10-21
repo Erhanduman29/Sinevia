@@ -9,7 +9,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, getNextUnwatchedEpisode } from '../lib/utils';
 import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
-import { searchTMDBSeries, fetchSeriesSeasonCounts } from '../lib/tmdb';
+import { searchTMDBSeries, fetchSeriesSeasonDetails } from '../lib/tmdb';
 import { useFilteredSeries } from '../lib/selectorHooks';
 import { openPlatform, listLibraryPlatforms } from '../lib/platformLinks';
 import AddSeriesModal from '../components/AddSeriesModal';
@@ -709,7 +709,7 @@ function saveKeptRatings(map: Record<string, number>) {
 }
 
 export default function SeriesPage() {
-  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia, addEpisodes } = useApp();
+  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia, addEpisodes, setSeriesRuntime } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
   const [pickedSeriesItem, setPickedSeriesItem] = useState<{ series: Series; episode: Episode } | null>(null);
@@ -823,19 +823,43 @@ export default function SeriesPage() {
 
     // FAZ 2 — Sezon & bölüm taraması: TMDB'de yeni sezon/var olan sezonda yeni
     // bölüm varsa listeye ekle (mevcut max+1'ten devam eder, silent — tek toast).
+    // Aynı taramada bölüm süreleri de toplanır: runtimes `${season}:${episode}` → dk
+    // olarak yazılır, ortalama süre dizinin episodeRuntime'ı olur.
     let addedEpisodes = 0;
     for (const s of data.series) {
       const tmdbId = resolvedTmdb.get(s.id) ?? s.tmdbId;
       if (!tmdbId) continue;
       try {
-        const remote = await fetchSeriesSeasonCounts(tmdbId);
+        const remote = await fetchSeriesSeasonDetails(tmdbId);
+        const runtimes: Record<string, number> = {};
+        const runtimeSamples: number[] = [];
+
         for (const { season, episodes } of remote) {
+          const seasonRuntimes: number[] = [];
+          for (const ep of episodes) {
+            if (typeof ep.runtime === 'number' && ep.runtime > 0) {
+              runtimes[`${season}:${ep.episode}`] = ep.runtime;
+              runtimeSamples.push(ep.runtime);
+              seasonRuntimes.push(ep.runtime);
+            }
+          }
           const inSeason = s.episodes.filter((e) => e.season === season);
           const maxEp = inSeason.length > 0 ? Math.max(...inSeason.map((e) => e.episode)) : 0;
-          if (episodes > maxEp) {
-            addEpisodes(s.id, season, episodes - maxEp, true);
-            addedEpisodes += episodes - maxEp;
+          const total = episodes.length;
+          if (total > maxEp) {
+            const avgForSeason = seasonRuntimes.length > 0
+              ? Math.round(seasonRuntimes.reduce((a, b) => a + b, 0) / seasonRuntimes.length)
+              : s.episodeRuntime;
+            addEpisodes(s.id, season, total - maxEp, true, avgForSeason);
+            addedEpisodes += total - maxEp;
           }
+        }
+
+        const avgRuntime = runtimeSamples.length > 0
+          ? Math.round(runtimeSamples.reduce((a, b) => a + b, 0) / runtimeSamples.length)
+          : s.episodeRuntime;
+        if (avgRuntime || Object.keys(runtimes).length > 0) {
+          setSeriesRuntime(s.id, avgRuntime, runtimes);
         }
       } catch (e) {
         console.error(`Bölüm taraması hatası (${s.title}):`, e);
@@ -1433,10 +1457,17 @@ export default function SeriesPage() {
                       seasons.map((season) => {
                         const eps = s.episodes.filter((e) => e.season === season).sort((a, b) => a.episode - b.episode);
                         const seasonAllWatched = eps.length > 0 && eps.every((e) => e.watched);
+                        const ratedRuntime = eps.reduce((sum, e) => sum + (e.runtime || 0), 0);
+                        const seasonMinutes = ratedRuntime > 0 ? ratedRuntime : (s.episodeRuntime || 0) * eps.length;
                         return (
                           <div key={season} className="svp-season-block p-2.5 sm:p-4 border-b last:border-0">
                             <div className="svp-season mb-2 sm:mb-2.5 flex items-center gap-2">
                               {season}. Sezon
+                              {seasonMinutes > 0 && (
+                                <span className="svp-mono" style={{ textTransform: 'none', letterSpacing: '.04em' }}>
+                                  · toplam {Math.floor(seasonMinutes / 60)} sa {seasonMinutes % 60} dk
+                                </span>
+                              )}
                               {seasonAllWatched && (
                                 <span className="svp-done-tag"><Check size={10} /> Tamamlandı</span>
                               )}
@@ -1680,8 +1711,23 @@ function EpisodeBox({
           <Lock size={12} />
         )}
       </button>
-      <div className={`svp-ep-num ${episode.watched ? 'opacity-60' : ''}`}>
-        {episode.episode}
+      <div className={`svp-ep-num ${episode.watched ? 'opacity-60' : ''} flex items-center justify-center gap-1`}>
+        <span>{episode.episode}</span>
+        {episode.runtime ? (
+          <span
+            title={`${episode.runtime} dakika`}
+            style={{
+              fontSize: '8px',
+              lineHeight: 1.3,
+              padding: '0 3px',
+              borderRadius: '4px',
+              border: '1px solid var(--svp-line2)',
+              color: 'var(--svp-muted)',
+            }}
+          >
+            {episode.runtime} dk
+          </span>
+        ) : null}
       </div>
       {showActions && (
         <button

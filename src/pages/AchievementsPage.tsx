@@ -3,6 +3,8 @@ import * as Icons from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS, TIER_ORDER, AchievementIcon } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
+import { TIER_COIN_REWARDS } from '../lib/coins';
+import { SineCoinIcon } from '../components/CoinPill';
 import { RANK_TIERS } from '../lib/rankTiers';
 import QuestBoard from '../components/QuestBoard';
 import TitleGallery from '../components/TitleGallery';
@@ -264,6 +266,22 @@ const ACHV_SOLID_CSS = `
   color:var(--tier-badge-text);
   flex-shrink:0;
 }
+.achv-coin-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2.5px 8px;
+  border-radius:999px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  font-weight:900;
+  color:#FDE68A;
+  background:linear-gradient(135deg, rgba(245,158,11,.18), rgba(120,53,15,.28));
+  border:1px solid rgba(245,158,11,.38);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.12);
+  flex-shrink:0;
+}
+.achv-card{height:100%;min-height:200px;}
 
 /* İlerleme Çubuğu (Canlı Gradyan) */
 .achv-track{
@@ -878,7 +896,7 @@ export default function AchievementsPage() {
           {/* BAŞARIM KARTLARI LİSTESİ */}
           <div
             data-tutorial="ach-grid"
-            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4 pb-8"
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 auto-rows-fr gap-3.5 sm:gap-4 pb-8"
           >
             {filteredAchievements.map((a) => {
               const tierKey = a.tier.tier as string;
@@ -945,6 +963,11 @@ export default function AchievementsPage() {
                               </span>
                             )}
 
+                            <span className="achv-coin-chip" title="Kazanılan SineCoin">
+                              <SineCoinIcon className="h-3.5 w-3.5" />
+                              +{TIER_COIN_REWARDS[a.tier.tier] || 0} SC
+                            </span>
+
                             {isSecret && isTestMode && (
                               <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border bg-[#2C0B16] text-rose-300 border-rose-700">
                                 Gizli
@@ -958,7 +981,7 @@ export default function AchievementsPage() {
                         </div>
 
                         <h3
-                          className={`mt-2 text-base sm:text-[16.5px] font-black tracking-tight leading-snug ${
+                          className={`mt-2 text-base sm:text-[16.5px] font-black tracking-tight leading-snug line-clamp-2 min-h-[2.6rem] ${
                             isLocked ? 'text-zinc-100' : 'text-white'
                           }`}
                         >
@@ -966,7 +989,7 @@ export default function AchievementsPage() {
                         </h3>
 
                         <p
-                          className={`text-xs sm:text-[13px] leading-relaxed mt-1 ${
+                          className={`text-xs sm:text-[13px] leading-relaxed mt-1 line-clamp-2 min-h-[2.5rem] ${
                             isLocked ? 'text-zinc-400' : 'text-zinc-300'
                           }`}
                         >

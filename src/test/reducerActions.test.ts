@@ -294,10 +294,13 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
 
     const s1 = rootReducer(state, { type: 'CONSUME_NEXT_TOAST' } as any);
     expect(s1.pendingXpGain).toEqual({ gained: 5, oldTotal: 0, newTotal: 5 });
+    expect(s1.pendingCoinGain).toEqual({ amount: 10, label: '3 başarım ödülü', final: false });
     const s2 = rootReducer(s1, { type: 'CONSUME_NEXT_TOAST' } as any);
     expect(s2.pendingXpGain).toEqual({ gained: 50, oldTotal: 5, newTotal: 55 });
+    expect(s2.pendingCoinGain).toEqual({ amount: 60, label: '3 başarım ödülü', final: false });
     const s3 = rootReducer(s2, { type: 'CONSUME_NEXT_TOAST' } as any);
     expect(s3.pendingXpGain).toEqual({ gained: 15, oldTotal: 55, newTotal: 70 });
+    expect(s3.pendingCoinGain).toEqual({ amount: 80, label: '3 başarım ödülü', final: true });
     expect(s3.pendingToasts).toHaveLength(0);
   });
 

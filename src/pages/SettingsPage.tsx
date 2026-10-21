@@ -1124,7 +1124,7 @@ export default function SettingsPage() {
           ownedGroupIds = ((ownedGroups as { id: string }[] | null) || []).map((g) => g.id);
         } catch { /* yoksay — grup yoksa mesaj temizliği atlanır */ }
 
-        const tasks: Promise<unknown>[] = [
+        const tasks: PromiseLike<unknown>[] = [
           supabase.storage.from('sinevia_saves').remove([`${agentId}.json`]),
           supabase.from('profiles').delete().eq('agent_id', agentId),
           supabase.from('network_logs').delete().eq('agent_id', agentId),

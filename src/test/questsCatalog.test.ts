@@ -8,15 +8,15 @@ import type { QuestDef } from '../lib/quests';
 const RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'] as const;
 
 describe('GÖREV KATALOGU (QUEST_DEFS) BÜTÜNLÜK TESTLERİ', () => {
-  test('Toplam 50 görev tanımlı olmalı ve nadirlik dağılımı dokümante edilmiş gibi olmalı', () => {
-    expect(QUEST_DEFS).toHaveLength(50);
+  test('Toplam 65 görev tanımlı olmalı ve nadirlik dağılımı dokümante edilmiş gibi olmalı', () => {
+    expect(QUEST_DEFS).toHaveLength(65);
 
     const counts = RARITIES.reduce((acc, r) => {
       acc[r] = QUEST_DEFS.filter((q) => q.rarity === r).length;
       return acc;
     }, {} as Record<string, number>);
 
-    expect(counts).toEqual({ common: 20, rare: 15, epic: 8, legendary: 5, mythic: 2 });
+    expect(counts).toEqual({ common: 24, rare: 19, epic: 11, legendary: 7, mythic: 4 });
   });
 
   test('görev kimlikleri (id) benzersiz olmalı', () => {

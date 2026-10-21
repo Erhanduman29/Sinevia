@@ -406,6 +406,66 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
   // --- GİZLİ BAŞARIM (tüm tutorialer bitince açılır; elmas) ---
   { id: 'tutorial_explorer', name: 'Sinevia Kâşifi', description: 'Uygulamanın her köşesini gezdin, her tutoriali tamamladın.', icon: 'Compass', hidden: true, secret: true, category: 'Özel', tiers: [
     { threshold: TUTORIAL_TOTAL_UNITS, xp: 400, tier: 'diamond', name: 'Sinevia Kâşifi' }
+  ]},
+
+  // --- DİZİ SÜRESİ BAŞARIMLARI ---
+  { id: 'series_time', name: 'Dizi Süresi Ustası', description: 'Dizilerde toplam {threshold} dakika izle.', icon: 'Tv', hidden: false, secret: false, category: 'Diziler', tiers: [
+    { threshold: 600, xp: 20, tier: 'bronze', name: 'İlk Bölümler' },
+    { threshold: 3000, xp: 50, tier: 'silver', name: 'Sezon Gezgini' },
+    { threshold: 9000, xp: 120, tier: 'gold', name: 'Dizi Maratoncusu' },
+    { threshold: 24000, xp: 250, tier: 'platinum', name: 'Ekran Bağımlısı' },
+    { threshold: 60000, xp: 600, tier: 'emerald', name: 'Sonsuz Sezon' },
+    { threshold: 150000, xp: 1200, tier: 'diamond', name: 'Zaman Yolcusu' }
+  ]},
+  { id: 'series_binge_time', name: 'Tek Oturum Efsanesi', description: 'Tek günde dizilerde toplam {threshold} dakika izle.', icon: 'Clock', hidden: false, secret: false, category: 'Diziler', tiers: [
+    { threshold: 120, xp: 15, tier: 'bronze', name: 'Kısa Seans' },
+    { threshold: 300, xp: 30, tier: 'silver', name: 'Uzun Akşam' },
+    { threshold: 600, xp: 60, tier: 'gold', name: 'Gece Kuşu' },
+    { threshold: 900, xp: 120, tier: 'platinum', name: 'Binge Başlangıcı' },
+    { threshold: 1200, xp: 300, tier: 'emerald', name: 'Dizi Fırtınası' },
+    { threshold: 1800, xp: 600, tier: 'diamond', name: 'Uykusuz Efsane' }
+  ]},
+  { id: 'series_complete_time', name: 'Tamamlanmış Koleksiyon', description: 'Tamamen bitirdiğin dizilerin toplam süresi {threshold} dakika olsun.', icon: 'Timer', hidden: false, secret: false, category: 'Diziler', tiers: [
+    { threshold: 1200, xp: 25, tier: 'bronze', name: 'İlk Final' },
+    { threshold: 6000, xp: 60, tier: 'silver', name: 'Koleksiyoner' },
+    { threshold: 18000, xp: 150, tier: 'gold', name: 'Sezon Arşivcisi' },
+    { threshold: 48000, xp: 300, tier: 'platinum', name: 'Dizi Müzesi' },
+    { threshold: 120000, xp: 750, tier: 'emerald', name: 'Yayın İmparatoru' },
+    { threshold: 300000, xp: 1500, tier: 'diamond', name: 'Ekran Tanrısı' }
+  ]},
+
+  // --- PAZAR BAŞARIMLARI ---
+  { id: 'market_buyer', name: 'Pazar Müşterisi', description: 'Pazardan {threshold} kez alışveriş yap.', icon: 'ShoppingBag', hidden: false, secret: false, category: 'Pazar', tiers: [
+    { threshold: 1, xp: 10, tier: 'bronze', name: 'İlk Alışveriş' },
+    { threshold: 5, xp: 20, tier: 'silver', name: 'Vitrin Gezgini' },
+    { threshold: 15, xp: 50, tier: 'gold', name: 'Sadık Müşteri' },
+    { threshold: 30, xp: 120, tier: 'platinum', name: 'Pazar Ustası' },
+    { threshold: 50, xp: 300, tier: 'emerald', name: 'Koleksiyon Tüccarı' },
+    { threshold: 100, xp: 700, tier: 'diamond', name: 'Sinevia Borsası' }
+  ]},
+  { id: 'market_spender', name: 'SineCoin Sirkülasyonu', description: 'Pazarda toplam {threshold} SineCoin harca.', icon: 'Coins', hidden: false, secret: false, category: 'Pazar', tiers: [
+    { threshold: 500, xp: 10, tier: 'bronze', name: 'İlk Harcama' },
+    { threshold: 2000, xp: 25, tier: 'silver', name: 'Bütçe Planlayıcı' },
+    { threshold: 5000, xp: 60, tier: 'gold', name: 'Pazar Yatırımcısı' },
+    { threshold: 15000, xp: 150, tier: 'platinum', name: 'SineCoin Balinası' },
+    { threshold: 40000, xp: 400, tier: 'emerald', name: 'Ekonomi Motoru' },
+    { threshold: 100000, xp: 900, tier: 'diamond', name: 'Pazar İmparatoru' }
+  ]},
+  { id: 'contract_finisher', name: 'Taahhüt Ustası', description: '{threshold} pazar görevini zamanında tamamla.', icon: 'ClipboardCheck', hidden: false, secret: false, category: 'Pazar', tiers: [
+    { threshold: 1, xp: 15, tier: 'bronze', name: 'İlk Teslim' },
+    { threshold: 5, xp: 35, tier: 'silver', name: 'Güvenilir Oyuncu' },
+    { threshold: 15, xp: 90, tier: 'gold', name: 'Taahhüt Ustası' },
+    { threshold: 30, xp: 200, tier: 'platinum', name: 'Kusursuz Sicil' },
+    { threshold: 60, xp: 500, tier: 'emerald', name: 'Pazar Profesyoneli' },
+    { threshold: 100, xp: 1100, tier: 'diamond', name: 'Efsanevi Yüklenici' }
+  ]},
+
+  // --- GİZLİ PAZAR BAŞARIMLARI ---
+  { id: 'weekly_contract_fail', name: 'Kırık Taahhüt', description: 'Bir haftalık pazar görevini süresi içinde tamamlayamadın.', icon: 'Unlink', hidden: true, secret: true, category: 'Gizli', tiers: [
+    { threshold: 1, xp: 15, tier: 'bronze', name: 'Kırık Taahhüt' }
+  ]},
+  { id: 'contract_cancelled', name: 'Yarıda Kalan Seans', description: 'Aktif bir pazar görevini kendi isteğinle iptal ettin.', icon: 'XCircle', hidden: true, secret: true, category: 'Gizli', tiers: [
+    { threshold: 1, xp: 10, tier: 'bronze', name: 'Yarıda Kalan Seans' }
   ]}
 ];
 

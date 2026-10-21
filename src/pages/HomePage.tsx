@@ -8,6 +8,9 @@ import {
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
 import { QUEST_DEFS, QuestIcon } from '../lib/quests';
+import { CONTRACT_MAP, CONTRACT_FAILURE_PENALTY, METRIC_LABELS } from '../lib/contracts';
+import { MARKET_ITEM_MAP } from '../lib/marketItems';
+import CoinPill, { SineCoinIcon } from '../components/CoinPill';
 import { levelFromXp } from '../lib/xp';
 import { ACHIEVEMENT_DEFS, AchievementIcon } from '../lib/achievements';
 import { getNextUnwatchedEpisode, formatDateShort, todayStr, normalize, ratingBgClass } from '../lib/utils';
@@ -289,6 +292,25 @@ const HOME_PREMIUM_CSS = `
   font-weight:700;
   color:var(--muted,#9a9a96);
 }
+button.snv-readout-box{
+  text-align:left;
+  font:inherit;
+  cursor:pointer;
+  transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease,background .22s ease;
+}
+button.snv-readout-box:hover{
+  transform:translateY(-2px);
+  border-color:rgba(245,158,11,.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 10px 28px -12px rgba(245,158,11,.55);
+}
+.snv-readout-box.is-coin{
+  border-color:rgba(245,158,11,.28);
+  background:linear-gradient(145deg,rgba(245,158,11,.13),rgba(120,53,15,.08));
+}
+.snv-readout-box.is-coin .snv-readout-top{color:#fcd34d}
+.snv-readout-box.is-coin .snv-readout-num em{color:#fbbf24}
+.snv-coin-arrow{color:#fbbf24;font-size:12px;transition:transform .2s ease}
+button.snv-readout-box.is-coin:hover .snv-coin-arrow{transform:translateX(3px)}
 
 /* 2. KATMAN: İKİ BÜYÜK PRESTİJ VİTRİNİ (UNVAN YOLU & AKTİF ROZET) */
 .snv-showcase-deck{
@@ -921,6 +943,7 @@ body[data-theme="sepia"] .snv-title-pill svg{
     padding:10px 12px;
     border-radius:13px;
   }
+  .snv-readout-box.is-coin{grid-column:1/-1;}
   .snv-readout-top{font-size:8.5px;letter-spacing:.1em}
   .snv-readout-num b{font-size:22px}
   .snv-readout-num em{font-size:9.5px}
@@ -1142,7 +1165,7 @@ export default function HomePage() {
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, showToast
   } = useApp();
 
-  const { questState } = useQuests();
+  const { questState, activeContract, activeContractProgress, activeContractRemaining } = useQuests();
 
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
   const [showPick, setShowPick] = useState(false);
@@ -1355,6 +1378,9 @@ export default function HomePage() {
   }, [lvl.level]);
 
   const userPersona = RANK_TIERS[currentRankIndex];
+  const equippedFrame = data.equipped?.frameId ? MARKET_ITEM_MAP.get(data.equipped.frameId) : null;
+  const equippedTitle = data.equipped?.titleId ? MARKET_ITEM_MAP.get(data.equipped.titleId) : null;
+  const equippedBadge = data.equipped?.badgeId ? MARKET_ITEM_MAP.get(data.equipped.badgeId) : null;
   const nextRank = RANK_TIERS[currentRankIndex + 1] || null;
   const CurrentRankIcon = userPersona.icon;
   const NextRankIcon = nextRank ? nextRank.icon : Crown;
@@ -1374,6 +1400,11 @@ export default function HomePage() {
 
   const navigateTo = (tabId: string) => {
     window.dispatchEvent(new CustomEvent('navigate-tab', { detail: tabId }));
+  };
+
+  const openMarketInventory = () => {
+    window.dispatchEvent(new CustomEvent('sinevia-open-market-tab', { detail: 'inventory' }));
+    navigateTo('market');
   };
 
   const goToAchievements = (action: 'trophies' | 'quests' | 'titles') => {
@@ -1459,7 +1490,7 @@ export default function HomePage() {
           {/* 1. ÜST KİMLİK & BÜYÜK DENEYİM / SERİ GÖSTERGELERİ */}
           <div className="snv-hero-top">
             <div className="snv-hero-identity">
-              <div className="snv-crest-orb">
+              <div className={`snv-crest-orb ${equippedFrame?.frameClass || ''}`}>
                 <svg className="snv-crest-ring" viewBox="0 0 112 112" aria-hidden="true">
                   <circle cx="56" cy="56" r={circleRadius} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="3.5" />
                   <circle
@@ -1488,8 +1519,13 @@ export default function HomePage() {
                     title="Unvan Kütüğünü Aç"
                     onClick={() => goToAchievements('titles')}
                   >
-                    <Crown size={12} /> {userPersona.title}
+                    <Crown size={12} /> {equippedTitle?.titleText || userPersona.title}
                   </button>
+                  {equippedBadge?.badgeText && (
+                    <span className="snv-title-pill" title={equippedBadge.name}>
+                      <Sparkles size={12} /> {equippedBadge.badgeText}
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="snv-code-btn"
@@ -1539,6 +1575,21 @@ export default function HomePage() {
                   Sv.{lvl.level + 1} için {xpToNext.toLocaleString('tr-TR')} XP kaldı
                 </div>
               </div>
+
+              {/* SineCoin Bakiyesi — tıklayınca envanter */}
+              <button type="button" className="snv-readout-box is-coin" onClick={openMarketInventory}>
+                <div className="snv-readout-top">
+                  <span className="inline-flex items-center gap-1.5">
+                    <SineCoinIcon className="h-3.5 w-3.5" /> SineCoin
+                  </span>
+                  <span className="snv-coin-arrow">→</span>
+                </div>
+                <div className="snv-readout-num">
+                  <b>{(data.coins || 0).toLocaleString('tr-TR')}</b>
+                  <em>SC</em>
+                </div>
+                <div className="snv-readout-foot">Envanteri Aç</div>
+              </button>
             </div>
           </div>
 
@@ -1714,8 +1765,130 @@ export default function HomePage() {
       </section>
 
       {/* ==============================
-          HIZLI ERİŞİM BUTONLARI
+          PAZAR GÖREVLERİ
           ============================== */}
+      <section className="hn-sec">
+        <div className="hn-sec-t">
+          <span className="hn-idx">{nextSectionIdx()}</span>
+          <h2>Pazar Görevleri</h2>
+          <span className="ln" />
+          <button type="button" className="hn-more" onClick={() => navigateTo('market')}>
+            Pazara Git <ChevronRight size={13} />
+          </button>
+        </div>
+
+        <div className="relative overflow-hidden rounded-3xl border border-gold-500/25 bg-gradient-to-br from-[#191307] via-ink-900 to-[#0b0b12] p-4 shadow-[0_18px_50px_-24px_rgba(245,158,11,0.55)] sm:p-5">
+          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-gold-500/15 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 -left-16 h-52 w-52 rounded-full bg-amber-400/10 blur-3xl" />
+          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold-400/70 to-transparent" />
+
+          <div className="relative grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="min-w-0">
+              <div className="mb-2.5 flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] ${
+                  activeContract
+                    ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                    : 'border-gold-400/30 bg-gold-500/10 text-gold-300'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${activeContract ? 'animate-pulse bg-emerald-400' : 'bg-gold-400'}`} />
+                  {activeContract ? 'Aktif Görev' : 'Yeni Fırsatlar'}
+                </span>
+                {activeContract && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-ink-200">
+                    <Timer size={10} /> {activeContractRemaining}
+                  </span>
+                )}
+              </div>
+
+              {activeContract ? (() => {
+                const def = CONTRACT_MAP.get(activeContract.contractId);
+                const percent = activeContractProgress?.percent || 0;
+                return (
+                  <div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gold-400/25 bg-gold-500/10 text-lg shadow-inner">
+                        {def?.icon || '🎯'}
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-black text-white">{def?.title || 'Aktif Pazar Görevi'}</h3>
+                        <p className="mt-0.5 line-clamp-1 text-[11px] text-ink-400">{def?.description}</p>
+                      </div>
+                    </div>
+
+                    {def && (
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-lg border border-azure-400/25 bg-azure-500/10 px-2 py-1 text-[10px] font-black text-azure-300">
+                          +{def.xpReward} XP
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-lg border border-gold-400/30 bg-gold-500/10 px-2 py-1 text-[10px] font-black text-gold-200">
+                          <SineCoinIcon className="h-3 w-3" /> +{def.coinReward} SC
+                        </span>
+                        <span className="rounded-lg border border-rose-400/20 bg-rose-500/10 px-2 py-1 text-[10px] font-bold text-rose-300">
+                          −{CONTRACT_FAILURE_PENALTY[def.rarity]} SC ceza
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="mt-3.5">
+                      <div className="mb-1.5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.16em] text-ink-400">
+                        <span>İlerleme</span>
+                        <span className="text-gold-300">%{percent}</span>
+                      </div>
+                      <div className="h-2.5 overflow-hidden rounded-full border border-white/5 bg-black/40">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-amber-500 via-gold-400 to-yellow-200 shadow-[0_0_12px_rgba(245,158,11,0.65)] transition-all duration-500"
+                          style={{ width: `${Math.max(percent, 2)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-ink-300">
+                      {(activeContractProgress?.requirements || []).map((req) => (
+                        <span key={req.metric} className={`rounded-md border px-1.5 py-0.5 ${req.met ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-white/5 bg-white/[0.03]'}`}>
+                          {METRIC_LABELS[req.metric]}: {Math.min(req.current, req.target)}/{req.target}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="flex items-start gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gold-400/30 bg-gradient-to-br from-gold-500/25 to-amber-600/10 shadow-[0_0_22px_-6px_rgba(245,158,11,0.6)]">
+                    <SineCoinIcon className="h-7 w-7" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black text-white">Pazardan görev al, XP ve SineCoin kazan</h3>
+                    <p className="mt-1 text-[11px] leading-relaxed text-ink-400">
+                      Günlük ve haftalık görevler haftada bir yenilenir. Aynı anda yalnızca 1 görev aktif olabilir.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="rounded-md border border-azure-400/20 bg-azure-500/10 px-2 py-0.5 text-[9px] font-black text-azure-300">Günlük görevler</span>
+                      <span className="rounded-md border border-gold-400/25 bg-gold-500/10 px-2 py-0.5 text-[9px] font-black text-gold-200">Haftalık sözleşmeler</span>
+                      <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-black text-ink-200">1 aktif görev</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-row items-center justify-between gap-2.5 border-t border-white/5 pt-3 sm:min-w-[184px] sm:flex-col sm:items-end sm:border-0 sm:pt-0">
+              <CoinPill amount={data.coins || 0} onClick={() => navigateTo('market')} />
+              <button
+                type="button"
+                onClick={() => navigateTo('market')}
+                className="group inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-gold-400 to-amber-500 px-4 py-2.5 text-xs font-black text-ink-950 shadow-[0_8px_24px_-8px_rgba(245,158,11,0.8)] transition hover:brightness-110 active:scale-[0.98]"
+              >
+                {activeContract ? 'Görevi Gör' : 'Görev Seç'}
+                <ChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+              </button>
+              <span className="hidden text-[9px] font-bold uppercase tracking-[0.14em] text-ink-500 sm:block">
+                Haftalık yenilenen vitrin
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div data-tutorial="home-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
         <button type="button" className="hn-btn hn-btn-p hn-action" onClick={() => setShowPick(true)}>
           <Shuffle size={13} /> Ne İzlesem

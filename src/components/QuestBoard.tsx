@@ -3,6 +3,8 @@ import { useQuests } from '../context/QuestContext';
 import { useTutorial } from '../context/TutorialContext';
 import { useSettings } from '../context/slices';
 import { QUEST_DEFS, RARITY_STYLES, QuestDef, QuestIcon } from '../lib/quests';
+import { LIFETIME_QUEST_COINS } from '../lib/coins';
+import { MARKET_ITEM_MAP } from '../lib/marketItems';
 import AcademyPage from '../pages/AcademyPage';
 import ConfirmDialog from './ConfirmDialog';
 import {
@@ -27,6 +29,14 @@ const RARITY_LABELS: Record<RarityKey, string> = {
   legendary: 'Efsanevi',
   mythic: 'Gizli Boss',
 };
+
+function questReward(def: QuestDef) {
+  if (def.itemReward) {
+    const item = MARKET_ITEM_MAP.get(def.itemReward);
+    return item ? `+ ${item.name}` : '+ Pazar itemi';
+  }
+  return `+ ${def.coinReward ?? LIFETIME_QUEST_COINS[def.rarity] ?? 20} SC`;
+}
 
 export default function QuestBoard() {
   const { questState, acceptQuest, rejectActiveQuest, equipBadge } = useQuests();
@@ -233,7 +243,7 @@ export default function QuestBoard() {
                     {offeredDef.description}
                   </p>
                   <div className="inline-flex items-center gap-2 bg-ink-950/90 px-4 py-2 rounded-xl border border-ink-800 text-xs font-black text-emerald-400 shadow-inner">
-                    <Sparkles size={15} /> Ödül: +{offeredDef.xpReward} XP &amp; Özel Arma
+                    <Sparkles size={15} /> Ödül: +{offeredDef.xpReward} XP · {questReward(offeredDef)}
                   </div>
                 </div>
               </div>
@@ -311,7 +321,7 @@ export default function QuestBoard() {
                       {RARITY_LABELS[activeDef.rarity]}
                     </span>
                     <span className="text-xs font-black text-emerald-400 tabular-nums">
-                      +{activeDef.xpReward} XP
+                      +{activeDef.xpReward} XP · {questReward(activeDef)}
                     </span>
                   </div>
                   <h3 className="text-xl sm:text-2xl font-black text-white mb-1.5 leading-tight drop-shadow-md">
@@ -550,7 +560,7 @@ export default function QuestBoard() {
                           {RARITY_LABELS[def.rarity]}
                         </span>
                         <span className="text-[10px] font-black text-emerald-400 tabular-nums">
-                          +{def.xpReward} XP
+                          +{def.xpReward} XP · {questReward(def)}
                         </span>
                       </div>
                     </div>

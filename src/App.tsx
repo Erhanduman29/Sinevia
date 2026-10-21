@@ -12,6 +12,7 @@ import AchievementsPage from './pages/AchievementsPage';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage';
 import AIPage from './pages/AIPage';
+import MarketPage from './pages/MarketPage';
 import WeeklyPlanPage from './pages/WeeklyPlanPage';
 import NetworkPage from './pages/NetworkPage'; // YENİ: Sinevia Ağı import edildi
 import Toasts from './components/Toasts';
@@ -19,6 +20,7 @@ import AchievementToasts from './components/AchievementToasts';
 import LevelUpModal from './components/LevelUpModal';
 import SeasonCompleteModal from './components/SeasonCompleteModal';
 import XpGainOverlay from './components/XpGainOverlay';
+import CoinGainOverlay from './components/CoinGainOverlay';
 import TutorialOverlay from './tutorial/TutorialOverlay';
 import AcademyCompanion from './tutorial/AcademyCompanion';
 import TutorialCenter from './tutorial/TutorialCenter';
@@ -38,6 +40,7 @@ const VALID_TABS: TabId[] = [
   'plan',
   'history',
   'achievements',
+  'market',
   'stats',
   'settings',
   'ai',
@@ -78,6 +81,7 @@ function AppContent() {
     dismissLevelUp,
     dismissSeasonComplete,
     xpGainData,
+    coinGainData,
   } = useApp();
   // Tutorial Merkezi kısayolla açılıp kapatılabilsin (Esc / F1).
   const { centerOpen, setCenterOpen } = useTutorial();
@@ -209,6 +213,7 @@ function AppContent() {
       {activeTab === 'plan' && <WeeklyPlanPage />}
       {activeTab === 'history' && <HistoryPage />}
       {activeTab === 'achievements' && <AchievementsPage />}
+      {activeTab === 'market' && <MarketPage />}
       {activeTab === 'stats' && <StatsPage />}
       {activeTab === 'settings' && <SettingsPage />}
       {activeTab === 'ai' && <AIPage />}
@@ -221,6 +226,10 @@ function AppContent() {
       <div className="relative z-[200]">
         {xpGainData && (
           <XpGainOverlay key={`${xpGainData.oldTotal}-${xpGainData.newTotal}`} />
+        )}
+
+        {coinGainData && (
+          <CoinGainOverlay key={`${coinGainData.amount}-${coinGainData.label}`} amount={coinGainData.amount} label={coinGainData.label} />
         )}
 
         <Toasts toasts={toasts} stackOffset={achievementToasts.length > 0 ? achievementToasts.length * 104 : 0} />

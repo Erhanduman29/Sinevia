@@ -598,6 +598,121 @@ function playHarmonicRiser(
   });
 }
 
+/**
+ * Tek bir tok SineCoin tıkırtısı: yumuşak temas gürültüsü, alçak metalik
+ * kısmi tonlar ve paranın ağırlığını hissettiren kısa bir bas gövdesi.
+ */
+function playCoinClink(
+  engine: { ctx: AudioContext; dry: AudioNode; wet: AudioNode },
+  startTime: number,
+  baseFreq: number,
+  pan: number,
+  volume: number,
+) {
+  const { ctx, dry, wet } = engine;
+  const out = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
+  if ('pan' in out) out.pan.setValueAtTime(pan, startTime);
+
+  // Tiz cızırtıyı kesen, gövdeyi öne çıkaran ortak renk filtresi.
+  const tone = ctx.createBiquadFilter();
+  tone.type = 'lowpass';
+  tone.frequency.setValueAtTime(5200, startTime);
+  tone.Q.setValueAtTime(0.55, startTime);
+  tone.connect(out);
+
+  out.connect(dry);
+
+  // Orta seviye reverb: kuru tıkırtıyı boğmadan mekân derinliği ekler.
+  const wetSend = ctx.createGain();
+  wetSend.gain.value = 0.36;
+  out.connect(wetSend);
+  wetSend.connect(wet);
+
+  // 1) Yumuşak temas gürültüsü (6 kHz cızırtısı yerine alçak-orta bant)
+  const noiseLen = Math.floor(ctx.sampleRate * 0.075);
+  const buffer = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+  const ch = buffer.getChannelData(0);
+  for (let i = 0; i < noiseLen; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / noiseLen) ** 2.4;
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(2150, startTime);
+  bp.Q.setValueAtTime(0.75, startTime);
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(volume * 0.28, startTime);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.065);
+  noise.connect(bp); bp.connect(noiseGain); noiseGain.connect(tone);
+  noise.start(startTime); noise.stop(startTime + 0.09);
+
+  // 2) Alçak, inharmonik ve uzun sönümlü metalik kısmi tonlar
+  const partials = [
+    { ratio: 1, gain: 0.5, decay: 0.72, type: 'triangle' as OscillatorType },
+    { ratio: 1.51, gain: 0.26, decay: 0.58, type: 'sine' as OscillatorType },
+    { ratio: 2.04, gain: 0.14, decay: 0.42, type: 'sine' as OscillatorType },
+    { ratio: 2.63, gain: 0.07, decay: 0.28, type: 'sine' as OscillatorType },
+  ];
+  partials.forEach((p) => {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    const freq = baseFreq * p.ratio;
+    osc.type = p.type;
+    osc.frequency.setValueAtTime(freq, startTime);
+    // Hafif aşağı kayma: temas anındaki metal gerilimi ve "tok" hissi.
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.984, startTime + Math.min(0.14, p.decay * 0.4));
+    osc.detune.setValueAtTime((Math.random() - 0.5) * 9, startTime);
+    g.gain.setValueAtTime(0.0001, startTime);
+    g.gain.exponentialRampToValueAtTime(volume * p.gain, startTime + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, startTime + p.decay);
+    osc.connect(g); g.connect(tone);
+    osc.start(startTime); osc.stop(startTime + p.decay + 0.03);
+  });
+
+  // 3) Paranın avuca düşme ağırlığı: alçak, yuvarlak bas gövdesi.
+  const thud = ctx.createOscillator();
+  const thudGain = ctx.createGain();
+  const thudFilter = ctx.createBiquadFilter();
+  thud.type = 'triangle';
+  thud.frequency.setValueAtTime(165, startTime);
+  thud.frequency.exponentialRampToValueAtTime(88, startTime + 0.24);
+  thudFilter.type = 'lowpass';
+  thudFilter.frequency.setValueAtTime(430, startTime);
+  thudGain.gain.setValueAtTime(0.0001, startTime);
+  thudGain.gain.exponentialRampToValueAtTime(volume * 0.34, startTime + 0.008);
+  thudGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.46);
+  thud.connect(thudFilter); thudFilter.connect(thudGain); thudGain.connect(tone);
+  thud.start(startTime); thud.stop(startTime + 0.5);
+}
+
+/**
+ * SineCoin kazanma / harcama için stereo, tok ve uzun kuyruklu para sesi.
+ * İlk temas → kısa stereo cascade → ağır oturma ve sıcak çan kuyruğu.
+ */
+export function playCoinSound() {
+  if (!isSoundEnabled()) return;
+  const engine = getAudioEngine();
+  if (!engine) return;
+  const now = engine.ctx.currentTime;
+
+  // Paraların avuca bıraktığı ağırlık (sinematik alt gövde).
+  playSubImpact(engine, now, 150, 52, 1.55, 0.14, 0);
+
+  // İlk temas: sağ-sol genişliğinde üç tok tıkırtı.
+  playCoinClink(engine, now, 1174.66, -0.38, 0.24);
+  playCoinClink(engine, now + 0.105, 1318.51, 0.4, 0.21);
+  playCoinClink(engine, now + 0.22, 1244.51, 0.02, 0.17);
+
+  // İkinci dalga: daha hafif, soldan sağa akan paralar.
+  playCoinClink(engine, now + 0.74, 1108.73, -0.46, 0.12);
+  playCoinClink(engine, now + 0.87, 1174.66, 0.48, 0.11);
+  playCoinClink(engine, now + 1.04, 987.77, 0.08, 0.1);
+
+  // Son paranın oturması + sıcak, alçak rezonans kuyruğu.
+  playCoinClink(engine, now + 1.58, 880, -0.08, 0.13);
+  playSubImpact(engine, now + 1.59, 122, 44, 1.85, 0.11, 0);
+  playHarmonicBell(engine, 587.33, now + 1.76, 2.5, 0.05, 0.16);
+}
+
 /* ============================================================================
    1. BAŞARIM / KUPA KAZANMA SESİ (PS5 Platinum Trophy / Xbox Rare Chime Stili)
    ============================================================================ */

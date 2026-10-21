@@ -132,6 +132,12 @@ export function evaluateQuestCompletion(
     new Date(h.ratingChangedAt as string).getTime() >= questAcceptedAt
   );
 
+  const episodeRuntimeOf = (e: WatchHistoryItem): number => {
+    const s = series.find(x => x.id === (e.seriesId || e.itemId));
+    const ep = s?.episodes.find(x => x.season === e.season && x.episode === e.episode);
+    return e.actualRuntime || e.originalRuntime || ep?.runtime || s?.episodeRuntime || 0;
+  };
+
   switch (questId) {
     case 'c_picky_taste': 
       return ratedMovies.some(m => m.rating === 7.5 || m.rating === 8.5);
@@ -161,9 +167,10 @@ export function evaluateQuestCompletion(
       return watchedMovies.some(m => m.note && m.note.length >= 50);
     case 'c_old_movie': 
       return watchedMovies.some(m => m.year && parseInt(m.year) < 2000);
-    case 'c_new_movie': 
+    case 'c_new_movie': {
       const currentYear = new Date().getFullYear().toString();
       return watchedMovies.some(m => m.year === currentYear);
+    }
     case 'c_weekend': 
       return watchedMovies.some(m => {
         if (!m.watchedAt) return false;
@@ -323,6 +330,67 @@ export function evaluateQuestCompletion(
         m.abandonedProgress.value > 0 &&
         m.abandonedProgress.value <= 15
       );
+
+    case 'c_night_series':
+      return watchedEpisodes.some(e => {
+        const hr = new Date(e.watchedAt).getHours();
+        return hr >= 22 || hr < 4;
+      });
+    case 'c_series_note':
+      return watchedEpisodes.some(e => (e.rating ?? 0) >= 7 && (e.note || '').length >= 30);
+    case 'c_three_genres':
+      return new Set(watchedMovies.map(m => m.genres?.[0]).filter(Boolean)).size >= 3;
+    case 'c_short_episode':
+      return watchedEpisodes.some(e => episodeRuntimeOf(e) > 0 && episodeRuntimeOf(e) <= 30);
+    case 'r_series_marathon':
+      return hasSeriesClusterSameDay(watchedEpisodes, 4);
+    case 'r_movie_series_day': {
+      const days = new Set(watchedMovies.map(m => toDayKey(m.watchedAt)).filter(Boolean));
+      for (const day of days) {
+        if (watchedEpisodes.filter(e => toDayKey(e.watchedAt) === day).length >= 2) return true;
+      }
+      return false;
+    }
+    case 'r_documentary_pair':
+      return watchedMovies.filter(m => m.genres?.includes('Belgesel')).length >= 2;
+    case 'r_series_high':
+      return watchedEpisodes.filter(e => (e.rating ?? 0) >= 9).length >= 3;
+    case 'e_season_binge':
+      return hasEpisodesOnSameDay(watchedEpisodes, 6);
+    case 'e_weekend_binge': {
+      const byDay = groupByDay(watchedEpisodes, e => e.watchedAt);
+      for (const [key, eps] of byDay) {
+        const wd = dateKeyToDate(key).getDay();
+        if ((wd === 5 || wd === 6 || wd === 0) && eps.length >= 6) return true;
+      }
+      return false;
+    }
+    case 'e_genre_marathon': {
+      const byDay = groupByDay(watchedMovies, m => m.watchedAt);
+      for (const arr of byDay.values()) {
+        const counts = new Map<string, number>();
+        for (const m of arr) {
+          for (const g of m.genres || []) counts.set(g, (counts.get(g) || 0) + 1);
+        }
+        if (Array.from(counts.values()).some(c => c >= 4)) return true;
+      }
+      return false;
+    }
+    case 'l_series_devotion':
+      return watchedEpisodes.length >= 15;
+    case 'l_cinema_century':
+      return watchedMovies.length >= 10;
+    case 'm_series_hater': {
+      const sorted = [...watchedEpisodes].sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
+      let run = 0;
+      for (const e of sorted) {
+        if (e.rating != null && e.rating <= 3) { run += 1; if (run >= 3) return true; }
+        else run = 0;
+      }
+      return false;
+    }
+    case 'm_binge_queen':
+      return hasEpisodesOnSameDay(watchedEpisodes, 10);
 
     default:
       return false;

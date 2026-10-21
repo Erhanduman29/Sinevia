@@ -4,7 +4,7 @@ import {
   Film, Tv, History, Trophy, Settings, BarChart3, Bot,
   Menu, X, LayoutDashboard, Sparkles, CalendarClock, Users,
   Cloud, CloudOff, RefreshCw, Search, Shuffle, ArrowRight, CornerDownLeft,
-  Target, Medal, SearchX, Clapperboard
+  Target, Medal, SearchX, Clapperboard, ShoppingBag
 } from 'lucide-react';
 import WrappedModal from './WrappedModal';
 import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
@@ -19,8 +19,9 @@ import Sini from '../tutorial/Sini';
 import { describeCombo, loadBindings } from '../lib/shortcuts';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { useLazyImageActivator } from '../hooks/useLazyImageActivator';
+import CoinPill from './CoinPill';
 
-export type TabId = 'home' | 'movies' | 'series' | 'network' | 'plan' | 'history' | 'achievements' | 'stats' | 'ai' | 'settings';
+export type TabId = 'home' | 'movies' | 'series' | 'network' | 'plan' | 'history' | 'achievements' | 'market' | 'stats' | 'ai' | 'settings';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -174,6 +175,7 @@ const SEARCH_PAGES: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'plan', label: 'Haftalık Plan', icon: CalendarClock },
   { id: 'history', label: 'Geçmiş', icon: History },
   { id: 'achievements', label: 'Başarımlar', icon: Trophy },
+  { id: 'market', label: 'Pazar', icon: ShoppingBag },
   { id: 'stats', label: 'İstatistik', icon: BarChart3 },
   { id: 'ai', label: 'AI Asistan', icon: Bot },
   { id: 'settings', label: 'Ayarlar', icon: Settings },
@@ -765,6 +767,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     { id: 'plan', icon: CalendarClock, label: 'Haftalık Plan', shortLabel: 'Plan' },
     { id: 'history', icon: History, label: 'Geçmiş', shortLabel: 'Geçmiş' },
     { id: 'achievements', icon: Trophy, label: 'Başarımlar', shortLabel: 'Kupalar' },
+    { id: 'market', icon: ShoppingBag, label: 'Pazar', shortLabel: 'Pazar' },
     { id: 'stats', icon: BarChart3, label: 'İstatistik', shortLabel: 'İstatistik' },
     { id: 'ai', icon: Bot, label: 'AI Asistan', shortLabel: 'AI' },
   ] as const;
@@ -1183,6 +1186,8 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             <span className="flex-1 text-[13px] text-ink-400 whitespace-nowrap overflow-hidden text-ellipsis">Film, dizi, oyuncu ara…</span>
             <kbd className="text-[10px] px-1.5 py-0.5 rounded-md border border-ink-800/60 bg-ink-800/40 text-ink-400 shrink-0" style={{ fontFamily: MONO }}>{searchCombo}</kbd>
           </button>
+
+          <CoinPill amount={Number(profileData.coins) || 0} onClick={() => onTabChange('market')} />
 
           <button
             onClick={() => setShowBulkAdd('movie')}

@@ -76,6 +76,8 @@ export interface Episode {
   id: string;
   season: number;
   episode: number;
+  /** Bölüm süresi (dakika) — TMDB'den çekilir. */
+  runtime?: number;
   watched: boolean;
   rating: number | null;
   detailedRating?: Record<string, number>;
@@ -101,6 +103,8 @@ export interface Series {
   cast?: string[];
   studios?: string[];
   originalLanguage?: string;
+  /** Ortalama bölüm süresi (dakika) — TMDB'den çekilir. */
+  episodeRuntime?: number;
   addedAt: string;
   /** Sinematik Otopsi: yarım bırakılan dizi. */
   abandoned?: boolean;
@@ -169,6 +173,61 @@ export interface WeeklyPlanItem {
   createdAt: string;
 }
 
+export interface CoinTx {
+  id: string;
+  /** Pozitif kazanç, negatif harcama. */
+  amount: number;
+  kind: 'achievement' | 'lifetime_quest' | 'contract' | 'purchase' | 'welcome' | 'bonus' | 'refund' | 'xp_conversion' | 'penalty';
+  label: string;
+  /** Aynı ödülün iki kez yazılmasını engelleyen tekil anahtar. */
+  refId: string;
+  itemId?: string;
+  createdAt: string;
+}
+
+export interface InventoryEntry {
+  itemId: string;
+  quantity: number;
+  acquiredAt: string;
+}
+
+export interface EquippedItems {
+  frameId?: string | null;
+  titleId?: string | null;
+  badgeId?: string | null;
+}
+
+export interface ActiveEffect {
+  itemId: string;
+  charges?: number;
+  expiresAt?: string;
+}
+
+export interface ActiveContract {
+  instanceId: string;
+  contractId: string;
+  startedAt: number;
+  expiresAt: number;
+}
+
+export interface ContractHistoryEntry {
+  instanceId: string;
+  contractId: string;
+  startedAt: number;
+  completedAt: number;
+  xp: number;
+  coins: number;
+}
+
+export interface MarketStats {
+  purchases: number;
+  coinsSpent: number;
+  contractsCompleted: number;
+  contractsFailed: number;
+  weeklyContractsFailed: number;
+  contractsCancelled: number;
+}
+
 export interface AppData {
   movies: Movie[];
   series: Series[];
@@ -179,6 +238,18 @@ export interface AppData {
   history: WatchHistoryItem[];
   achievements: AchievementProgress[];
   criteria?: RatingCriterion[];
+  /** SineCoin bakiyesi (ledger toplamıyla senkron tutulur). */
+  coins?: number;
+  coinLedger?: CoinTx[];
+  inventory?: InventoryEntry[];
+  equipped?: EquippedItems;
+  activeEffects?: ActiveEffect[];
+  /** Pazar vitrinini haftalık yeniden karıştırma sayacı. */
+  marketRerollNonce?: number;
+  /** Pazar tanıtım/backfill ekranı gösterildi mi. */
+  marketIntroSeen?: boolean;
+  /** Pazar başarımları için sayaçlar. */
+  marketStats?: MarketStats;
   xp: number;
   level: number;
   totalXp: number;
@@ -210,4 +281,6 @@ export interface AppData {
   /** Sıradaki seviye kutlamaları (tetikten sonraki ara seviyeler; PROMOTE_LEVEL_UP ile sırayla açılır). */
   pendingLevelUpQueue?: number[];
   pendingXpGain?: { gained: number; oldTotal: number; newTotal: number };
+  /** Başarım coin animasyonu için geçici kuyruk kaydı (buluta yazılmaz). */
+  pendingCoinGain?: { amount: number; label: string; final?: boolean };
 }

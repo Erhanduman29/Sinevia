@@ -4,6 +4,12 @@ import { QUEST_DEFS, RARITY_STYLES, QuestIcon } from '../lib/quests';
 import { Sparkles } from 'lucide-react';
 import { evaluateQuestCompletion } from '../lib/questLogic';
 import { playQuestCompleteSound } from '../lib/sound';
+import { CONTRACT_MAP, CONTRACT_FAILURE_PENALTY, contractItemId } from '../lib/contracts';
+import { evaluateContractProgress, remainingLabel } from '../lib/contractLogic';
+import { LIFETIME_QUEST_COINS } from '../lib/coins';
+import type { ActiveContract, ContractHistoryEntry } from '../types';
+import { ContractCelebrationOverlay } from '../components/ContractCelebrationOverlay';
+import { MARKET_ITEM_MAP } from '../lib/marketItems';
 
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
 
@@ -14,7 +20,9 @@ interface QuestState {
   questCooldownUntil: number | null; 
   completedQuests: string[];         
   activeBadgeId: string | null;
-  isPenaltyEnabled: boolean; 
+  isPenaltyEnabled: boolean;
+  activeContract?: ActiveContract | null;
+  contractHistory?: ContractHistoryEntry[];
 }
 
 interface QuestContextValue {
@@ -25,6 +33,12 @@ interface QuestContextValue {
   equipBadge: (questId: string | null) => void;
   togglePenalty: () => void; 
   resetQuestData: () => void;
+  activeContract: ActiveContract | null;
+  contractHistory: ContractHistoryEntry[];
+  activateContract: (contractId: string) => boolean;
+  cancelContract: () => void;
+  activeContractProgress: ReturnType<typeof evaluateContractProgress> | null;
+  activeContractRemaining: string;
 }
 
 const defaultQuestState: QuestState = {
@@ -34,7 +48,9 @@ const defaultQuestState: QuestState = {
   questCooldownUntil: null,
   completedQuests: [],
   activeBadgeId: null,
-  isPenaltyEnabled: false, 
+  isPenaltyEnabled: false,
+  activeContract: null,
+  contractHistory: [],
 };
 
 const QuestContext = createContext<QuestContextValue | null>(null);
@@ -46,7 +62,7 @@ export function useQuests() {
 }
 
 export function QuestProvider({ children }: { children: ReactNode }) {
-  const { data, grantXp, setIsQuestCelebrating, levelUpData, seasonCompleteData, xpGainData, achievementToasts, levelUpQueuedRef } = useApp();
+  const { data, grantXp, grantCoins, grantItem, grantContractReward, recordMarketOutcome, consumeEffect, setIsQuestCelebrating, levelUpData, seasonCompleteData, xpGainData, achievementToasts, levelUpQueuedRef, activateItem, showToast } = useApp();
 
   const [questState, setQuestState] = useState<QuestState>(() => {
     try {
@@ -142,6 +158,127 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     setQuestState(defaultQuestState);
   };
 
+  const [contractCelebration, setContractCelebration] = useState<{ contractId: string; xp: number; coins: number } | null>(null);
+  const activeContract = questState.activeContract || null;
+  const contractHistory = questState.contractHistory || [];
+
+  const activeContractProgress = useMemo(() => {
+    if (!activeContract) return null;
+    const def = CONTRACT_MAP.get(activeContract.contractId);
+    if (!def) return null;
+    return evaluateContractProgress(def, activeContract.startedAt, data);
+  }, [activeContract, data]);
+
+  const activeContractRemaining = activeContract
+    ? remainingLabel(activeContract)
+    : '';
+
+  const activateContract = (contractId: string): boolean => {
+    if (questState.activeContract) {
+      showToast('Aynı anda yalnızca 1 pazar görevi aktif olabilir.', 'warning');
+      return false;
+    }
+    const def = CONTRACT_MAP.get(contractId);
+    if (!def) return false;
+    const itemId = contractItemId(contractId);
+    const owned = (data.inventory || []).find((entry) => entry.itemId === itemId)?.quantity || 0;
+    if (owned <= 0) {
+      showToast('Bu görev envanterinde yok. Önce pazardan satın al.', 'warning');
+      return false;
+    }
+    const startedAt = Date.now();
+    const expiresAt = startedAt + def.durationHours * 60 * 60 * 1000;
+    activateItem(itemId, 'contract_activate', `${def.title} aktifleştirildi`);
+    setQuestState((prev) => ({
+      ...prev,
+      activeContract: { instanceId: `ci_${startedAt}_${Math.random().toString(36).slice(2, 8)}`, contractId, startedAt, expiresAt },
+    }));
+    return true;
+  };
+
+  const cancelContract = () => {
+    if (!questState.activeContract) return;
+    const def = CONTRACT_MAP.get(questState.activeContract.contractId);
+    recordMarketOutcome(
+      'cancelled',
+      def?.type === 'weekly',
+      0,
+      `Görev iptali: ${def?.title || 'Pazar görevi'}`,
+      `contract-cancel:${questState.activeContract.instanceId}`,
+    );
+    setQuestState((prev) => ({ ...prev, activeContract: null }));
+    showToast('Pazar görevi iptal edildi. Satın alınan görev tüketildi.', 'info');
+  };
+
+  useEffect(() => {
+    if (!activeContract) return;
+    const def = CONTRACT_MAP.get(activeContract.contractId);
+    if (!def) return;
+    if (Date.now() >= activeContract.expiresAt) {
+      const penalty = CONTRACT_FAILURE_PENALTY[def.rarity] || 25;
+      recordMarketOutcome(
+        'failed',
+        def.type === 'weekly',
+        penalty,
+        `Görev cezası: ${def.title}`,
+        `contract-fail:${activeContract.instanceId}`,
+      );
+      setQuestState((prev) => ({ ...prev, activeContract: null }));
+      showToast(`"${def.title}" süresi doldu. ${penalty} SC ceza uygulandı.`, 'warning');
+      return;
+    }
+    const progress = evaluateContractProgress(def, activeContract.startedAt, data);
+    if (!progress.completed) return;
+
+    const doubled = (data.activeEffects || []).some(
+      (effect) => effect.itemId === 'util_double_reward' && (effect.charges || 1) > 0,
+    );
+    const coins = Math.round(def.coinReward * (doubled ? 2 : 1));
+    if (doubled) consumeEffect('util_double_reward');
+    grantContractReward(def.xpReward, coins, `contract:${activeContract.instanceId}`, def.title);
+    setQuestState((prev) => ({
+      ...prev,
+      activeContract: null,
+      contractHistory: [
+        {
+          instanceId: activeContract.instanceId,
+          contractId: activeContract.contractId,
+          startedAt: activeContract.startedAt,
+          completedAt: Date.now(),
+          xp: def.xpReward,
+          coins,
+        },
+        ...(prev.contractHistory || []),
+      ].slice(0, 100),
+    }));
+    setContractCelebration({ contractId: activeContract.contractId, xp: def.xpReward, coins });
+    playQuestCompleteSound(def.rarity);
+  }, [activeContract, data, consumeEffect, grantContractReward, recordMarketOutcome, showToast]);
+
+  useEffect(() => {
+    if (!activeContract) return;
+    const timer = window.setInterval(() => {
+      if (Date.now() >= activeContract.expiresAt) {
+        const def = CONTRACT_MAP.get(activeContract.contractId);
+        if (def) {
+          const penalty = CONTRACT_FAILURE_PENALTY[def.rarity] || 25;
+          recordMarketOutcome(
+            'failed',
+            def.type === 'weekly',
+            penalty,
+            `Görev cezası: ${def.title}`,
+            `contract-fail:${activeContract.instanceId}`,
+          );
+          showToast(`"${def.title}" süresi doldu. ${penalty} SC ceza uygulandı.`, 'warning');
+        } else {
+          showToast('Pazar görevi süresi doldu.', 'warning');
+        }
+        setQuestState((prev) => ({ ...prev, activeContract: null }));
+      }
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [activeContract, recordMarketOutcome, showToast]);
+
   useEffect(() => {
     if (!questState.activeQuestId || !questState.questAcceptedAt) return;
 
@@ -155,6 +292,19 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     );
 
     if (isCompleted) {
+      const questDef = QUEST_DEFS.find((q) => q.id === questState.activeQuestId);
+      if (questDef) {
+        if (questDef.itemReward) {
+          grantItem(questDef.itemReward, `Görev ödülü: ${questDef.title}`, `questitem:${questDef.id}`);
+        } else {
+          grantCoins(
+            questDef.coinReward ?? LIFETIME_QUEST_COINS[questDef.rarity] ?? 20,
+            'lifetime_quest',
+            `Görev: ${questDef.title}`,
+            `quest:${questDef.id}`,
+          );
+        }
+      }
       completeActiveQuest(questState.activeQuestId);
       queuedCelebrationRef.current = null;
       if (levelUpData || seasonCompleteData || xpGainData || data.pendingLevelUp || levelUpQueuedRef.current || achievementToasts.length > 0) {
@@ -165,7 +315,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       }
     }
 
-  }, [data.history, data.movies, data.series, data.pendingLevelUp, questState.activeQuestId, questState.questAcceptedAt, data.dailyStreak, levelUpData, seasonCompleteData, xpGainData, achievementToasts]);
+  }, [data.history, data.movies, data.series, data.pendingLevelUp, questState.activeQuestId, questState.questAcceptedAt, data.dailyStreak, levelUpData, seasonCompleteData, xpGainData, achievementToasts, grantCoins, grantItem]);
 
   useEffect(() => {
     const qid = queuedCelebrationRef.current;
@@ -184,7 +334,13 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       completeActiveQuest,
       equipBadge,
       togglePenalty,
-      resetQuestData 
+      resetQuestData,
+      activeContract,
+      contractHistory,
+      activateContract,
+      cancelContract,
+      activeContractProgress,
+      activeContractRemaining,
     }}>
       {children}
 
@@ -196,6 +352,15 @@ export function QuestProvider({ children }: { children: ReactNode }) {
             setCelebratingQuestId(null);
             setIsQuestCelebrating(false); 
           }} 
+        />
+      )}
+
+      {contractCelebration && (
+        <ContractCelebrationOverlay
+          contractId={contractCelebration.contractId}
+          xp={contractCelebration.xp}
+          coins={contractCelebration.coins}
+          onClose={() => setContractCelebration(null)}
         />
       )}
     </QuestContext.Provider>
@@ -777,7 +942,7 @@ function QuestCelebrationOverlay({ questId, onClaim }: { questId: string, onClai
               />
               <span className="relative z-10 flex items-center gap-3 group-hover:text-ink-950 transition-colors">
                 <Sparkles size={20} className="text-ink-950 group-hover:rotate-[25deg] group-hover:scale-110 transition-transform duration-300" />
-                Ödülü Tahsil Et (+{def.xpReward} XP)
+                Ödülü Tahsil Et (+{def.xpReward} XP · {def.itemReward ? MARKET_ITEM_MAP.get(def.itemReward)?.name || 'Pazar itemi' : `${def.coinReward ?? LIFETIME_QUEST_COINS[def.rarity] ?? 20} SC`})
               </span>
             </button>
           </div>

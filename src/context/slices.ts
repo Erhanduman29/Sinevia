@@ -5,7 +5,7 @@ import type { ExtendedAppData, AppContextValue } from './AppContext';
 export type ActionsSlice = Omit<
   AppContextValue,
   | 'data' | 'syncStatus' | 'isQuestCelebrating' | 'toasts' | 'achievementToasts'
-  | 'levelUpData' | 'seasonCompleteData' | 'xpGainData' | 'weeklyPlan'
+  | 'levelUpData' | 'seasonCompleteData' | 'xpGainData' | 'coinGainData' | 'weeklyPlan'
 >;
 
 export const ActionsContext = createContext<ActionsSlice | null>(null);

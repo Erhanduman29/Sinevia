@@ -31,6 +31,7 @@ export default function AddSeriesModal({ onClose }: Props) {
   const [studios, setStudios] = useState<string[]>([]);
   const [keywords, setKeywords] = useState<string[]>([]);
   const [originalLanguage, setOriginalLanguage] = useState<string | undefined>();
+  const [episodeRuntime, setEpisodeRuntime] = useState<number | undefined>(undefined);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -56,6 +57,7 @@ export default function AddSeriesModal({ onClose }: Props) {
     setStudios(series.studios || []);
     setKeywords(series.keywords || []);
     setOriginalLanguage(series.originalLanguage);
+    setEpisodeRuntime(series.episodeRuntime);
     
     const mappedIncoming = resolveTMDBGenres(series.genres, data.genres);
     const newGenres = new Set([...selectedGenres, ...mappedIncoming]);
@@ -115,7 +117,8 @@ export default function AddSeriesModal({ onClose }: Props) {
         studios,
         keywords,
         originalLanguage
-      }
+      },
+      episodeRuntime
     );
     if (ok) onClose();
   };
@@ -232,6 +235,7 @@ export default function AddSeriesModal({ onClose }: Props) {
                   setStudios([]);
                   setKeywords([]);
                   setOriginalLanguage(undefined);
+                  setEpisodeRuntime(undefined);
                 }} 
                 className="text-xs text-red-400 hover:underline px-2 flex-shrink-0"
               >
@@ -245,6 +249,7 @@ export default function AddSeriesModal({ onClose }: Props) {
               <label className="block text-sm font-medium text-ink-300">Sezonlar</label>
               <span className="text-xs text-ink-500">
                 {seasons.length} sezon · {totalEpisodes} bölüm
+                {episodeRuntime ? ` · ~${episodeRuntime} dk/bölüm` : ''}
               </span>
             </div>
             <div className="space-y-2">

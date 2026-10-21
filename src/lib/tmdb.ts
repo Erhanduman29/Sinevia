@@ -38,6 +38,7 @@ export interface TMDBSeriesResult {
   originalLanguage?: string;
   imdbId?: string; // YENİ
   watchProviders?: WatchProvider[]; // YENİ
+  episodeRuntime?: number; // YENİ: bölüm başına ortalama süre (dk)
 }
 
 const GENRE_MAP: Record<number, string> = {
@@ -63,6 +64,52 @@ export async function fetchSeriesSeasonCounts(
       .filter((s) => (s.season_number ?? 0) > 0 && (s.episode_count ?? 0) > 0)
       .map((s) => ({ season: s.season_number as number, episodes: s.episode_count as number }))
       .sort((a, b) => a.season - b.season);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Dizinin sezon/bölüm sürelerini (dk) TMDB'den çeker.
+ * Dönen yapı: [{ season, episodes: [{ episode, runtime? }] }]
+ * Ağ/parse hatalarında boş dizi döner — çağıran akış bozulmaz.
+ */
+export async function fetchSeriesSeasonDetails(
+  tmdbId: number
+): Promise<{ season: number; episodes: { episode: number; runtime?: number }[] }[]> {
+  try {
+    const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&language=tr-TR`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const seasons: { season_number?: number }[] = Array.isArray(data?.seasons) ? data.seasons : [];
+    const seasonNumbers = seasons
+      .map((s) => s.season_number ?? 0)
+      .filter((n) => n > 0)
+      .sort((a, b) => a - b);
+
+    const out: { season: number; episodes: { episode: number; runtime?: number }[] }[] = [];
+    for (const seasonNumber of seasonNumbers) {
+      try {
+        const seasonRes = await fetch(
+          `https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}&language=tr-TR`
+        );
+        if (!seasonRes.ok) continue;
+        const seasonData = await seasonRes.json();
+        const eps: { episode_number?: number; runtime?: number | null }[] = Array.isArray(seasonData?.episodes)
+          ? seasonData.episodes
+          : [];
+        out.push({
+          season: seasonNumber,
+          episodes: eps.map((ep) => ({
+            episode: ep.episode_number as number,
+            runtime: ep.runtime ?? undefined,
+          })),
+        });
+      } catch {
+        /* tek sezon hatası tüm taramayı düşürmesin */
+      }
+    }
+    return out;
   } catch {
     return [];
   }
@@ -164,6 +211,7 @@ export async function searchTMDBSeries(query: string): Promise<TMDBSeriesResult[
       let keywords: string[] = [], creators: string[] = [], cast: string[] = [], studios: string[] = [];
       let imdbId = undefined;
       let watchProviders: WatchProvider[] = [];
+      let episodeRuntime: number | undefined;
       
       try {
         // YENİ: watch/providers ve external_ids eklendi
@@ -171,6 +219,7 @@ export async function searchTMDBSeries(query: string): Promise<TMDBSeriesResult[
         const detailData = await detailRes.json();
         
         imdbId = detailData.external_ids?.imdb_id;
+        episodeRuntime = detailData.episode_run_time?.[0] ?? detailData.last_episode_to_air?.runtime ?? undefined;
 
         // YENİ: Türkiye'deki Yasal Platformları Çek
         const trProviders = detailData['watch/providers']?.results?.TR;
@@ -225,7 +274,8 @@ export async function searchTMDBSeries(query: string): Promise<TMDBSeriesResult[
         studios: Array.from(new Set(studios)),
         originalLanguage: item.original_language || '',
         imdbId,
-        watchProviders
+        watchProviders,
+        episodeRuntime
       };
     }));
     

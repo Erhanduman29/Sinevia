@@ -3,6 +3,8 @@ import * as Icons from 'lucide-react';
 import { DISPLAY_DURATION_MS } from '../context/AppContext';
 import type { AchievementToastItem } from '../context/AppContext';
 import { TIER_COLORS, AchievementIcon } from '../lib/achievements';
+import { TIER_COIN_REWARDS } from '../lib/coins';
+import { SineCoinIcon } from './CoinPill';
 
 export default function AchievementToasts({ toasts }: { toasts: AchievementToastItem[] }) {
   return (
@@ -62,6 +64,10 @@ function AchievementToast({ toast }: { toast: AchievementToastItem }) {
         </div>
         <div className="text-xs text-ink-300 mt-0.5 line-clamp-2">
           <span className="font-bold text-gold-400">{tierInfo?.label}</span> · {toast.description}
+        </div>
+        <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-gold-400/35 bg-gold-500/10 px-2 py-0.5 text-[10px] font-black text-gold-200">
+          <SineCoinIcon className="h-3.5 w-3.5" />
+          +{(TIER_COIN_REWARDS as Record<string, number>)[toast.tier] || 0} SC
         </div>
       </div>
     </button>
