@@ -108,12 +108,13 @@ const XP_BY_RARITY: Record<ContractRarity, { daily: number; weekly: number }> = 
   mythic: { daily: 550, weekly: 1500 },
 };
 
+/** Pazar görevinin fiyatı, verdiği XP ile birebir aynıdır. */
 const PRICE_BY_RARITY: Record<ContractRarity, { daily: number; weekly: number }> = {
-  common: { daily: 50, weekly: 180 },
-  rare: { daily: 100, weekly: 360 },
-  epic: { daily: 200, weekly: 650 },
-  legendary: { daily: 350, weekly: 1100 },
-  mythic: { daily: 550, weekly: 1800 },
+  common: { daily: 40, weekly: 120 },
+  rare: { daily: 90, weekly: 260 },
+  epic: { daily: 180, weekly: 520 },
+  legendary: { daily: 320, weekly: 900 },
+  mythic: { daily: 550, weekly: 1500 },
 };
 
 /** Süresi dolan pazar görevinde bakiyeden düşülecek ceza. */
@@ -125,12 +126,15 @@ export const CONTRACT_FAILURE_PENALTY: Record<ContractRarity, number> = {
   mythic: 350,
 };
 
+/** Tamamlanan görevde harcanan coinin %12'si geri döner. */
+export const CONTRACT_COIN_REBATE_RATE = 0.12;
+
 const COIN_RATE_BY_RARITY: Record<ContractRarity, number> = {
-  common: 0.05,
-  rare: 0.06,
-  epic: 0.07,
-  legendary: 0.09,
-  mythic: 0.12,
+  common: CONTRACT_COIN_REBATE_RATE,
+  rare: CONTRACT_COIN_REBATE_RATE,
+  epic: CONTRACT_COIN_REBATE_RATE,
+  legendary: CONTRACT_COIN_REBATE_RATE,
+  mythic: CONTRACT_COIN_REBATE_RATE,
 };
 
 function contract(

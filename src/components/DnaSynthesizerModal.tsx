@@ -389,7 +389,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
       });
     }
 
-    const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} izle`);
+    const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} İzle`);
     links.push({
       href: `https://www.google.com/search?q=${searchQuery}`,
       text: "Google'da Bul",
@@ -414,7 +414,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
         .replace('{title}', encodeURIComponent(movie.title))
         .replace('{year}', movie.year || '');
 
-      links.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+      links.push({ href: finalAltHref, text: 'İzle', logo: null, icon: PlayCircle });
     }
 
     return links;

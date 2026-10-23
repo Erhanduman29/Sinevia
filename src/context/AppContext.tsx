@@ -9,6 +9,8 @@ import {
   addEffectCharge,
   addInventoryItem,
   awardLevelCoins,
+  awardStreakCoins,
+  awardWeeklyActivityCoins,
   coinBalance,
   activeEffectCharges,
   consumeEffectCharge,
@@ -17,13 +19,30 @@ import {
   inventoryQuantity,
   pendingLevelCoinTotal,
   removeInventoryItem,
+  streakDayCoinReward,
   syncCoinLedger,
+  syncMilestoneItems,
   TIER_COIN_REWARDS,
+  WEEKLY_ACTIVITY_REQUIRED_DAYS,
 } from '../lib/coins';
-import { XP_CONVERSION_RATE } from '../lib/marketItems';
+import { getMarketItem, isPermanentItem, showcaseLimit, type MarketItemKind } from '../lib/marketItems';
+import type { ContractRarity } from '../lib/contracts';
+import { isSoundBusy, getSoundBusyKind, getSoundBusyRemainingMs } from '../lib/sound';
+import { weekKey } from '../lib/contractLogic';
 import { levelFromXp } from '../lib/xp';
 import { calculateEloDelta } from '../lib/calibrationEngine';
-import { rewriteLegacyTemplate } from '../lib/actionBridge';
+import { normalizeActionLabel, rewriteLegacyTemplate } from '../lib/actionBridge';
+import {
+  applyBackupExtras,
+  buildBackupPayload,
+  parseBackupPayload,
+  pickBackupExtras,
+  readBackupExtras,
+  readQuestState,
+  writeQuestState,
+  type BackupExtras,
+} from '../lib/appBackup';
+import { pruneExpiredPlanItems } from '../lib/planPrune';
 import { supabase } from '../lib/supabase';
 import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, PREV_ACCOUNT_KEY } from '../lib/storageService';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
@@ -257,49 +276,22 @@ function getCleanHashString(stateObj: any, questStateRaw?: any, extrasRaw?: Reco
 }
 
 /* =========================================================================
-   BULUT EŞİTLEME EK DURUMLARI — tutorial ilerlemesi + akademi yoldaşı durumu
-   (core/quests gibi aynı JSON dosyasına gömülür; Supabase şeması DEĞİŞMEZ.)
+   BULUT EŞİTLEME EK DURUMLARI — tutorial, akademi, ses/kısayol ve sekme
+   tercihleri (core/quests gibi aynı JSON dosyasına gömülür; şema DEĞİŞMEZ.)
    ========================================================================= */
 /** Bu cihazdaki ek durumları oku (yükleme/payload için). */
-function readSyncExtras(): Record<string, any> {
-  const extras: Record<string, any> = {};
-  try {
-    const raw = localStorage.getItem('sinevia-tutorial-v1');
-    if (raw) extras.tutorial = JSON.parse(raw);
-  } catch {}
-  try {
-    const raw = localStorage.getItem('sinevia-academy-ui-v1');
-    if (raw) extras.academyUi = JSON.parse(raw);
-  } catch {}
-  return extras;
+function readSyncExtras(): BackupExtras {
+  return readBackupExtras();
 }
 
 /** Bulut dosyasındaki mevcut ek durumları seç (eski yedeklerde hiçbiri olmayabilir). */
-function pickIncomingExtras(incomingJson: any): Record<string, any> {
-  const extras: Record<string, any> = {};
-  if (incomingJson && incomingJson.tutorial) extras.tutorial = incomingJson.tutorial;
-  if (incomingJson && incomingJson.academyUi) extras.academyUi = incomingJson.academyUi;
-  return extras;
+function pickIncomingExtras(incomingJson: unknown): BackupExtras {
+  return pickBackupExtras(incomingJson);
 }
 
 /** İnen ek durumları yerel depoya yaz ve dinleyicilere (TutorialContext vb.) duyur. */
-function applyIncomingExtras(incomingJson: any) {
-  let applied = false;
-  if (incomingJson && incomingJson.tutorial) {
-    try {
-      localStorage.setItem('sinevia-tutorial-v1', JSON.stringify(incomingJson.tutorial));
-      applied = true;
-    } catch {}
-  }
-  if (incomingJson && incomingJson.academyUi) {
-    try {
-      localStorage.setItem('sinevia-academy-ui-v1', JSON.stringify(incomingJson.academyUi));
-      applied = true;
-    } catch {}
-  }
-  if (applied) {
-    window.dispatchEvent(new CustomEvent('sinevia-sync-extras-applied'));
-  }
+function applyIncomingExtras(incomingJson: unknown) {
+  applyBackupExtras(pickBackupExtras(incomingJson));
 }
 
 function synchronizeXPAndLevel(
@@ -344,12 +336,12 @@ function synchronizeXPAndLevel(
   const correctedLevelInfo = levelFromXp(recalculatedXp);
   const oldLevel = state.level || 1; 
   
-  const newState: ExtendedAppData = {
+  const newState: ExtendedAppData = syncMilestoneItems({
     ...state,
     totalXp: recalculatedXp,
     level: correctedLevelInfo.level,
     xp: correctedLevelInfo.currentLevelXp
-  };
+  }, correctedLevelInfo.level);
 
   // Seviye atlama tetiği: her ara seviye ayrı kutlamaya girer (deferLevelUp ile
   // başarım batch'inde ertelenir — seviyeler XP reveal'ından sırayla enqueue edilir).
@@ -362,6 +354,45 @@ function synchronizeXPAndLevel(
   }
 
   return newState;
+}
+
+function countActiveWatchDaysThisWeek(state: Pick<ExtendedAppData, 'history'>, week = weekKey()): number {
+  const days = new Set<string>();
+  for (const item of state.history || []) {
+    if (item.isPastWatch || !item.watchedAt) continue;
+    if (weekKey(item.watchedAt) !== week) continue;
+    days.add(localDayKey(item.watchedAt));
+  }
+  return days.size;
+}
+
+/** Günlük seri ve haftalık 5 gün aktivite coinlerini uygular. */
+function applyWatchEconomyRewards(state: ExtendedAppData, wasNewDay: boolean): ExtendedAppData {
+  let next = state;
+  if (wasNewDay) {
+    next = awardStreakCoins(next, todayStr(), next.dailyStreak || 0);
+  }
+  return awardWeeklyActivityCoins(
+    next,
+    weekKey(),
+    countActiveWatchDaysThisWeek(next),
+  );
+}
+
+function withWatchEconomyRewards(state: ExtendedAppData, wasNewDay: boolean): ExtendedAppData {
+  const before = coinBalance(state);
+  const rewarded = applyWatchEconomyRewards(state, wasNewDay);
+  const gained = coinBalance(rewarded) - before;
+  if (gained <= 0) return rewarded;
+  return {
+    ...rewarded,
+    pendingCoinGain: mergePendingCoinGain(
+      rewarded.pendingCoinGain,
+      gained,
+      'İzleme ödülü',
+      true,
+    ),
+  };
 }
 
 /**
@@ -467,6 +498,7 @@ type Action =
   | { type: 'ADD_PLAN_ITEM'; item: WeeklyPlanItem }
   | { type: 'DELETE_PLAN_ITEM'; id: string }
   | { type: 'UPDATE_PLAN_ITEM'; id: string; date: string; time: string }
+  | { type: 'PRUNE_EXPIRED_PLAN_ITEMS'; today?: string }
   | { type: 'TOGGLE_NOTIFICATIONS'; enabled: boolean }
   | { type: 'TOGGLE_SHARE_WATCHED'; enabled: boolean }
   | { type: 'TOGGLE_SHARE_PAST_WATCHED'; enabled: boolean }
@@ -484,10 +516,10 @@ type Action =
   | { type: 'GRANT_COINS'; amount: number; kind: CoinTx['kind']; label: string; refId: string; itemId?: string }
   | { type: 'GRANT_CONTRACT_REWARD'; xp: number; coins: number; refId: string; label: string }
   | { type: 'PURCHASE_ITEM'; itemId: string; name: string; price: number; kind: string; consumable?: boolean; coupon?: boolean }
-  | { type: 'EQUIP_ITEM'; slot: 'frameId' | 'titleId' | 'badgeId'; itemId: string | null }
+  | { type: 'EQUIP_ITEM'; slot: 'frameId' | 'titleId' | 'badgeId' | 'badgeId2' | 'backgroundId' | 'nameEffectId'; itemId: string | null }
   | { type: 'USE_ITEM'; itemId: string; effect: string; label: string }
+  | { type: 'PIN_CONTRACT'; contractId: string; week: string }
   | { type: 'CONSUME_EFFECT'; itemId: string }
-  | { type: 'CONVERT_COINS_TO_XP'; coins: number; refId: string }
   | { type: 'SET_SERIES_RUNTIME'; seriesId: string; episodeRuntime?: number; runtimes?: Record<string, number> }
   | { type: 'MARK_MARKET_INTRO_SEEN' }
   | { type: 'REROLL_MARKET' }
@@ -960,11 +992,21 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'TOGGLE_SHARE_PAST_WATCHED') return { ...state, sharePastWatchedInFeed: action.enabled };
   if (action.type === 'TOGGLE_SPECIFIC_NOTIFICATION') return { ...state, [action.key]: action.enabled };
   if (action.type === 'SET_NICKNAME') return { ...state, nickname: action.nickname };
-  if (action.type === 'SET_SHOWCASE') return { ...state, showcase: action.showcase.slice(0, 4) };
+  if (action.type === 'SET_SHOWCASE') return { ...state, showcase: action.showcase.slice(0, showcaseLimit(state.perks)) };
   if (action.type === 'SET_EXTERNAL_ACTIONS') return { ...state, externalActions: action.actions };
 
   if (action.type === 'GRANT_COINS') {
-    return grantCoinsToData(state, action.amount, action.kind, action.label, action.refId, action.itemId);
+    const next = grantCoinsToData(state, action.amount, action.kind, action.label, action.refId, action.itemId);
+    if (action.amount > 0) {
+      const hasToasts = (next.pendingToasts?.length ?? 0) > 0;
+      next.pendingCoinGain = mergePendingCoinGain(
+        next.pendingCoinGain,
+        action.amount,
+        action.label,
+        !hasToasts,
+      );
+    }
+    return next;
   }
   if (action.type === 'GRANT_CONTRACT_REWARD') {
     if (hasCoinTx(state.coinLedger, action.refId)) return state;
@@ -998,8 +1040,15 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     const levelCoinTotal = pendingLevelCoinTotal(next, oldLevel, finalLevel);
     const withLevels = awardLevelCoins(next, oldLevel, finalLevel);
     const hasToasts = (withLevels.pendingToasts?.length ?? 0) > 0;
-    const pendingCoinGain = (levelCoinTotal > 0 || state.pendingCoinGain)
-      ? mergePendingCoinGain(state.pendingCoinGain, levelCoinTotal, 'Seviye ödülleri', !hasToasts)
+    const contractCoinTotal = Math.max(0, action.coins || 0);
+    const totalCoinGain = contractCoinTotal + levelCoinTotal;
+    const pendingCoinGain = (totalCoinGain > 0 || state.pendingCoinGain)
+      ? mergePendingCoinGain(
+          state.pendingCoinGain,
+          totalCoinGain,
+          contractCoinTotal > 0 ? action.label : 'Seviye ödülleri',
+          !hasToasts,
+        )
       : undefined;
     const levelUps = applyLevelUps(withLevels, oldLevel, finalLevel);
     return {
@@ -1039,8 +1088,26 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     return addInventoryItem(state, action.itemId, 1);
   }
   if (action.type === 'PURCHASE_ITEM') {
-    const cosmeticKinds = new Set(['frame', 'title', 'badge', 'collectible']);
-    if (cosmeticKinds.has(action.kind) && inventoryQuantity(state, action.itemId) > 0) return state;
+    const def = getMarketItem(action.itemId);
+    const currentWeek = weekKey();
+    const purchaseCountThisWeek = (state.coinLedger || []).filter(
+      (tx) =>
+        tx.kind === 'purchase' &&
+        tx.itemId === action.itemId &&
+        weekKey(tx.createdAt) === currentWeek,
+    ).length;
+    // Bir kez alınan ürünler (kozmetik, koleksiyon, kalıcı gelişim) tekrar alınamaz.
+    if (isPermanentItem(action.kind as MarketItemKind) && inventoryQuantity(state, action.itemId) > 0) {
+      return state;
+    }
+    // Görevler haftada yalnızca bir kez satın alınabilir.
+    if (action.kind === 'contract' && purchaseCountThisWeek > 0) return state;
+    // Tüketilebilir ürünlerin haftalık alım sınırı vardır.
+    if (def?.weeklyLimit && purchaseCountThisWeek >= def.weeklyLimit) return state;
+    // İkinci vitrin yuvası ilk yuvadan sonra açılabilir.
+    if (def?.perk === 'showcase_slot_2' && !(state.perks || []).includes('showcase_slot_1')) {
+      return state;
+    }
     const basePrice = Math.max(0, Math.round(action.price));
     const finalPrice = action.coupon ? Math.round(basePrice * 0.8) : basePrice;
     if (coinBalance(state) < finalPrice) return state;
@@ -1055,6 +1122,14 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       createdAt: new Date().toISOString(),
     });
     next = addInventoryItem(next, action.itemId, 1);
+    if (def?.perk) {
+      next = {
+        ...next,
+        perks: (next.perks || []).includes(def.perk)
+          ? next.perks
+          : [...(next.perks || []), def.perk],
+      };
+    }
     if (action.coupon) next = consumeEffectCharge(next, 'util_market_coupon');
     next = {
       ...next,
@@ -1068,6 +1143,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   }
   if (action.type === 'EQUIP_ITEM') {
     if (action.itemId && inventoryQuantity(state, action.itemId) <= 0) return state;
+    if (action.slot === 'badgeId2' && !(state.perks || []).includes('badge_slot')) return state;
     return { ...state, equipped: { ...(state.equipped || {}), [action.slot]: action.itemId } };
   }
   if (action.type === 'CONSUME_EFFECT') {
@@ -1078,35 +1154,33 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     let next = removeInventoryItem(state, action.itemId, 1);
     if (action.effect === 'contract_reroll') {
       next = { ...next, marketRerollNonce: (next.marketRerollNonce || 0) + 1 };
-    } else if (action.effect === 'streak_shield' || action.effect === 'double_reward' || action.effect === 'market_coupon') {
+    } else if (action.effect === 'single_reroll') {
+      next = { ...next, marketDailyNonce: (next.marketDailyNonce || 0) + 1 };
+    } else if (action.effect === 'selective_reroll') {
+      next = { ...next, marketWeeklyNonce: (next.marketWeeklyNonce || 0) + 1 };
+    } else if (
+      action.effect === 'streak_shield' ||
+      action.effect === 'double_reward' ||
+      action.effect === 'market_coupon' ||
+      action.effect === 'penalty_waiver' ||
+      action.effect === 'xp_boost' ||
+      action.effect === 'contract_insurance'
+    ) {
       next = addEffectCharge(next, action.itemId);
+    } else if (action.effect === 'streak_freeze') {
+      next = addEffectCharge(next, action.itemId);
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      next = {
+        ...next,
+        activeEffects: (next.activeEffects || []).map((effect) =>
+          effect.itemId === action.itemId ? { ...effect, expiresAt } : effect,
+        ),
+      };
     }
     return next;
   }
-  if (action.type === 'CONVERT_COINS_TO_XP') {
-    const amount = Math.max(0, Math.round(action.coins));
-    if (amount <= 0 || coinBalance(state) < amount) return state;
-    if (state.coinLedger?.some((tx) => tx.refId === action.refId)) return state;
-    let next = appendCoinTx(state, {
-      id: action.refId,
-      refId: action.refId,
-      amount: -amount,
-      kind: 'xp_conversion',
-      label: `${amount} SineCoin → ${amount * XP_CONVERSION_RATE} XP`,
-      createdAt: new Date().toISOString(),
-    });
-    const gained = amount * XP_CONVERSION_RATE;
-    const newTotalXp = next.totalXp + gained;
-    const levelData = levelFromXp(newTotalXp);
-    next = {
-      ...next,
-      bonusXp: (next.bonusXp || 0) + gained,
-      totalXp: newTotalXp,
-      xp: levelData.currentLevelXp,
-      level: levelData.level,
-      pendingXpGain: { gained, oldTotal: next.totalXp, newTotal: newTotalXp },
-    };
-    return next;
+  if (action.type === 'PIN_CONTRACT') {
+    return { ...state, pinnedContract: { week: action.week, contractId: action.contractId } };
   }
   if (action.type === 'SET_SERIES_RUNTIME') {
     const runtimeState = {
@@ -1240,11 +1314,13 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       );
       nextState.history = [action.historyItem, ...state.history];
       if (!action.isPastWatch) {
+        const wasNewDay = state.dailyStreakDate !== todayStr();
         const streakUpdate = applyStreakForWatch(state);
         nextState.dailyStreak = streakUpdate.dailyStreak;
         if (streakUpdate.activeEffects) nextState.activeEffects = streakUpdate.activeEffects;
         nextState.dailyStreakDate = todayStr();
         nextState.lastWatchDate = todayStr();
+        nextState = withWatchEconomyRewards(nextState, wasNewDay);
       }
       break;
     case 'UNWATCH_MOVIE':
@@ -1274,10 +1350,14 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'WATCH_EPISODE':
       nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => (e.id === action.episodeId ? { ...e, watched: true, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt } : e)) } : s));
       nextState.history = [action.historyItem, ...state.history]; {
+        const wasNewDay = state.dailyStreakDate !== todayStr();
         const streakUpdate = applyStreakForWatch(state);
         nextState.dailyStreak = streakUpdate.dailyStreak;
         if (streakUpdate.activeEffects) nextState.activeEffects = streakUpdate.activeEffects;
-      } nextState.dailyStreakDate = todayStr(); nextState.lastWatchDate = todayStr(); break;
+        nextState.dailyStreakDate = todayStr();
+        nextState.lastWatchDate = todayStr();
+        nextState = withWatchEconomyRewards(nextState, wasNewDay);
+      } break;
     case 'UNWATCH_EPISODE':
       nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => (e.id === action.episodeId ? { ...e, watched: false, rating: null, detailedRating: undefined, reviewTags: undefined, note: '', watchedAt: null } : e)) } : s));
       nextState.history = state.history.filter((h) => h.itemId !== action.episodeId && h.id !== action.episodeId); break;
@@ -1341,6 +1421,13 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'ADD_PLAN_ITEM': nextState.weeklyPlan = [...(state.weeklyPlan || []), action.item]; break;
     case 'DELETE_PLAN_ITEM': nextState.weeklyPlan = (state.weeklyPlan || []).filter((p) => p.id !== action.id); break;
     case 'UPDATE_PLAN_ITEM': nextState.weeklyPlan = (state.weeklyPlan || []).map((p) => p.id === action.id ? { ...p, date: action.date, time: action.time } : p); break;
+    case 'PRUNE_EXPIRED_PLAN_ITEMS': {
+      const currentPlan = state.weeklyPlan || [];
+      const pruned = pruneExpiredPlanItems(currentPlan, state.movies || [], action.today || todayStr());
+      if (pruned === currentPlan) return state;
+      nextState.weeklyPlan = pruned;
+      break;
+    }
   }
   return applyAchievements(nextState, skipRatingUnlocks ? { skipRatingUnlocks: true } : undefined);
 }
@@ -1354,6 +1441,9 @@ export interface AppContextValue {
   data: ExtendedAppData;
   syncStatus: 'syncing' | 'synced' | 'error'; // YENİ: Eşitleme Durum Sinyali
   isQuestCelebrating: boolean; setIsQuestCelebrating: (val: boolean) => void; levelUpQueuedRef: { current: boolean }; // gecikmeli seviye modalı bekliyor (dış flush kapıları için)
+  // Kutlama kapıları (ref tabanlı, state gecikmesinden etkilenmez)
+  contractCelebratingRef: { current: boolean }; contractQueuedRef: { current: { contractId: string; xp: number; coins: number; rarity: ContractRarity } | null };
+  questCelebratingRef: { current: boolean }; questQueuedRef: { current: boolean }; levelUpOpenRef: { current: boolean }; seasonOpenRef: { current: boolean }; seasonQueuedRef: { current: { seriesTitle: string; season: number } | null }; xpGainOpenRef: { current: boolean };
   addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => boolean;
   deleteMovie: (id: string) => void; startWatchingMovie: (id: string, silent?: boolean) => void; togglePauseWatchingMovie: (id: string) => void; cancelWatchingMovie: (id: string) => void; canRateMovieWithTimer: (id: string) => boolean;
   watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
@@ -1372,6 +1462,13 @@ export interface AppContextValue {
   levelUpData: LevelUpData | null; seasonCompleteData: SeasonCompleteData | null; dismissLevelUp: () => void; dismissSeasonComplete: () => void;
   toggleLockedNames: () => void; toggleBadgeDetails: () => void; xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
   coinGainData: { amount: number; label: string } | null;
+  queuedCoinGain: { amount: number; label: string; final?: boolean } | null;
+  isContractCelebrating: boolean;
+  contractCelebrationData: { contractId: string; xp: number; coins: number; rarity: ContractRarity } | null;
+  requestContractCelebration: (payload: { contractId: string; xp: number; coins: number; rarity: ContractRarity }) => void;
+  dismissContractCelebration: () => void;
+  /** Pazar görevi tamamlandı sinyali (layout effect ile, XP/başarım efektlerinden önce yazılır). */
+  setContractCompletionPending: (val: boolean) => void;
   updateAIHistory: (messages: AIMessage[]) => void; addCriterion: (criterion: RatingCriterion) => void; editCriterion: (id: string, criterion: RatingCriterion) => void; deleteCriterion: (id: string) => void;
   updateAltWatchTemplate: (template: string) => void; updateTheme: (theme: string) => void;
   weeklyPlan: WeeklyPlanItem[]; addPlanItem: (movie: Movie, date: string, time: string) => boolean; deletePlanItem: (id: string) => void; updatePlanItem: (id: string, date: string, time: string) => boolean;
@@ -1379,10 +1476,10 @@ export interface AppContextValue {
   grantCoins: (amount: number, kind: CoinTx['kind'], label: string, refId: string, itemId?: string) => void;
   grantContractReward: (xp: number, coins: number, refId: string, label: string) => void;
   purchaseItem: (itemId: string, name: string, price: number, kind: string, consumable?: boolean, coupon?: boolean) => void;
-  equipItem: (slot: 'frameId' | 'titleId' | 'badgeId', itemId: string | null) => void;
+  equipItem: (slot: 'frameId' | 'titleId' | 'badgeId' | 'badgeId2' | 'backgroundId' | 'nameEffectId', itemId: string | null) => void;
   activateItem: (itemId: string, effect: string, label: string) => void;
+  pinContract: (contractId: string, week: string) => void;
   consumeEffect: (itemId: string) => void;
-  convertCoinsToXp: (coins: number, refId: string) => void;
   setSeriesRuntime: (seriesId: string, episodeRuntime?: number, runtimes?: Record<string, number>) => void;
   markMarketIntroSeen: () => void;
   rerollMarket: () => void;
@@ -1434,8 +1531,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // listesinin ilk (primary) şablonu olarak taşınır — eski "Alternatif İzle"
         // davranışı kaybolmaz, kullanıcı yeni listeyi düzenleyebilir.
         if (!Array.isArray(parsedData.externalActions)) parsedData.externalActions = [];
+        // Eski kayıtlı "Alternatif İzle" etiketlerini görünürde "İzle" olarak normalize et.
+        parsedData.externalActions = parsedData.externalActions.map((action: any) => (
+          action && typeof action === 'object'
+            ? { ...action, label: normalizeActionLabel(action.label) }
+            : action
+        ));
         if (parsedData.externalActions.length === 0 && parsedData.altWatchTemplate) {
-          parsedData.externalActions = [{ id: 'legacy-alt-izle', label: 'Alternatif İzle', urlTemplate: rewriteLegacyTemplate(parsedData.altWatchTemplate), icon: 'ExternalLink', targetScope: 'all', isPrimary: true }];
+          parsedData.externalActions = [{ id: 'legacy-alt-izle', label: 'İzle', urlTemplate: rewriteLegacyTemplate(parsedData.altWatchTemplate), icon: 'ExternalLink', targetScope: 'all', isPrimary: true }];
         }
         
         parsedData = synchronizeXPAndLevel(parsedData, true);
@@ -1450,13 +1553,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const levelUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // ertelenmiş seviye modalı
   const levelUpQueuedRef = useRef(false);   // modal zamanlandı VEYA açık (ref, state'ten önce okunur)
   const seasonQueuedRef = useRef<{ seriesTitle: string; season: number } | null>(null); // bekleyen sezon modalı
-  const levelUpOpenRef = useRef(false); const seasonOpenRef = useRef(false); const xpGainOpenRef = useRef(false); const questCelebratingRef = useRef(false);
+  const levelUpOpenRef = useRef(false); const seasonOpenRef = useRef(false); const xpGainOpenRef = useRef(false); const questCelebratingRef = useRef(false); const questQueuedRef = useRef(false); const levelUpSoundStartedRef = useRef(false);
+  const contractQueuedRef = useRef<{ contractId: string; xp: number; coins: number; rarity: ContractRarity } | null>(null);
+  const contractOpenRef = useRef(false);
+  const contractCelebratingRef = useRef(false);
+  // QuestProvider, aktif sözleşmenin tamamlandığını useLayoutEffect ile buraya yazar.
+  // Böylece aynı commit'te çalışan XP/başarım efektleri kutlamadan önce araya girmez.
+  const contractCompletionPendingRef = useRef(false);
+  const setContractCompletionPending = useCallback((val: boolean) => {
+    contractCompletionPendingRef.current = val;
+  }, []);
   const toastRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null); // ertelenen sıradan toast
   // SENKRON AYNA: Görev kutlaması (rozet) ile başarım kuyruğu AYNI commit'te
   // tetiklenebilir; React state'i commit edilmeden parent etkileri eski değeri
   // okurdu → setter ref'i ANINDA yazar, kuyruk etkisi bunu görür ve ikisi
   // asla üst üste başlamaz (sesler de dahil).
   const setIsQuestCelebrating = useCallback((val: boolean) => { questCelebratingRef.current = val; setQuestCelebratingState(val); }, []);
+  const setIsContractCelebrating = useCallback((val: boolean) => { contractCelebratingRef.current = val; setContractCelebratingState(val); }, []);
   
   const lastSyncedStorageHash = useRef<string>(getCleanHashString(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}'), readSyncExtras()));
   // En güncel reducer durumuna ref üzerinden erişim (localStorage artık sadece küçük bir anlık görüntü tutuyor).
@@ -1495,6 +1608,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [queuedCoinGain, setQueuedCoinGain] = useState<{ amount: number; label: string; final?: boolean } | null>(null);
   const coinGainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coinShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [contractCelebrationData, setContractCelebrationData] = useState<{ contractId: string; xp: number; coins: number; rarity: ContractRarity } | null>(null);
+  const [isContractCelebrating, setContractCelebratingState] = useState(false);
+  const [contractTick, setContractTick] = useState(0);
+  const [animationTick, setAnimationTick] = useState(0);
 
   useEffect(() => { document.body.setAttribute('data-theme', !data.theme ? 'premium-dark' : data.theme); }, [data.theme]);
 
@@ -1589,6 +1706,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { window.removeEventListener('pagehide', flushWrites); window.removeEventListener('beforeunload', flushWrites); document.removeEventListener('visibilitychange', onVisibility); };
   }, [data]);
 
+  // HAFTALIK PLAN TEMİZLİĞİ — planlanan günün üzerinden 2 gün geçmiş ve film
+  // hâlâ izlenmemişse kaydı otomatik kaldır. Kullanıcı tarihi değiştirirse
+  // (UPDATE_PLAN_ITEM) sayaç yeni tarihten başlar.
+  useEffect(() => {
+    const prune = () => dispatch({ type: 'PRUNE_EXPIRED_PLAN_ITEMS', today: todayStr() });
+    prune();
+    const timer = window.setInterval(prune, 60 * 60 * 1000);
+    const onPlanVisibility = () => {
+      if (document.visibilityState === 'visible') prune();
+    };
+    document.addEventListener('visibilitychange', onPlanVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onPlanVisibility);
+    };
+  }, [data.weeklyPlan, data.movies]);
+
   // AÇILIŞ KONTROLÜ (BOOT CHECK)
   useEffect(() => {
     if (!data.agentId) return;
@@ -1637,6 +1771,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
               lmSkipBumpRef.current = true; // bulut senkronu gerçek yerel düzenleme DEĞİLDİR
               dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
+              if (questData) window.dispatchEvent(new CustomEvent('sinevia-quests-restored'));
               showToast('Yokluğunda yapılan güncellemeler eşitlendi!', 'info');
             }
           }
@@ -1824,6 +1959,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
                 lmSkipBumpRef.current = true; // realtime indirmesi gerçek yerel düzenleme DEĞİLDİR
                 dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
+                if (questData) window.dispatchEvent(new CustomEvent('sinevia-quests-restored'));
                 setSyncStatus('synced');
               } else {
                 setSyncStatus('error');
@@ -1864,38 +2000,137 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => { const id = uid(); setAchievementToasts({ type: 'add', toast: { ...item, id } }); setTimeout(() => setAchievementToasts({ type: 'remove', id }), DISPLAY_DURATION_MS); }, []);
 
+  // Kutlama kuyruğu beklerken veya ses çalarken kısa nabız. Nabız yalnızca
+  // ses başladığında değil, bekleyen bir animasyon olduğunda da çalışır;
+  // aksi halde ses bittikten sonra hiçbir state değişmeyip kuyruk kilitlenir.
+  useEffect(() => {
+    const hasPendingCelebration =
+      !!contractQueuedRef.current ||
+      !!contractOpenRef.current ||
+      !!data.pendingXpGain ||
+      !!data.pendingLevelUp ||
+      (data.pendingLevelUpQueue?.length || 0) > 0 ||
+      (data.pendingToasts?.length || 0) > 0 ||
+      !!data.pendingCoinGain ||
+      !!queuedCoinGain ||
+      !!xpGainData ||
+      !!levelUpData ||
+      !!coinGainData ||
+      isQuestCelebrating ||
+      !!seasonCompleteData;
+    if (!isSoundBusy() && !hasPendingCelebration) return;
+    const delay = isSoundBusy()
+      ? Math.min(getSoundBusyRemainingMs() + 40, 250)
+      : 250;
+    const timer = window.setTimeout(() => setAnimationTick((tick) => tick + 1), delay);
+    return () => window.clearTimeout(timer);
+  }, [
+    animationTick,
+    data.pendingXpGain,
+    data.pendingLevelUp,
+    data.pendingLevelUpQueue,
+    data.pendingToasts,
+    data.pendingCoinGain,
+    queuedCoinGain,
+    xpGainData,
+    levelUpData,
+    coinGainData,
+    isQuestCelebrating,
+    seasonCompleteData,
+    contractCelebrationData,
+    contractTick,
+  ]);
+
+  // Pazar görevi kutlaması her şeyden önce açılır; diğer animasyonlar
+  // contractOpenRef kapanana kadar bekletilir.
+  useEffect(() => {
+    if (!contractQueuedRef.current || contractOpenRef.current) return;
+    if (
+      xpGainData ||
+      levelUpData ||
+      seasonCompleteData ||
+      seasonQueuedRef.current ||
+      seasonOpenRef.current ||
+      questCelebratingRef.current ||
+      coinGainData ||
+      achievementToasts.length > 0 ||
+      isProcessingToastRef.current ||
+      isSoundBusy()
+    ) return;
+    const payload = contractQueuedRef.current;
+    contractQueuedRef.current = null;
+    contractOpenRef.current = true;
+    setContractCelebrationData(payload);
+    setAnimationTick((tick) => tick + 1);
+    import('../lib/sound').then(({ playMarketContractCompleteSound }) => playMarketContractCompleteSound(payload.rarity));
+  }, [contractTick, animationTick, queueTick, xpGainData, levelUpData, seasonCompleteData, isQuestCelebrating, coinGainData, achievementToasts.length]);
+
+  // XP barı tek başına bir katmandır. Başarım bildirimiyle aynı anda
+  // görünebilir (kullanıcı istisnası); diğer kutlamalarla binemez.
   useEffect(() => {
     const inBoot = Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS;
-    if (data.pendingXpGain) {
-      // Açılış uzlaşma penceresindeki XP kazancı hidrate/bulut senkronu yeniden hesaplamasıdır,
-      // gerçek ödül değil → sadece temizle, gösterme (kutlama benzeri sahte animasyonu önle).
-      dispatch({ type: 'CLEAR_XP_GAIN' });
-      if (!inBoot) {
-        if (xpTimerRef.current) clearTimeout(xpTimerRef.current); setXpGainData(data.pendingXpGain);
-        xpTimerRef.current = setTimeout(() => { setXpGainData(null); xpTimerRef.current = null; }, XP_OVERLAY_DURATION_MS);
+    if (!data.pendingXpGain) return;
+    if (contractCompletionPendingRef.current || contractCelebratingRef.current || contractQueuedRef.current) return;
+    if (levelUpData || seasonCompleteData || seasonQueuedRef.current || seasonOpenRef.current || questCelebratingRef.current || coinGainData) return;
+    // Başarım sesi XP barıyla birlikte çalabilir; diğer sesler bitmeden başlamaz.
+    if (isSoundBusy() && getSoundBusyKind() !== 'achievement') return;
+
+    dispatch({ type: 'CLEAR_XP_GAIN' });
+    if (inBoot) return;
+    if (xpTimerRef.current) clearTimeout(xpTimerRef.current);
+    xpGainOpenRef.current = true;
+    setXpGainData(data.pendingXpGain);
+    xpTimerRef.current = setTimeout(() => {
+      xpGainOpenRef.current = false;
+      setXpGainData(null);
+      xpTimerRef.current = null;
+      setAnimationTick((tick) => tick + 1);
+    }, XP_OVERLAY_DURATION_MS);
+  }, [data.pendingXpGain, animationTick, isContractCelebrating, contractTick, levelUpData, seasonCompleteData, isQuestCelebrating, coinGainData]);
+
+  // Seviye modalı; XP kartı, başarım kuyruğu, pazar görevi, sezon ve quest
+  // bitmeden açılmaz. Böylece sesler de üst üste binmez.
+  useEffect(() => {
+    const inBoot = Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS;
+    if (!data.pendingLevelUp) return;
+    if (contractCompletionPendingRef.current || contractCelebratingRef.current || contractQueuedRef.current) return;
+    if (xpGainData || data.pendingXpGain || xpGainOpenRef.current) return;
+    if (
+      levelUpData ||
+      levelUpQueuedRef.current ||
+      seasonCompleteData ||
+      seasonQueuedRef.current ||
+      seasonOpenRef.current ||
+      questCelebratingRef.current ||
+      (data.pendingToasts?.length || 0) > 0 ||
+      achievementToasts.length > 0 ||
+      isProcessingToastRef.current ||
+      coinGainData ||
+      isSoundBusy()
+    ) return;
+
+    // Ref'i dispatch'ten ÖNCE işaretle: coin sahnesi aynı commit'te level modalını
+    // henüz görmeden açılıp üst üste binmesin.
+    levelUpQueuedRef.current = true;
+    dispatch({ type: 'CLEAR_LEVELUP' });
+    if (inBoot) return;
+    if (levelUpTimerRef.current) clearTimeout(levelUpTimerRef.current);
+    const payload = data.pendingLevelUp;
+    const fire = () => {
+      // 150ms beklerken bir başarım bildirimi açılmış olabilir; modal onun
+      // üstüne binmesin diye ses/bildirim bitene kadar tekrar dene.
+      if (isProcessingToastRef.current || achievementToastsRef.current.length > 0 || isSoundBusy()) {
+        levelUpTimerRef.current = setTimeout(fire, 250);
+        return;
       }
-    }
-    if (data.pendingLevelUp) {
-      // Açılış uzlaşma penceresi içindeki "artış" hidrate/bulut senkronu yeniden hesaplamasıdır,
-      // gerçek kutlama değildir → sadece temizle, gösterme.
-      dispatch({ type: 'CLEAR_LEVELUP' });
-      if (!inBoot) {
-        // SIRA: XP kartı oynarken tam ekran seviye modalı AÇILMAZ (üst üste binmesin).
-        // XP kartı bitiminden 150ms sonra açılır → kartın çıkış animasyonu da tamamlanır.
-        const xpActive = !!data.pendingXpGain || xpGainOpenRef.current;
-        const delay = xpActive ? XP_OVERLAY_DURATION_MS + 150 : 0;
-        if (levelUpTimerRef.current) clearTimeout(levelUpTimerRef.current);
-        levelUpQueuedRef.current = true;
-        const payload = data.pendingLevelUp;
-        const fire = () => {
-          levelUpTimerRef.current = null; levelUpQueuedRef.current = false;
-          setLevelUpData(payload);
-          import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound());
-        };
-        if (delay > 0) levelUpTimerRef.current = setTimeout(fire, delay); else fire();
-      }
-    }
-  }, [data.pendingXpGain, data.pendingLevelUp]);
+      levelUpTimerRef.current = null;
+      levelUpQueuedRef.current = false;
+      setLevelUpData(payload);
+      if (!levelUpSoundStartedRef.current) { levelUpSoundStartedRef.current = true; import('../lib/sound').then(({ playLevelUpSound }) => playLevelUpSound()); }
+      setAnimationTick((tick) => tick + 1);
+    };
+    levelUpTimerRef.current = setTimeout(fire, 150);
+  }, [data.pendingLevelUp, data.pendingXpGain, xpGainData, animationTick, queueTick, isContractCelebrating, contractTick, levelUpData, seasonCompleteData, isQuestCelebrating, achievementToasts.length, coinGainData]);
 
   // Coin animasyonu — başarım/level parçaları reducer'da birleşir. Ara parçalar
   // (final=false) tüketilmez; son toplam ancak bildirimler ve seviye zinciri
@@ -1905,7 +2140,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!payload || payload.final === false) return;
     dispatch({ type: 'CLEAR_COIN_GAIN' });
     if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) return;
-    if (coinGainTimerRef.current) clearTimeout(coinGainTimerRef.current);
+    // Aktif coin sahnesinin kendi kapanma timer'ını BURADA iptal ETME.
+    // Yeni coin gelince eski timer temizlenirse sahne ekranda kilitli kalır;
+    // yeni sahne başlarken coin play effect timer'ı zaten yeniliyor.
     if (coinShowTimerRef.current) clearTimeout(coinShowTimerRef.current);
     // Başarım bildirimi + XP barı bitmeden coin animasyonu başlamaz.
     coinShowTimerRef.current = setTimeout(() => {
@@ -1920,14 +2157,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // biriken toplam tek seferde oynar.
   useEffect(() => {
     if (!queuedCoinGain) return;
-    if (levelUpData || data.pendingLevelUp || data.pendingLevelUpQueue?.length) return;
+    if (
+      contractCelebratingRef.current ||
+      contractQueuedRef.current ||
+      xpGainData ||
+      data.pendingXpGain ||
+      levelUpData ||
+      levelUpQueuedRef.current ||
+      data.pendingLevelUp ||
+      data.pendingLevelUpQueue?.length ||
+      seasonCompleteData ||
+      seasonQueuedRef.current ||
+      seasonOpenRef.current ||
+      questCelebratingRef.current ||
+      questQueuedRef.current ||
+      (data.pendingToasts?.length || 0) > 0 ||
+      achievementToasts.length > 0 ||
+      isProcessingToastRef.current ||
+      isSoundBusy()
+    ) return;
     setQueuedCoinGain(null);
     if (coinGainTimerRef.current) clearTimeout(coinGainTimerRef.current);
     setCoinGainData({ amount: queuedCoinGain.amount, label: queuedCoinGain.label });
     import('../lib/sound').then(({ playCoinSound }) => playCoinSound());
     // Animasyon 6.2s sürüyor; fade bitmeden katmanı sökmemek için 6.4s bekle.
-    coinGainTimerRef.current = setTimeout(() => { setCoinGainData(null); coinGainTimerRef.current = null; }, 6400);
-  }, [queuedCoinGain, levelUpData, data.pendingLevelUp, data.pendingLevelUpQueue]);
+    coinGainTimerRef.current = setTimeout(() => { setCoinGainData(null); coinGainTimerRef.current = null; }, 2600);
+  }, [queuedCoinGain, levelUpData, data.pendingLevelUp, data.pendingLevelUpQueue, data.pendingXpGain, xpGainData, seasonCompleteData, isQuestCelebrating, data.pendingToasts, achievementToasts.length, isContractCelebrating, contractTick, animationTick, queueTick]);
 
   // Ayna ref'ler: kuyruk etkileri state değişiminden ÖNCE ref okuyabilsin diye
   // her state değişiminde hemen eşitlenir (bileşen sırası: bu etkiler kuyruk
@@ -1947,33 +2202,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const requestSeasonComplete = useCallback((payload: { seriesTitle: string; season: number }) => {
     // Kapı: tam ekran seviye/kutlama penceresi VEYA görünen başarım bildirimi
     // (sezon modalı kartın üstüne açılıp kaybolmasına yol açmasın).
-    if (levelUpQueuedRef.current || levelUpOpenRef.current || xpGainOpenRef.current || questCelebratingRef.current || seasonOpenRef.current || achievementToasts.length > 0) {
+    if (isSoundBusy() || contractCelebratingRef.current || contractQueuedRef.current || levelUpQueuedRef.current || levelUpOpenRef.current || xpGainOpenRef.current || questCelebratingRef.current || seasonOpenRef.current || coinGainData || queuedCoinGain || achievementToasts.length > 0) {
       seasonQueuedRef.current = payload;
     } else setSeasonCompleteData(payload);
   }, [achievementToasts]);
   useEffect(() => {
     if (!seasonQueuedRef.current) return;
-    if (levelUpQueuedRef.current || levelUpOpenRef.current || xpGainOpenRef.current || questCelebratingRef.current || achievementToasts.length > 0) return;
+    if (isSoundBusy() || contractCelebratingRef.current || contractQueuedRef.current || levelUpQueuedRef.current || levelUpOpenRef.current || xpGainOpenRef.current || questCelebratingRef.current || coinGainData || queuedCoinGain || achievementToasts.length > 0) return;
     const payload = seasonQueuedRef.current; seasonQueuedRef.current = null;
     setSeasonCompleteData(payload);
-  }, [xpGainData, levelUpData, isQuestCelebrating, achievementToasts]);
+  }, [xpGainData, levelUpData, isQuestCelebrating, achievementToasts, isContractCelebrating, contractTick, animationTick]);
 
   useEffect(() => {
-    const queue = data.pendingToasts || []; if (queue.length === 0 || levelUpData || seasonCompleteData || levelUpQueuedRef.current || seasonOpenRef.current || isProcessingToastRef.current || questCelebratingRef.current) return;
+    const queue = data.pendingToasts || []; if (queue.length === 0 || isSoundBusy() || contractCompletionPendingRef.current || contractCelebratingRef.current || contractQueuedRef.current || levelUpData || levelUpOpenRef.current || seasonCompleteData || seasonQueuedRef.current || seasonOpenRef.current || isProcessingToastRef.current || questCelebratingRef.current || coinGainData) return;
     // Açılış uzlaşma penceresindeki kuyruk (bayat bulut/hidrasyon kaynaklı) GÖSTERİLMEZ, sessizce tüketilir.
     if (Date.now() - bootStartRef.current < BOOT_RECONCILE_WINDOW_MS) { dispatch({ type: 'CONSUME_NEXT_TOAST' }); dispatch({ type: 'CLEAR_LEVEL_UP_QUEUE' }); return; }
     isProcessingToastRef.current = true; const nextAchievement = queue[0], remainingCount = queue.length - 1; const comboText = remainingCount > 0 ? ` (+${remainingCount} Sırada)` : '';
     showAchievementToast({ achievementName: `${nextAchievement.name}${comboText}`, achievementId: nextAchievement.achievementId, tier: nextAchievement.tier, icon: nextAchievement.icon, description: nextAchievement.description });
     import('../lib/sound').then(({ playAchievementSound }) => playAchievementSound()); dispatch({ type: 'CONSUME_NEXT_TOAST' });
     setTimeout(() => { isProcessingToastRef.current = false; setQueueTick((t) => t + 1); }, QUEUE_STEP_DURATION_MS);
-  }, [data.pendingToasts, levelUpData, seasonCompleteData, queueTick, showAchievementToast, isQuestCelebrating]);
+  }, [data.pendingToasts, levelUpData, seasonCompleteData, queueTick, showAchievementToast, isQuestCelebrating, isContractCelebrating, contractTick, animationTick, coinGainData]);
 
   const showToast = useCallback((message: string, type: ToastItem['type'] = 'success') => {
     // SIRA: yalnızca TAM EKRAN kutlamalar (seviye/sezon/görev) açıksa/beke-
     // leniyorsa ertelenir (modal altında kaybolmasın) → 400ms aralıkla dener.
     // Başarım bildirimleri artık ERTELENMEZ: stackOffset ile üstüne kaydırılır.
     const attempt = () => {
-      if (levelUpQueuedRef.current || levelUpOpenRef.current || seasonOpenRef.current || seasonQueuedRef.current || questCelebratingRef.current) {
+      if (isSoundBusy() || contractCelebratingRef.current || contractQueuedRef.current || levelUpQueuedRef.current || levelUpOpenRef.current || seasonOpenRef.current || seasonQueuedRef.current || questCelebratingRef.current) {
         toastRetryRef.current = setTimeout(attempt, 400);
         return;
       }
@@ -2161,8 +2416,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCriterion = useCallback((id: string) => { dispatch({ type: 'DELETE_CRITERION', id }); showToast('Kriter Silindi'); }, [showToast]);
   const updateAltWatchTemplate = useCallback((template: string) => { dispatch({ type: 'UPDATE_ALT_TEMPLATE', template }); showToast('Alternatif izleme şablonu güncellendi', 'success'); }, [showToast]);
   const updateTheme = useCallback((theme: string) => { dispatch({ type: 'SET_THEME', theme }); showToast('Tema değiştirildi', 'success'); }, [showToast]);
-  const exportData = useCallback(() => { const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = `sinevia-yedek-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('Yedek alındı'); }, [data, showToast]);
-  const importData = useCallback((json: string) => { try { dispatch({ type: 'IMPORT_DATA', data: { ...defaultData(), ...JSON.parse(json) } }); showToast('Veriler geri yüklendi'); return true; } catch { showToast('Hata', 'error'); return false; } }, [showToast]);
+  const exportData = useCallback(() => {
+    const payload = buildBackupPayload(data, readQuestState(), readBackupExtras());
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sinevia-yedek-${todayStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Tam yedek alındı (görevler ve ayarlar dahil)', 'success');
+  }, [data, showToast]);
+  const importData = useCallback((json: string) => {
+    try {
+      const parsed = JSON.parse(json);
+      const { core, quests, extras } = parseBackupPayload(parsed);
+      if (!core || typeof core !== 'object' || Array.isArray(core)) throw new Error('Geçersiz yedek');
+      const restoredQuests = quests != null ? writeQuestState(quests) : false;
+      applyBackupExtras(extras);
+      try {
+        localStorage.removeItem('sinevia_zero_reset');
+        localStorage.removeItem('sinevia_restore_prev');
+      } catch { /* kota */ }
+      dispatch({ type: 'IMPORT_DATA', data: { ...defaultData(), ...core } });
+      if (quests == null) {
+        showToast('Veriler geri yüklendi; yedekte görev verisi yok (mevcut görevler korundu).', 'warning');
+      } else if (!restoredQuests) {
+        showToast('Veriler geri yüklendi ancak görevler yazılamadı.', 'warning');
+      } else {
+        showToast('Tam yedek geri yüklendi (görevler dahil).', 'success');
+      }
+      return true;
+    } catch {
+      showToast('Yedek dosyası okunamadı', 'error');
+      return false;
+    }
+  }, [showToast]);
   const resetData = useCallback(() => { dispatch({ type: 'IMPORT_DATA', data: defaultData() }); showToast('Sıfırlandı'); }, [showToast]);
   const exportShareList = useCallback(() => {
     const sharePayload = { isShareList: true, exportedAt: new Date().toISOString(), collections: data.collections.map((c) => ({ id: c.id, name: c.name })), movies: data.movies.map((m) => ({ title: m.title, year: m.year, genres: m.genres, collectionId: m.collectionId, runtime: m.runtime, posterUrl: m.posterUrl, overview: m.overview, tmdbId: m.tmdbId, imdbId: m.imdbId, watchProviders: m.watchProviders, directors: m.directors, cast: m.cast, studios: m.studios, keywords: m.keywords, originalLanguage: m.originalLanguage, customUrl: m.customUrl })), series: data.series.map((s) => ({ title: s.title, year: s.year, genres: s.genres, posterUrl: s.posterUrl, overview: s.overview, tmdbId: s.tmdbId, imdbId: s.imdbId, watchProviders: s.watchProviders, creators: s.creators, cast: s.cast, studios: s.studios, keywords: s.keywords, originalLanguage: s.originalLanguage, customUrl: s.customUrl, episodes: (s.episodes || []).map((e) => ({ season: e.season, episode: e.episode })) })) };
@@ -2181,34 +2469,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'MERGE_SHARED_LIST', movies: newMovies, series: newSeries, collections: newCollections, genres: tempGenres }); showToast(`${newMovies.length} yeni film ve ${newSeries.length} yeni dizi eklendi!`, 'success'); return true;
     } catch { showToast('Geçersiz paylaşım dosyası!', 'error'); return false; }
   }, [data.collections, data.genres, data.movies, data.removedSeriesTitles, data.series, showToast]);
-  const dismissLevelUp = useCallback(() => { setLevelUpData(null); dispatch({ type: 'PROMOTE_LEVEL_UP' }); }, []); const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []); const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
+  const dismissLevelUp = useCallback(() => { levelUpSoundStartedRef.current = false; setLevelUpData(null); dispatch({ type: 'PROMOTE_LEVEL_UP' }); }, []); const dismissSeasonComplete = useCallback(() => setSeasonCompleteData(null), []);
+  const requestContractCelebration = useCallback((payload: { contractId: string; xp: number; coins: number; rarity: ContractRarity }) => {
+    contractQueuedRef.current = payload;
+    contractCelebratingRef.current = true;
+    setIsContractCelebrating(true);
+    setContractTick((tick) => tick + 1);
+  }, [setIsContractCelebrating]);
+  const dismissContractCelebration = useCallback(() => {
+    contractOpenRef.current = false;
+    setContractCelebrationData(null);
+    if (contractQueuedRef.current) {
+      setContractTick((tick) => tick + 1);
+      return;
+    }
+    contractCelebratingRef.current = false;
+    setIsContractCelebrating(false);
+    setContractTick((tick) => tick + 1);
+  }, [setIsContractCelebrating]); const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
   const grantCoins = useCallback((amount: number, kind: CoinTx['kind'], label: string, refId: string, itemId?: string) => {
     if (amount <= 0) return;
+    // Ses ve bildirim CoinGainOverlay açılınca tetiklenir (sıranın SON halkası).
+    // Burada erken ses çalmak pazar görevi/görev kutlamasını 6.2s geciktiriyordu.
     dispatch({ type: 'GRANT_COINS', amount, kind, label, refId, itemId });
-    showToast(`+${amount} SineCoin`, 'success');
-    import('../lib/sound').then(({ playCoinSound }) => playCoinSound());
-  }, [showToast]);
+  }, []);
   const grantContractReward = useCallback((xp: number, coins: number, refId: string, label: string) => {
+    // Kutlama sesi ContractCelebrationOverlay açıldığında çalar; coin sesi ise
+    // en sonda CoinGainOverlay ile gelir. Burada ses çalmak sırayı bozuyordu.
     dispatch({ type: 'GRANT_CONTRACT_REWARD', xp, coins, refId, label });
-    showToast(`Görev tamamlandı: +${xp} XP · +${coins} SC`, 'success');
-    import('../lib/sound').then(({ playCoinSound }) => playCoinSound());
-  }, [showToast]);
+  }, []);
   const purchaseItem = useCallback((itemId: string, name: string, price: number, kind: string, consumable?: boolean, coupon?: boolean) => {
     dispatch({ type: 'PURCHASE_ITEM', itemId, name, price, kind, consumable, coupon });
     showToast(`${name} satın alındı`, 'success');
-    import('../lib/sound').then(({ playCoinSound }) => playCoinSound());
   }, [showToast]);
-  const equipItem = useCallback((slot: 'frameId' | 'titleId' | 'badgeId', itemId: string | null) => {
+  const equipItem = useCallback((slot: 'frameId' | 'titleId' | 'badgeId' | 'badgeId2' | 'backgroundId' | 'nameEffectId', itemId: string | null) => {
     dispatch({ type: 'EQUIP_ITEM', slot, itemId });
   }, []);
   const activateItem = useCallback((itemId: string, effect: string, label: string) => {
     dispatch({ type: 'USE_ITEM', itemId, effect, label });
     showToast(label, 'success');
   }, [showToast]);
-  const convertCoinsToXp = useCallback((coins: number, refId: string) => {
-    dispatch({ type: 'CONVERT_COINS_TO_XP', coins, refId });
-    showToast(`+${coins * XP_CONVERSION_RATE} XP`, 'success');
-    import('../lib/sound').then(({ playCoinSound }) => playCoinSound());
+  const pinContract = useCallback((contractId: string, week: string) => {
+    dispatch({ type: 'PIN_CONTRACT', contractId, week });
+    showToast('Görev gelecek hafta için sabitlendi', 'success');
   }, [showToast]);
   const consumeEffect = useCallback((itemId: string) => {
     dispatch({ type: 'CONSUME_EFFECT', itemId });
@@ -2269,7 +2572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, toggleBadgeDetails, xpGainData, coinGainData, levelUpQueuedRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, consumeEffect, convertCoinsToXp, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
@@ -2281,10 +2584,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue,
     exportData, importData, resetData, exportShareList, importShareList,
-    showToast, dismissLevelUp, dismissSeasonComplete, toggleLockedNames, toggleBadgeDetails, updateAIHistory,
+    showToast, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, toggleLockedNames, toggleBadgeDetails, updateAIHistory,
     addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme,
     addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem,
-    equipItem, activateItem, consumeEffect, convertCoinsToXp, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome,
+    equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome,
     toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification,
     forceXpSync, syncAchievements,
     abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions,
@@ -2332,6 +2635,18 @@ function applyStreakForWatch(data: ExtendedAppData): { dailyStreak: number; acti
   if (gap > 1 && activeEffectCharges(data, 'util_streak_shield') > 0) {
     const shielded = consumeEffectCharge(data, 'util_streak_shield');
     return { dailyStreak: data.dailyStreak + 1, activeEffects: shielded.activeEffects };
+  }
+  if (gap > 1) {
+    const freeze = (data.activeEffects || []).find(
+      (effect) =>
+        effect.itemId === 'util_streak_freeze' &&
+        (effect.charges ?? 1) > 0 &&
+        (!effect.expiresAt || new Date(effect.expiresAt).getTime() > Date.now()),
+    );
+    if (freeze) {
+      const frozen = consumeEffectCharge(data, 'util_streak_freeze');
+      return { dailyStreak: data.dailyStreak + 1, activeEffects: frozen.activeEffects };
+    }
   }
   return { dailyStreak: updateStreak(data) };
 }

@@ -4,8 +4,14 @@ import {
   playLevelUpSound,
   playLessonDoneSound,
   playQuestCompleteSound,
+  playMarketContractCompleteSound,
   playUiClickSound,
   playRatingArpSound,
+  isSoundBusy,
+  markSoundBusy,
+  clearSoundBusy,
+  getSoundBusyKind,
+  getSoundBusyRemainingMs,
 } from '../lib/sound';
 
 // ============================================================================
@@ -110,7 +116,7 @@ const startsOf = (o: any) => o.start.mock.calls[0][0] as number;
 const stopsOf = (o: any) => o.stop.mock.calls[0][0] as number;
 
 describe('Penceresiz (Node/SSR) ortamda ses çalmayı DENEmemeli ama çökmemeli', () => {
-  test('window yokken 4 ses fonksiyonu da hata fırlatmadan sessizce geri dönmeli', () => {
+  test('window yokken 5 ses fonksiyonu da hata fırlatmadan sessizce geri dönmeli', () => {
     delete (globalThis as any).window;
     expect(typeof window).toBe('undefined'); // kodun guart (guard) dalı çalışıyor
 
@@ -119,6 +125,7 @@ describe('Penceresiz (Node/SSR) ortamda ses çalmayı DENEmemeli ama çökmemeli
       playLevelUpSound();
       playLessonDoneSound();
       playQuestCompleteSound();
+      playMarketContractCompleteSound();
     }).not.toThrow();
   });
 });
@@ -215,7 +222,7 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     expect(startTimes).toEqual([10, 10.07, 10.14, 10.22]);
   });
 
-  test('playQuestCompleteSound (Common tier): 7 marimba + 2 riser + 2 sub + 6 pad × 2 + 6 bell × 3 = 48 osilatör, PATLAMA tam 3.0s\'te', () => {
+  test('playQuestCompleteSound (normal quest Common): eski 7s beste, PATLAMA 3.0s', () => {
     playQuestCompleteSound();
 
     expect(created.oscillators).toHaveLength(48);
@@ -223,11 +230,10 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     const saws = created.oscillators.filter((o) => o.type === 'sawtooth');
     const triangles = created.oscillators.filter((o) => o.type === 'triangle');
     const sines = created.oscillators.filter((o) => o.type === 'sine');
-    expect(saws).toHaveLength(6);       // 6 pad saw gövdesi (Cmaj9)
+    expect(saws).toHaveLength(6);       // 6 pad saw gövdesi
     expect(triangles).toHaveLength(20); // 7 marimba harm + 1 riser + 6 pad + 6 bell harm
     expect(sines).toHaveLength(22);     // 7 marimba + 1 riser + 2 sub + 6 bell gövde + 6 bell parıltı
 
-    // Yükselen riser: C3 → C4 (0 - 2.96s) — ilk nabız 0.18s'te başlar, riser 10.0s'te
     const riserSine = sines.find((o) => startsOf(o) === 10 && o.frequency.value === 130.81);
     expect(riserSine).toBeTruthy();
     expect(riserSine!.frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(
@@ -235,16 +241,71 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
       expect.closeTo(12.9, 2)
     );
 
-    // Görsel senkron: QuestCelebrationOverlay faz 1 tam 3000ms'de → drop = now+3.0
-    // (stereo sub çifti 115 Hz'den açılır)
     const dropSines = sines.filter((o) => o.frequency.value === 115);
     expect(dropSines).toHaveLength(2);
     dropSines.forEach((o) => expect(startsOf(o)).toBeCloseTo(13, 5));
 
-    // Sıcak pad akoru da drop anında (13.0s) başlamalı
     const chordSaws = saws.filter((o) => startsOf(o) > 12);
     expect(chordSaws).toHaveLength(6);
     chordSaws.forEach((o) => expect(startsOf(o)).toBeCloseTo(13, 5));
+  });
+
+  test('playMarketContractCompleteSound (Common): yeni hızlı beste, 32 osilatör, drop 0.5s', () => {
+    playMarketContractCompleteSound();
+
+    expect(created.oscillators).toHaveLength(32);
+
+    const saws = created.oscillators.filter((o) => o.type === 'sawtooth');
+    const triangles = created.oscillators.filter((o) => o.type === 'triangle');
+    const sines = created.oscillators.filter((o) => o.type === 'sine');
+    expect(saws).toHaveLength(4);       // 4 pad saw gövdesi
+    expect(triangles).toHaveLength(12); // 3 marimba harm + 4 pad + 3 drop bell + 2 seal bell
+    expect(sines).toHaveLength(16);     // 3 marimba + 1 riser + 2 sub + 6 drop bell + 4 seal bell
+
+    // Hızlı riser: C3 → C4 (0 - 0.48s), 10.0s'te başlar
+    const riserSine = sines.find((o) => startsOf(o) === 10 && o.frequency.value === 130.81);
+    expect(riserSine).toBeTruthy();
+    expect(riserSine!.frequency.exponentialRampToValueAtTime).toHaveBeenCalledWith(
+      261.63,
+      expect.closeTo(10.47, 2)
+    );
+
+    // Hızlı drop: now + 0.5s → stereo sub çifti 115 Hz'den açılır
+    const dropSines = sines.filter((o) => o.frequency.value === 115);
+    expect(dropSines).toHaveLength(2);
+    dropSines.forEach((o) => expect(startsOf(o)).toBeCloseTo(10.5, 5));
+
+    // Sıcak pad akoru da drop anında (10.5s) başlamalı
+    const chordSaws = saws.filter((o) => startsOf(o) > 10.4);
+    expect(chordSaws).toHaveLength(4);
+    chordSaws.forEach((o) => expect(startsOf(o)).toBeCloseTo(10.5, 5));
+
+    // Mühür çanları 1.2s ve 1.28s'te devreye girer
+    const sealBells = sines.filter((o) => o.frequency.value === 1046.5 || o.frequency.value === 1318.51);
+    expect(sealBells.map(startsOf)).toEqual([11.2, 11.28]);
+  });
+
+  test('ses kilitleri ayrı: normal quest 7000ms, pazar görevi 3800ms', () => {
+    clearSoundBusy();
+    const questStartedAt = Date.now();
+    playQuestCompleteSound('mythic');
+    const questElapsed = Date.now() - questStartedAt;
+    expect(isSoundBusy()).toBe(true);
+    expect(getSoundBusyKind()).toBe('quest');
+    // Kompozisyonun senkron süresini de sayarak gerçek kilit süresini ölç.
+    const questLockMs = getSoundBusyRemainingMs() + questElapsed;
+    expect(questLockMs).toBeGreaterThan(6900);
+    expect(questLockMs).toBeLessThanOrEqual(7005);
+
+    clearSoundBusy();
+    const marketStartedAt = Date.now();
+    playMarketContractCompleteSound('mythic');
+    const marketElapsed = Date.now() - marketStartedAt;
+    expect(isSoundBusy()).toBe(true);
+    expect(getSoundBusyKind()).toBe('quest');
+    const marketLockMs = getSoundBusyRemainingMs() + marketElapsed;
+    expect(marketLockMs).toBeGreaterThan(3600);
+    expect(marketLockMs).toBeLessThanOrEqual(3805);
   });
 
   test('playQuestCompleteSound: 5 tier 5 FARKLI beste üretir (regresyon: hepsi aynı ses)', () => {
@@ -270,6 +331,40 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
     // "5 varyant ama hepsi aynı ses" regresyonunu yakalar:
     // Common/Rare/Epic/Legendary/Mythic besteleri birbirinden FARKLI olmalı
     expect(new Set(signatures).size).toBe(5);
+  });
+
+  test('pazar görevi sesi: 5 tier farklı ve normal quest sesinden ayrı', () => {
+    const tiers = ['common', 'rare', 'epic', 'legendary', 'mythic'] as const;
+    const signatures: string[] = [];
+
+    for (const tier of tiers) {
+      created.oscillators.length = 0;
+      created.gains.length = 0;
+      playMarketContractCompleteSound(tier);
+      signatures.push(
+        created.oscillators
+          .map((o) => `${o.type}:${Math.round(o.frequency.value * 100)}`)
+          .join('|')
+      );
+    }
+
+    expect(new Set(signatures).size).toBe(5);
+
+    created.oscillators.length = 0;
+    created.gains.length = 0;
+    playQuestCompleteSound('common');
+    const questCommon = created.oscillators
+      .map((o) => `${o.type}:${Math.round(o.frequency.value * 100)}`)
+      .join('|');
+
+    created.oscillators.length = 0;
+    created.gains.length = 0;
+    playMarketContractCompleteSound('common');
+    const marketCommon = created.oscillators
+      .map((o) => `${o.type}:${Math.round(o.frequency.value * 100)}`)
+      .join('|');
+
+    expect(marketCommon).not.toBe(questCommon);
   });
 
   test('osilatör → gain/node → destination zinciri kurulmalı (ses gerçekten çıkışa bağlanmalı)', () => {
@@ -317,6 +412,7 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
   });
 
   test('playRatingArpSound: yükselen E5→G5→B5→E6 Lydian arpeji, zirve notası en uzun', () => {
+    clearSoundBusy();
     playRatingArpSound();
 
     // 4 bell × 3 (gövde sine + harmonik triangle + üst oktav parıltısı) = 12 osilatör
@@ -341,5 +437,60 @@ describe('SAHTE AudioContext ile ses üretimi', () => {
 
     // Gövde + harmonikler, panner üzerinden dry+wet'e bağlı (stereo yayılım)
     created.oscillators.forEach((o) => expect(o.connect).toHaveBeenCalled());
+  });
+
+  describe('ses etkinlik kilidi', () => {
+    beforeEach(() => {
+      clearSoundBusy();
+      vi.useRealTimers();
+    });
+
+    test('aktif ses yokken meşgul değildir', () => {
+      expect(isSoundBusy()).toBe(false);
+      expect(getSoundBusyKind()).toBeNull();
+    });
+
+    test('ses başladığında süre boyunca meşgul kalır', () => {
+      markSoundBusy('achievement', 2400);
+      expect(isSoundBusy()).toBe(true);
+      expect(getSoundBusyKind()).toBe('achievement');
+      expect(getSoundBusyRemainingMs()).toBeGreaterThan(0);
+    });
+
+    test('daha kısa süre mevcut pencereyi kısaltmaz', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      markSoundBusy('quest', 5000);
+      markSoundBusy('achievement', 1000);
+      vi.advanceTimersByTime(3000);
+      expect(isSoundBusy()).toBe(true);
+      expect(getSoundBusyKind()).toBe('quest');
+    });
+
+    test('daha uzun süre pencereyi uzatır ve türü günceller', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      markSoundBusy('achievement', 1000);
+      markSoundBusy('level', 5000);
+      vi.advanceTimersByTime(3000);
+      expect(isSoundBusy()).toBe(true);
+      expect(getSoundBusyKind()).toBe('level');
+    });
+
+    test('süre bitince meşguliyet kendiliğinden biter', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      markSoundBusy('coin', 2000);
+      vi.advanceTimersByTime(2001);
+      expect(isSoundBusy()).toBe(false);
+      expect(getSoundBusyKind()).toBeNull();
+    });
+
+    test('clearSoundBusy hemen temizler', () => {
+      markSoundBusy('quest', 7000);
+      clearSoundBusy();
+      expect(isSoundBusy()).toBe(false);
+      expect(getSoundBusyKind()).toBeNull();
+    });
   });
 });

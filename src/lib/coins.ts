@@ -1,8 +1,20 @@
 import type { AppData, CoinTx } from '../types';
 import { ACHIEVEMENT_DEFS } from './achievements';
 import { QUEST_DEFS } from './quests';
+import { milestoneItemForLevel } from './levelRewards';
 
 export const WELCOME_BONUS = 150;
+
+/** Haftalık aktivite ödülü: 5 ayrı izleme günü tamamlanınca. */
+export const WEEKLY_ACTIVITY_REWARD = 250;
+export const WEEKLY_ACTIVITY_REQUIRED_DAYS = 5;
+export const MAX_STREAK_DAILY_COINS = 30;
+
+/** Seri günü büyüdükçe artan günlük coin ödülü. 2. gün 2, 7. gün 10 coin. */
+export function streakDayCoinReward(day: number): number {
+  if (day < 1) return 0;
+  return Math.min(MAX_STREAK_DAILY_COINS, day + Math.floor(day / 7) * 3);
+}
 
 /** Başarım tier'ı başına SineCoin ödülü. */
 export const TIER_COIN_REWARDS: Record<string, number> = {
@@ -112,7 +124,7 @@ export function syncCoinLedger<T extends AppData>(state: T): T {
         if (!completed.has(def.id)) continue;
         push(
           `quest:${def.id}`,
-          LIFETIME_QUEST_COINS[def.rarity] || 20,
+          def.coinReward ?? LIFETIME_QUEST_COINS[def.rarity] ?? 20,
           'lifetime_quest',
           `Görev: ${def.title}`,
         );
@@ -138,19 +150,58 @@ export function grantCoins<T extends AppData>(
   return appendCoinTx(data, makeTx(refId, amount, kind, label, itemId));
 }
 
-/** Seviye atlama ödülü — düşük seviyelerde mütevazı, yüksek seviyelerde artan. */
+/** Seviye atlama ödülü — seviye yükseldikçe artar, üst sınır yoktur. */
 export function levelCoinReward(level: number): number {
   if (level < 2) return 0;
-  return Math.min(120, 15 + (level - 2) * 5);
+  return 15 + Math.floor((level - 2) * 2.5);
 }
 
-/** Eski ve yeni seviye arasındaki her kademe için coin yazar (ledger idempotent). */
+/** Eski ve yeni seviye arasındaki her kademe için coin ve kilometre taşı ödülü yazar. */
 export function awardLevelCoins<T extends AppData>(state: T, oldLevel: number, newLevel: number): T {
   let next = state;
   for (let level = oldLevel + 1; level <= newLevel; level += 1) {
     next = grantCoins(next, levelCoinReward(level), 'bonus', `Seviye ${level} ödülü`, `level:${level}`);
+    const milestone = milestoneItemForLevel(level);
+    if (milestone && inventoryQuantity(next, milestone.id) === 0) {
+      next = addInventoryItem(next, milestone.id);
+    }
   }
   return next;
+}
+
+/** Eski hesaplara geçmiş seviyelerin kaçırılmış kilometre taşı ödüllerini verir. */
+export function syncMilestoneItems<T extends AppData>(state: T, currentLevel: number): T {
+  let next = state;
+  for (let level = 1; level <= currentLevel; level += 1) {
+    const milestone = milestoneItemForLevel(level);
+    if (milestone && inventoryQuantity(next, milestone.id) === 0) {
+      next = addInventoryItem(next, milestone.id);
+    }
+  }
+  return next;
+}
+
+/** Günün ilk izlemesinde seri coin ödülünü yazar (günde tek kez). */
+export function awardStreakCoins<T extends AppData>(state: T, date: string, streak: number): T {
+  const amount = streakDayCoinReward(streak);
+  if (amount <= 0) return state;
+  return grantCoins(state, amount, 'streak', `Günlük seri: ${streak} gün`, `streak:${date}`);
+}
+
+/** Haftada 5 ayrı izleme günü tamamlanınca aktivite ödülünü yazar. */
+export function awardWeeklyActivityCoins<T extends AppData>(
+  state: T,
+  week: string,
+  activeDays: number,
+): T {
+  if (activeDays < WEEKLY_ACTIVITY_REQUIRED_DAYS) return state;
+  return grantCoins(
+    state,
+    WEEKLY_ACTIVITY_REWARD,
+    'bonus',
+    'Haftalık aktivite ödülü (5 gün)',
+    `activity:${week}`,
+  );
 }
 
 /**

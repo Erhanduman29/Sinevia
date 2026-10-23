@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useApp, getMovieTimerInfo } from '../context/AppContext';
-import { resolveActionUrl } from '../lib/actionBridge';
+import { normalizeActionLabel, resolveActionUrl } from '../lib/actionBridge';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
 import RatingModal from './RatingModal';
 import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
@@ -224,7 +224,7 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
       });
     }
 
-    const searchSuffix = isMovie ? 'izle' : 'dizi izle';
+    const searchSuffix = isMovie ? 'İzle' : 'dizi izle';
     const searchQuery = encodeURIComponent(`${title} ${year || ''} ${searchSuffix}`);
     links.push({ href: `https://www.google.com/search?q=${searchQuery}`, text: "Google'da Bul", logo: null, icon: Search });
 
@@ -232,7 +232,7 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
       const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
       const slug = title.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (match) => charMap[match]).replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       const finalAltHref = appData.altWatchTemplate.replace('{imdb}', imdbId || '').replace('{slug}', slug).replace('{title}', encodeURIComponent(title)).replace('{year}', year || '');
-      links.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+      links.push({ href: finalAltHref, text: 'İzle', logo: null, icon: PlayCircle });
     }
     return links;
   };
@@ -527,7 +527,7 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold border opacity-50 cursor-not-allowed select-none"
                             style={{ background: 'var(--bg-surface, #12121a)', borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #9a9a96)' }}
                           >
-                            <Icon size={13} /> {tpl.label || 'Aksiyon'}
+                            <Icon size={13} /> {normalizeActionLabel(tpl.label)}
                           </span>
                         );
                       }
@@ -538,14 +538,14 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title={`${tpl.label || 'Aksiyon'} — yeni sekmede açılır`}
+                          title={`${normalizeActionLabel(tpl.label)} — yeni sekmede açılır`}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-bold transition-all border"
                           style={primary
                             ? { background: 'var(--blob-1, rgba(232, 56, 79, .14))', borderColor: 'var(--red, var(--color-1, #e8384f))', color: 'var(--text-main, #f4f4f2)' }
                             : { background: 'var(--bg-surface, #12121a)', borderColor: 'var(--line, var(--border-dim))', color: 'var(--muted, #9a9a96)' }}
                         >
                           <Icon size={13} style={primary ? { color: 'var(--red, var(--color-1, #e8384f))' } : undefined} />
-                          {tpl.label || 'Aksiyon'}
+                          {normalizeActionLabel(tpl.label)}
                         </a>
                       );
                     })}

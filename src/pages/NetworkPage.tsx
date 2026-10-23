@@ -11,6 +11,7 @@ import type { ShowcaseItem } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { uid, ratingBgClass } from '../lib/utils';
 import { levelFromXp } from '../lib/xp';
+import { showcaseLimit } from '../lib/marketItems';
 import AgentProfileModal from '../components/AgentProfileModal';
 import ShowcaseEditorModal from '../components/ShowcaseEditorModal';
 import ChatHubModal, { renderChatMessageBubble } from '../components/ChatHubModal';
@@ -627,7 +628,7 @@ export default function NetworkPage() {
         <div className="flex flex-wrap sm:flex-row items-center gap-2 w-full lg:w-auto">
           <button onClick={() => setShowShowcaseModal(true)} className="sm:hidden w-full min-h-11 flex items-center justify-center gap-2 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 text-gold-400 px-4 py-2.5 rounded-xl transition-all">
             <Crown size={15} />
-            <span className="text-xs font-black uppercase tracking-wider">Vitrinim ({myValidShowcase.length}/4)</span>
+            <span className="text-xs font-black uppercase tracking-wider">Vitrinim ({myValidShowcase.length}/{showcaseLimit(data.perks)})</span>
           </button>
           <button onClick={() => data.agentId && openProfileModal(data.agentId)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-ink-900 hover:bg-ink-800 border border-ink-700 text-ink-200 px-4 py-3 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold transition-all">
             <Eye size={15} className="text-emerald-400" /> Profilim
@@ -1521,6 +1522,7 @@ export default function NetworkPage() {
         onSave={handleSaveShowcase}
         onClose={() => setShowShowcaseModal(false)}
         showToast={showToast}
+        maxItems={showcaseLimit(data.perks)}
       />
 
       {/* 3. MESAJLAŞMA MERKEZİ (CHAT HUB) MODALI */}

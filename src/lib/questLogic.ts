@@ -109,7 +109,10 @@ export function evaluateQuestCompletion(
   series: Series[] = []
 ): boolean {
   // Sadece görevi KABUL ETTİKTEN SONRA izlenenler
+  // Önceden izlenen (past watch) kayıtlar görevi tetiklemez; görevler yalnız
+  // yeni izlemeler için vardır.
   const historySince = history.filter(h => {
+    if (h.isPastWatch) return false;
     const watchedTime = new Date(h.watchedAt).getTime();
     return !isNaN(watchedTime) && watchedTime >= questAcceptedAt;
   });
@@ -127,6 +130,7 @@ export function evaluateQuestCompletion(
   // Görev kabulünden SONRA yapılan puan revizyonları (previousRating yalnız değişimde yazılır)
   const revisedMovies = historySince.filter(h =>
     h.kind === 'movie' &&
+    !h.isPastWatch &&
     h.previousRating != null &&
     Boolean(h.ratingChangedAt) &&
     new Date(h.ratingChangedAt as string).getTime() >= questAcceptedAt

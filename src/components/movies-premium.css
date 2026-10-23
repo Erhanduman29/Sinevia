@@ -202,8 +202,8 @@ body[data-theme='paper-light'] .mpx-root {
   font-weight: 800;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  padding: 13px 22px;
-  min-height: 44px;
+  padding: 10px 16px;
+  min-height: 38px;
   border-radius: 13px;
   border: 1px solid transparent;
   cursor: pointer;
@@ -303,8 +303,8 @@ body[data-theme='paper-light'] .mpx-root {
 }
 
 .mpx-btn-xs {
-  padding: 6px 12px;
-  font-size: 10.5px;
+  padding: 5px 10px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   border-radius: 11px;
 }
@@ -313,8 +313,8 @@ body[data-theme='paper-light'] .mpx-root {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border-radius: 12px;
   border: 1px solid transparent;
@@ -340,7 +340,7 @@ body[data-theme='paper-light'] .mpx-root {
   justify-content: center;
   gap: 6px;
   padding: 5px 8px;
-  min-height: 40px;
+  min-height: 32px;
   border-radius: 11px;
   background: rgba(16, 185, 129, 0.14);
   border: 1px solid rgba(16, 185, 129, 0.4);
@@ -355,8 +355,8 @@ body[data-theme='paper-light'] .mpx-root {
 }
 @media (min-width: 768px) {
   .mpx-ibtn {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 10px;
   }
 }
@@ -368,7 +368,9 @@ body[data-theme='paper-light'] .mpx-root {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  overflow-x: auto;
+  /* NOT: overflow-x:auto (tek eksende taşma) dikey ekseni de kırpıyordu →
+     "Durum ⋯" menüsü kesiliyor / tıklanamıyor görünüyordu. */
+  overflow: visible;
 }
 
 .mpx-chip {
@@ -376,8 +378,8 @@ body[data-theme='paper-light'] .mpx-root {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 9px 16px;
-  min-height: 44px;
+  padding: 7px 13px;
+  min-height: 36px;
   border-radius: 999px;
   border: 1px solid var(--mpx-line2);
   background: var(--mpx-surf);
@@ -536,18 +538,24 @@ body[data-theme='paper-light'] .mpx-tag.is-warn { color: #b45309; }
 .mpx-link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 34px;
-  padding: 4px 10px;
+  gap: 6px;
+  min-height: 36px;
+  padding: 5px 12px;
   border-radius: 10px;
   border: 1px solid var(--mpx-line2);
   background: var(--mpx-surf);
   color: color-mix(in srgb, var(--text-main, #f4f4f2) 75%, transparent);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-decoration: none;
   transition: 0.2s;
+}
+
+.mpx-link svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
 }
 .mpx-link:hover {
   color: var(--mpx-a2);
@@ -557,7 +565,10 @@ body[data-theme='paper-light'] .mpx-tag.is-warn { color: #b45309; }
 }
 /* Birincil varyant — aynı kompakt ölçülerde vurgulu köprü */
 .mpx-link-p {
-  color: var(--mpx-on-acc);
+  color: #fff;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   border-color: color-mix(in srgb, var(--mpx-a1) 45%, transparent);
   background: linear-gradient(150deg, var(--mpx-a2) -10%, var(--mpx-a1) 55%, var(--mpx-a3) 135%);
   box-shadow:
@@ -565,7 +576,7 @@ body[data-theme='paper-light'] .mpx-tag.is-warn { color: #b45309; }
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 .mpx-link-p:hover {
-  color: var(--mpx-on-acc);
+  color: #fff;
   transform: translateY(-1px);
   box-shadow:
     0 10px 22px -8px color-mix(in srgb, var(--mpx-a1) 90%, transparent),
@@ -574,6 +585,10 @@ body[data-theme='paper-light'] .mpx-tag.is-warn { color: #b45309; }
 body[data-theme='light'] .mpx-link:hover,
 body[data-theme='paper-light'] .mpx-link:hover {
   color: color-mix(in srgb, var(--mpx-a1) 72%, #000);
+}
+body[data-theme='light'] .mpx-link-p:hover,
+body[data-theme='paper-light'] .mpx-link-p:hover {
+  color: #fff;
 }
 
 /* ---------- POSTERLER ---------- */
@@ -793,7 +808,110 @@ body[data-theme='paper-light'] .mpx-link:hover {
 @media (max-width: 767px) {
   .mpx-btn,
   .mpx-chip {
-    min-height: 44px;
+    min-height: 30px;
+  }
+
+  /* Kart içi aksiyon butonları — dar sütunda simetrik, tek/çift satır sığar */
+  .mpx-btn-xs {
+    min-height: 26px;
+    padding: 3px 8px;
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    border-radius: 9px;
+    gap: 0.3em;
+    line-height: 1.15;
+    /* Uzun etiketler ("Takvime Planlandı") dar sütunda taşmasın */
+    white-space: normal;
+    text-align: center;
+  }
+  .mpx-btn-xs svg {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+  }
+
+  /* MOBİL: "Ara & Filtrele" — dokunmatik hedefi büyütülür (kart içi butonlar etkilenmez) */
+  .mpx-filter-btn {
+    min-height: 40px;
+    padding: 9px 12px;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    border-radius: 12px;
+    gap: 0.45em;
+  }
+  .mpx-filter-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  .mpx-filter-btn .mpx-idx {
+    font-size: 9.5px;
+  }
+
+  .mpx-chip {
+    padding: 5px 10px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    gap: 4px;
+  }
+
+  .mpx-ibtn {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+  }
+  .mpx-ibtn svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  /* İzleme köprüleri ("alternatif izle") — kart yüksekliğini büyütmesin */
+  .mpx-link {
+    min-height: 20px;
+    padding: 2px 7px;
+    font-size: 9px;
+    gap: 4px;
+    border-radius: 8px;
+  }
+  .mpx-link svg {
+    width: 9px;
+    height: 9px;
+  }
+
+  /* MOBİL: "Alternatif izle" çipi daha kompakt (diğer köprüler etkilenmez) */
+  .mpx-link-alt {
+    min-height: 20px;
+    padding: 1px 6px;
+    font-size: 8px;
+    gap: 3px;
+    border-radius: 7px;
+  }
+  .mpx-link-alt svg {
+    width: 8px;
+    height: 8px;
+  }
+  .mpx-link-alt img {
+    width: 10px;
+    height: 10px;
+  }
+
+  .mpx-timerpill {
+    min-height: 26px;
+    padding: 3px 6px;
+    font-size: 9.5px;
+    border-radius: 8px;
+    gap: 3px;
+  }
+  .mpx-timerpill .mpx-ibtn {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+  }
+
+  .mpx-tag {
+    font-size: 8px;
+    padding: 2px 6px;
+    gap: 3px;
   }
 }
 

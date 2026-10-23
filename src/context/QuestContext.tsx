@@ -1,14 +1,14 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import { useApp } from './AppContext'; 
 import { QUEST_DEFS, RARITY_STYLES, QuestIcon } from '../lib/quests';
 import { Sparkles } from 'lucide-react';
 import { evaluateQuestCompletion } from '../lib/questLogic';
-import { playQuestCompleteSound } from '../lib/sound';
+import { isSoundBusy, playQuestCompleteSound } from '../lib/sound';
 import { CONTRACT_MAP, CONTRACT_FAILURE_PENALTY, contractItemId } from '../lib/contracts';
-import { evaluateContractProgress, remainingLabel } from '../lib/contractLogic';
+import { evaluateContractProgress, remainingLabel, weekKey } from '../lib/contractLogic';
 import { LIFETIME_QUEST_COINS } from '../lib/coins';
+import { todayStr } from '../lib/utils';
 import type { ActiveContract, ContractHistoryEntry } from '../types';
-import { ContractCelebrationOverlay } from '../components/ContractCelebrationOverlay';
 import { MARKET_ITEM_MAP } from '../lib/marketItems';
 
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
@@ -23,6 +23,10 @@ interface QuestState {
   isPenaltyEnabled: boolean;
   activeContract?: ActiveContract | null;
   contractHistory?: ContractHistoryEntry[];
+  /** Günlük ücretsiz görev kullanımı (tarih + kullanılan adet). */
+  freeDailyUsage?: { date: string; count: number };
+  /** Sabitlenmiş görevin ücretsiz başlatma hakkının kullanıldığı hafta. */
+  freePinnedUsage?: { week: string; contractId: string };
 }
 
 interface QuestContextValue {
@@ -37,6 +41,7 @@ interface QuestContextValue {
   contractHistory: ContractHistoryEntry[];
   activateContract: (contractId: string) => boolean;
   cancelContract: () => void;
+  extendActiveContract: (itemId?: string) => boolean;
   activeContractProgress: ReturnType<typeof evaluateContractProgress> | null;
   activeContractRemaining: string;
 }
@@ -62,7 +67,15 @@ export function useQuests() {
 }
 
 export function QuestProvider({ children }: { children: ReactNode }) {
-  const { data, grantXp, grantCoins, grantItem, grantContractReward, recordMarketOutcome, consumeEffect, setIsQuestCelebrating, levelUpData, seasonCompleteData, xpGainData, achievementToasts, levelUpQueuedRef, activateItem, showToast } = useApp();
+  const { data, grantXp, grantCoins, grantItem, grantContractReward, recordMarketOutcome, consumeEffect, setIsQuestCelebrating, isQuestCelebrating, levelUpData, seasonCompleteData, xpGainData, achievementToasts, levelUpQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, activateItem, showToast, requestContractCelebration, isContractCelebrating, coinGainData, queuedCoinGain, setContractCompletionPending } = useApp();
+
+  // Ses hâlâ çalarken görev kutlaması başlamasın diye kısa nabız.
+  const [soundTick, setSoundTick] = useState(0);
+  useEffect(() => {
+    if (!isSoundBusy()) return;
+    const timer = window.setTimeout(() => setSoundTick((tick) => tick + 1), 200);
+    return () => window.clearTimeout(timer);
+  }, [soundTick, isQuestCelebrating, isContractCelebrating]);
 
   const [questState, setQuestState] = useState<QuestState>(() => {
     try {
@@ -87,6 +100,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
   });
 
   const [celebratingQuestId, setCelebratingQuestId] = useState<string | null>(null);
+
   // SIRA: görev tamamlanınca tam ekran kutlama (seviye/sezon) veya XP kartı
   // AÇIKSA kutlama ertelenir; hepsi bitince sırayla başlatılır.
   const queuedCelebrationRef = useRef<string | null>(null);
@@ -96,6 +110,26 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     if (localStorage.getItem('sinevia_zero_reset') === '1') return;
     localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(questState));
   }, [questState]);
+
+  // Yedek geri yükleme / bulut eşitleme görevleri localStorage'a yazdığında
+  // QuestContext'i anında tazele (yeniden yükleme beklemeden).
+  useEffect(() => {
+    const restoreQuests = () => {
+      try {
+        const stored = localStorage.getItem(QUEST_STORAGE_KEY);
+        if (!stored) {
+          setQuestState(defaultQuestState);
+          return;
+        }
+        const parsed = JSON.parse(stored);
+        setQuestState({ ...defaultQuestState, ...parsed });
+      } catch {
+        setQuestState(defaultQuestState);
+      }
+    };
+    window.addEventListener('sinevia-quests-restored', restoreQuests);
+    return () => window.removeEventListener('sinevia-quests-restored', restoreQuests);
+  }, []);
 
   const togglePenalty = () => {
     setQuestState(prev => ({
@@ -158,7 +192,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     setQuestState(defaultQuestState);
   };
 
-  const [contractCelebration, setContractCelebration] = useState<{ contractId: string; xp: number; coins: number } | null>(null);
+
   const activeContract = questState.activeContract || null;
   const contractHistory = questState.contractHistory || [];
 
@@ -168,6 +202,14 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     if (!def) return null;
     return evaluateContractProgress(def, activeContract.startedAt, data);
   }, [activeContract, data]);
+
+  // Pazar görevi tamamlandığında AppContext'in XP/başarım efektleri aynı
+  // commit'te araya girmesin. Layout effect, pasif efektlerden ÖNCE çalışır;
+  // böylece sözleşme kutlaması gerçekten ilk sırada açılır.
+  useLayoutEffect(() => {
+    setContractCompletionPending(Boolean(activeContract && activeContractProgress?.completed));
+    return () => setContractCompletionPending(false);
+  }, [activeContract, activeContractProgress, setContractCompletionPending]);
 
   const activeContractRemaining = activeContract
     ? remainingLabel(activeContract)
@@ -180,18 +222,63 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     }
     const def = CONTRACT_MAP.get(contractId);
     if (!def) return false;
-    const itemId = contractItemId(contractId);
-    const owned = (data.inventory || []).find((entry) => entry.itemId === itemId)?.quantity || 0;
-    if (owned <= 0) {
-      showToast('Bu görev envanterinde yok. Önce pazardan satın al.', 'warning');
-      return false;
+
+    const today = todayStr();
+    const currentWeek = weekKey();
+    const usedToday =
+      questState.freeDailyUsage?.date === today ? questState.freeDailyUsage.count : 0;
+    const freeDailyLimit = 1 + ((data.perks || []).includes('contract_slot') ? 1 : 0);
+    const dailyFree = def.type === 'daily' && usedToday < freeDailyLimit;
+    const pinFreeAlreadyUsed =
+      questState.freePinnedUsage?.week === currentWeek &&
+      questState.freePinnedUsage?.contractId === contractId;
+    const pinnedFree =
+      data.pinnedContract?.contractId === contractId &&
+      data.pinnedContract?.week === currentWeek &&
+      !pinFreeAlreadyUsed;
+    const freeSource: 'daily' | 'pin' | undefined = pinnedFree
+      ? 'pin'
+      : dailyFree
+        ? 'daily'
+        : undefined;
+
+    if (!freeSource) {
+      const itemId = contractItemId(contractId);
+      const owned = (data.inventory || []).find((entry) => entry.itemId === itemId)?.quantity || 0;
+      if (owned <= 0) {
+        showToast('Bu görev envanterinde yok. Önce pazardan satın al.', 'warning');
+        return false;
+      }
+      activateItem(itemId, 'contract_activate', `${def.title} aktifleştirildi`);
+    } else {
+      showToast(
+        freeSource === 'pin'
+          ? `${def.title} ücretsiz başlatıldı (sabitlenmiş görev).`
+          : `${def.title} ücretsiz başlatıldı.`,
+        'success',
+      );
     }
+
     const startedAt = Date.now();
     const expiresAt = startedAt + def.durationHours * 60 * 60 * 1000;
-    activateItem(itemId, 'contract_activate', `${def.title} aktifleştirildi`);
     setQuestState((prev) => ({
       ...prev,
-      activeContract: { instanceId: `ci_${startedAt}_${Math.random().toString(36).slice(2, 8)}`, contractId, startedAt, expiresAt },
+      activeContract: {
+        instanceId: `ci_${startedAt}_${Math.random().toString(36).slice(2, 8)}`,
+        contractId,
+        startedAt,
+        expiresAt,
+        free: Boolean(freeSource),
+        freeSource,
+      },
+      freeDailyUsage:
+        freeSource === 'daily'
+          ? { date: today, count: usedToday + 1 }
+          : prev.freeDailyUsage,
+      freePinnedUsage:
+        freeSource === 'pin'
+          ? { week: currentWeek, contractId }
+          : prev.freePinnedUsage,
     }));
     return true;
   };
@@ -207,24 +294,89 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       `contract-cancel:${questState.activeContract.instanceId}`,
     );
     setQuestState((prev) => ({ ...prev, activeContract: null }));
-    showToast('Pazar görevi iptal edildi. Satın alınan görev tüketildi.', 'info');
+    showToast(
+      questState.activeContract.free
+        ? 'Ücretsiz pazar görevi iptal edildi.'
+        : 'Pazar görevi iptal edildi. Satın alınan görev tüketildi.',
+      'info',
+    );
   };
 
-  useEffect(() => {
+  const extendActiveContract = (itemId = 'util_contract_extension'): boolean => {
+    if (!questState.activeContract) {
+      showToast('Uzatılacak aktif bir görev yok.', 'warning');
+      return false;
+    }
+    const def = CONTRACT_MAP.get(questState.activeContract.contractId);
+    if (!def) return false;
+    const hours = def.type === 'daily' ? 24 : 72;
+    activateItem(itemId, 'contract_extension', `Görev süresi +${hours} saat uzatıldı`);
+    setQuestState((prev) =>
+      prev.activeContract
+        ? {
+            ...prev,
+            activeContract: {
+              ...prev.activeContract,
+              expiresAt: prev.activeContract.expiresAt + hours * 60 * 60 * 1000,
+            },
+          }
+        : prev,
+    );
+    return true;
+  };
+
+  const applyContractFailure = (instanceId: string, contractId: string) => {
+    const def = CONTRACT_MAP.get(contractId);
+    if (!def) {
+      setQuestState((prev) => ({ ...prev, activeContract: null }));
+      return;
+    }
+    const wasFree =
+      questState.activeContract?.instanceId === instanceId &&
+      Boolean(questState.activeContract?.free);
+    let penalty = wasFree ? 0 : CONTRACT_FAILURE_PENALTY[def.rarity] || 25;
+    const waiver = !wasFree && (data.activeEffects || []).some(
+      (effect) => effect.itemId === 'util_penalty_waiver' && (effect.charges || 1) > 0,
+    );
+    if (waiver) {
+      consumeEffect('util_penalty_waiver');
+      penalty = 0;
+      showToast('Ceza Affı kullanıldı: ceza uygulanmadı.', 'success');
+    }
+    const insured = !wasFree && (data.activeEffects || []).some(
+      (effect) => effect.itemId === 'util_contract_insurance' && (effect.charges || 1) > 0,
+    );
+    if (insured) {
+      consumeEffect('util_contract_insurance');
+      const refund = Math.max(1, Math.round(def.price * 0.5));
+      grantCoins(refund, 'refund', `Görev sigortası: ${def.title}`, `contract-insurance:${instanceId}`);
+    }
+    recordMarketOutcome(
+      'failed',
+      def.type === 'weekly',
+      penalty,
+      `Görev cezası: ${def.title}`,
+      `contract-fail:${instanceId}`,
+    );
+    setQuestState((prev) => ({ ...prev, activeContract: null }));
+    if (wasFree) {
+      showToast(`"${def.title}" ücretsiz görevi sona erdi. Ceza yok.`, 'info');
+    } else if (penalty > 0) {
+      showToast(`"${def.title}" süresi doldu. ${penalty} SC ceza uygulandı.`, 'warning');
+    } else {
+      showToast(`"${def.title}" süresi doldu. Ceza uygulanmadı.`, 'info');
+    }
+  };
+
+  // Layout effect: pazar görevi kutlaması, aynı commit'te açılan XP/başarım
+  // efektlerinden ÖNCE sırayı kapmalı. Passive effect parent-first çalıştığı
+  // için contract ref'i geç kalıyor ve XP barı öne geçiyordu.
+  useLayoutEffect(() => {
     if (!activeContract) return;
     const def = CONTRACT_MAP.get(activeContract.contractId);
     if (!def) return;
     if (Date.now() >= activeContract.expiresAt) {
-      const penalty = CONTRACT_FAILURE_PENALTY[def.rarity] || 25;
-      recordMarketOutcome(
-        'failed',
-        def.type === 'weekly',
-        penalty,
-        `Görev cezası: ${def.title}`,
-        `contract-fail:${activeContract.instanceId}`,
-      );
-      setQuestState((prev) => ({ ...prev, activeContract: null }));
-      showToast(`"${def.title}" süresi doldu. ${penalty} SC ceza uygulandı.`, 'warning');
+      applyContractFailure(activeContract.instanceId, activeContract.contractId);
       return;
     }
     const progress = evaluateContractProgress(def, activeContract.startedAt, data);
@@ -233,9 +385,22 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     const doubled = (data.activeEffects || []).some(
       (effect) => effect.itemId === 'util_double_reward' && (effect.charges || 1) > 0,
     );
-    const coins = Math.round(def.coinReward * (doubled ? 2 : 1));
+    const boosted = (data.activeEffects || []).some(
+      (effect) => effect.itemId === 'util_xp_boost' && (effect.charges || 1) > 0,
+    );
+    const coins = activeContract.free
+      ? 0
+      : Math.round(def.coinReward * (doubled ? 2 : 1));
+    const gainedXp = Math.round(
+      def.xpReward * (boosted ? 1.5 : 1) * (doubled ? 1.1 : 1),
+    );
     if (doubled) consumeEffect('util_double_reward');
-    grantContractReward(def.xpReward, coins, `contract:${activeContract.instanceId}`, def.title);
+    if (boosted) consumeEffect('util_xp_boost');
+    // Pazar görevi kutlaması her şeyden önce kuyruğa girer. Ödül dispatch'i
+    // XP/başarım effect'lerini tetiklemeden önce ref'i işaretlemek gerekir;
+    // aksi halde XP barı görev animasyonunun önüne geçiyor.
+    requestContractCelebration({ contractId: activeContract.contractId, xp: gainedXp, coins, rarity: def.rarity });
+    grantContractReward(gainedXp, coins, `contract:${activeContract.instanceId}`, def.title);
     setQuestState((prev) => ({
       ...prev,
       activeContract: null,
@@ -245,35 +410,20 @@ export function QuestProvider({ children }: { children: ReactNode }) {
           contractId: activeContract.contractId,
           startedAt: activeContract.startedAt,
           completedAt: Date.now(),
-          xp: def.xpReward,
+          xp: gainedXp,
           coins,
+          free: activeContract.free,
         },
         ...(prev.contractHistory || []),
       ].slice(0, 100),
     }));
-    setContractCelebration({ contractId: activeContract.contractId, xp: def.xpReward, coins });
-    playQuestCompleteSound(def.rarity);
-  }, [activeContract, data, consumeEffect, grantContractReward, recordMarketOutcome, showToast]);
+  }, [activeContract, data, consumeEffect, grantContractReward, recordMarketOutcome, requestContractCelebration, showToast]);
 
   useEffect(() => {
     if (!activeContract) return;
     const timer = window.setInterval(() => {
       if (Date.now() >= activeContract.expiresAt) {
-        const def = CONTRACT_MAP.get(activeContract.contractId);
-        if (def) {
-          const penalty = CONTRACT_FAILURE_PENALTY[def.rarity] || 25;
-          recordMarketOutcome(
-            'failed',
-            def.type === 'weekly',
-            penalty,
-            `Görev cezası: ${def.title}`,
-            `contract-fail:${activeContract.instanceId}`,
-          );
-          showToast(`"${def.title}" süresi doldu. ${penalty} SC ceza uygulandı.`, 'warning');
-        } else {
-          showToast('Pazar görevi süresi doldu.', 'warning');
-        }
-        setQuestState((prev) => ({ ...prev, activeContract: null }));
+        applyContractFailure(activeContract.instanceId, activeContract.contractId);
       }
     }, 30000);
     return () => window.clearInterval(timer);
@@ -307,24 +457,26 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       }
       completeActiveQuest(questState.activeQuestId);
       queuedCelebrationRef.current = null;
-      if (levelUpData || seasonCompleteData || xpGainData || data.pendingLevelUp || levelUpQueuedRef.current || achievementToasts.length > 0) {
+      if (isSoundBusy() || contractCelebratingRef.current || contractQueuedRef.current || seasonCompleteData || seasonOpenRef.current || seasonQueuedRef.current || xpGainData || levelUpData || achievementToasts.length > 0 || coinGainData) {
         queuedCelebrationRef.current = questState.activeQuestId;
+questQueuedRef.current = true;
       } else {
         setIsQuestCelebrating(true);
         setCelebratingQuestId(questState.activeQuestId);
       }
     }
 
-  }, [data.history, data.movies, data.series, data.pendingLevelUp, questState.activeQuestId, questState.questAcceptedAt, data.dailyStreak, levelUpData, seasonCompleteData, xpGainData, achievementToasts, grantCoins, grantItem]);
+  }, [data.history, data.movies, data.series, data.pendingLevelUp, data.pendingToasts, questState.activeQuestId, questState.questAcceptedAt, data.dailyStreak, levelUpData, seasonCompleteData, xpGainData, achievementToasts, isContractCelebrating, coinGainData, queuedCoinGain, soundTick, grantCoins, grantItem]);
 
   useEffect(() => {
     const qid = queuedCelebrationRef.current;
     if (!qid) return;
-    if (levelUpData || seasonCompleteData || xpGainData || data.pendingLevelUp || levelUpQueuedRef.current || achievementToasts.length > 0) return;
+    if (isSoundBusy() || isContractCelebrating || contractCelebratingRef.current || contractQueuedRef.current || seasonCompleteData || seasonOpenRef.current || seasonQueuedRef.current || xpGainData || levelUpData || achievementToasts.length > 0 || coinGainData) return;
     queuedCelebrationRef.current = null;
+    questQueuedRef.current = false;
     setIsQuestCelebrating(true);
     setCelebratingQuestId(qid);
-  }, [levelUpData, seasonCompleteData, xpGainData, data.pendingLevelUp, achievementToasts]);
+  }, [levelUpData, seasonCompleteData, xpGainData, data.pendingLevelUp, data.pendingToasts, achievementToasts, isContractCelebrating, coinGainData, queuedCoinGain, soundTick]);
 
   return (
     <QuestContext.Provider value={{ 
@@ -339,6 +491,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       contractHistory,
       activateContract,
       cancelContract,
+      extendActiveContract,
       activeContractProgress,
       activeContractRemaining,
     }}>
@@ -352,15 +505,6 @@ export function QuestProvider({ children }: { children: ReactNode }) {
             setCelebratingQuestId(null);
             setIsQuestCelebrating(false); 
           }} 
-        />
-      )}
-
-      {contractCelebration && (
-        <ContractCelebrationOverlay
-          contractId={contractCelebration.contractId}
-          xp={contractCelebration.xp}
-          coins={contractCelebration.coins}
-          onClose={() => setContractCelebration(null)}
         />
       )}
     </QuestContext.Provider>

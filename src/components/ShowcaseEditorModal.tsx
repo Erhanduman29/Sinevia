@@ -11,6 +11,7 @@ interface ShowcaseEditorModalProps {
   onSave: (newShowcase: ShowcaseItem[]) => void;
   onClose: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
+  maxItems?: number;
 }
 
 export default function ShowcaseEditorModal({
@@ -21,6 +22,7 @@ export default function ShowcaseEditorModal({
   onSave,
   onClose,
   showToast,
+  maxItems = 4,
 }: ShowcaseEditorModalProps) {
   const [draft, setDraft] = useState<ShowcaseItem[]>(initialShowcase || []);
   const [search, setSearch] = useState('');
@@ -108,8 +110,8 @@ export default function ShowcaseEditorModal({
     setDraft(prev => {
       const exists = prev.some(x => x.id === item.id);
       if (exists) return prev.filter(x => x.id !== item.id);
-      if (prev.length >= 4) {
-        showToast('Vitrine en fazla 4 başyapıt ekleyebilirsin!', 'warning');
+      if (prev.length >= maxItems) {
+        showToast(`Vitrine en fazla ${maxItems} başyapıt ekleyebilirsin!`, 'warning');
         return prev;
       }
       return [
@@ -390,7 +392,7 @@ export default function ShowcaseEditorModal({
             onClick={() => onSave(draft)}
             className="flex-1 bg-gradient-to-r from-gold-500 to-amber-500 hover:from-gold-400 hover:to-amber-400 text-ink-950 rounded-xl text-sm font-black uppercase tracking-wider transition-all shadow-lg shadow-gold-500/20 flex items-center justify-center gap-2"
           >
-            <Check size={18} strokeWidth={3} /> Vitrini Kaydet ({draft.length}/4)
+            <Check size={18} strokeWidth={3} /> Vitrini Kaydet ({draft.length}/{maxItems})
           </button>
         </div>
       </div>

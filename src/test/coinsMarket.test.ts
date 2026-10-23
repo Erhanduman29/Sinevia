@@ -1,8 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import { applyAchievements, rootReducer, type ExtendedAppData } from '../context/AppContext';
-import { coinBalance, inventoryQuantity, levelCoinReward } from '../lib/coins';
+import { coinBalance, inventoryQuantity, levelCoinReward, streakDayCoinReward } from '../lib/coins';
 import { getMarketOffers, evaluateContractProgress, weekKey } from '../lib/contractLogic';
-import type { ContractDef } from '../lib/contracts';
+import {
+  CONTRACT_DEFS,
+  contractItemId,
+  type ContractDef,
+} from '../lib/contracts';
+import { milestoneItemForLevel } from '../lib/levelRewards';
 
 function base(): ExtendedAppData {
   return {
@@ -49,6 +54,59 @@ describe('SineCoin ekonomisi', () => {
     expect(inventoryQuantity(state, 'frame_test')).toBe(1);
   });
 
+  test('aynı görev aynı hafta içinde ikinci kez satın alınamaz', () => {
+    const itemId = contractItemId('d_one_movie');
+    let state = base();
+    state = rootReducer(state, {
+      type: 'GRANT_COINS', amount: 2000, kind: 'bonus', label: 'Test', refId: 'test:contract-buy',
+    } as any);
+    state = rootReducer(state, {
+      type: 'PURCHASE_ITEM', itemId, name: 'Bir Film', price: 100, kind: 'contract',
+    } as any);
+    const coinsAfterFirst = coinBalance(state);
+    expect(inventoryQuantity(state, itemId)).toBe(1);
+
+    state = rootReducer(state, {
+      type: 'PURCHASE_ITEM', itemId, name: 'Bir Film', price: 100, kind: 'contract',
+    } as any);
+
+    expect(coinBalance(state)).toBe(coinsAfterFirst);
+    expect(inventoryQuantity(state, itemId)).toBe(1);
+  });
+
+  test('haftalık limiti olan item limit dolunca satın alınamaz', () => {
+    let state = base();
+    state = rootReducer(state, {
+      type: 'GRANT_COINS', amount: 3000, kind: 'bonus', label: 'Test', refId: 'test:limit-buy',
+    } as any);
+
+    for (let i = 0; i < 5; i += 1) {
+      state = rootReducer(state, {
+        type: 'PURCHASE_ITEM',
+        itemId: 'util_daily_ink',
+        name: 'Günlük Mürekkep',
+        price: 150,
+        kind: 'utility',
+        consumable: true,
+      } as any);
+    }
+
+    expect(inventoryQuantity(state, 'util_daily_ink')).toBe(5);
+    const coinsAfterLimit = coinBalance(state);
+
+    state = rootReducer(state, {
+      type: 'PURCHASE_ITEM',
+      itemId: 'util_daily_ink',
+      name: 'Günlük Mürekkep',
+      price: 150,
+      kind: 'utility',
+      consumable: true,
+    } as any);
+
+    expect(inventoryQuantity(state, 'util_daily_ink')).toBe(5);
+    expect(coinBalance(state)).toBe(coinsAfterLimit);
+  });
+
   test('görev ödülü bonus XP olarak kalıcıdır', () => {
     let state = base();
     state = rootReducer(state, {
@@ -59,7 +117,7 @@ describe('SineCoin ekonomisi', () => {
     expect(coinBalance(state)).toBe(200); // 25 + 150 hoş geldin + 10 başarım + 15 seviye 2 ödülü
     expect(state.pendingLevelUp?.newLevel).toBe(2);
     expect(state.pendingXpGain).toEqual({ gained: 500, oldTotal: 0, newTotal: 500 });
-    expect(state.pendingCoinGain?.amount).toBe(15);
+    expect(state.pendingCoinGain?.amount).toBe(40); // 25 görev coin + 15 seviye 2 ödülü
   });
 
   test('üst üste seviye atlayınca tüm seviye coinleri tek animasyonda toplanır', () => {
@@ -108,16 +166,46 @@ describe('SineCoin ekonomisi', () => {
     expect(state.achievements.find((a) => a.achievementId === 'contract_cancelled')?.unlockedTiers).toContain('bronze');
   });
 
-  test('coin ile XP dönüşümü bakiyeyi düşürür', () => {
-    let state = base();
-    state = rootReducer(state, {
-      type: 'GRANT_COINS', amount: 200, kind: 'bonus', label: 'Test', refId: 'test:3',
-    } as any);
-    state = rootReducer(state, {
-      type: 'CONVERT_COINS_TO_XP', coins: 100, refId: 'xp:test',
-    } as any);
-    expect(coinBalance(state)).toBe(100);
-    expect(state.bonusXp).toBe(200);
+  test('seviye coin ödülleri 2–98 aralığında 13.071 SC üretir', () => {
+    let total = 0;
+    for (let level = 2; level <= 98; level += 1) total += levelCoinReward(level);
+    expect(total).toBe(13071);
+    expect(levelCoinReward(2)).toBe(15);
+    expect(levelCoinReward(98)).toBe(255);
+    expect(levelCoinReward(105)).toBe(272);
+  });
+
+  test('günlük seri coin ödülü eğrisi çapa değerleri karşılar', () => {
+    expect(streakDayCoinReward(1)).toBe(1);
+    expect(streakDayCoinReward(2)).toBe(2);
+    expect(streakDayCoinReward(7)).toBe(10);
+    expect(streakDayCoinReward(14)).toBe(20);
+    expect(streakDayCoinReward(21)).toBe(30);
+    expect(streakDayCoinReward(60)).toBe(30);
+  });
+});
+
+describe('Yeni ekonomi dengesi', () => {
+  test('her kontratın fiyatı XP ödülüne eşittir', () => {
+    for (const contract of CONTRACT_DEFS) {
+      expect(contract.price).toBe(contract.xpReward);
+    }
+  });
+
+  test('kontrat coin iadesi %12 ve en az 5 SC', () => {
+    for (const contract of CONTRACT_DEFS) {
+      expect(contract.coinReward).toBe(Math.max(5, Math.round(contract.price * 0.12)));
+    }
+  });
+
+  test('kilometre taşı seviyeleri ödül üretir', () => {
+    expect(milestoneItemForLevel(5)?.id).toBe('milestone_badge_first_reel');
+    expect(milestoneItemForLevel(20)?.id).toBe('milestone_title_projector');
+    expect(milestoneItemForLevel(50)?.id).toBe('milestone_frame_gold_reel');
+    expect(milestoneItemForLevel(75)?.id).toBe('milestone_name_cinematic');
+    expect(milestoneItemForLevel(100)?.id).toBe('milestone_badge_sinevia_legend');
+    expect(milestoneItemForLevel(125)?.id).toBe('milestone_prestige_125');
+    expect(milestoneItemForLevel(6)).toBeNull();
   });
 });
 

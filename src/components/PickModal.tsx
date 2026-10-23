@@ -191,7 +191,7 @@ export default function PickModal({
       });
     }
 
-    const searchSuffix = meta.isMovie ? 'izle' : 'dizi izle';
+    const searchSuffix = meta.isMovie ? 'İzle' : 'dizi izle';
     const searchQuery = encodeURIComponent(`${meta.title} ${meta.year || ''} ${searchSuffix}`);
     links.push({
       href: `https://www.google.com/search?q=${searchQuery}`,
@@ -214,7 +214,7 @@ export default function PickModal({
         .replace('{title}', encodeURIComponent(meta.title))
         .replace('{year}', meta.year || '');
 
-      links.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+      links.push({ href: finalAltHref, text: 'İzle', logo: null, icon: PlayCircle });
     }
 
     return links;

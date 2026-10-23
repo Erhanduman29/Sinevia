@@ -26,10 +26,13 @@ const LOCAL_SNAPSHOT_KEY = 'sinevia-v1';
 
 /**
  * "Önceki hesap" yedeği: Taşıma Kodu ile yeni hesap yüklendiğinde bu cihazdaki
- * yerel hesap buraya saklanır; "Cihazdan Çıkış Yap" bu yedeğe dönmek için
- * `sinevia_restore_prev` bayrağını kullanır.
+ * yerel hesap buraya saklanır. Yeni davranış: çıkışta TÜM yerel veri silinir,
+ * bu yedek de dahil — eski hesapla oturum otomatik geri gelmez.
  */
 export const PREV_ACCOUNT_KEY = 'sinevia_prev_account';
+
+/** Tüm yerel verinin silindiğini işaretleyen bayrak (init bu bayrağı görüp sıfırdan başlar). */
+export const ZERO_RESET_KEY = 'sinevia_zero_reset';
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
@@ -163,6 +166,32 @@ class WriteQueue {
 }
 
 export const writeQueue = new WriteQueue();
+
+/**
+ * Cihazdaki TÜM Sinevia verisini siler: bekleyen yazımları boşaltır,
+ * `sinevia*` localStorage anahtarlarını ve IndexedDB kayıtlarını temizler.
+ * En son sıfırlama bayrağını bırakır; böylece reload sırasında pagehide eski
+ * veriyi geri yazsa bile uygulama temiz başlar.
+ */
+export async function clearAllLocalAppData(): Promise<void> {
+  try { await writeQueue.flush(); } catch { /* yazma hatası temizliği engellemesin */ }
+
+  try {
+    const keys: string[] = [];
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.toLowerCase().startsWith('sinevia')) keys.push(key);
+    }
+    for (const key of keys) {
+      try { localStorage.removeItem(key); } catch { /* devam */ }
+    }
+  } catch { /* localStorage erişilemez */ }
+
+  try { await idbDel(LOCAL_SNAPSHOT_KEY); } catch { /* devam */ }
+  try { await idbDel(PREV_ACCOUNT_KEY); } catch { /* devam */ }
+
+  try { localStorage.setItem(ZERO_RESET_KEY, '1'); } catch { /* kota */ }
+}
 
 /**
  * Göç (migration): localStorage'da hâlâ TAM kütüphane varsa ve IDB boşsa, IDB'ye taşı.

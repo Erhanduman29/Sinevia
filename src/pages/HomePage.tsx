@@ -3,7 +3,7 @@ import {
   Shuffle, Sparkles, Star, Search,
   Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
   ChevronRight, Target, Film, RefreshCw, Users, Lock,
-  Timer, Play, Pause, X, ShieldAlert, Copy, Crown, Swords, Clapperboard
+  Timer, Play, Pause, X, ShieldAlert, Copy, Crown, Swords, Clapperboard, MoreHorizontal
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useQuests } from '../context/QuestContext';
@@ -232,7 +232,7 @@ const HOME_PREMIUM_CSS = `
   flex-shrink:0;
 }
 .snv-readout-box{
-  min-width:170px;
+  min-width:186px;
   padding:14px 20px;
   border-radius:18px;
   background:linear-gradient(145deg,color-mix(in srgb, var(--text-main,#f4f4f2) 4.5%, transparent),color-mix(in srgb, var(--text-main,#f4f4f2) 1.5%, transparent));
@@ -309,6 +309,12 @@ button.snv-readout-box:hover{
 }
 .snv-readout-box.is-coin .snv-readout-top{color:#fcd34d}
 .snv-readout-box.is-coin .snv-readout-num em{color:#fbbf24}
+.snv-readout-box.is-streak{
+  border-color:rgba(251,146,60,.26);
+  background:linear-gradient(145deg,rgba(251,146,60,.12),rgba(120,53,15,.06));
+}
+.snv-readout-box.is-streak .snv-readout-top{color:#fdba74}
+.snv-readout-box.is-streak .snv-readout-num em{color:#fb923c}
 .snv-coin-arrow{color:#fbbf24;font-size:12px;transition:transform .2s ease}
 button.snv-readout-box.is-coin:hover .snv-coin-arrow{transform:translateX(3px)}
 
@@ -760,6 +766,7 @@ body[data-theme="sepia"] .snv-title-pill svg{
 .hn-btnrow{display:flex;flex-wrap:wrap;gap:11px;margin-top:auto;padding-top:6px;min-width:0}
 .hn-btnrow .hn-btn{max-width:100%}
 .hn-links{display:flex;gap:8px;flex-wrap:wrap}
+.hn-sp-more{display:none}
 .hn-link-chip{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted,#9a9a96);background:rgba(255,255,255,.04);border:1px solid var(--line-2,var(--border-dim,rgba(244,244,242,.13)));padding:8px 13px;border-radius:99px;transition:.2s;text-decoration:none}
 .hn-link-chip:hover{color:var(--text-main,#f4f4f2);border-color:rgba(255,255,255,.3);transform:translateY(-2px)}
 .hn-link-logo{width:13px;height:13px;border-radius:3px;object-fit:cover}
@@ -896,7 +903,14 @@ body[data-theme="sepia"] .snv-title-pill svg{
   .hn-duo{grid-template-columns:1fr}
   .hn-panel + .hn-panel{border-left:0;border-top:1px solid var(--line,rgba(244,244,242,.07))}
 }
+        .snv-hero-side{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex:0 0 auto;min-width:0}
+        .snv-hero-side .snv-id-laser-wrap{margin-top:2px}
+
+.hn-quick{gap:8px}
+.hn-quick .hn-btn{min-height:36px;padding:7px 10px;font-size:11.5px;border-radius:10px;justify-content:center}
 @media (max-width:767px){
+  .hn-quick .hn-btn{min-height:32px;padding:6px 7px;font-size:9px}
+          .snv-hero-side{width:100%;align-items:stretch;gap:8px}
   /* Bölüm Başlıkları */
   .hn-sec{gap:8px}
   .hn-sec-t{gap:7px;flex-wrap:wrap}
@@ -908,7 +922,7 @@ body[data-theme="sepia"] .snv-title-pill svg{
   /* Genel Mobil Butonlar */
   .hn-btn{padding:7px 10px;font-size:9px;letter-spacing:.05em;gap:4px;min-height:34px;border-radius:9px;justify-content:center}
   .hn-planned{padding:7px 10px;font-size:9px;letter-spacing:.05em;min-height:34px;border-radius:9px}
-  .hn-action{min-height:34px;padding:7px 8px;font-size:9px}
+  .hn-action{min-height:32px;padding:6px 7px;font-size:8.5px;gap:4px}
 
   /* 01 · SİNEVİA KARTI — MOBİLDE TÜM VERİLER TAM VE OKUNAKLI */
   .snv-id-card{border-radius:18px}
@@ -938,77 +952,50 @@ body[data-theme="sepia"] .snv-title-pill svg{
     grid-template-columns:1fr 1fr;
     gap:8px;
   }
+  .snv-readout-box.is-streak{grid-column:1 / -1}
   .snv-readout-box{
     min-width:0;
-    padding:10px 12px;
-    border-radius:13px;
+    padding:9px 10px;
+    border-radius:12px;
   }
-  .snv-readout-box.is-coin{grid-column:1/-1;}
-  .snv-readout-top{font-size:8.5px;letter-spacing:.1em}
-  .snv-readout-num b{font-size:22px}
-  .snv-readout-num em{font-size:9.5px}
-  .snv-readout-foot{font-size:9.5px}
+  .snv-readout-box.is-coin{grid-column:auto}
+  .snv-readout-top{font-size:8px;letter-spacing:.08em}
+  .snv-readout-num b{font-size:20px}
+  .snv-readout-num em{font-size:9px}
+  .snv-readout-foot{font-size:8.5px}
 
-  /* Mobil Orta Vitrin: Unvan Yolu & Aktif Rozet Alt Alta Tam Görünüm */
+  /* Mobil Orta Vitrin: Unvan Yolu & Aktif Rozet Alt Alta Kompakt */
   .snv-showcase-deck{
     grid-template-columns:1fr;
-    gap:10px;
-    padding:0 14px 14px;
+    gap:8px;
+    padding:0 12px 12px;
   }
   .snv-deck-panel{
-    padding:13px 14px;
-    border-radius:15px;
-    gap:11px;
+    padding:10px 12px;
+    border-radius:13px;
+    gap:8px;
   }
-  .snv-deck-title{font-size:9.5px;letter-spacing:.12em}
-  .snv-deck-pill{font-size:9.5px;padding:3px 9px}
+  .snv-deck-title{font-size:9px;letter-spacing:.1em}
+  .snv-deck-pill{font-size:8.5px;padding:2.5px 7px}
 
-  .snv-rank-road{gap:8px}
-  .snv-rank-Endpoint{gap:8px}
-  .snv-rank-pedestal{width:46px;height:46px;border-radius:12px}
-  .snv-rank-info small{font-size:8px;letter-spacing:.08em}
-  .snv-rank-info b{font-size:12.5px}
-  .snv-rank-info span{font-size:9.5px}
-  .snv-rank-arrow{width:26px;height:26px}
-  .snv-rank-progress-labels{font-size:9.5px}
-  .snv-rank-bar{height:6px}
+  .snv-rank-road{gap:6px}
+  .snv-rank-Endpoint{gap:6px}
+  .snv-rank-pedestal{width:40px;height:40px;border-radius:11px}
+  .snv-rank-info small{font-size:7.5px;letter-spacing:.06em}
+  .snv-rank-info b{font-size:11.5px}
+  .snv-rank-info span{font-size:9px}
+  .snv-rank-arrow{width:22px;height:22px}
+  .snv-rank-progress-labels{font-size:9px}
+  .snv-rank-bar{height:5px}
 
-  .snv-badge-body{gap:12px}
-  .snv-badge-pedestal{width:54px;height:54px;border-radius:14px}
-  .snv-badge-info b{font-size:14px}
-  .snv-badge-info p{font-size:11px;line-height:1.35}
-  .snv-badge-foot{font-size:10px;padding-top:8px}
+  .snv-badge-body{gap:10px}
+  .snv-badge-pedestal{width:46px;height:46px;border-radius:12px}
+  .snv-badge-info b{font-size:13px}
+  .snv-badge-info p{font-size:10px;line-height:1.3}
+  .snv-badge-foot{font-size:9px;padding-top:6px}
 
-  /* Mobil Alt Konsol: 5'li Metrik + 6'lı Kupa Kademesi */
-  .snv-id-footer{
-    grid-template-columns:1fr;
-    padding:12px 14px 14px;
-    gap:10px;
-  }
-  .snv-id-metrics{
-    padding:0;
-    border-right:0;
-    gap:5px;
-  }
-  .snv-id-mitem{
-    padding:7px 4px;
-    border-radius:9px;
-  }
-  .snv-id-mitem b{font-size:15px}
-  .snv-id-mitem span{font-size:8px;letter-spacing:.06em}
-
-  .snv-id-tiers{
-    padding:0;
-    gap:5px;
-  }
-  .snv-id-tier{
-    padding:7px 4px;
-    border-radius:9px;
-    gap:3px;
-  }
-  .snv-id-tier i{width:6px;height:6px}
-  .snv-id-tier b{font-size:13.5px}
-  .snv-id-tier span{font-size:7.5px;letter-spacing:.04em}
+  /* Mobilde alt istatistik/kupa konsolu gizlenir */
+  .snv-id-footer{display:none}
 
   /* Canlı Sayaç */
   .hn-timer{padding:10px 12px;gap:8px;border-radius:14px}
@@ -1027,6 +1014,9 @@ body[data-theme="sepia"] .snv-title-pill svg{
     padding:11px;
     border-radius:14px;
     align-items:start;
+    overflow:visible;
+    position:relative;
+    z-index:6;
   }
   .hn-sp-poster{
     width:84px;
@@ -1051,29 +1041,61 @@ body[data-theme="sepia"] .snv-title-pill svg{
     font-size:11px;
     line-height:1.45;
     display:-webkit-box;
-    -webkit-line-clamp:3;
+    -webkit-line-clamp:2;
     -webkit-box-orient:vertical;
     overflow:hidden;
   }
   .hn-btnrow{
     grid-column:1 / -1;
-    display:grid;
-    grid-template-columns:repeat(2,1fr);
+    position:relative;
+    display:flex;
     gap:5px;
     padding-top:2px;
     margin-top:0;
   }
   .hn-btnrow .hn-btn,
   .hn-btnrow .hn-planned{
+    flex:1 1 0%;
     padding:6px 8px;
     font-size:8.5px;
     min-height:30px;
     border-radius:8px;
     letter-spacing:.04em;
     justify-content:center;
-    width:100%;
+    width:auto;
   }
-  .hn-links{grid-column:1 / -1;gap:4px}
+  .hn-sp-extra{display:none !important}
+  .hn-sp-more{display:inline-flex !important}
+  .hn-sp-more-menu{
+    position:absolute;
+    right:0;
+    top:calc(100% + 6px);
+    z-index:30;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    min-width:190px;
+    max-width:74vw;
+    padding:6px;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(9,9,12,.97);
+    box-shadow:0 18px 40px rgba(0,0,0,.6);
+    backdrop-filter:blur(10px);
+  }
+  .hn-sp-more-menu .hn-btn,
+  .hn-sp-more-menu .hn-sp-more-item{
+    justify-content:flex-start;
+    width:100%;
+    flex:none;
+    font-size:8.5px;
+    min-height:32px;
+    padding:6px 9px;
+    border-radius:8px;
+    letter-spacing:.04em;
+  }
+  .hn-sp-more-menu .hn-sp-more-item{display:inline-flex;align-items:center;gap:7px;color:var(--muted,#9a9a96);background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.12)}
+  .hn-links{display:none !important}
   .hn-link-chip{font-size:7.5px;padding:3.5px 7px;letter-spacing:.04em;gap:4px}
   .hn-link-logo{width:10px;height:10px}
 
@@ -1172,6 +1194,7 @@ export default function HomePage() {
   const [showDnaModal, setShowDnaModal] = useState(false);
   const [showCalibration, setShowCalibration] = useState(false);
   const [spotlightOffset, setSpotlightOffset] = useState(0);
+  const [spotlightMoreOpen, setSpotlightMoreOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -1381,6 +1404,13 @@ export default function HomePage() {
   const equippedFrame = data.equipped?.frameId ? MARKET_ITEM_MAP.get(data.equipped.frameId) : null;
   const equippedTitle = data.equipped?.titleId ? MARKET_ITEM_MAP.get(data.equipped.titleId) : null;
   const equippedBadge = data.equipped?.badgeId ? MARKET_ITEM_MAP.get(data.equipped.badgeId) : null;
+  const equippedBadge2 = data.equipped?.badgeId2 ? MARKET_ITEM_MAP.get(data.equipped.badgeId2) : null;
+  const equippedBackground = data.equipped?.backgroundId
+    ? MARKET_ITEM_MAP.get(data.equipped.backgroundId)
+    : null;
+  const equippedNameEffect = data.equipped?.nameEffectId
+    ? MARKET_ITEM_MAP.get(data.equipped.nameEffectId)
+    : null;
   const nextRank = RANK_TIERS[currentRankIndex + 1] || null;
   const CurrentRankIcon = userPersona.icon;
   const NextRankIcon = nextRank ? nextRank.icon : Crown;
@@ -1434,14 +1464,14 @@ export default function HomePage() {
       });
     }
 
-    const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} izle`);
+    const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} İzle`);
     links.push({ href: `https://www.google.com/search?q=${searchQuery}`, text: "Google'da Bul", logo: null, icon: Search });
 
     if (data.altWatchTemplate && (movie.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
       const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
       const slug = movie.title.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (match) => charMap[match]).replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       const finalAltHref = data.altWatchTemplate.replace('{imdb}', movie.imdbId || '').replace('{slug}', slug).replace('{title}', encodeURIComponent(movie.title)).replace('{year}', movie.year || '');
-      links.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+      links.push({ href: finalAltHref, text: 'İzle', logo: null, icon: PlayCircle });
     }
     return links;
   };
@@ -1485,6 +1515,12 @@ export default function HomePage() {
         </div>
 
         <div className="snv-id-card" data-tutorial="home-hero">
+          {equippedBackground && (
+            <div
+              className={`pointer-events-none absolute inset-0 rounded-[inherit] opacity-70 ${equippedBackground.backgroundClass || ''}`}
+              aria-hidden="true"
+            />
+          )}
           <div className="snv-id-overlay" aria-hidden="true" />
 
           {/* 1. ÜST KİMLİK & BÜYÜK DENEYİM / SERİ GÖSTERGELERİ */}
@@ -1526,6 +1562,11 @@ export default function HomePage() {
                       <Sparkles size={12} /> {equippedBadge.badgeText}
                     </span>
                   )}
+                  {equippedBadge2?.badgeText && (
+                    <span className="snv-title-pill" title={equippedBadge2.name}>
+                      <Sparkles size={12} /> {equippedBadge2.badgeText}
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="snv-code-btn"
@@ -1539,57 +1580,65 @@ export default function HomePage() {
                   </button>
                 </div>
 
-                <h1 className="snv-hero-name">{data.nickname}</h1>
+                <h1 className={`snv-hero-name ${equippedNameEffect?.nameEffectClass || ''}`}>
+                  {data.nickname}
+                </h1>
                 <div className="snv-hero-sub">{userPersona.subtitle}</div>
               </div>
             </div>
 
-            <div className="snv-hero-readouts">
-              {/* Günlük Seri Kutusu */}
-              <div className="snv-readout-box" data-tutorial="home-streak">
-                <div className="snv-readout-top">
-                  <span className="inline-flex items-center gap-1">
-                    <Flame size={12} className="flame" /> Günlük Seri
-                  </span>
+            <div className="snv-hero-side">
+              <div className="snv-hero-readouts">
+                {/* Günlük Seri Kutusu */}
+                <div className="snv-readout-box is-streak" data-tutorial="home-streak">
+                  <div className="snv-readout-top">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Flame size={12} className="flame" /> Günlük Seri
+                    </span>
+                  </div>
+                  <div className="snv-readout-num">
+                    <b>{data.dailyStreak || 0}</b>
+                    <em className="warm">Gün</em>
+                  </div>
+                  <div className="snv-readout-foot">
+                    {data.dailyStreak > 0 ? 'Seri aktif devam ediyor' : 'Bugün izle, seri başlat'}
+                  </div>
                 </div>
-                <div className="snv-readout-num">
-                  <b>{data.dailyStreak || 0}</b>
-                  <em className="warm">Gün</em>
+
+                {/* Toplam Deneyim Kutusu */}
+                <div className="snv-readout-box">
+                  <div className="snv-readout-top">
+                    <span>Deneyim Puanı</span>
+                    <span className="xp-pct">%{Math.floor(lvl.progress)}</span>
+                  </div>
+                  <div className="snv-readout-num">
+                    <b>{(data.totalXp || 0).toLocaleString('tr-TR')}</b>
+                    <em>XP</em>
+                  </div>
+                  <div className="snv-readout-foot">
+                    Sv.{lvl.level + 1} için {xpToNext.toLocaleString('tr-TR')} XP kaldı
+                  </div>
                 </div>
-                <div className="snv-readout-foot">
-                  {data.dailyStreak > 0 ? 'Seri aktif devam ediyor' : 'Bugün bir yapım izle'}
-                </div>
+
+                {/* SineCoin Bakiyesi — tıklayınca envanter */}
+                <button type="button" className="snv-readout-box is-coin" onClick={openMarketInventory}>
+                  <div className="snv-readout-top">
+                    <span className="inline-flex items-center gap-1.5">
+                      <SineCoinIcon className="h-3.5 w-3.5" /> SineCoin
+                    </span>
+                    <span className="snv-coin-arrow">→</span>
+                  </div>
+                  <div className="snv-readout-num">
+                    <b>{(data.coins || 0).toLocaleString('tr-TR')}</b>
+                    <em>SC</em>
+                  </div>
+                  <div className="snv-readout-foot">Envanteri Aç</div>
+                </button>
               </div>
 
-              {/* Toplam Deneyim Kutusu */}
-              <div className="snv-readout-box">
-                <div className="snv-readout-top">
-                  <span>Deneyim Puanı</span>
-                  <span className="xp-pct">%{Math.floor(lvl.progress)}</span>
-                </div>
-                <div className="snv-readout-num">
-                  <b>{(data.totalXp || 0).toLocaleString('tr-TR')}</b>
-                  <em>XP</em>
-                </div>
-                <div className="snv-readout-foot">
-                  Sv.{lvl.level + 1} için {xpToNext.toLocaleString('tr-TR')} XP kaldı
-                </div>
+              <div className="snv-id-laser-wrap" title={`Seviye İlerlemesi: %${Math.floor(lvl.progress)}`}>
+                <div className="snv-id-laser-fill" style={{ width: `${Math.max(2, lvl.progress)}%` }} />
               </div>
-
-              {/* SineCoin Bakiyesi — tıklayınca envanter */}
-              <button type="button" className="snv-readout-box is-coin" onClick={openMarketInventory}>
-                <div className="snv-readout-top">
-                  <span className="inline-flex items-center gap-1.5">
-                    <SineCoinIcon className="h-3.5 w-3.5" /> SineCoin
-                  </span>
-                  <span className="snv-coin-arrow">→</span>
-                </div>
-                <div className="snv-readout-num">
-                  <b>{(data.coins || 0).toLocaleString('tr-TR')}</b>
-                  <em>SC</em>
-                </div>
-                <div className="snv-readout-foot">Envanteri Aç</div>
-              </button>
             </div>
           </div>
 
@@ -1721,11 +1770,6 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* 3. LAZER XP İLERLEME HATTI */}
-          <div className="snv-id-laser-wrap" title={`Seviye İlerlemesi: %${Math.floor(lvl.progress)}`}>
-            <div className="snv-id-laser-fill" style={{ width: `${Math.max(2, lvl.progress)}%` }} />
-          </div>
-
           {/* 4. ALT KONSOL: 5'Lİ KARİYER METRİĞİ & 6'LI KUPA KADEMELERİ */}
           <div className="snv-id-footer">
             <div className="snv-id-metrics">
@@ -1764,132 +1808,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ==============================
-          PAZAR GÖREVLERİ
-          ============================== */}
-      <section className="hn-sec">
-        <div className="hn-sec-t">
-          <span className="hn-idx">{nextSectionIdx()}</span>
-          <h2>Pazar Görevleri</h2>
-          <span className="ln" />
-          <button type="button" className="hn-more" onClick={() => navigateTo('market')}>
-            Pazara Git <ChevronRight size={13} />
-          </button>
-        </div>
-
-        <div className="relative overflow-hidden rounded-3xl border border-gold-500/25 bg-gradient-to-br from-[#191307] via-ink-900 to-[#0b0b12] p-4 shadow-[0_18px_50px_-24px_rgba(245,158,11,0.55)] sm:p-5">
-          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-gold-500/15 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 -left-16 h-52 w-52 rounded-full bg-amber-400/10 blur-3xl" />
-          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold-400/70 to-transparent" />
-
-          <div className="relative grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
-            <div className="min-w-0">
-              <div className="mb-2.5 flex flex-wrap items-center gap-2">
-                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] ${
-                  activeContract
-                    ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
-                    : 'border-gold-400/30 bg-gold-500/10 text-gold-300'
-                }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${activeContract ? 'animate-pulse bg-emerald-400' : 'bg-gold-400'}`} />
-                  {activeContract ? 'Aktif Görev' : 'Yeni Fırsatlar'}
-                </span>
-                {activeContract && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-ink-200">
-                    <Timer size={10} /> {activeContractRemaining}
-                  </span>
-                )}
-              </div>
-
-              {activeContract ? (() => {
-                const def = CONTRACT_MAP.get(activeContract.contractId);
-                const percent = activeContractProgress?.percent || 0;
-                return (
-                  <div>
-                    <div className="flex items-start gap-2.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gold-400/25 bg-gold-500/10 text-lg shadow-inner">
-                        {def?.icon || '🎯'}
-                      </span>
-                      <div className="min-w-0">
-                        <h3 className="truncate text-sm font-black text-white">{def?.title || 'Aktif Pazar Görevi'}</h3>
-                        <p className="mt-0.5 line-clamp-1 text-[11px] text-ink-400">{def?.description}</p>
-                      </div>
-                    </div>
-
-                    {def && (
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                        <span className="rounded-lg border border-azure-400/25 bg-azure-500/10 px-2 py-1 text-[10px] font-black text-azure-300">
-                          +{def.xpReward} XP
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-lg border border-gold-400/30 bg-gold-500/10 px-2 py-1 text-[10px] font-black text-gold-200">
-                          <SineCoinIcon className="h-3 w-3" /> +{def.coinReward} SC
-                        </span>
-                        <span className="rounded-lg border border-rose-400/20 bg-rose-500/10 px-2 py-1 text-[10px] font-bold text-rose-300">
-                          −{CONTRACT_FAILURE_PENALTY[def.rarity]} SC ceza
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="mt-3.5">
-                      <div className="mb-1.5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.16em] text-ink-400">
-                        <span>İlerleme</span>
-                        <span className="text-gold-300">%{percent}</span>
-                      </div>
-                      <div className="h-2.5 overflow-hidden rounded-full border border-white/5 bg-black/40">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-amber-500 via-gold-400 to-yellow-200 shadow-[0_0_12px_rgba(245,158,11,0.65)] transition-all duration-500"
-                          style={{ width: `${Math.max(percent, 2)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-ink-300">
-                      {(activeContractProgress?.requirements || []).map((req) => (
-                        <span key={req.metric} className={`rounded-md border px-1.5 py-0.5 ${req.met ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-white/5 bg-white/[0.03]'}`}>
-                          {METRIC_LABELS[req.metric]}: {Math.min(req.current, req.target)}/{req.target}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })() : (
-                <div className="flex items-start gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gold-400/30 bg-gradient-to-br from-gold-500/25 to-amber-600/10 shadow-[0_0_22px_-6px_rgba(245,158,11,0.6)]">
-                    <SineCoinIcon className="h-7 w-7" />
-                  </span>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-black text-white">Pazardan görev al, XP ve SineCoin kazan</h3>
-                    <p className="mt-1 text-[11px] leading-relaxed text-ink-400">
-                      Günlük ve haftalık görevler haftada bir yenilenir. Aynı anda yalnızca 1 görev aktif olabilir.
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className="rounded-md border border-azure-400/20 bg-azure-500/10 px-2 py-0.5 text-[9px] font-black text-azure-300">Günlük görevler</span>
-                      <span className="rounded-md border border-gold-400/25 bg-gold-500/10 px-2 py-0.5 text-[9px] font-black text-gold-200">Haftalık sözleşmeler</span>
-                      <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-black text-ink-200">1 aktif görev</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-row items-center justify-between gap-2.5 border-t border-white/5 pt-3 sm:min-w-[184px] sm:flex-col sm:items-end sm:border-0 sm:pt-0">
-              <CoinPill amount={data.coins || 0} onClick={() => navigateTo('market')} />
-              <button
-                type="button"
-                onClick={() => navigateTo('market')}
-                className="group inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-gold-400 to-amber-500 px-4 py-2.5 text-xs font-black text-ink-950 shadow-[0_8px_24px_-8px_rgba(245,158,11,0.8)] transition hover:brightness-110 active:scale-[0.98]"
-              >
-                {activeContract ? 'Görevi Gör' : 'Görev Seç'}
-                <ChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
-              </button>
-              <span className="hidden text-[9px] font-bold uppercase tracking-[0.14em] text-ink-500 sm:block">
-                Haftalık yenilenen vitrin
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div data-tutorial="home-actions" className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+      {/* HIZLI AKSİYONLAR */}
+      <div data-tutorial="home-actions" className="hn-quick grid grid-cols-2 sm:grid-cols-4">
         <button type="button" className="hn-btn hn-btn-p hn-action" onClick={() => setShowPick(true)}>
           <Shuffle size={13} /> Ne İzlesem
         </button>
@@ -1903,6 +1823,131 @@ export default function HomePage() {
           <Swords size={13} /> Düelloya Başla
         </button>
       </div>
+
+      {/* ==============================
+          PAZAR GÖREVLERİ
+          ============================== */}
+      <section className="hn-sec">
+        <div className="hn-sec-t">
+          <span className="hn-idx">{nextSectionIdx()}</span>
+          <h2>Pazar Görevleri</h2>
+          <span className="ln" />
+          <button type="button" className="hn-more" onClick={() => navigateTo('market')}>
+            Pazara Git <ChevronRight size={13} />
+          </button>
+        </div>
+
+        <div className="pazar-card relative overflow-hidden rounded-xl border border-gold-500/25 bg-gradient-to-br from-[#191307] via-ink-900 to-[#0b0b12] p-2.5 shadow-[0_14px_38px_-26px_rgba(245,158,11,0.5)] sm:rounded-3xl sm:p-4">
+          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-gold-500/15 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 -left-16 h-52 w-52 rounded-full bg-amber-400/10 blur-3xl" />
+          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold-400/70 to-transparent" />
+
+          <div className="relative grid gap-2 sm:gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="min-w-0">
+              <div className="mb-1.5 sm:mb-2 flex flex-wrap items-center gap-1 sm:gap-1.5">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[8.5px] font-black uppercase tracking-[0.16em] ${
+                  activeContract
+                    ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                    : 'border-gold-400/30 bg-gold-500/10 text-gold-300'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${activeContract ? 'animate-pulse bg-emerald-400' : 'bg-gold-400'}`} />
+                  {activeContract ? 'Aktif Görev' : 'Yeni Fırsatlar'}
+                </span>
+                {activeContract && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold text-ink-200">
+                    <Timer size={10} /> {activeContractRemaining}
+                  </span>
+                )}
+              </div>
+
+              {activeContract ? (() => {
+                const def = CONTRACT_MAP.get(activeContract.contractId);
+                const percent = activeContractProgress?.percent || 0;
+                return (
+                  <div>
+                    <div className="flex items-start gap-2 sm:gap-2.5">
+                      <span className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg border border-gold-400/25 bg-gold-500/10 text-sm sm:text-base shadow-inner">
+                        {def?.icon || '🎯'}
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-[12px] sm:text-[13px] font-black text-white">{def?.title || 'Aktif Pazar Görevi'}</h3>
+                        <p className="mt-0.5 line-clamp-1 text-[9.5px] sm:text-[10px] text-ink-400">{def?.description}</p>
+                      </div>
+                    </div>
+
+                    {def && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1 sm:mt-3 sm:gap-1.5">
+                        <span className="rounded-md sm:rounded-lg border border-azure-400/25 bg-azure-500/10 px-1.5 py-0.5 sm:px-2 sm:py-1 text-[9px] sm:text-[10px] font-black text-azure-300">
+                          +{def.xpReward} XP
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-md sm:rounded-lg border border-gold-400/30 bg-gold-500/10 px-1.5 py-0.5 sm:px-2 sm:py-1 text-[9px] sm:text-[10px] font-black text-gold-200">
+                          <SineCoinIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> +{def.coinReward} SC
+                        </span>
+                        <span className="rounded-md sm:rounded-lg border border-rose-400/20 bg-rose-500/10 px-1.5 py-0.5 sm:px-2 sm:py-1 text-[9px] sm:text-[10px] font-bold text-rose-300">
+                          −{CONTRACT_FAILURE_PENALTY[def.rarity]} SC ceza
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="mt-2 sm:mt-3.5">
+                      <div className="mb-1 sm:mb-1.5 flex items-center justify-between text-[8px] sm:text-[9px] font-black uppercase tracking-[0.16em] text-ink-400">
+                        <span>İlerleme</span>
+                        <span className="text-gold-300">%{percent}</span>
+                      </div>
+                      <div className="h-1.5 sm:h-2.5 overflow-hidden rounded-full border border-white/5 bg-black/40">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-amber-500 via-gold-400 to-yellow-200 shadow-[0_0_12px_rgba(245,158,11,0.65)] transition-all duration-500"
+                          style={{ width: `${Math.max(percent, 2)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[9px] sm:mt-2.5 sm:gap-x-3 sm:gap-y-1.5 sm:text-[10px] text-ink-300">
+                      {(activeContractProgress?.requirements || []).map((req) => (
+                        <span key={req.metric} className={`rounded-md border px-1.5 py-0.5 ${req.met ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-white/5 bg-white/[0.03]'}`}>
+                          {METRIC_LABELS[req.metric]}: {Math.min(req.current, req.target)}/{req.target}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <span className="flex h-8 w-8 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg sm:rounded-2xl border border-gold-400/30 bg-gradient-to-br from-gold-500/25 to-amber-600/10 shadow-[0_0_22px_-6px_rgba(245,158,11,0.6)]">
+                    <SineCoinIcon className="h-5 w-5 sm:h-7 sm:w-7" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-[12.5px] sm:text-sm font-black text-white">Pazardan görev al, XP ve SineCoin kazan</h3>
+                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-[11px] leading-snug sm:leading-relaxed text-ink-400">
+                      Günlük ve haftalık görevler haftada bir yenilenir. Aynı anda yalnızca 1 görev aktif olabilir.
+                    </p>
+                    <div className="mt-1.5 sm:mt-2 flex flex-wrap gap-1 sm:gap-1.5">
+                      <span className="rounded-md border border-azure-400/20 bg-azure-500/10 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] font-black text-azure-300">Günlük görevler</span>
+                      <span className="rounded-md border border-gold-400/25 bg-gold-500/10 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] font-black text-gold-200">Haftalık sözleşmeler</span>
+                      <span className="rounded-md border border-white/10 bg-white/5 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] font-black text-ink-200">1 aktif görev</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-row items-center justify-between gap-2 border-t border-white/5 pt-2 sm:min-w-[184px] sm:flex-col sm:items-end sm:border-0 sm:pt-0 sm:gap-2.5">
+              <CoinPill amount={data.coins || 0} onClick={() => navigateTo('market')} />
+              <button
+                type="button"
+                onClick={() => navigateTo('market')}
+                className="group inline-flex items-center gap-1 rounded-lg sm:rounded-xl bg-gradient-to-r from-gold-400 to-amber-500 px-3 py-1.5 sm:px-4 sm:py-2.5 text-[10.5px] sm:text-xs font-black text-ink-950 shadow-[0_8px_24px_-8px_rgba(245,158,11,0.8)] transition hover:brightness-110 active:scale-[0.98]"
+              >
+                {activeContract ? 'Görevi Gör' : 'Görev Seç'}
+                <ChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+              </button>
+              <span className="hidden text-[9px] font-bold uppercase tracking-[0.14em] text-ink-500 sm:block">
+                Haftalık yenilenen vitrin
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {activeTimerMovie && (() => {
         const info = getMovieTimerInfo(activeTimerMovie, nowMs);
@@ -1954,17 +1999,15 @@ export default function HomePage() {
             <div className="hn-sec-t">
               <span className="hn-idx">{nextSectionIdx()}</span>
               <h2>Günün Sinema Kartı</h2>
-              <span className="ln" />
-              <span className="inline-flex items-center gap-3.5">
-                {eligibleMovies.length > 1 && (
-                  <button type="button" className="hn-more" onClick={() => setSpotlightOffset((prev) => prev + 1)}>
-                    <RefreshCw size={12} /> Kartı Değiştir
-                  </button>
-                )}
-                <button type="button" className="hn-more" onClick={() => navigateTo('movies')}>
-                  Tüm Filmler <ChevronRight size={13} />
+              {eligibleMovies.length > 1 && (
+                <button type="button" className="hn-more" onClick={() => setSpotlightOffset((prev) => prev + 1)}>
+                  <RefreshCw size={12} /> Kartı Değiştir
                 </button>
-              </span>
+              )}
+              <span className="ln" />
+              <button type="button" className="hn-more ml-auto" onClick={() => navigateTo('movies')}>
+                Tüm Filmler <ChevronRight size={13} />
+              </button>
             </div>
 
             <div className="hn-spotlight">
@@ -2013,7 +2056,7 @@ export default function HomePage() {
                   <button type="button" className="hn-btn hn-btn-p" onClick={() => handleRequestRateMovie(spotlightMovie)}>
                     <Star size={12} className="hn-btn-ic" /> Puanla
                   </button>
-                  <button type="button" className="hn-btn hn-btn-s" onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}>
+                  <button type="button" className="hn-btn hn-btn-s hn-sp-extra" onClick={() => setDetailTarget({ type: 'movie', data: spotlightMovie })}>
                     <Eye size={12} className="hn-btn-ic" /> Künye
                   </button>
                   {!isSpotlightTimerActive && (
@@ -2027,11 +2070,58 @@ export default function HomePage() {
                     </button>
                   )}
                   {isSpotlightPlanned ? (
-                    <span className="hn-planned"><Lock size={11} className="hn-btn-ic" /> Takvime Planlandı</span>
+                    <span className="hn-planned hn-sp-extra"><Lock size={11} className="hn-btn-ic" /> Takvime Planlandı</span>
                   ) : (
-                    <button type="button" className="hn-btn hn-btn-g" onClick={() => navigateTo('plan')}>
+                    <button type="button" className="hn-btn hn-btn-g hn-sp-extra" onClick={() => navigateTo('plan')}>
                       <Calendar size={12} className="hn-btn-ic" /> Planlayıcıya Git
                     </button>
+                  )}
+                  <button
+                    type="button"
+                    className="hn-btn hn-btn-s hn-sp-more"
+                    onClick={() => setSpotlightMoreOpen((prev) => !prev)}
+                    aria-expanded={spotlightMoreOpen}
+                    aria-label="Diğer aksiyonlar"
+                  >
+                    <MoreHorizontal size={14} className="hn-btn-ic" /> Diğer
+                  </button>
+                  {spotlightMoreOpen && (
+                    <div className="hn-sp-more-menu">
+                      <button
+                        type="button"
+                        className="hn-btn hn-btn-s"
+                        onClick={() => { setSpotlightMoreOpen(false); setDetailTarget({ type: 'movie', data: spotlightMovie }); }}
+                      >
+                        <Eye size={12} className="hn-btn-ic" /> Künye
+                      </button>
+                      {isSpotlightPlanned ? (
+                        <span className="hn-sp-more-item"><Lock size={11} className="hn-btn-ic" /> Takvime Planlandı</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="hn-btn hn-btn-g"
+                          onClick={() => { setSpotlightMoreOpen(false); navigateTo('plan'); }}
+                        >
+                          <Calendar size={12} className="hn-btn-ic" /> Planlayıcıya Git
+                        </button>
+                      )}
+                      {getMovieWatchLinks(spotlightMovie).map((link, idx) => {
+                        const LinkIcon = link.icon;
+                        return (
+                          <a
+                            key={idx}
+                            href={link.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hn-link-chip"
+                            onClick={() => setSpotlightMoreOpen(false)}
+                          >
+                            {link.logo ? <img src={link.logo} alt={link.text} className="hn-link-logo" /> : <LinkIcon size={11} />}
+                            {link.text}
+                          </a>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
 
@@ -2059,13 +2149,13 @@ export default function HomePage() {
         <section className="hn-sec">
           <div className="hn-sec-t">
             <span className="hn-idx">{nextSectionIdx()}</span>
-            <h2>İzlemeye Devam Et — {ongoingSeries.length} Dizi</h2>
+            <h2>İzlemeye Devam Et — {Math.min(ongoingSeries.length, 5)} Dizi</h2>
             <span className="ln" />
             <button type="button" className="hn-more" onClick={() => navigateTo('series')}>Tüm Diziler <ChevronRight size={13} /></button>
           </div>
 
           <div className="hn-series-grid">
-            {ongoingSeries.slice(0, 6).map(({ series, episode, watchedCount, totalCount, pct }) => (
+            {ongoingSeries.slice(0, 5).map(({ series, episode, watchedCount, totalCount, pct }) => (
               <div key={series.id} className="hn-scard">
                 <button
                   type="button"
@@ -2099,14 +2189,14 @@ export default function HomePage() {
       <section className="hn-sec">
         <div className="hn-sec-t">
           <span className="hn-idx">{nextSectionIdx()}</span>
-          <h2>Rozetler &amp; Sinevia Ağı</h2>
+          <h2>Başarımlar &amp; Sinevia Ağı</h2>
           <span className="ln" />
         </div>
 
         <div className="hn-duo">
           <div className="hn-panel">
             <h3>
-              <span className="hn-di" /> En Yakın Rozetler
+              <span className="hn-di" /> En Yakın Başarımlar
               <button type="button" className="hn-more" onClick={() => navigateTo('achievements')}>Tümü <ChevronRight size={13} /></button>
             </h3>
 

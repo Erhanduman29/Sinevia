@@ -177,7 +177,7 @@ export interface CoinTx {
   id: string;
   /** Pozitif kazanç, negatif harcama. */
   amount: number;
-  kind: 'achievement' | 'lifetime_quest' | 'contract' | 'purchase' | 'welcome' | 'bonus' | 'refund' | 'xp_conversion' | 'penalty';
+  kind: 'achievement' | 'lifetime_quest' | 'contract' | 'purchase' | 'welcome' | 'bonus' | 'refund' | 'xp_conversion' | 'penalty' | 'streak';
   label: string;
   /** Aynı ödülün iki kez yazılmasını engelleyen tekil anahtar. */
   refId: string;
@@ -195,6 +195,9 @@ export interface EquippedItems {
   frameId?: string | null;
   titleId?: string | null;
   badgeId?: string | null;
+  badgeId2?: string | null;
+  backgroundId?: string | null;
+  nameEffectId?: string | null;
 }
 
 export interface ActiveEffect {
@@ -208,6 +211,9 @@ export interface ActiveContract {
   contractId: string;
   startedAt: number;
   expiresAt: number;
+  /** Günlük ücretsiz görev veya sabitlenmiş ücretsiz görev. */
+  free?: boolean;
+  freeSource?: 'daily' | 'pin';
 }
 
 export interface ContractHistoryEntry {
@@ -217,6 +223,7 @@ export interface ContractHistoryEntry {
   completedAt: number;
   xp: number;
   coins: number;
+  free?: boolean;
 }
 
 export interface MarketStats {
@@ -246,6 +253,14 @@ export interface AppData {
   activeEffects?: ActiveEffect[];
   /** Pazar vitrinini haftalık yeniden karıştırma sayacı. */
   marketRerollNonce?: number;
+  /** Yalnız günlük görevleri yenileyen sayaç. */
+  marketDailyNonce?: number;
+  /** Yalnız haftalık görevleri yenileyen sayaç. */
+  marketWeeklyNonce?: number;
+  /** Kalıcı gelişim avantajları (vitrin yuvası, rozet yuvası, ek görev). */
+  perks?: string[];
+  /** Bir sonraki hafta için sabitlenen görev. */
+  pinnedContract?: { week: string; contractId: string } | null;
   /** Pazar tanıtım/backfill ekranı gösterildi mi. */
   marketIntroSeen?: boolean;
   /** Pazar başarımları için sayaçlar. */

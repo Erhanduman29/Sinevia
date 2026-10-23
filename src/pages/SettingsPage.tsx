@@ -25,7 +25,7 @@ import {
   playUiClickSound, playRatingArpSound,
 } from '../lib/sound';
 import { ACTION_BRIDGE_PRESETS, newActionId, resolveActionUrl, extractPlaceholders } from '../lib/actionBridge';
-import { idbGet, idbSet, idbDel, PREV_ACCOUNT_KEY } from '../lib/storageService';
+import { idbGet, idbSet, PREV_ACCOUNT_KEY, clearAllLocalAppData } from '../lib/storageService';
 
 // ---------------------------------------------------------------------------
 // PREMIUM YÜZEY & BUTON DİLİ — sinevia-premium.html ile aynı tokenlar.
@@ -1064,23 +1064,11 @@ export default function SettingsPage() {
     setEditingReviewTag(null);
   };
 
-  /** Cihazdaki yerel veriyi sıfırlamak için bayrak bırakır — asıl temizliği
-   *  AppProvider init/mount'u yapar: boot anlık görüntüsü (kimlik dahil) yeniden
-   *  yükleme anında pagehide ile geri yazılsa bile init bayrağı görüp taze
-   *  defaultData ile açar, IndexedDB kaydını siler ve hidratasyonu atlar. */
-  const clearLocalDeviceData = async (forceZero = false) => {
-    if (!forceZero) {
-      try {
-        // Taşıma ile gelinen yerel hesap yedeği varsa: çıkış, o yedeğe döner
-        // (Sıfır hesap değil). Bayrak mount'ta yedeği IDB'ye kurar.
-        const prev = await idbGet<{ data?: { movies?: unknown[]; series?: unknown[]; history?: unknown[]; agentId?: string } }>(PREV_ACCOUNT_KEY);
-        if (prev?.data?.agentId || (prev?.data?.movies?.length || 0) + (prev?.data?.series?.length || 0) + (prev?.data?.history?.length || 0) > 0) {
-          try { localStorage.setItem('sinevia_restore_prev', '1'); } catch { /* kota */ }
-          return;
-        }
-      } catch { /* yedek okunamadı → sıfırlamaya düş */ }
-    }
-    try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
+  /** Cihazdaki TÜM yerel veriyi (kütüphane, görevler, tutorial, ayarlar,
+   *  oturum/kimlik ve önceki hesap yedeği) siler. Çıkış artık eski yerel
+   *  hesaba dönmez; bulut hesabı ayrı kalır ve kurtarma anahtarıyla taşınır. */
+  const clearLocalDeviceData = async () => {
+    await clearAllLocalAppData();
   };
 
   const handleDisconnectDevice = async () => {
@@ -1168,20 +1156,9 @@ export default function SettingsPage() {
       return;
     }
 
-    // Yerel kütüphane IndexedDB'de — bayrak init'te onu da temizler.
-    // Tam sıfırlamada yerel hesap yedeği de silinir (geri dönecek hesap yok).
-    try { await idbDel(PREV_ACCOUNT_KEY); } catch { /* kota */ }
-    await clearLocalDeviceData(true);
-
-    // "Her şeyi sil" kesin temizlik: context sağlayıcıları (QuestProvider,
-    // TutorialProvider) AppProvider'ın çocuğu olduğundan, yeniden yüklemede
-    // mount sırasında eski localStorage kayıtlarını okuyup belleğe alabilirler.
-    // Bu anahtarları reload'dan ÖNCE senkron silerek onları tamamen sıfırla.
-    try {
-      localStorage.removeItem('sinevia-quests-v1');
-      localStorage.removeItem('sinevia-tutorial-v1');
-      localStorage.removeItem('sinevia-academy-ui-v1');
-    } catch { /* kota */ }
+    // Bulut silindi → cihazdaki HER ŞEYİ (kütüphane, görevler, tutorial,
+    // akademi, ayarlar, kimlik ve önceki hesap yedeği) senkron temizle.
+    await clearLocalDeviceData();
 
     setShowResetModal(false);
     setConfirmResetStage(0);
@@ -1593,7 +1570,7 @@ export default function SettingsPage() {
             title="Tam Yedekle / Geri Yükle"
             icon={<Download size={18} className="text-emerald-400 flex-shrink-0" />}
             defaultOpen={false}
-            desc="Tüm kişisel verilerini (geçmiş, puanlar ve başarımlar dahil) çevrimdışı JSON dosyası olarak bilgisayarına indir."
+            desc="Kütüphane, görevler, başarımlar, tutorial/akademi ilerlemesi ve ayarlar dahil tüm verilerini çevrimdışı JSON dosyası olarak indir."
           >
             <div className="grid grid-cols-2 sm:flex gap-2.5">
               <button
@@ -1627,8 +1604,8 @@ export default function SettingsPage() {
                   <LogOut size={18} /> Bu Cihazdan Çıkış Yap
                 </h3>
                 <p className="text-xs sm:text-sm text-ink-400 mb-4 leading-relaxed">
-                  Sadece bu tarayıcıdaki verileri temizler ve seni yeni bir "Sıfır" hesaba geçirir. 
-                  <strong>Bu cihaza daha önce taşıma ile hesap yüklediysen</strong> (yerel kaydı saklandıysa) çıkış yapınca <strong>o hesap geri gelir.</strong>
+                  Bu cihazdaki <strong>tüm yerel veriler</strong> (kütüphane, görevler, başarımlar, tutorial/akademi ilerlemesi, ayarlar ve oturum bilgisi) kalıcı olarak silinir.
+                  Bulut hesabın silinmez; kurtarma anahtarınla başka bir cihazda geri yükleyebilirsin. <strong>Bu cihazda eski yerel hesap geri gelmez.</strong>
                 </p>
                 <button 
                   onClick={() => setShowLogoutModal(true)} 
@@ -1645,7 +1622,7 @@ export default function SettingsPage() {
                   <Trash2 size={18} /> Hesabı Kalıcı Olarak Yok Et
                 </h3>
                 <p className="text-xs sm:text-sm text-red-400/70 mb-4 leading-relaxed">
-                  Tüm kütüphanen, başarımların ve Ağ Kimliğin buluttan <strong>tamamen</strong> silinir. 
+                  Tüm kütüphanen, görevlerin, başarımların, ayarların ve Ağ Kimliğin hem buluttan hem bu cihazdan <strong>tamamen</strong> silinir. 
                   Bu işlemi diğer cihazlarından (Örn: Chrome) da geri alamazsın. Sinevia tamamen sıfırlanır.
                 </p>
 

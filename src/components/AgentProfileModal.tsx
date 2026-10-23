@@ -9,6 +9,7 @@ import { useApp, getMovieTimerInfo } from '../context/AppContext';
 import type { ShowcaseItem } from '../context/AppContext';
 import { ratingBgClass, formatDateShort } from '../lib/utils';
 import { levelFromXp } from '../lib/xp';
+import { showcaseLimit } from '../lib/marketItems';
 import RatingModal from './RatingModal';
 import MediaDetailModal from './MediaDetailModal';
 import type { Movie } from '../types';
@@ -507,7 +508,7 @@ export default function AgentProfileModal({
                   onClick={onOpenShowcaseEditor}
                   className="bg-gradient-to-r from-gold-500 to-amber-500 hover:from-gold-400 hover:to-amber-400 text-ink-950 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-gold-500/20 transition-all self-start sm:self-end"
                 >
-                  <Crown size={15} /> Vitrinimi Düzenle ({showcaseItems.length}/4)
+                  <Crown size={15} /> Vitrinimi Düzenle ({showcaseItems.length}/{showcaseLimit(data.perks)})
                 </button>
               )
             ) : (
@@ -1152,7 +1153,7 @@ export default function AgentProfileModal({
               watchLinks.push({ href: finalHref, text: provider.providerName, logo: provider.logoUrl, icon: PlayCircle });
             });
           }
-          const searchQuery = encodeURIComponent(`${displayTitle} ${displayYear} izle`);
+          const searchQuery = encodeURIComponent(`${displayTitle} ${displayYear} İzle`);
           watchLinks.push({ href: `https://www.google.com/search?q=${searchQuery}`, text: "Google'da Bul", logo: null, icon: Search });
 
           if (data.altWatchTemplate && (myMovie?.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
@@ -1163,7 +1164,7 @@ export default function AgentProfileModal({
               .replace('{slug}', slug)
               .replace('{title}', encodeURIComponent(displayTitle))
               .replace('{year}', displayYear);
-            watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+            watchLinks.push({ href: finalAltHref, text: 'İzle', logo: null, icon: PlayCircle });
           }
 
           const timerInfo = myMovie && !myMovie.watched && myMovie.startedAt ? getMovieTimerInfo(myMovie, nowMs) : null;

@@ -5,13 +5,13 @@ import {
   CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye,
   FolderPlus, X, Play, Pause, Timer, Zap, Lock, EyeOff, ChevronsUpDown, History,
   CheckSquare, Square, ArrowRightLeft, SlidersHorizontal, Send, Film, Skull, RotateCcw,
-  Info, MessageSquare, MonitorPlay, Scale
+  Info, MessageSquare, MonitorPlay, Scale, MoreHorizontal
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useActions, useLibrary, useSettings } from '../context/slices';
 import { ratingBgClass, formatDateShort, normalize } from '../lib/utils';
-import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
+import { normalizeActionLabel, resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDB } from '../lib/tmdb';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import { useFilteredMovies } from '../lib/selectorHooks';
@@ -71,6 +71,7 @@ export default function MoviesPage() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unwatchTarget, setUnwatchTarget] = useState<Movie | null>(null);
   const [reviveTarget, setReviveTarget] = useState<Movie | null>(null);
   const [showDna, setShowDna] = useState(false);
@@ -107,12 +108,32 @@ export default function MoviesPage() {
   const [pastMoveNewColName, setPastMoveNewColName] = useState<string>('');
 
   const [watchedFilter, setWatchedFilter] = useState<WatchedFilterMode>('unwatched');
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<string>('');
   const [abandonTarget, setAbandonTarget] = useState<Movie | null>(null);
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<SortMode>('added');
   const [search, setSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+
+  /* "Durum ⋯" menüsü: dışına tıklayınca / Esc ile kapansın */
+  useEffect(() => {
+    if (!statusMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-menu-root]')) return;
+      setStatusMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setStatusMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [statusMenuOpen]);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const activeTimerMovie = useMemo(() => libMovies.find((m) => !m.watched && m.startedAt) || null, [libMovies]);
@@ -461,7 +482,7 @@ export default function MoviesPage() {
   return (
     <div className="space-y-4 sm:space-y-5 mpx-root">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-ink-100 flex items-center gap-2.5">
             <div className="mpx-tile">
               <Projector size={20} />
@@ -469,16 +490,55 @@ export default function MoviesPage() {
             Filmler
           </h1>
 
-          <button
-            onClick={() => setShowAdd(true)}
-            data-tutorial="movies-add"
-            className="mpx-btn mpx-btn-p mpx-btn-xs mpx-only-sm"
-          >
-            <Plus size={16} strokeWidth={2.5} /> Film Ekle
-          </button>
+          <div className="flex items-center gap-1.5 md:hidden">
+            <button
+              onClick={() => setShowAdd(true)}
+              data-tutorial="movies-add"
+              className="mpx-btn mpx-btn-p mpx-btn-xs"
+            >
+              <Plus size={16} strokeWidth={2.5} /> Film Ekle
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                className="mpx-btn mpx-btn-s mpx-btn-xs"
+                aria-expanded={mobileMenuOpen}
+                aria-label="Diğer film aksiyonları"
+              >
+                <MoreHorizontal size={16} />
+              </button>
+              {mobileMenuOpen && (
+                <div className="absolute right-0 top-full z-40 mt-2 flex w-44 flex-col gap-1 rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); openSendModal(); }}
+                    className="mpx-btn mpx-btn-s mpx-btn-xs w-full justify-start"
+                  >
+                    <Send size={15} className="flex-shrink-0 text-violet-400" />
+                    <span className="truncate">Tavsiye Et</span>
+                  </button>
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); handleSyncTMDB(); }}
+                    disabled={isSyncing}
+                    className="mpx-btn mpx-btn-s mpx-btn-xs w-full justify-start"
+                  >
+                    <RefreshCw size={15} className={`flex-shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span className="truncate">{isSyncing ? 'Taranıyor' : 'Eksik Bul'}</span>
+                  </button>
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); setShowPick(true); }}
+                    data-tutorial="movies-pick"
+                    className="mpx-btn mpx-btn-s mpx-btn-xs w-full justify-start"
+                  >
+                    <Shuffle size={15} className="flex-shrink-0" />
+                    <span className="truncate">Ne İzlesem</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
+        <div className="hidden md:flex md:flex-nowrap items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => openSendModal()}
             className="mpx-btn mpx-btn-s mpx-btn-xs flex-1 sm:flex-none"
@@ -514,7 +574,7 @@ export default function MoviesPage() {
           <button
             onClick={() => setShowAdd(true)}
             data-tutorial="movies-add"
-            className="mpx-btn mpx-btn-p mpx-hide-sm"
+            className="mpx-btn mpx-btn-p"
           >
             <Plus size={18} /> Film Ekle
           </button>
@@ -588,48 +648,85 @@ export default function MoviesPage() {
             >
               İzlenecek ({totalUnwatched})
             </button>
-            <button
-              onClick={() => setWatchedFilter('watched')}
-              className={`mpx-chip ${watchedFilter === 'watched' ? 'on' : ''}`}
-            >
-              İzlenen ({totalWatched})
-            </button>
-            <button
-              onClick={() => setWatchedFilter('past')}
-              className={`mpx-chip ${watchedFilter === 'past' ? 'on' : ''}`}
-            >
-              <History size={12} className="flex-shrink-0 hidden xs:inline" />
-              <span>Önceden ({totalPastWatched})</span>
-            </button>
-            <button
-              onClick={() => setWatchedFilter('graveyard')}
-              className={`mpx-chip ${watchedFilter === 'graveyard' ? 'on' : ''}`}
-              title="Yarım bırakılan filmler (Sinematik Otopsi)"
-            >
-              <span>🪦 Mezarlık ({totalAbandoned})</span>
-            </button>
+            <div className="relative" data-menu-root>
+              <button
+                type="button"
+                onClick={() => setStatusMenuOpen((prev) => !prev)}
+                className={`mpx-chip ${['watched', 'past', 'graveyard'].includes(watchedFilter) ? 'on' : ''}`}
+                aria-expanded={statusMenuOpen}
+                title="Diğer durumlar"
+              >
+                <MoreHorizontal size={14} />
+                <span>
+                  {watchedFilter === 'watched'
+                    ? 'İzlenen'
+                    : watchedFilter === 'past'
+                      ? 'Önceden'
+                      : watchedFilter === 'graveyard'
+                        ? 'Mezarlık'
+                        : 'Durum'}
+                </span>
+              </button>
+              {statusMenuOpen && (
+                <div className="absolute right-0 top-full z-40 mt-2 flex w-44 flex-col gap-1 rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWatchedFilter('watched');
+                      setStatusMenuOpen(false);
+                    }}
+                    className={`mpx-btn mpx-btn-s mpx-btn-xs w-full justify-start ${watchedFilter === 'watched' ? 'on' : ''}`}
+                  >
+                    İzlenen ({totalWatched})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWatchedFilter('past');
+                      setStatusMenuOpen(false);
+                    }}
+                    className={`mpx-btn mpx-btn-s mpx-btn-xs w-full justify-start ${watchedFilter === 'past' ? 'on' : ''}`}
+                  >
+                    <History size={12} /> Önceden ({totalPastWatched})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWatchedFilter('graveyard');
+                      setStatusMenuOpen(false);
+                    }}
+                    className={`mpx-btn mpx-btn-s mpx-btn-xs w-full justify-start ${watchedFilter === 'graveyard' ? 'on' : ''}`}
+                    title="Yarım bırakılan filmler (Sinematik Otopsi)"
+                  >
+                    🪦 Mezarlık ({totalAbandoned})
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5">
             {platformOptions.length > 0 && (
-              <select
-                value={platformFilter}
-                onChange={(e) => setPlatformFilter(e.target.value)}
-                title="Platforma göre filtrele"
-                className="mpx-btn mpx-btn-xs mpx-btn-s flex-1 sm:flex-none"
-              >
-                <option value="">Tüm Platformlar</option>
-                {platformOptions.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
+              <div className="hidden md:block">
+                <select
+                  value={platformFilter}
+                  onChange={(e) => setPlatformFilter(e.target.value)}
+                  title="Platforma göre filtrele"
+                  className="mpx-btn mpx-btn-xs mpx-btn-s sm:flex-none"
+                >
+                  <option value="">Tüm Platformlar</option>
+                  {platformOptions.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
             <button
               type="button"
               onClick={() => setIsFilterPanelOpen((prev) => !prev)}
-              className={`mpx-btn mpx-btn-xs flex-1 sm:flex-none ${
+              className={`mpx-btn mpx-btn-xs mpx-filter-btn flex-1 sm:flex-none ${
                 isFilterPanelOpen || activeFilterCount > 0 ? 'mpx-btn-s on' : 'mpx-btn-s'
               }`}
             >
@@ -677,6 +774,24 @@ export default function MoviesPage() {
                 </button>
               )}
             </div>
+
+            {platformOptions.length > 0 && (
+              <div className="md:hidden">
+                <select
+                  value={platformFilter}
+                  onChange={(e) => setPlatformFilter(e.target.value)}
+                  title="Platforma göre filtrele"
+                  className="mpx-btn mpx-btn-xs mpx-btn-s w-full"
+                >
+                  <option value="">Tüm Platformlar</option>
+                  {platformOptions.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
               <div className="mpx-mono flex items-center gap-1 text-[11px] font-bold text-ink-400 mr-1 flex-shrink-0">
@@ -1617,6 +1732,20 @@ function MovieRow({
   onAbandon: (movie: Movie) => void;
   onRevive: (movie: Movie) => void;
 }) {
+  // Kart içi ⋯ menüleri (izleme köprüleri + araçlar) — mobilde kompakt kart
+  const [openMenu, setOpenMenu] = useState<'watch' | 'actions' | null>(null);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-row-menu]')) return;
+      setOpenMenu(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [openMenu]);
+
   const watchLinks: { href: string; text: string; logo: string | null; icon: any; primary?: boolean; platform?: string }[] = [];
 
   if (movie.customUrl) watchLinks.push({ href: movie.customUrl, text: 'Özel Kaynak', logo: null, icon: ExternalLink });
@@ -1651,7 +1780,7 @@ function MovieRow({
     if (primaryHref) {
       watchLinks.unshift({
         href: primaryHref,
-        text: primaryAction.label || 'Aksiyon',
+        text: normalizeActionLabel(primaryAction.label),
         logo: null,
         icon: BRIDGE_ICONS[primaryAction.icon] || ExternalLink,
         primary: true,
@@ -1668,7 +1797,7 @@ function MovieRow({
     const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
     const slug = movie.title.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (match) => charMap[match]).replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const finalAltHref = altWatchTemplate.replace('{imdb}', movie.imdbId || '').replace('{slug}', slug).replace('{title}', encodeURIComponent(movie.title)).replace('{year}', movie.year || '');
-    watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+    watchLinks.push({ href: finalAltHref, text: 'İzle', logo: null, icon: PlayCircle });
   }
 
   const timerInfo = !movie.watched && movie.startedAt ? getMovieTimerInfo(movie, nowMs) : null;
@@ -1676,14 +1805,14 @@ function MovieRow({
   return (
     <div
       id={`movie-row-${movie.id}`}
-      className={`mpx-row group flex flex-col md:flex-row gap-3 md:gap-4 mb-2 md:items-center p-2.5 sm:p-3 ${isHighlighted ? 'is-hl' : ''}`}
+      className={`mpx-row group flex flex-row items-center gap-2 md:gap-4 mb-1.5 md:mb-2 p-1.5 sm:p-3 ${isHighlighted ? 'is-hl' : ''} ${openMenu ? 'z-30' : ''}`}
     >
-      <div className="flex gap-3 sm:gap-3.5 flex-1 min-w-0">
+      <div className="flex gap-2.5 sm:gap-3.5 flex-1 min-w-0">
         <button
           type="button"
           onClick={() => onSelectDetail(movie)}
           title="Sinema Kartını & Detayları Gör"
-          className="mpx-poster mpx-poster-sm w-14 sm:w-16 flex-shrink-0 aspect-[2/3] flex items-center justify-center group/poster cursor-pointer focus:outline-none self-start md:self-center"
+          className="mpx-poster mpx-poster-sm w-12 sm:w-16 flex-shrink-0 aspect-[2/3] flex items-center justify-center group/poster cursor-pointer focus:outline-none self-start md:self-center"
         >
           {movie.posterUrl ? (
             <img loading="lazy" decoding="async" src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
@@ -1698,12 +1827,12 @@ function MovieRow({
           </div>
         </button>
 
-        <div className="flex-1 min-w-0 flex flex-col justify-center py-0.5">
-          <div className="flex flex-wrap items-center gap-1.5 mb-1 md:mb-0.5">
+        <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5 py-0.5">
+          <div className="flex flex-wrap items-center gap-1 mb-0.5 md:mb-0.5">
             <button
               type="button"
               onClick={() => onSelectDetail(movie)}
-              className={`font-bold text-sm truncate text-left hover:text-gold-400 transition-colors ${movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'}`}
+              className={`max-w-full font-bold text-[12.5px] sm:text-sm truncate text-left hover:text-gold-400 transition-colors ${movie.watched ? 'text-ink-500 line-through' : 'text-ink-100'}`}
               title="Sinema Kartını Gör"
             >
               {movie.title}
@@ -1735,7 +1864,7 @@ function MovieRow({
             )}
           </div>
 
-          <div className="mpx-mono font-semibold flex items-center gap-2 flex-wrap text-[10.5px] sm:text-[11px] text-ink-400 mb-1.5 md:mb-1">
+          <div className="mpx-mono font-semibold flex items-center gap-1.5 flex-wrap text-[9.5px] sm:text-[11px] text-ink-400 mb-1 md:mb-1">
             {movie.year && <span className="flex items-center gap-1"><Calendar size={10} /> {movie.year}</span>}
             {movie.runtime && <span className="flex items-center gap-1"><Clock size={10} /> {movie.runtime} dk</span>}
             {movie.watched && !movie.isPastWatch && movie.actualRuntime && movie.runtime && movie.actualRuntime < movie.runtime && (
@@ -1744,13 +1873,13 @@ function MovieRow({
               </span>
             )}
             {movie.genres.length > 0 && <span className="hidden sm:inline px-0.5 opacity-40">•</span>}
-            {movie.genres.length > 0 && <span className="truncate max-w-[180px] sm:max-w-none">{movie.genres.join(', ')}</span>}
+            {movie.genres.length > 0 && <span className="hidden sm:inline">{movie.genres.join(', ')}</span>}
           </div>
 
-          {/* izleme köprüleri — 4px ızgara oranlı aralık (gap-2) */}
-          <div className="flex items-center gap-2 flex-wrap mt-auto">
+          {/* izleme köprüleri — birincil + ilk alternatif satır içinde, kalanı ⋯ menüsünde */}
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap mt-0.5">
             {movie.watched && movie.rating !== null && (
-              <div className="flex items-center gap-1 mr-1">
+              <div className="flex items-center gap-1 mr-0.5 sm:mr-1">
                 <span className={`mpx-rate ${ratingBgClass(movie.rating)}`}>{movie.rating}</span>
                 {!movie.isPastWatch && movie.watchedAt && (
                   <span className="mpx-mono font-semibold text-[9.5px] text-ink-500 hidden sm:inline">{formatDateShort(movie.watchedAt)}</span>
@@ -1758,52 +1887,169 @@ function MovieRow({
               </div>
             )}
 
-            {watchLinks.map((link, idx) => {
-              const Icon = link.icon;
-              if (link.primary) {
-                // Birincil harici aksiyon — kompakt vurgulu köprü, yeni sekmede açılır
-                return (
-                  <a
-                    key={idx}
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    title={`${link.text} — yeni sekmede açılır`}
-                    className="mpx-link mpx-link-p"
-                  >
-                    <Icon size={10} />
-                    <span>{link.text}</span>
-                  </a>
-                );
-              }
+            {(() => {
+              const primaryLink = watchLinks.find((link) => link.primary) || null;
+              const secondaryLinks = watchLinks.filter((link) => link !== primaryLink);
+              // Mobilde kartı kompakt tutmak için yalnızca bir köprü satır içinde kalır,
+              // gerisi "⋯" menüsüne taşınır.
+              const inlineLinks = primaryLink ? [primaryLink] : secondaryLinks.slice(0, 1);
+              const overflowLinks = primaryLink ? secondaryLinks : secondaryLinks.slice(1);
+
               return (
-                <a
-                  key={idx}
-                  href={link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (link.platform && openPlatform(link.platform, movie.title)) {
-                      e.preventDefault();
-                    }
-                  }}
-                  className="mpx-link"
-                  title={link.platform ? `${link.platform} uygulamasında aç` : undefined}
-                >
-                  {link.logo ? <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-2.5 h-2.5 rounded-[2px] object-cover"  onError={handleImgFallback}/> : <Icon size={10} />}
-                  <span>{link.text}</span>
-                </a>
+                <>
+                  {inlineLinks.map((link, idx) => {
+                    const Icon = link.icon;
+                    const isPrimary = Boolean(link.primary);
+                    return (
+                      <a
+                        key={`inline-${idx}`}
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isPrimary && link.platform && openPlatform(link.platform, movie.title)) {
+                            e.preventDefault();
+                          }
+                        }}
+                        title={
+                          isPrimary
+                            ? `${link.text} — yeni sekmede açılır`
+                            : link.platform
+                              ? `${link.platform} uygulamasında aç`
+                              : undefined
+                        }
+                        className={`mpx-link ${isPrimary ? 'mpx-link-p' : ''} ${/alternatif/i.test(link.text) ? 'mpx-link-alt' : ''}`}
+                      >
+                        {link.logo ? (
+                          <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-2.5 h-2.5 rounded-[2px] object-cover" onError={handleImgFallback} />
+                        ) : (
+                          <Icon size={10} />
+                        )}
+                        <span
+                          className="max-w-[7.5rem] truncate"
+                          style={/alternatif/i.test(link.text) ? { textTransform: 'lowercase' } : undefined}
+                        >
+                          {link.text}
+                        </span>
+                      </a>
+                    );
+                  })}
+
+                  <div className={`relative flex-shrink-0 ${overflowLinks.length > 0 ? '' : 'md:hidden'}`} data-row-menu>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenu((prev) => (prev === 'watch' ? null : 'watch'));
+                        }}
+                        aria-expanded={openMenu === 'watch'}
+                        aria-label="Diğer izleme bağlantıları ve film işlemleri"
+                        title="Diğer izleme bağlantıları"
+                        className="mpx-link"
+                      >
+                        <MoreHorizontal size={12} />
+                      </button>
+                      {openMenu === 'watch' && (
+                        <div className="absolute left-0 top-full z-50 mt-1.5 flex max-h-[min(70vh,20rem)] w-44 flex-col gap-1 overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+                          {overflowLinks.map((link, idx) => {
+                            const Icon = link.icon;
+                            return (
+                              <a
+                                key={`more-${idx}`}
+                                href={link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (link.platform && openPlatform(link.platform, movie.title)) e.preventDefault();
+                                  setOpenMenu(null);
+                                }}
+                                title={link.platform ? `${link.platform} uygulamasında aç` : undefined}
+                                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-ink-200 transition hover:bg-white/10 hover:text-white"
+                              >
+                                {link.logo ? (
+                                  <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="h-3 w-3 flex-shrink-0 rounded-[2px] object-cover" onError={handleImgFallback} />
+                                ) : (
+                                  <Icon size={11} className="flex-shrink-0" />
+                                )}
+                                <span className="truncate">{link.text}</span>
+                              </a>
+                            );
+                          })}
+
+                          {/* Mobilde kart içi işlemler de aynı menüde — kartı kısaltır */}
+                          <div className="md:hidden flex flex-col gap-1">
+                            <div className="my-0.5 h-px bg-white/10" />
+                            {!movie.abandoned && !movie.watched && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenMenu(null);
+                                  onAbandon(movie);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-red-300 transition hover:bg-white/10 hover:text-red-200"
+                              >
+                                <Skull size={12} className="flex-shrink-0" /> Yarım Bırak
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenMenu(null);
+                                onSendToFriend(movie);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-ink-200 transition hover:bg-white/10 hover:text-white"
+                            >
+                              <Send size={12} className="flex-shrink-0" /> Tavsiye Et
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenMenu(null);
+                                onAssignCollection(movie);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-ink-200 transition hover:bg-white/10 hover:text-white"
+                            >
+                              <Boxes size={12} className="flex-shrink-0" /> Koleksiyon
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenMenu(null);
+                                onEdit(movie);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-ink-200 transition hover:bg-white/10 hover:text-white"
+                            >
+                              <Edit2 size={12} className="flex-shrink-0" /> Düzenle
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenMenu(null);
+                                onDelete(movie);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-red-300 transition hover:bg-white/10 hover:text-red-200"
+                            >
+                              <Trash2 size={12} className="flex-shrink-0" /> Sil
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                </>
               );
-            })}
+            })()}
           </div>
         </div>
       </div>
 
-      {/* Sağ Kısım: Aksiyon Butonları */}
-      <div className="flex flex-wrap items-center justify-between md:justify-end gap-2 sm:gap-2 w-full md:w-auto bg-ink-950/40 md:bg-transparent p-2 md:p-0 rounded-xl md:rounded-none border border-ink-800/40 md:border-0 flex-shrink-0">
-        <div className="flex items-center gap-2 w-full md:w-auto md:flex-none">
+      {/* Sağ Kısım: Aksiyon Butonları — mobilde kompakt dikey sütun */}
+      <div
+        data-row-menu
+        className="flex flex-col md:flex-row md:items-center md:justify-end gap-1 md:gap-2 w-[5.75rem] md:w-auto flex-shrink-0 self-stretch md:self-auto justify-center"
+      >
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-1 md:gap-2 w-full md:w-auto md:flex-none">
           {movie.abandoned ? (
             <button
               onClick={() => onRevive(movie)}
@@ -1876,7 +2122,8 @@ function MovieRow({
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0 w-full md:w-auto justify-end">
+        {/* Yardımcı araçlar — masaüstünde ikon satırı */}
+        <div className="hidden md:flex items-center gap-2 flex-shrink-0 justify-end">
           {!movie.abandoned && !movie.watched && (
             <button
               onClick={() => onAbandon(movie)}

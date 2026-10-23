@@ -22,6 +22,41 @@ export function setSoundEnabled(enabled: boolean): void {
   } catch {
     // Depolama kapalı olabilir; tercih yalnızca oturumda kalır.
   }
+  if (!enabled) clearSoundBusy();
+}
+
+/**
+ * Global ses kilidi: aynı anda yalnızca tek bir kutlama sesi çalmasını sağlar.
+ * Süreler ilgili sentez fonksiyonlarının gerçek bitiş süreleriyle eşleşir.
+ */
+export type SoundActivityKind = 'coin' | 'achievement' | 'level' | 'lesson' | 'quest';
+
+let soundBusyUntil = 0;
+let soundBusyKind: SoundActivityKind | null = null;
+
+export function markSoundBusy(kind: SoundActivityKind, durationMs: number): void {
+  const until = Date.now() + durationMs;
+  if (until > soundBusyUntil) {
+    soundBusyUntil = until;
+    soundBusyKind = kind;
+  }
+}
+
+export function isSoundBusy(): boolean {
+  return soundBusyUntil > Date.now();
+}
+
+export function getSoundBusyKind(): SoundActivityKind | null {
+  return isSoundBusy() ? soundBusyKind : null;
+}
+
+export function getSoundBusyRemainingMs(): number {
+  return Math.max(0, soundBusyUntil - Date.now());
+}
+
+export function clearSoundBusy(): void {
+  soundBusyUntil = 0;
+  soundBusyKind = null;
 }
 
 /**
@@ -599,118 +634,167 @@ function playHarmonicRiser(
 }
 
 /**
- * Tek bir tok SineCoin tıkırtısı: yumuşak temas gürültüsü, alçak metalik
- * kısmi tonlar ve paranın ağırlığını hissettiren kısa bir bas gövdesi.
+ * 24-AYAR AKORTLU SİNECOİN FİZİKSEL SENTEZLEYİCİSİ
+ * Gürültü (noise) içermez; çıtırtı ve teneke hissini tamamen sıfırlar.
+ * 1) Tok Ahşap/Kadife Zemin Darbesi (Weight Thud)
+ * 2) Orta Gövde Alaşım Sıcaklığı (Warm Fundamental + Octave)
+ * 3) Saf Altın Çınlaması (Kristal Parıltı - Tam Harmonik Uyumlu)
  */
-function playCoinClink(
+function playMintedGoldCoin(
   engine: { ctx: AudioContext; dry: AudioNode; wet: AudioNode },
   startTime: number,
-  baseFreq: number,
+  freq: number,
   pan: number,
   volume: number,
+  ringDuration = 0.75,
+  weight = 1.0
 ) {
   const { ctx, dry, wet } = engine;
-  const out = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
-  if ('pan' in out) out.pan.setValueAtTime(pan, startTime);
 
-  // Tiz cızırtıyı kesen, gövdeyi öne çıkaran ortak renk filtresi.
-  const tone = ctx.createBiquadFilter();
-  tone.type = 'lowpass';
-  tone.frequency.setValueAtTime(5200, startTime);
-  tone.Q.setValueAtTime(0.55, startTime);
-  tone.connect(out);
+  const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  const out = panner || ctx.createGain();
+  if (panner) {
+    panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), startTime);
+  }
 
+  // İpeksi Lowpass Filtre: Sert dijital köşeleri yuvarlar, tok ve pahalı bir tını verir
+  const toneFilter = ctx.createBiquadFilter();
+  toneFilter.type = 'lowpass';
+  toneFilter.frequency.setValueAtTime(Math.min(7500, freq * 4.2), startTime);
+  toneFilter.frequency.exponentialRampToValueAtTime(Math.max(1200, freq * 1.35), startTime + ringDuration);
+  toneFilter.Q.setValueAtTime(0.7, startTime);
+
+  toneFilter.connect(out);
   out.connect(dry);
 
-  // Orta seviye reverb: kuru tıkırtıyı boğmadan mekân derinliği ekler.
+  // Zengin sinema salonu yankısı (altın paranın mekânda bıraktığı lüks kuyruk)
   const wetSend = ctx.createGain();
-  wetSend.gain.value = 0.36;
+  wetSend.gain.setValueAtTime(0.42, startTime);
   out.connect(wetSend);
   wetSend.connect(wet);
 
-  // 1) Yumuşak temas gürültüsü (6 kHz cızırtısı yerine alçak-orta bant)
-  const noiseLen = Math.floor(ctx.sampleRate * 0.075);
-  const buffer = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
-  const ch = buffer.getChannelData(0);
-  for (let i = 0; i < noiseLen; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / noiseLen) ** 2.4;
-  const noise = ctx.createBufferSource();
-  noise.buffer = buffer;
-  const bp = ctx.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.setValueAtTime(2150, startTime);
-  bp.Q.setValueAtTime(0.75, startTime);
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(volume * 0.28, startTime);
-  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.065);
-  noise.connect(bp); bp.connect(noiseGain); noiseGain.connect(tone);
-  noise.start(startTime); noise.stop(startTime + 0.09);
+  // -------------------------------------------------------------------------
+  // KATMAN 1: TOK ZEMİN / AVUÇ DARBESİ (Paranın fiziksel ağırlığı - "Tuk" hissi)
+  // -------------------------------------------------------------------------
+  if (weight > 0.05) {
+    const bodyOsc = ctx.createOscillator();
+    const bodyGain = ctx.createGain();
+    const bodyFilter = ctx.createBiquadFilter();
 
-  // 2) Alçak, inharmonik ve uzun sönümlü metalik kısmi tonlar
-  const partials = [
-    { ratio: 1, gain: 0.5, decay: 0.72, type: 'triangle' as OscillatorType },
-    { ratio: 1.51, gain: 0.26, decay: 0.58, type: 'sine' as OscillatorType },
-    { ratio: 2.04, gain: 0.14, decay: 0.42, type: 'sine' as OscillatorType },
-    { ratio: 2.63, gain: 0.07, decay: 0.28, type: 'sine' as OscillatorType },
+    bodyOsc.type = 'sine';
+    // 210 Hz'den 68 Hz'e hızlıca inen tok, kadifemsi darbe (hiçbir cızırtı üretmez)
+    bodyOsc.frequency.setValueAtTime(215, startTime);
+    bodyOsc.frequency.exponentialRampToValueAtTime(68, startTime + 0.065);
+
+    bodyFilter.type = 'lowpass';
+    bodyFilter.frequency.setValueAtTime(340, startTime);
+
+    bodyGain.gain.setValueAtTime(0.0001, startTime);
+    bodyGain.gain.linearRampToValueAtTime(volume * 0.58 * weight, startTime + 0.003);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.095);
+
+    bodyOsc.connect(bodyFilter);
+    bodyFilter.connect(bodyGain);
+    bodyGain.connect(out);
+
+    bodyOsc.start(startTime);
+    bodyOsc.stop(startTime + 0.11);
+  }
+
+  // -------------------------------------------------------------------------
+  // KATMAN 2: METALİK KENAR VURGUSU (FM-benzeri çok kısa, temiz "tık" atağı)
+  // -------------------------------------------------------------------------
+  const pingOsc = ctx.createOscillator();
+  const pingGain = ctx.createGain();
+  pingOsc.type = 'triangle';
+  pingOsc.frequency.setValueAtTime(freq * 1.5, startTime); // Tam 5'li uyumu
+  pingOsc.frequency.exponentialRampToValueAtTime(freq * 0.5, startTime + 0.018);
+
+  pingGain.gain.setValueAtTime(0.0001, startTime);
+  pingGain.gain.linearRampToValueAtTime(volume * 0.42, startTime + 0.002);
+  pingGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.024);
+
+  pingOsc.connect(pingGain);
+  pingGain.connect(toneFilter);
+  pingOsc.start(startTime);
+  pingOsc.stop(startTime + 0.03);
+
+  // -------------------------------------------------------------------------
+  // KATMAN 3: AKORTLU ALTIN REZONANS GÖVDESİ (Kulağa hoş gelen müzikal tınlama)
+  // -------------------------------------------------------------------------
+  const harmonics = [
+    // 1. Alt Gövde (Tokluk ve sıcaklık verir - bir oktav aşağısı)
+    { ratio: 0.5, gain: 0.28 * weight, decay: ringDuration * 0.65, type: 'triangle' as OscillatorType, detune: 0 },
+    // 2. Ana Altın Notası (Temel frekans)
+    { ratio: 1.0, gain: 0.56, decay: ringDuration, type: 'sine' as OscillatorType, detune: -2 },
+    // 3. Parlak Oktav Harmoniği
+    { ratio: 2.0, gain: 0.24, decay: ringDuration * 0.78, type: 'sine' as OscillatorType, detune: 3 },
+    // 4. Altın Sikke Kristal Çan Modu (Tatlı metalik ışıltı)
+    { ratio: 2.997, gain: 0.11, decay: ringDuration * 0.52, type: 'sine' as OscillatorType, detune: -4 },
   ];
-  partials.forEach((p) => {
+
+  harmonics.forEach((h) => {
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
-    const freq = baseFreq * p.ratio;
-    osc.type = p.type;
-    osc.frequency.setValueAtTime(freq, startTime);
-    // Hafif aşağı kayma: temas anındaki metal gerilimi ve "tok" hissi.
-    osc.frequency.exponentialRampToValueAtTime(freq * 0.984, startTime + Math.min(0.14, p.decay * 0.4));
-    osc.detune.setValueAtTime((Math.random() - 0.5) * 9, startTime);
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.exponentialRampToValueAtTime(volume * p.gain, startTime + 0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + p.decay);
-    osc.connect(g); g.connect(tone);
-    osc.start(startTime); osc.stop(startTime + p.decay + 0.03);
-  });
+    const targetFreq = freq * h.ratio;
 
-  // 3) Paranın avuca düşme ağırlığı: alçak, yuvarlak bas gövdesi.
-  const thud = ctx.createOscillator();
-  const thudGain = ctx.createGain();
-  const thudFilter = ctx.createBiquadFilter();
-  thud.type = 'triangle';
-  thud.frequency.setValueAtTime(165, startTime);
-  thud.frequency.exponentialRampToValueAtTime(88, startTime + 0.24);
-  thudFilter.type = 'lowpass';
-  thudFilter.frequency.setValueAtTime(430, startTime);
-  thudGain.gain.setValueAtTime(0.0001, startTime);
-  thudGain.gain.exponentialRampToValueAtTime(volume * 0.34, startTime + 0.008);
-  thudGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.46);
-  thud.connect(thudFilter); thudFilter.connect(thudGain); thudGain.connect(tone);
-  thud.start(startTime); thud.stop(startTime + 0.5);
+    osc.type = h.type;
+    // İlk temas anında çok hafif yukarıdan yerine oturma (gerçek metalik sekme hissi)
+    osc.frequency.setValueAtTime(targetFreq * 1.006, startTime);
+    osc.frequency.exponentialRampToValueAtTime(targetFreq, startTime + 0.014);
+    osc.detune.setValueAtTime(h.detune, startTime);
+
+    g.gain.setValueAtTime(0.0001, startTime);
+    g.gain.linearRampToValueAtTime(Math.max(0.0002, volume * h.gain), startTime + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, startTime + h.decay);
+
+    osc.connect(g);
+    g.connect(toneFilter);
+    osc.start(startTime);
+    osc.stop(startTime + h.decay + 0.04);
+  });
 }
 
 /**
- * SineCoin kazanma / harcama için stereo, tok ve uzun kuyruklu para sesi.
- * İlk temas → kısa stereo cascade → ağır oturma ve sıcak çan kuyruğu.
+ * 2.4 SANİYELİK KISA VE PREMIUM SİNECOİN SESİ
+ * Tok bir bas darbesiyle ekrana düşer, anında 5 akortlu altın çınlamasıyla
+ * (D Majör arpeji) şelale etkisi yaratır ve hızla sönümlenir.
  */
 export function playCoinSound() {
   if (!isSoundEnabled()) return;
   const engine = getAudioEngine();
   if (!engine) return;
+  
+  // Süreyi 6200'den 2400'e düşürdük
+  markSoundBusy('coin', 2600); 
   const now = engine.ctx.currentTime;
 
-  // Paraların avuca bıraktığı ağırlık (sinematik alt gövde).
-  playSubImpact(engine, now, 150, 52, 1.55, 0.14, 0);
+  // 1. Tok Zemin Darbesi ve Kısa Sıcak Akor (0.00s)
+  playSubImpact(engine, now, 140, 45, 0.6, 0.32, 0);
+  
+  [146.83, 220.00, 293.66].forEach((f, idx) => {
+    playWarmPadNote(engine, f, now, 0.05, 1.2, 0.045, (idx - 1) * 0.2);
+  });
 
-  // İlk temas: sağ-sol genişliğinde üç tok tıkırtı.
-  playCoinClink(engine, now, 1174.66, -0.38, 0.24);
-  playCoinClink(engine, now + 0.105, 1318.51, 0.4, 0.21);
-  playCoinClink(engine, now + 0.22, 1244.51, 0.02, 0.17);
+  // 2. Ana Büyük Altın Çarpması (0.00s)
+  playMintedGoldCoin(engine, now, 1174.66, 0, 0.24, 0.8, 1.2); // D6
+  playMintedGoldCoin(engine, now + 0.02, 1479.98, 0, 0.18, 0.8, 0.8); // F#6
 
-  // İkinci dalga: daha hafif, soldan sağa akan paralar.
-  playCoinClink(engine, now + 0.74, 1108.73, -0.46, 0.12);
-  playCoinClink(engine, now + 0.87, 1174.66, 0.48, 0.11);
-  playCoinClink(engine, now + 1.04, 987.77, 0.08, 0.1);
+  // 3. Jackpot Saçılımı (0.12s - 0.40s arası hızlı altın dökülüşü)
+  const burst = [
+    { t: 0.12, freq: 880.00,  pan: -0.35, vol: 0.16 }, // A5
+    { t: 0.18, freq: 987.77,  pan: 0.35,  vol: 0.16 }, // B5
+    { t: 0.24, freq: 1108.73, pan: -0.20, vol: 0.17 }, // C#6
+    { t: 0.31, freq: 1318.51, pan: 0.20,  vol: 0.18 }, // E6
+    { t: 0.40, freq: 1760.00, pan: 0.00,  vol: 0.20 }, // A6
+  ];
+  
+  burst.forEach(b => {
+    playMintedGoldCoin(engine, now + b.t, b.freq, b.pan, b.vol, 0.75, 0.6);
+  });
 
-  // Son paranın oturması + sıcak, alçak rezonans kuyruğu.
-  playCoinClink(engine, now + 1.58, 880, -0.08, 0.13);
-  playSubImpact(engine, now + 1.59, 122, 44, 1.85, 0.11, 0);
-  playHarmonicBell(engine, 587.33, now + 1.76, 2.5, 0.05, 0.16);
+  // 4. Son Kapanış Işıltısı (0.55s)
+  playHarmonicBell(engine, 2349.32, now + 0.55, 1.2, 0.12, 0); // D7
 }
 
 /* ============================================================================
@@ -720,6 +804,7 @@ export function playAchievementSound() {
   if (!isSoundEnabled()) return;
   const engine = getAudioEngine();
   if (!engine) return;
+  markSoundBusy('achievement', 2400);
 
   const now = engine.ctx.currentTime;
 
@@ -749,6 +834,7 @@ export function playLevelUpSound() {
   if (!isSoundEnabled()) return;
   const engine = getAudioEngine();
   if (!engine) return;
+  markSoundBusy('level', 3800);
 
   const now = engine.ctx.currentTime;
 
@@ -786,6 +872,7 @@ export function playLessonDoneSound() {
   if (!isSoundEnabled()) return;
   const engine = getAudioEngine();
   if (!engine) return;
+  markSoundBusy('lesson', 1700);
 
   const now = engine.ctx.currentTime;
 
@@ -1260,40 +1347,257 @@ function playMythicQuestSymphony(engine: AudioEngine, now: number) {
   });
 }
 
-/**
- * Görev Tamamlanma Müziği Ana Yönlendirici:
- * Görevin nadirlik (rarity) değerine göre 5 farklı besteden birini çalıştırır.
- * Parametre verilmezse geriye dönük uyumluluk için 'Common' bestesi çalar.
- */
+
 export function playQuestCompleteSound(rarity?: string) {
   if (!isSoundEnabled()) return;
   const engine = getAudioEngine();
   if (!engine) return;
 
+  // Eski 7 saniyelik normal görev senfonisi; QuestCelebrationOverlay ile senkron.
+  markSoundBusy('quest', 7000);
+
   const now = engine.ctx.currentTime;
   const tier = normalizeQuestTier(rarity);
 
   switch (tier) {
-    case 'Common':
-      playCommonQuestSymphony(engine, now);
-      break;
-    case 'Rare':
-      playRareQuestSymphony(engine, now);
-      break;
-    case 'Epic':
-      playEpicQuestSymphony(engine, now);
-      break;
-    case 'Legendary':
-      playLegendaryQuestSymphony(engine, now);
-      break;
-    case 'Mythic':
-      playMythicQuestSymphony(engine, now);
-      break;
+    case 'Common': playCommonQuestSymphony(engine, now); break;
+    case 'Rare': playRareQuestSymphony(engine, now); break;
+    case 'Epic': playEpicQuestSymphony(engine, now); break;
+    case 'Legendary': playLegendaryQuestSymphony(engine, now); break;
+    case 'Mythic': playMythicQuestSymphony(engine, now); break;
   }
 }
 
 /* ============================================================================
-   5. PREMIUM MİKRO-ETKİLEŞİM VE SİNEMATİK MODÜL SESLERİ
+   5. SİNEMATİK PAZAR GÖREVİ TAMAMLANMA MÜZİĞİ (3 SANİYELİK YENİ HIZLI VERSİYON)
+   ----------------------------------------------------------------------------
+   Yeni Overlay Zaman Çizelgesi:
+   - Phase 0 (0.00s - 0.50s): Arma giriş ritmi & kısa tırmanış
+   - Phase 1 (0.50s - 1.20s): Drop! (Başlık Ekrana Vurur)
+   - Phase 2 (1.20s+)       : Mühürlenme! (Çiplerin oturması) & Sönümlenme
+   ============================================================================ */
+
+export type MarketContractSoundTier = 'Common' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
+
+function normalizeMarketContractTier(rarity?: string): MarketContractSoundTier {
+  const r = (rarity || 'common').trim().toLowerCase();
+  if (r.includes('mythic') || r.includes('mitik')) return 'Mythic';
+  if (r.includes('legend') || r.includes('efsane')) return 'Legendary';
+  if (r.includes('epic') || r.includes('epik')) return 'Epic';
+  if (r.includes('rare') || r.includes('nadir')) return 'Rare';
+  return 'Common';
+}
+
+/** TIER 1: COMMON */
+function playCommonMarketContractSymphony(engine: AudioEngine, now: number) {
+  // Phase 0 (0.0s - 0.5s): Kısa nabız
+  [261.63, 329.63, 392.0].forEach((f, i) => {
+    playSoftMarimbaNote(engine, f, now + i * 0.15, 0.3, 0.04, (i % 2 === 0 ? -1 : 1) * 0.2);
+  });
+  playHarmonicRiser(engine, now, 0.48, [{ startFreq: 130.81, endFreq: 261.63, type: 'sine', panStart: -0.2, panEnd: 0.2 }], 0.08, 1600);
+
+  // Phase 1 (0.5s): Drop (C Maj9)
+  const drop = now + 0.5;
+  playSubImpact(engine, drop, 115, 45, 0.8, 0.24);
+  [130.81, 196.0, 261.63, 329.63].forEach((f, idx) => {
+    playWarmPadNote(engine, f, drop, 0.05, 1.8, 0.045, (idx - 1.5) * 0.15);
+  });
+  [523.25, 659.25, 783.99].forEach((f, i) => {
+    playHarmonicBell(engine, f, drop + i * 0.08, 1.2, 0.09, i === 1 ? 0 : 0.2);
+  });
+
+  // Phase 2 (1.2s): Mühür
+  const seal = now + 1.2;
+  playHarmonicBell(engine, 1046.5, seal, 1.4, 0.09, 0.0);
+  playHarmonicBell(engine, 1318.51, seal + 0.08, 1.6, 0.08, 0.2);
+}
+
+/** TIER 2: RARE */
+function playRareMarketContractSymphony(engine: AudioEngine, now: number) {
+  // Phase 0 (0.0s - 0.5s): Hızlı Dorian
+  const dorian = [293.66, 349.23, 440.0, 523.25, 587.33];
+  dorian.forEach((f, i) => {
+    playSoftMarimbaNote(engine, f, now + i * 0.09, 0.25, 0.045, Math.sin(i) * 0.4);
+  });
+  playSubImpact(engine, now, 105, 50, 0.4, 0.15);
+  playHarmonicRiser(engine, now, 0.48, [
+    { startFreq: 146.83, endFreq: 293.66, type: 'triangle', panStart: 0.3, panEnd: -0.3 },
+    { startFreq: 220.0, endFreq: 587.33, type: 'sine', panStart: 0, panEnd: 0 }
+  ], 0.1, 2400);
+
+  // Phase 1 (0.5s): Drop (D Maj9)
+  const drop = now + 0.5;
+  playSubImpact(engine, drop, 135, 38, 1.0, 0.3);
+  [146.83, 220.0, 293.66, 369.99, 440.0].forEach((f, idx) => {
+    playWarmPadNote(engine, f, drop, 0.04, 2.0, 0.05, ((idx % 2 === 0 ? -1 : 1) * idx) / 5);
+  });
+  [739.99, 880.0, 1108.73, 1174.66].forEach((f, i) => {
+    playHarmonicBell(engine, f, drop + i * 0.08, 1.3, 0.11, (i % 2 === 0 ? -1 : 1) * 0.2);
+  });
+
+  // Phase 2 (1.2s): Mühür
+  const seal = now + 1.2;
+  playWarmPadNote(engine, 293.66, seal, 0.03, 1.2, 0.05, -0.2);
+  playWarmPadNote(engine, 369.99, seal, 0.03, 1.2, 0.05, 0.2);
+  playHarmonicBell(engine, 1174.66, seal, 1.6, 0.11, 0.2);
+  playHarmonicBell(engine, 1760.0, seal + 0.1, 1.8, 0.1, 0.0);
+}
+
+/** TIER 3: EPIC */
+function playEpicMarketContractSymphony(engine: AudioEngine, now: number) {
+  // Phase 0 (0.0s - 0.5s): Hızlı Taiko + Ostinato
+  [164.81, 246.94, 329.63, 392.0, 493.88].forEach((f, i) => {
+    playSoftMarimbaNote(engine, f, now + i * 0.09, 0.28, 0.05, ((i % 3) - 1) * 0.4);
+  });
+  [0.0, 0.2, 0.35].forEach((t, idx) => {
+    playSubImpact(engine, now + t, 110 + idx * 15, 42, 0.4, 0.2 + idx * 0.03, (idx % 2 === 0 ? -1 : 1) * 0.2);
+  });
+  playHarmonicRiser(engine, now, 0.48, [
+    { startFreq: 123.47, endFreq: 246.94, type: 'sawtooth', panStart: 0.5, panEnd: -0.5 },
+    { startFreq: 164.81, endFreq: 659.25, type: 'triangle', panStart: -0.3, panEnd: 0.3 }
+  ], 0.13, 3200);
+
+  // Phase 1 (0.5s): Drop Brass
+  const drop = now + 0.5;
+  playSubImpact(engine, drop, 165, 34, 1.2, 0.38);
+  [82.41, 164.81, 246.94, 329.63].forEach((f, idx) => {
+    playCinematicBrass(engine, f, drop, 0.05, 1.8, 0.065, ((idx % 2 === 0 ? -1 : 1) * idx) / 4);
+  });
+  [164.81, 246.94, 415.30].forEach((f, idx) => {
+    playWarmPadNote(engine, f, drop, 0.04, 2.2, 0.05, (idx - 1) * 0.2);
+  });
+  [987.77, 1318.51, 1479.98, 1975.53].forEach((f, i) => {
+    playHarmonicBell(engine, f, drop + i * 0.09, 1.5, 0.13, (i % 2 === 0 ? -1 : 1) * 0.3);
+  });
+
+  // Phase 2 (1.2s): Mühür
+  const seal = now + 1.2;
+  playSubImpact(engine, seal, 145, 38, 1.0, 0.28);
+  playCinematicBrass(engine, 246.94, seal, 0.04, 1.4, 0.06, 0.0);
+  playHarmonicBell(engine, 1661.22, seal, 1.8, 0.12, 0.3);
+  playHarmonicBell(engine, 2637.02, seal + 0.12, 2.0, 0.11, 0.0);
+}
+
+/** TIER 4: LEGENDARY */
+function playLegendaryMarketContractSymphony(engine: AudioEngine, now: number) {
+  // Phase 0 (0.0s - 0.5s): Kraliyet Arpeji + Koro
+  const notes = [196.0, 293.66, 392.0, 493.88, 587.33, 739.99, 987.77, 1174.66];
+  notes.forEach((f, i) => {
+    const t = now + (i / 7) * 0.45;
+    playSoftMarimbaNote(engine, f, t, 0.3, 0.05, Math.cos(i) * 0.5);
+    playHarmonicBell(engine, f * 1.5, t, 0.4, 0.04, Math.sin(i) * -0.5);
+  });
+  playEtherealChoir(engine, 293.66, now, 0.5, 1.2, 0.04, -0.4);
+  playEtherealChoir(engine, 440.0, now + 0.2, 0.3, 1.0, 0.04, 0.4);
+  playHarmonicRiser(engine, now, 0.48, [
+    { startFreq: 110.0, endFreq: 293.66, type: 'sawtooth', panStart: 0.6, panEnd: -0.6 },
+    { startFreq: 293.66, endFreq: 1174.66, type: 'sine', panStart: -0.4, panEnd: 0.4 }
+  ], 0.15, 3800);
+
+  // Phase 1 (0.5s): Kraliyet Drop
+  const drop = now + 0.5;
+  playSubImpact(engine, drop, 175, 32, 1.4, 0.42);
+  [98.0, 146.83, 196.0, 246.94, 293.66].forEach((f, idx) => {
+    playCinematicBrass(engine, f, drop, 0.04, 2.2, 0.065, ((idx % 2 === 0 ? -1 : 1) * idx) / 5);
+  });
+  [293.66, 369.99, 493.88, 783.99].forEach((f, idx) => {
+    playEtherealChoir(engine, f, drop + 0.02, 0.2, 2.5, 0.055, (idx - 1.5) * 0.3);
+  });
+  [783.99, 987.77, 1174.66, 1567.98, 1975.53].forEach((f, i) => {
+    playHarmonicBell(engine, f, drop + i * 0.09, 1.8, 0.14, (i % 2 === 0 ? -1 : 1) * 0.4);
+  });
+
+  // Phase 2 (1.2s): Kraliyet Mühür
+  const seal = now + 1.2;
+  playSubImpact(engine, seal, 160, 35, 1.2, 0.34);
+  [293.66, 392.0, 493.88].forEach((f, idx) => {
+    playCinematicBrass(engine, f, seal, 0.04, 1.8, 0.06, (idx - 1) * 0.3);
+    playEtherealChoir(engine, f * 2, seal, 0.2, 2.0, 0.045, (1 - idx) * 0.3);
+  });
+  [1567.98, 1975.53, 2349.32].forEach((f, i) => {
+    playHarmonicBell(engine, f, seal + i * 0.08, 2.0, 0.12, (i % 2 === 0 ? -1 : 1) * 0.3);
+  });
+}
+
+/** TIER 5: MYTHIC */
+function playMythicMarketContractSymphony(engine: AudioEngine, now: number) {
+  // Phase 0 (0.0s - 0.42s): Kuantum Sarmalı + Vakum 
+  // (0.42s - 0.50s arası mutlak sessizlik - drop öncesi nefes kesilmesi)
+  playSubImpact(engine, now, 140, 28, 0.5, 0.35);
+  playCinematicBrass(engine, 65.41, now, 0.1, 0.5, 0.08, 0.0);
+  
+  const helix = [261.63, 329.63, 392.0, 493.88, 587.33, 739.99, 880.0, 1046.5, 1318.51, 1760.0];
+  helix.forEach((f, i) => {
+    const t = now + (i / 9) * 0.38;
+    playHarmonicBell(engine, f, t, 0.3, 0.05 + (i / 9) * 0.05, Math.sin(i) * 0.7);
+    if (i % 2 === 0) playTelemetryPulse(engine, f * 1.5, t, 0.08, 0.04, Math.cos(i) * -0.7);
+  });
+  
+  playEtherealChoir(engine, 293.66, now, 0.2, 0.42, 0.05, -0.5);
+  playEtherealChoir(engine, 440.0, now + 0.1, 0.2, 0.32, 0.05, 0.5);
+  
+  playHarmonicRiser(engine, now, 0.4, [
+    { startFreq: 110.0, endFreq: 293.66, type: 'sawtooth', panStart: 0.8, panEnd: -0.8 },
+    { startFreq: 220.0, endFreq: 880.0, type: 'triangle', panStart: -0.5, panEnd: 0.5 },
+    { startFreq: 293.66, endFreq: 1760.0, type: 'sine', panStart: 0, panEnd: 0 }
+  ], 0.18, 4600);
+
+  // Phase 1 (0.5s): Supernova Drop (D Maj13#11)
+  const drop = now + 0.5;
+  playSubImpact(engine, drop, 195, 29, 1.8, 0.46, 0.0);
+  playSubImpact(engine, drop + 0.05, 120, 36.71, 1.4, 0.3, 0.0);
+
+  [73.42, 110.0, 146.83, 220.0, 293.66, 369.99, 440.0].forEach((f, idx) => {
+    playCinematicBrass(engine, f, drop, 0.04, 2.5, 0.065, ((idx % 2 === 0 ? -1 : 1) * idx) / 8);
+  });
+  [293.66, 440.0, 554.37, 830.61].forEach((f, idx) => {
+    playEtherealChoir(engine, f, drop, 0.2, 3.0, 0.058, (idx - 1.5) * 0.4);
+  });
+  [880.0, 1174.66, 1479.98, 1661.22, 1760.0, 2349.32].forEach((f, i) => {
+    playHarmonicBell(engine, f, drop + i * 0.08, 2.2, 0.15, (i % 2 === 0 ? -1 : 1) * 0.5);
+    playSoftMarimbaNote(engine, f * 0.5, drop + i * 0.08, 0.5, 0.08, (i % 2 === 0 ? 1 : -1) * 0.5);
+  });
+
+  // Phase 2 (1.2s): Mitik Mühür ve Yıldız Tozu Şelalesi
+  const seal = now + 1.2;
+  playSubImpact(engine, seal, 180, 30, 1.6, 0.4, 0.0);
+  [146.83, 293.66, 440.0, 739.99].forEach((f, idx) => {
+    playCinematicBrass(engine, f, seal, 0.04, 2.2, 0.06, (idx - 1.5) * 0.3);
+    if (idx >= 1) playEtherealChoir(engine, f, seal, 0.2, 2.5, 0.05, (1.5 - idx) * 0.3);
+  });
+  [1760.0, 2217.46, 2349.32, 2959.96, 3520.0].forEach((f, i) => {
+    playHarmonicBell(engine, f, seal + i * 0.06, 2.2, 0.12, Math.sin(i * 1.5) * 0.6);
+  });
+}
+
+/**
+ * Pazar Görevi Tamamlanma Müziği Ana Yönlendirici:
+ * Pazar görsel overlay'i 3 saniyede kapanır; ses kuyruğu (özellikle Mythic)
+ * 3.69 saniyeye kadar sürdüğü için kilit 3.8 saniye tutulur.
+ */
+export function playMarketContractCompleteSound(rarity?: string) {
+  if (!isSoundEnabled()) return;
+  const engine = getAudioEngine();
+  if (!engine) return;
+  
+  // Overlay 3000ms'de kapanır, ancak Mythic'in son çanı 3690ms'de biter.
+  // Sonraki kutlama sesi bu kuyruk bitmeden başlamasın diye 3800ms rezerve et.
+  markSoundBusy('quest', 3800);
+
+  const now = engine.ctx.currentTime;
+  const tier = normalizeMarketContractTier(rarity);
+
+  switch (tier) {
+    case 'Common': playCommonMarketContractSymphony(engine, now); break;
+    case 'Rare': playRareMarketContractSymphony(engine, now); break;
+    case 'Epic': playEpicMarketContractSymphony(engine, now); break;
+    case 'Legendary': playLegendaryMarketContractSymphony(engine, now); break;
+    case 'Mythic': playMythicMarketContractSymphony(engine, now); break;
+  }
+}
+
+/* ============================================================================
+   6. PREMIUM MİKRO-ETKİLEŞİM VE SİNEMATİK MODÜL SESLERİ
    (Animasyon süreleriyle milimetrik senkron — Süreler Birebir Korundu)
    ============================================================================ */
 
@@ -1508,6 +1812,9 @@ export function playUiClickSound(group: UiClickGroup) {
  */
 export function playRatingArpSound() {
   if (!isSoundEnabled()) return;
+  // Puanlama sesi de kutlama sesleriyle üst üste binmesin.
+  if (isSoundBusy()) return;
+  markSoundBusy('lesson', 1700);
   const engine = getAudioEngine();
   if (!engine) return;
 

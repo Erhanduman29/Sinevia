@@ -85,8 +85,8 @@ export const WELCOME_TUTORIAL: TutorialDef = {
 };
 
 /* =========================================================================
-   2. SAYFA TUTORIALERİ — 6 sayfa (Filmler, Haftalık Plan, Sinevia Ağı,
-      Başarımlar, İstatistikler, Geçmiş)
+   2. SAYFA TUTORIALERİ — 7 sayfa (Filmler, Haftalık Plan, Sinevia Ağı,
+      Başarımlar, İstatistikler, Geçmiş, Pazar)
    Sayfaya İLK girişte otomatik tetiklenir.
    ========================================================================= */
 export const PAGE_TUTORIALS: TutorialDef[] = [
@@ -314,6 +314,55 @@ export const PAGE_TUTORIALS: TutorialDef[] = [
       },
     ],
   },
+  {
+    id: 'page_market',
+    group: 'page',
+    page: 'market',
+    steps: [
+      {
+        type: 'slide',
+        title: 'Pazar & Envanter — emeğinin karşılığı',
+        desc: 'Görevlerden ve başarımlardan kazandığın SineCoin\'leri burada harcarsın. Pazar; pazar görevleri, güçlendirmeler, kozmetikler ve koleksiyon parçalarıyla dolu.',
+      },
+      {
+        type: 'spotlight',
+        target: 'market-header',
+        title: 'Bütçen ve haftalık fırsatlar',
+        desc: 'Üstteki coin göstergesi bakiyeni gösterir; yanındaki alan bu haftanın yenilenme zamanını ve aktif kuponunu bildirir. Coin\'e dokunarak cüzdanına geçebilirsin.',
+      },
+      {
+        type: 'direct',
+        target: 'market-tab-gorevler',
+        title: 'Önce pazar görevlerine bak',
+        desc: 'Şimdi "Görevler" sekmesine dokun. Pazar görevleri; izleme, puanlama veya plan hedefleri karşılığında ekstra coin ve XP kazandırır.',
+        hint: 'Görevler sekmesine dokun →',
+      },
+      {
+        type: 'spotlight',
+        target: 'market-contracts',
+        title: 'Pazar görevleri',
+        desc: 'Bir görevi satın aldığında aktif görevin yoksa otomatik başlar; varsa envanterine eklenir. Süre bitmeden hedefi tamamla, ödülünü kap.',
+      },
+      {
+        type: 'direct',
+        target: 'market-tab-pazar',
+        title: 'Ürünlere geri dön',
+        desc: 'Şimdi "Pazar" sekmesine dokun. Burada işlevsel itemler, kalıcı gelişimler ve kozmetikler seni bekliyor.',
+        hint: 'Pazar sekmesine dokun →',
+      },
+      {
+        type: 'spotlight',
+        target: 'market-items',
+        title: 'Satın alınabilir ürünler',
+        desc: 'İşlevsel itemler görev ve XP akışını etkiler; kozmetikler profilini kişiselleştirir. Bir ürüne tıklayınca detay penceresi açılır ve satın alma onayını orada verirsin.',
+      },
+      {
+        type: 'slide',
+        title: 'Envanter senin çantan',
+        desc: 'Satın aldığın her şey Envanter sekmesine düşer. Bir eşyaya tıklayarak detayını görüp kullanabilir, kuşanabilir veya bekleyen pazar görevini başlatabilirsin. Harcarken keyfini çıkar!',
+      },
+    ],
+  },
 ];
 
 /* =========================================================================
@@ -358,7 +407,7 @@ export const ALL_TUTORIALS: TutorialDef[] = [
 ];
 
 /* =========================================================================
-   AKADEMİ — 12 sıralı ders (XP'siz, görev panosunda altın blok)
+   AKADEMİ — 13 sıralı ders (XP'siz, görev panosunda altın blok)
    Her ders bir "eylem"dir; kullanıcı gerçekten yaparak tamamlar.
    NOT: Yeni dersler SONA eklenir — academyStep bir indeks olduğu için
    araya ders koymak mevcut kullanıcıların ilerlemesini kaydırır.
@@ -380,7 +429,8 @@ export interface AcademyQuestDef {
     | 'history_rating_edited'
     | 'badge_equipped'
     | 'ai_message_sent'
-    | 'backup_created';
+    | 'backup_created'
+    | 'market_item_bought';
   /** Görevin tamamlanması için kaç kez tetiklenmeli (default 1).
    *  Orta zorluk için kolay tekrarlanabilir dersler 2-3 ister. */
   count?: number;
@@ -399,6 +449,7 @@ export const ACADEMY_QUESTS: AcademyQuestDef[] = [
   { id: 'ac_achievements', title: 'Bir Rozet Tak', desc: 'Görev Panosu\'nda tamamladığın görevlerden ikisini profil rozeti olarak tak.', trigger: 'badge_equipped', count: 2 },
   { id: 'ac_ai', title: "AI Asistan'a Mesaj Yaz", desc: "AI Asistan'a iki soru yaz ve gönder; katalog ve öneri ipuçları kap.", trigger: 'ai_message_sent', count: 2 },
   { id: 'ac_backup', title: 'Verini Yedekle', desc: 'Ayarlar → Tam Yedekle bölümünden "Yedek Al" ile verini dosya olarak indir.', trigger: 'backup_created' },
+  { id: 'ac_market', title: 'Pazardan Bir İtem Satın Al', desc: 'Pazar sekmesinden bir ürün seç ve satın al. Görevlerden kazandığın SineCoin\'leri harcayarak envanterini güçlendir.', trigger: 'market_item_bought' },
 ];
 
 /* =========================================================================
@@ -420,7 +471,7 @@ export const TUTORIAL_CENTER = {
     welcome: 'İlk açılışta otomatik başlar; buradan istediğin an baştan izleyebilirsin.',
     page: 'Her sayfanın kendi turları var. Bir sayfaya ilk girdiğinde otomatik de başlarlar.',
     modal: 'Pencerelerdeki (puanlama vb.) akışları tanıtır.',
-    academy: 'On iki gerçek görevle uygulamayı yaparak öğren — XP yok, sadece deneyim. Her dersi buradan ayrı ayrı başlatabilir, bitmiş bir dersi yeniden yapabilirsin.',
+    academy: 'On üç gerçek görevle uygulamayı yaparak öğren — XP yok, sadece deneyim. Her dersi buradan ayrı ayrı başlatabilir, bitmiş bir dersi yeniden yapabilirsin.',
   },
   startHint: 'Seçtiğin tur, ilgili sayfayı açıp oradan başlar.',
   status: {

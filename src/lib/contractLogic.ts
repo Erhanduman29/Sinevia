@@ -70,13 +70,19 @@ export interface MarketOffers {
   weekly: ContractDef[];
 }
 
-/** Vitrin her Pazartesi değişir; reroll jetonu aynı hafta içinde yeniden karıştırır. */
-export function getMarketOffers(week: string, rerollNonce = 0): MarketOffers {
+/** Görevler her Pazartesi değişir; reroll jetonu aynı hafta içinde yeniden karıştırır. */
+export function getMarketOffers(
+  week: string,
+  rerollNonce = 0,
+  dailyNonce = 0,
+  weeklyNonce = 0,
+  extraDaily = 0,
+): MarketOffers {
   const seed = `${week}:${rerollNonce}`;
   return {
     weekKey: week,
-    daily: seededShuffle(DAILY_CONTRACTS, `daily:${seed}`).slice(0, 6),
-    weekly: seededShuffle(WEEKLY_CONTRACTS, `weekly:${seed}`).slice(0, 6),
+    daily: seededShuffle(DAILY_CONTRACTS, `daily:${seed}:${dailyNonce}`).slice(0, 6 + extraDaily),
+    weekly: seededShuffle(WEEKLY_CONTRACTS, `weekly:${seed}:${weeklyNonce}`).slice(0, 6),
   };
 }
 
@@ -131,6 +137,8 @@ export function evaluateContractProgress(
   data: AppData,
 ): ContractProgress {
   const entries = (data.history || []).filter((entry) => {
+    // Önceden izlenen kayıtlar pazar görevini tetiklemez.
+    if (entry.isPastWatch) return false;
     const timestamp = new Date(entry.watchedAt).getTime();
     return Number.isFinite(timestamp) && timestamp >= startedAt;
   });

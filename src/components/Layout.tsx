@@ -772,12 +772,12 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
     { id: 'ai', icon: Bot, label: 'AI Asistan', shortLabel: 'AI' },
   ] as const;
 
-  // Mobil alt bar — en sağa Ayarlar eklendi
+  // Mobil alt bar — Pazar, Geçmiş'in yerini alır; Geçmiş tam menüde kalır.
   const mobileBottomTabs = [
     { id: 'movies', icon: Film, label: 'Filmler' },
     { id: 'series', icon: Tv, label: 'Diziler' },
     { id: 'network', icon: Users, label: 'Sinevia Ağı' },
-    { id: 'history', icon: History, label: 'Geçmiş' },
+    { id: 'market', icon: ShoppingBag, label: 'Pazar' },
     { id: 'achievements', icon: Trophy, label: 'Başarımlar' },
     { id: 'settings', icon: Settings, label: 'Ayarlar' },
   ] as const;
@@ -836,6 +836,16 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   const handleMobileMenuClick = (id: TabId) => {
     onTabChange(id);
     setIsMobileMenuOpen(false);
+  };
+
+  // Pazar, ilk açılışta Pazar sekmesinde başlar; coin kısayolu doğrudan Cüzdan'ı ister.
+  const openMarketWallet = () => {
+    try {
+      sessionStorage.setItem('sinevia-market-tab', 'cuzdan');
+    } catch {
+      // Depolama kapalıysa Pazar yine varsayılan sekmede açılır.
+    }
+    onTabChange('market');
   };
 
   const openGlobalSearch = () => setIsSearchOpen(true);
@@ -902,7 +912,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       <div className="fixed bottom-[-10%] left-[-5%] w-[300px] h-[300px] sm:w-[420px] sm:h-[420px] md:w-[600px] md:h-[600px] rounded-full blur-[70px] sm:blur-[100px] md:blur-[130px] pointer-events-none ambient-glow-2 -z-10 transition-all duration-700" />
       <div className="fixed top-[40%] left-[30%] w-[260px] h-[260px] sm:w-[380px] sm:h-[380px] md:w-[500px] md:h-[500px] rounded-full blur-[80px] sm:blur-[110px] md:blur-[140px] pointer-events-none ambient-glow-3 -z-10 transition-all duration-700" />
 
-      {/* MOBİL: SABİT ÜST BAR (Arama Çubuğu + Katalog + Ne İzlesem) */}
+      {/* MOBİL: SABİT ÜST BAR (Arama Çubuğu + Katalog + Coin) */}
       <header
         className="md:hidden fixed top-0 inset-x-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-ink-900/80 backdrop-blur-xl border-b border-ink-800 z-[60] flex items-center justify-between gap-1.5 pl-[max(0.6rem,env(safe-area-inset-left))] pr-[max(0.6rem,env(safe-area-inset-right))] shadow-md shrink-0 transition-transform duration-300"
         style={glassSurface}
@@ -945,8 +955,15 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           <span className="text-[11.5px] text-ink-400 truncate">Ara…</span>
         </button>
 
-        {/* Sağ: Katalog + Ne İzlesem + Bulut Durumu */}
+        {/* Sağ: Coin + Katalog + Bulut Durumu */}
         <div className="flex items-center gap-1 shrink-0">
+          <CoinPill
+            amount={Number(profileData.coins) || 0}
+            onClick={openMarketWallet}
+            size="sm"
+            className="h-9 max-w-[6.5rem] text-[10px]"
+          />
+
           <button
             type="button"
             onClick={() => setShowBulkAdd('movie')}
@@ -955,18 +972,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             title="Katalog Ekle"
           >
             <Clapperboard size={13} />
-            <span>Katalog</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowPick(true)}
-            className="relative overflow-hidden h-9 px-2.5 rounded-xl text-white font-extrabold text-[10px] tracking-[0.06em] uppercase flex items-center gap-1 shrink-0 transition-transform active:scale-95"
-            style={btnPrimaryStyle}
-            title="Ne İzlesem"
-          >
-            <Shuffle size={13} />
-            <span>Ne İzlesem</span>
+            <span className="hidden min-[360px]:inline">Katalog</span>
           </button>
 
           <div

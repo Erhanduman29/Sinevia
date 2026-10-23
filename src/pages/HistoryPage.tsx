@@ -1116,6 +1116,10 @@ function MovieHistoryCard({
 }) {
   const hasDetailed = item.detailedRating && Object.keys(item.detailedRating).length > 0;
   const hasTags = item.reviewTags && item.reviewTags.length > 0;
+  // MOBİL: detaylı kriter ızgarası varsayılan kapalı → kart yüksekliği korunur.
+  // Masaüstünde (sm:) grid her zaman açık kalır, buton gizlenir.
+  const [showCrit, setShowCrit] = useState(false);
+  const [showTags, setShowTags] = useState(false);
   const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch);
   // Sinematik Otopsi: item.abandoned yoksa itemId → film lookup ile türetilir.
   const isDnf = Boolean(item.abandoned ?? movieData?.abandoned);
@@ -1202,26 +1206,70 @@ function MovieHistoryCard({
             </div>
 
             {hasTags && (
-              <div className="mt-2 flex flex-wrap items-center gap-1">
-                {item.reviewTags!.map((tag) => (
-                  <span key={tag} className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30 px-2 py-0.5 rounded-lg">
-                    {tag}
+              <>
+                {/* MOBİL: değerlendirme başlıkları tek satıra katlanır */}
+                <button
+                  type="button"
+                  onClick={() => setShowTags((v) => !v)}
+                  aria-expanded={showTags}
+                  className="sm:hidden mt-2 w-full flex items-center justify-between gap-2 text-left bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] text-ink-300 px-2.5 py-1.5 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-colors"
+                >
+                  <span className="min-w-0 text-[9.5px] font-bold uppercase tracking-wider leading-tight">
+                    Değerlendirme Başlıkları
                   </span>
-                ))}
-              </div>
+                  <span className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-[9px] font-mono tabular-nums text-ink-400">
+                      {item.reviewTags!.length}
+                    </span>
+                    <ChevronDown
+                      size={13}
+                      className={`transition-transform ${showTags ? 'rotate-180' : ''}`}
+                    />
+                  </span>
+                </button>
+                <div className={`${showTags ? 'flex' : 'hidden'} sm:flex mt-2 flex-wrap items-center gap-1`}>
+                  {item.reviewTags!.map((tag) => (
+                    <span key={tag} className="text-[9px] sm:text-xs font-bold uppercase tracking-wider bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30 px-1.5 sm:px-2 py-0.5 rounded-lg">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </>
             )}
 
             {hasDetailed && (
-              <div className="mt-2 flex flex-wrap items-center gap-1">
-                {Object.entries(item.detailedRating!).map(([critId, score]) => {
-                  const critName = criteriaList.find((c) => c.id === critId)?.name || critId;
-                  return (
-                    <span key={critId} className="text-[10px] font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] text-ink-200 px-2 py-0.5 rounded-lg border border-[color:var(--line-2,var(--border-dim))]">
-                      {critName}: <strong className="text-[color:var(--red-hi,var(--color-1))] tabular-nums">{score}</strong>
+              <>
+                {/* MOBİL: kriter ızgarası tek satıra katlanır */}
+                <button
+                  type="button"
+                  onClick={() => setShowCrit((v) => !v)}
+                  aria-expanded={showCrit}
+                  className="sm:hidden mt-2 w-full flex items-center justify-between gap-2 text-left bg-[color:var(--surface,var(--bg-surface))] hover:bg-[color:var(--surface2,var(--bg-card))] text-ink-300 px-2.5 py-1.5 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-colors"
+                >
+                  <span className="min-w-0 text-[9.5px] font-bold uppercase tracking-wider leading-tight">
+                    Detaylı Kriterler
+                  </span>
+                  <span className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-[9px] font-mono tabular-nums text-ink-400">
+                      {Object.keys(item.detailedRating!).length}
                     </span>
-                  );
-                })}
-              </div>
+                    <ChevronDown
+                      size={13}
+                      className={`transition-transform ${showCrit ? 'rotate-180' : ''}`}
+                    />
+                  </span>
+                </button>
+                <div className={`${showCrit ? 'flex' : 'hidden'} sm:flex mt-2 flex-wrap items-center gap-1`}>
+                  {Object.entries(item.detailedRating!).map(([critId, score]) => {
+                    const critName = criteriaList.find((c) => c.id === critId)?.name || critId;
+                    return (
+                      <span key={critId} className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider bg-[color:var(--surface,var(--bg-surface))] text-ink-200 px-1.5 sm:px-2 py-0.5 rounded-lg border border-[color:var(--line-2,var(--border-dim))]">
+                        {critName}: <strong className="text-[color:var(--red-hi,var(--color-1))] tabular-nums">{score}</strong>
+                      </span>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
             {item.note && (

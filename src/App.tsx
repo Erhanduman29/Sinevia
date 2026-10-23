@@ -21,6 +21,7 @@ import LevelUpModal from './components/LevelUpModal';
 import SeasonCompleteModal from './components/SeasonCompleteModal';
 import XpGainOverlay from './components/XpGainOverlay';
 import CoinGainOverlay from './components/CoinGainOverlay';
+import { ContractCelebrationOverlay } from './components/ContractCelebrationOverlay';
 import TutorialOverlay from './tutorial/TutorialOverlay';
 import AcademyCompanion from './tutorial/AcademyCompanion';
 import TutorialCenter from './tutorial/TutorialCenter';
@@ -82,6 +83,8 @@ function AppContent() {
     dismissSeasonComplete,
     xpGainData,
     coinGainData,
+    contractCelebrationData,
+    dismissContractCelebration,
   } = useApp();
   // Tutorial Merkezi kısayolla açılıp kapatılabilsin (Esc / F1).
   const { centerOpen, setCenterOpen } = useTutorial();
@@ -223,8 +226,17 @@ function AppContent() {
 
       <TutorialLayer activeTab={activeTab} />
 
-      <div className="relative z-[200]">
-        {xpGainData && (
+      {/* Kutlamalar eğitim/karşılama katmanının (z-300) üstünde kalmalı. */}
+      <div className="relative z-[400]">
+        {contractCelebrationData && (
+        <ContractCelebrationOverlay
+          contractId={contractCelebrationData.contractId}
+          xp={contractCelebrationData.xp}
+          coins={contractCelebrationData.coins}
+          onClose={dismissContractCelebration}
+        />
+      )}
+      {xpGainData && (
           <XpGainOverlay key={`${xpGainData.oldTotal}-${xpGainData.newTotal}`} />
         )}
 

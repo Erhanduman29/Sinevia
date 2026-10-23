@@ -67,6 +67,7 @@ export default function TutorialCenter({ onClose }: { onClose: () => void }) {
     ac_achievements: 'achievements',
     ac_ai: 'ai',
     ac_backup: 'settings',
+    ac_market: 'market',
   };
 
   const launchLesson = (index: number) => {

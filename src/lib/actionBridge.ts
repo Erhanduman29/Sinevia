@@ -79,6 +79,13 @@ export function rewriteLegacyTemplate(legacy: string): string {
     .replace(/\{slug\}/g, '{title_slug}');
 }
 
+/** Eski "Alternatif İzle" etiketlerini kullanıcıya görünen kısa "İzle" etiketine çevirir. */
+export function normalizeActionLabel(label?: string | null): string {
+  const trimmed = (label || '').trim();
+  if (!trimmed) return 'Aksiyon';
+  return /alternatif/i.test(trimmed) ? 'İzle' : trimmed;
+}
+
 /** Hazır şablonlar — SettingsPage "şablon ekle" menüsü ve ilk kurulum için. */
 export const ACTION_BRIDGE_PRESETS: Array<Omit<ExternalActionTemplate, 'id'>> = [
   { label: 'YouTube Fragman', urlTemplate: 'https://www.youtube.com/results?search_query={title_slug}+{year}+trailer', icon: 'Play', targetScope: 'all', isPrimary: false },

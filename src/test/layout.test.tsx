@@ -38,10 +38,11 @@ describe('LAYOUT SMOKE TESTLERİ', () => {
     ['Ana Sayfa', 'Filmler', 'Diziler', 'Sinevia Ağı', 'Haftalık Plan', 'Geçmiş', 'Başarımlar', 'İstatistik', 'AI Asistan']
       .forEach((label) => expect(html, `menü etiketi eksik: ${label}`).toContain(label));
 
-    // data-tutorial="nav-<id>" bağlantıları: 9 sidebar + 6 alt bar = 15
-    // (kullanıcı mobil alt bara "Ayarlar" ekledi — 6. sekme, en sağda)
-    const navLinks = html.match(/data-tutorial="nav-(home|movies|series|network|plan|history|achievements|stats|ai|settings)"/g) || [];
-    expect(navLinks).toHaveLength(15);
+    // data-tutorial="nav-<id>" bağlantıları: 10 masaüstü + 6 mobil alt bar = 16
+    // (mobilde Geçmiş kaldırıldı, yerine Pazar eklendi; Geçmiş tam menüde kalır)
+    const navLinks = html.match(/data-tutorial="nav-(home|movies|series|network|plan|history|achievements|market|stats|ai|settings)"/g) || [];
+    expect(navLinks).toHaveLength(16);
+    expect((html.match(/data-tutorial="nav-market"/g) || [])).toHaveLength(2);
   });
 
   test('aktif sekme altın renk vurgusu almalı, diğer sekmeler almamalı', () => {

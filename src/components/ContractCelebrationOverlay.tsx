@@ -22,56 +22,16 @@ interface TierVisual {
 }
 
 const TIER_VISUALS: Record<string, TierVisual> = {
-  common: {
-    accent: '#cbd5e1',
-    accentSoft: '#94a3b8',
-    label: 'Yaygın',
-    rays: 12,
-    rings: 2,
-    particles: 16,
-  },
-  rare: {
-    accent: '#7dd3fc',
-    accentSoft: '#38bdf8',
-    label: 'Nadir',
-    rays: 16,
-    rings: 3,
-    particles: 22,
-  },
-  epic: {
-    accent: '#c4b5fd',
-    accentSoft: '#e879f9',
-    label: 'Destansı',
-    rays: 20,
-    rings: 3,
-    particles: 30,
-  },
-  legendary: {
-    accent: '#fde68a',
-    accentSoft: '#f59e0b',
-    label: 'Efsanevi',
-    rays: 24,
-    rings: 4,
-    particles: 40,
-  },
-  mythic: {
-    accent: '#fda4af',
-    accentSoft: '#fb923c',
-    label: 'Mitik',
-    rays: 28,
-    rings: 5,
-    particles: 52,
-  },
+  common: { accent: '#cbd5e1', accentSoft: '#94a3b8', label: 'Yaygın', rays: 12, rings: 2, particles: 16 },
+  rare: { accent: '#7dd3fc', accentSoft: '#38bdf8', label: 'Nadir', rays: 16, rings: 3, particles: 22 },
+  epic: { accent: '#c4b5fd', accentSoft: '#e879f9', label: 'Destansı', rays: 20, rings: 3, particles: 30 },
+  legendary: { accent: '#fde68a', accentSoft: '#f59e0b', label: 'Efsanevi', rays: 24, rings: 4, particles: 40 },
+  mythic: { accent: '#fda4af', accentSoft: '#fb923c', label: 'Mitik', rays: 28, rings: 5, particles: 52 },
 };
 
 const RAY_ANGLES = Array.from({ length: 28 }, (_, i) => i);
 const PARTICLE_SEEDS = Array.from({ length: 52 }, (_, i) => i);
 
-/**
- * Pazar görevi tamamlanınca açılan pencereyi değiştiren, nadirliğe göre
- * yoğunluğu değişen tam ekran kutlama sahnesi. Etkileşimi engellemez ve
- * kendiliğinden kapanır; XP, seviye ve coin akışları ayrı katmanlarda devam eder.
- */
 export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: Props) {
   const def = CONTRACT_MAP.get(contractId);
   const visual = TIER_VISUALS[def?.rarity || 'common'] || TIER_VISUALS.common;
@@ -84,7 +44,8 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
   }, [onClose]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => onCloseRef.current(), 4200);
+    // 4200ms'den 3000ms'ye düşürüldü.
+    const timer = window.setTimeout(() => onCloseRef.current(), 3000);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -95,65 +56,62 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
       aria-live="polite"
     >
       <style>{`
+        /* 2.8s Genel Yaşam Döngüsü */
         @keyframes cco-bg {
           0% { opacity: 0; }
-          8% { opacity: 1; }
-          78% { opacity: 1; }
+          12% { opacity: 1; }
+          80% { opacity: 1; }
           100% { opacity: 0; }
         }
         @keyframes cco-stage {
-          0% { opacity: 0; transform: translateY(10px) scale(.94); }
-          7% { opacity: 1; transform: translateY(0) scale(1); }
-          78% { opacity: 1; transform: translateY(0) scale(1.01); }
-          100% { opacity: 0; transform: translateY(-6px) scale(1.035); }
+          0% { opacity: 0; transform: translateY(15px) scale(.92); }
+          10% { opacity: 1; transform: translateY(0) scale(1); }
+          80% { opacity: 1; transform: translateY(0) scale(1.015); }
+          100% { opacity: 0; transform: translateY(-8px) scale(1.04); }
         }
         @keyframes cco-glow {
-          0% { opacity: 0; transform: scale(.35); }
-          14% { opacity: 1; transform: scale(1); }
-          64% { opacity: .82; transform: scale(1.1); }
-          100% { opacity: 0; transform: scale(1.24); }
+          0% { opacity: 0; transform: scale(.4); }
+          15% { opacity: 1; transform: scale(1); }
+          65% { opacity: .8; transform: scale(1.1); }
+          100% { opacity: 0; transform: scale(1.2); }
         }
         @keyframes cco-ray {
           0% { opacity: 0; transform: rotate(var(--a)) scaleY(.05); }
-          12% { opacity: .95; }
-          52% { opacity: .55; }
-          100% { opacity: 0; transform: rotate(var(--a)) scaleY(1.85); }
+          15% { opacity: .9; }
+          55% { opacity: .4; }
+          100% { opacity: 0; transform: rotate(var(--a)) scaleY(1.6); }
         }
         @keyframes cco-ring {
-          0% { opacity: .9; transform: scale(.18); }
-          55% { opacity: .5; }
-          100% { opacity: 0; transform: scale(2.9); }
+          0% { opacity: .9; transform: scale(.2); }
+          55% { opacity: .4; }
+          100% { opacity: 0; transform: scale(2.6); }
         }
         @keyframes cco-particle {
           0% { opacity: 0; transform: translate(-50%, -50%) scale(.2); }
-          14% { opacity: 1; }
-          70% { opacity: .85; }
+          15% { opacity: 1; }
+          75% { opacity: .8; }
           100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.25); }
         }
+        /* Arma ve Yazı Animasyonları Daha Seri */
         @keyframes cco-emblem {
-          0% { opacity: 0; transform: scale(.4) rotate(-16deg); }
-          55% { opacity: 1; transform: scale(1.1) rotate(3deg); }
+          0% { opacity: 0; transform: scale(.4) rotate(-12deg); }
+          60% { opacity: 1; transform: scale(1.08) rotate(2deg); }
           100% { opacity: 1; transform: scale(1) rotate(0); }
         }
         @keyframes cco-icon {
           0%, 100% { transform: translateY(0) rotate(-2deg); }
-          50% { transform: translateY(-7px) rotate(2deg); }
+          50% { transform: translateY(-5px) rotate(2deg); }
         }
         @keyframes cco-spin {
           to { transform: rotate(360deg); }
         }
         @keyframes cco-text {
-          0% { opacity: 0; transform: translateY(16px); filter: blur(6px); }
+          0% { opacity: 0; transform: translateY(12px); filter: blur(4px); }
           100% { opacity: 1; transform: translateY(0); filter: blur(0); }
         }
         @keyframes cco-chip {
-          0% { opacity: 0; transform: translateY(12px) scale(.9); }
+          0% { opacity: 0; transform: translateY(10px) scale(.92); }
           100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .cco-stage { animation: none !important; opacity: 1 !important; }
-          .cco-ray, .cco-ring, .cco-particle { display: none; }
-          .cco-icon { animation: none !important; }
         }
       `}</style>
 
@@ -161,19 +119,19 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
         className="absolute inset-0"
         style={{
           background: `radial-gradient(circle at 50% 46%, ${visual.accent}2e 0%, ${visual.accentSoft}18 28%, rgba(2,6,23,.62) 58%, rgba(2,6,23,.9) 100%)`,
-          animation: 'cco-bg 4s ease-in-out forwards',
+          animation: 'cco-bg 2.8s ease-in-out forwards',
         }}
       />
 
       <div
         className="cco-stage relative flex h-[430px] w-full max-w-3xl items-center justify-center"
-        style={{ animation: 'cco-stage 4s cubic-bezier(.2,.8,.25,1) forwards' }}
+        style={{ animation: 'cco-stage 2.8s cubic-bezier(.2,.8,.25,1) forwards' }}
       >
         <span
           className="absolute h-[27rem] w-[27rem] rounded-full blur-3xl"
           style={{
             background: `radial-gradient(circle, ${visual.accent}4d 0%, ${visual.accentSoft}24 42%, transparent 70%)`,
-            animation: 'cco-glow 3.8s ease-out forwards',
+            animation: 'cco-glow 2.7s ease-out forwards',
           }}
         />
 
@@ -184,7 +142,7 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
             style={{
               '--a': `${(i / visual.rays) * 360 + (i % 2) * 4}deg`,
               background: `linear-gradient(to top, transparent, ${visual.accent}dd, transparent)`,
-              animation: `cco-ray ${2.1 + (i % 4) * 0.13}s cubic-bezier(.16,.7,.25,1) ${0.08 + (i % 5) * 0.035}s forwards`,
+              animation: `cco-ray ${1.4 + (i % 4) * 0.1}s cubic-bezier(.16,.7,.25,1) ${0.05 + (i % 5) * 0.02}s forwards`,
             } as CSSProperties}
           />
         ))}
@@ -196,7 +154,7 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
             style={{
               borderColor: i % 2 === 0 ? `${visual.accent}b3` : `${visual.accentSoft}80`,
               boxShadow: `0 0 34px ${visual.accent}38`,
-              animation: `cco-ring ${2.35 + i * 0.28}s cubic-bezier(.16,.7,.25,1) ${i * 0.16}s forwards`,
+              animation: `cco-ring ${1.6 + i * 0.2}s cubic-bezier(.16,.7,.25,1) ${i * 0.12}s forwards`,
             }}
           />
         ))}
@@ -216,14 +174,14 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
                 boxShadow: `0 0 ${8 + size * 2}px ${visual.accent}`,
                 '--dx': `${Math.cos(angle) * distance}px`,
                 '--dy': `${Math.sin(angle) * distance}px`,
-                animation: `cco-particle ${1.35 + (i % 6) * 0.16}s ease-out ${0.08 + (i % 9) * 0.06}s forwards`,
+                animation: `cco-particle ${1.1 + (i % 6) * 0.12}s ease-out ${0.05 + (i % 9) * 0.04}s forwards`,
               } as CSSProperties}
             />
           );
         })}
 
         <div className="relative z-10 flex flex-col items-center text-center">
-          <div className="relative" style={{ animation: 'cco-emblem .95s cubic-bezier(.2,.85,.25,1.08) both' }}>
+          <div className="relative" style={{ animation: 'cco-emblem .6s cubic-bezier(.2,.85,.25,1.08) both' }}>
             <span
               className="absolute -inset-6 rounded-full border border-dashed opacity-50"
               style={{ borderColor: visual.accent, animation: 'cco-spin 9s linear infinite' }}
@@ -242,7 +200,7 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
               <span
                 className="cco-icon text-7xl"
                 style={{
-                  animation: 'cco-icon 2.8s ease-in-out 1s infinite',
+                  animation: 'cco-icon 2.8s ease-in-out 0.5s infinite',
                   filter: `drop-shadow(0 0 22px ${visual.accent}80)`,
                 }}
               >
@@ -252,7 +210,7 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
             </div>
           </div>
 
-          <div className="mt-6" style={{ animation: 'cco-text .7s cubic-bezier(.2,.9,.25,1) .32s both' }}>
+          <div className="mt-6" style={{ animation: 'cco-text .5s cubic-bezier(.2,.9,.25,1) .2s both' }}>
             <div
               className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.28em]"
               style={{ borderColor: `${visual.accent}66`, color: visual.accent, background: `${visual.accent}12` }}
@@ -268,17 +226,14 @@ export function ContractCelebrationOverlay({ contractId, xp, coins, onClose }: P
               {def?.title || 'Görev tamamlandı'}
             </h2>
 
-            <p
-              className="mt-2 text-[10px] font-black uppercase tracking-[0.32em]"
-              style={{ color: visual.accent }}
-            >
+            <p className="mt-2 text-[10px] font-black uppercase tracking-[0.32em]" style={{ color: visual.accent }}>
               {visual.label}
             </p>
           </div>
 
           <div
             className="mt-5 flex flex-wrap items-center justify-center gap-2.5"
-            style={{ animation: 'cco-chip .6s cubic-bezier(.2,.9,.25,1) .58s both' }}
+            style={{ animation: 'cco-chip .5s cubic-bezier(.2,.9,.25,1) .35s both' }}
           >
             <div className="flex items-center gap-2 rounded-full border border-azure-500/35 bg-azure-500/12 px-4 py-2 backdrop-blur-sm">
               <Zap className="h-4 w-4 text-azure-300" />

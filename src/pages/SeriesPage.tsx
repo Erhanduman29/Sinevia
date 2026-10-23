@@ -3,12 +3,12 @@ import {
   Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter,
   ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, RefreshCw,
   PlayCircle, ExternalLink, Eye, SlidersHorizontal, X, Send, Skull, RotateCcw,
-  Play, Info, Film, MessageSquare, MonitorPlay
+  Play, Info, Film, MessageSquare, MonitorPlay, MoreHorizontal
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, getNextUnwatchedEpisode } from '../lib/utils';
-import { resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
+import { normalizeActionLabel, resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDBSeries, fetchSeriesSeasonDetails } from '../lib/tmdb';
 import { useFilteredSeries } from '../lib/selectorHooks';
 import { openPlatform, listLibraryPlatforms } from '../lib/platformLinks';
@@ -184,9 +184,9 @@ const SERIES_PREMIUM_CSS = `
 /* ---------- PREMIUM BUTON SİSTEMİ ---------- */
 .svp-btn-p, .svp-btn-s {
   position: relative; overflow: hidden; isolation: isolate;
-  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  font-weight: 800; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase;
-  border-radius: 13px; border: 1px solid transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+  font-weight: 800; font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+  border-radius: 11px; border: 1px solid transparent;
   transition: .25s cubic-bezier(.2, .7, .3, 1);
   white-space: nowrap;
 }
@@ -222,8 +222,9 @@ const SERIES_PREMIUM_CSS = `
 .svp-btn-p:disabled, .svp-btn-s:disabled { opacity: .4; pointer-events: none; }
 /* Kompakt birincil — izleme çipleriyle aynı ölçü/ritim (svp-link ile hizalı) */
 .svp-btn-p.svp-btn-p--xs {
-  font-size: 10px; padding: .25rem .55rem; border-radius: 8px;
-  gap: .3rem; letter-spacing: .04em;
+  min-height: 34px;
+  font-size: 11px; padding: .35rem .75rem; border-radius: 8px;
+  gap: .42rem; letter-spacing: .04em;
   box-shadow: 0 6px 16px -10px var(--svp-t70), inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 -1px 3px rgba(0, 0, 0, .2);
 }
 .svp-btn-p.svp-btn-p--xs:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -10px var(--svp-t85), inset 0 1px 0 rgba(255, 255, 255, .35); }
@@ -232,7 +233,7 @@ const SERIES_PREMIUM_CSS = `
   border-radius: 12px; border: 1px solid var(--svp-line2);
   background: var(--svp-surf);
   color: var(--svp-muted);
-  font-weight: 800; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  font-weight: 800; font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
   transition: .24s cubic-bezier(.2, .7, .3, 1);
 }
 .svp-btn-ghost:hover {
@@ -246,8 +247,8 @@ const SERIES_PREMIUM_CSS = `
 .svp-chipbar { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 .svp-tab {
   display: inline-flex; align-items: center; gap: .35rem;
-  padding: .5rem .85rem; border-radius: 99px;
-  font-size: 10.5px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase;
+  padding: .4rem .7rem; border-radius: 99px;
+  font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
   color: var(--svp-muted);
   border: 1px solid var(--svp-line2);
   background: var(--svp-surf);
@@ -269,8 +270,8 @@ const SERIES_PREMIUM_CSS = `
 
 .svp-chip {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: .3rem;
-  padding: .45rem .85rem; border-radius: 99px;
-  font-size: 10.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  padding: .4rem .7rem; border-radius: 99px;
+  font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
   border: 1px solid var(--svp-line2);
   background: var(--svp-surf);
   color: var(--svp-muted);
@@ -400,9 +401,10 @@ const SERIES_PREMIUM_CSS = `
 
 /* ---------- KART İÇİ İZLEME LİNKLERİ ---------- */
 .svp-link {
-  display: inline-flex; align-items: center; gap: .3rem;
-  padding: .25rem .55rem; border-radius: 8px;
-  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  display: inline-flex; align-items: center; gap: .45rem;
+  min-height: 34px;
+  padding: .35rem .75rem; border-radius: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: .04em;
   border: 1px solid var(--svp-line2);
   background: var(--svp-surf);
   color: var(--svp-muted);
@@ -674,6 +676,45 @@ const SERIES_PREMIUM_CSS = `
   border-top: 1px solid var(--svp-line2);
   background: color-mix(in srgb, var(--svp-ink) 2%, transparent);
 }
+
+/* ---------- MOBİL KOMPAKT KART ÖLÇEKLERİ ---------- */
+@media (max-width: 639px) {
+  .svp-link {
+    min-height: 26px;
+    padding: .12rem .42rem;
+    font-size: 8.5px;
+    gap: .22rem;
+    border-radius: 7px;
+  }
+  .svp-btn-p.svp-btn-p--xs {
+    min-height: 26px;
+    font-size: 9.5px;
+    padding: .2rem .5rem;
+  }
+  .svp-link img { width: 10px; height: 10px; }
+  .svp-count-pill { font-size: 8.5px; padding: .1rem .35rem; }
+  .svp-act { border-radius: 9px; }
+  /* Mobilde ilerleme çubuğu yerine yüzde etiketi gösterilir (kart yüksekliği) */
+  .svp-side .svp-prog { display: none; }
+  .svp-pct { font-size: 9.5px; }
+  .svp-prog .svp-pct { font-size: 10px; }
+  .svp-done-tag, .svp-dnf-tag { font-size: 8px; padding: .1rem .35rem; }
+  /* MOBİL: afişin üstündeki sezon/bölüm rozeti gizlenir (afiş daha büyük görünür) */
+  .svp-poster::after { display: none; }
+  /* MOBİL: "Alternatif izle" çipleri daha kompakt */
+  .svp-btn-p--xs.svp-alt,
+  .svp-link.svp-alt {
+    font-size: 8px;
+    padding: .1rem .32rem;
+    gap: .2rem;
+    border-radius: 7px;
+    letter-spacing: .02em;
+  }
+  .svp-btn-p--xs.svp-alt svg,
+  .svp-link.svp-alt svg { width: 8px; height: 8px; }
+  .svp-btn-p--xs.svp-alt img,
+  .svp-link.svp-alt img { width: 10px; height: 10px; }
+}
 `;
 
 /* ---------- PUANLAMA KORUMA DEPO'SU (localStorage aynası) ----------
@@ -712,6 +753,7 @@ export default function SeriesPage() {
   const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia, addEpisodes, setSeriesRuntime } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pickedSeriesItem, setPickedSeriesItem] = useState<{ series: Series; episode: Episode } | null>(null);
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [ratingTarget, setRatingTarget] = useState<{ series: Series; episode: Episode } | null>(null);
@@ -729,6 +771,9 @@ export default function SeriesPage() {
 
   const [watchedFilter, setWatchedFilter] = useState<boolean | null>(false);
   const [graveyardView, setGraveyardView] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  // Kart içi "alternatif izle" ⋯ menüsü — aynı anda tek kartta açık kalır
+  const [watchMenuId, setWatchMenuId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<string>('');
   const [abandonTarget, setAbandonTarget] = useState<{ series: Series; season: number; episode: number } | null>(null);
   const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
@@ -736,6 +781,19 @@ export default function SeriesPage() {
   const [search, setSearch] = useState('');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  /* Durum sekmesi + kart içi ⋯ menüleri: dışına tıklayınca kapan */
+  useEffect(() => {
+    if (!statusMenuOpen && !watchMenuId) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-menu-root]')) return;
+      setStatusMenuOpen(false);
+      setWatchMenuId(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [statusMenuOpen, watchMenuId]);
 
   /* PUANLAMA KORUMA (SAĞLAM)
      'Bölümü tamamla/geri al' tıklaması UNWATCH_EPISODE tetikler ve reducer
@@ -946,21 +1004,70 @@ export default function SeriesPage() {
       <style>{SERIES_PREMIUM_CSS}</style>
 
       {/* ÜST BAŞLIK & AKSİYON BARI (mobil: sm: sabitlemeleri ≥768'i birebir korur) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-2.5">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-2.5">
+        <div className="flex items-center justify-between gap-2">
           <h1 className="svp-h1 text-2xl sm:text-3xl flex items-center gap-2 sm:gap-2.5">
             <div className="svp-tile">
               <Tv size={20} />
             </div>
             <span className="svp-grad-text">Diziler</span>
           </h1>
+
+          {/* MOBİL: Dizi Ekle + ⋯ taşma menüsü */}
+          <div className="flex items-center gap-1.5 md:hidden">
+            <button
+              onClick={() => setShowAdd(true)}
+              className="svp-btn-p px-2.5 py-1.5 text-[11px]"
+            >
+              <Plus size={16} />
+              Dizi Ekle
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                className="svp-btn-s min-h-8 min-w-8 px-2 py-1.5"
+                aria-label="Diğer dizi işlemleri"
+                aria-expanded={mobileMenuOpen}
+              >
+                <MoreHorizontal size={16} />
+              </button>
+              {mobileMenuOpen && (
+                <div className="absolute right-0 top-full z-40 mt-2 flex w-44 flex-col gap-1 rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+                  <button
+                    onClick={() => { openSendModal(); setMobileMenuOpen(false); }}
+                    className="svp-btn-s w-full justify-start px-3 py-2 text-xs"
+                  >
+                    <Send size={15} className="flex-shrink-0 svp-ic-a2" />
+                    <span className="truncate min-w-0">Tavsiye Et</span>
+                  </button>
+                  <button
+                    onClick={() => { handleSyncTMDBSeries(); setMobileMenuOpen(false); }}
+                    disabled={isSyncing}
+                    className="svp-btn-s w-full justify-start px-3 py-2 text-xs"
+                  >
+                    <RefreshCw size={15} className={`flex-shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span className="truncate min-w-0">{isSyncing ? 'Taranıyor...' : 'Eksikleri Bul'}</span>
+                  </button>
+                  <button
+                    onClick={() => { setShowPick(true); setMobileMenuOpen(false); }}
+                    className="svp-btn-s w-full justify-start px-3 py-2 text-xs"
+                  >
+                    <Shuffle size={15} className="flex-shrink-0" />
+                    <span className="truncate min-w-0">Ne İzlesem</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2">
+        {/* MASAÜSTÜ: tüm işlemler aynen korunur */}
+        <div className="hidden md:flex md:flex-nowrap items-center gap-1.5 md:gap-2">
           {/* ARKADAŞA TAVSİYE (TEKLİ & TOPLU) */}
           <button
             onClick={() => openSendModal()}
-            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-2.5 sm:px-3.5 py-2 sm:py-2.5 min-h-10 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
+            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-2.5 sm:px-3 py-1.5 sm:py-2 min-h-8 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-[13px]"
             title="Arkadaşına tekli veya çoklu dizi listesi öner"
           >
             <Send size={15} className="flex-shrink-0 svp-ic-a2" />
@@ -970,7 +1077,7 @@ export default function SeriesPage() {
           <button
             onClick={handleSyncTMDBSeries}
             disabled={isSyncing}
-            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-10 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
+            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-2.5 sm:px-3 py-1.5 sm:py-2 min-h-8 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-[13px]"
           >
             <RefreshCw size={15} className={`flex-shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
             <span className="truncate min-w-0">{isSyncing ? 'Taranıyor...' : 'Eksikleri Bul'}</span>
@@ -978,7 +1085,7 @@ export default function SeriesPage() {
 
           <button
             onClick={() => setShowPick(true)}
-            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-10 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-sm"
+            className="svp-btn-s flex-1 sm:flex-none min-w-0 px-2.5 sm:px-3 py-1.5 sm:py-2 min-h-8 sm:min-h-0 rounded-xl sm:rounded-[13px] text-xs sm:text-[13px]"
           >
             <Shuffle size={15} className="flex-shrink-0" />
             <span className="truncate min-w-0">Ne İzlesem</span>
@@ -986,7 +1093,7 @@ export default function SeriesPage() {
 
           <button
             onClick={() => setShowAdd(true)}
-            className="svp-btn-p hidden sm:inline-flex px-4 py-2.5 text-sm"
+            className="svp-btn-p px-3 py-2 text-xs"
           >
             <Plus size={18} />
             Dizi Ekle
@@ -1001,44 +1108,63 @@ export default function SeriesPage() {
             <div className="svp-chipbar">
               <button
                 onClick={() => { setGraveyardView(false); setWatchedFilter(null); }}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${!graveyardView && watchedFilter === null ? 'svp-tab-on' : ''}`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 truncate ${!graveyardView && watchedFilter === null ? 'svp-tab-on' : ''}`}
               >
                 Tümü <span className="svp-tab-n">({data.series.length})</span>
               </button>
               <button
                 onClick={() => { setGraveyardView(false); setWatchedFilter(false); }}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${!graveyardView && watchedFilter === false ? 'svp-tab-on' : ''}`}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 truncate ${!graveyardView && watchedFilter === false ? 'svp-tab-on' : ''}`}
               >
                 İzlenecek <span className="svp-tab-n">({totalOngoing})</span>
               </button>
-              <button
-                onClick={() => { setGraveyardView(false); setWatchedFilter(true); }}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${!graveyardView && watchedFilter === true ? 'svp-tab-on' : ''}`}
-              >
-                Bitenler <span className="svp-tab-n">({totalCompleted})</span>
-              </button>
-              <button
-                onClick={() => setGraveyardView(true)}
-                className={`svp-tab px-2.5 sm:px-3 py-1.5 min-h-10 sm:min-h-0 truncate ${graveyardView ? 'svp-tab-on' : ''}`}
-                title="Yarım bırakılan diziler (Sinematik Otopsi)"
-              >
-                🪦 Mezarlık <span className="svp-tab-n">({totalAbandoned})</span>
-              </button>
+              <div className="relative" data-menu-root>
+                <button
+                  onClick={() => setStatusMenuOpen((prev) => !prev)}
+                  className={`svp-tab px-2.5 sm:px-3 py-1.5 truncate ${graveyardView || watchedFilter === true ? 'svp-tab-on' : ''}`}
+                  aria-expanded={statusMenuOpen}
+                  title="Diğer durumlar"
+                >
+                  <MoreHorizontal size={13} />
+                  {graveyardView ? 'Mezarlık' : watchedFilter === true ? 'Bitenler' : 'Durum'}
+                </button>
+                {statusMenuOpen && (
+                  <div className="absolute right-0 top-full z-40 mt-2 flex w-44 flex-col gap-1 rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+                    <button
+                      type="button"
+                      onClick={() => { setGraveyardView(false); setWatchedFilter(true); setStatusMenuOpen(false); }}
+                      className="svp-btn-s w-full justify-start px-3 py-2 text-xs"
+                    >
+                      Bitenler <span className="svp-tab-n">({totalCompleted})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setGraveyardView(true); setStatusMenuOpen(false); }}
+                      className="svp-btn-s w-full justify-start px-3 py-2 text-xs"
+                      title="Yarım bırakılan diziler (Sinematik Otopsi)"
+                    >
+                      🪦 Mezarlık <span className="svp-tab-n">({totalAbandoned})</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-1.5">
               {platformOptions.length > 0 && (
-                <select
-                  value={platformFilter}
-                  onChange={(e) => setPlatformFilter(e.target.value)}
-                  title="Platforma göre filtrele"
-                  className="svp-btn-s flex-1 sm:flex-none px-3 sm:px-3.5 py-2 min-h-10 sm:min-h-0"
-                >
-                  <option value="">Tüm Platformlar</option>
-                  {platformOptions.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
+                <div className="hidden md:block">
+                  <select
+                    value={platformFilter}
+                    onChange={(e) => setPlatformFilter(e.target.value)}
+                    title="Platforma göre filtrele"
+                    className="svp-btn-s px-3 sm:px-3.5 py-2 min-h-10 sm:min-h-0"
+                  >
+                    <option value="">Tüm Platformlar</option>
+                    {platformOptions.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
               )}
               <button
                 type="button"
@@ -1090,6 +1216,22 @@ export default function SeriesPage() {
                   </button>
                 )}
               </div>
+
+              {platformOptions.length > 0 && (
+                <div className="md:hidden">
+                  <select
+                    value={platformFilter}
+                    onChange={(e) => setPlatformFilter(e.target.value)}
+                    title="Platforma göre filtrele"
+                    className="svp-btn-s w-full px-3 py-2 min-h-10"
+                  >
+                    <option value="">Tüm Platformlar</option>
+                    {platformOptions.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5">
                 <div className="svp-mono flex items-center gap-1 mr-1 flex-shrink-0">
@@ -1188,7 +1330,7 @@ export default function SeriesPage() {
               });
             }
 
-            const searchQuery = encodeURIComponent(`${s.title} ${s.year || ''} dizi izle`);
+            const searchQuery = encodeURIComponent(`${s.title} ${s.year || ''} dizi İzle`);
             watchLinks.push({
               href: `https://www.google.com/search?q=${searchQuery}`,
               text: "Google'da Bul",
@@ -1209,7 +1351,7 @@ export default function SeriesPage() {
               if (primaryHref) {
                 watchLinks.unshift({
                   href: primaryHref,
-                  text: primaryAction.label || 'Aksiyon',
+                  text: normalizeActionLabel(primaryAction.label),
                   logo: null,
                   icon: BRIDGE_ICONS[primaryAction.icon] || ExternalLink,
                   primary: true,
@@ -1236,17 +1378,17 @@ export default function SeriesPage() {
                 .replace('{title}', encodeURIComponent(s.title))
                 .replace('{year}', s.year || '');
 
-              watchLinks.push({ href: finalAltHref, text: 'Alternatif', logo: null, icon: PlayCircle });
+              watchLinks.push({ href: finalAltHref, text: 'İzle', logo: null, icon: PlayCircle });
             }
 
             return (
-              <div key={s.id} className="svp-card overflow-hidden flex flex-col sm:flex-row flex-wrap">
+              <div key={s.id} className={`svp-card relative flex flex-col sm:flex-row flex-wrap ${watchMenuId === s.id ? 'z-30' : ''}`}>
                 <div
                   onClick={() => toggleSeries(s.id)}
-                  className="svp-card-main flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-2.5 sm:p-4 w-full cursor-pointer"
+                  className="svp-card-main flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between p-1.5 sm:p-4 w-full cursor-pointer"
                 >
                   <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0">
-                    {isExpanded ? <ChevronDown size={17} className="svp-ic-a2 flex-shrink-0" /> : <ChevronRight size={17} className="svp-ic-muted flex-shrink-0" />}
+                    {isExpanded ? <ChevronDown size={14} className="svp-ic-a2 flex-shrink-0 sm:h-[17px] sm:w-[17px]" /> : <ChevronRight size={14} className="svp-ic-muted flex-shrink-0 sm:h-[17px] sm:w-[17px]" />}
 
                     <button
                       type="button"
@@ -1256,12 +1398,12 @@ export default function SeriesPage() {
                       }}
                       title="Künye"
                       data-ep={nextEp ? `S${nextEp.season}B${nextEp.episode}` : ''}
-                      className="svp-poster w-14 sm:w-16 aspect-[2/3] flex-shrink-0 flex items-center justify-center group/poster cursor-pointer focus:outline-none"
+                      className="svp-poster w-12 sm:w-16 aspect-[2/3] flex-shrink-0 flex items-center justify-center group/poster cursor-pointer focus:outline-none"
                     >
                       {s.posterUrl ? (
                         <img loading="lazy" decoding="async" src={s.posterUrl} alt={s.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
                       ) : (
-                        <Tv size={16} className="svp-ic-muted" />
+                        <Tv size={14} className="svp-ic-muted" />
                       )}
                       <div className="absolute inset-0 bg-black/65 opacity-0 group-hover/poster:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 p-1">
                         <div className="svp-modal-check w-6 h-6">
@@ -1272,7 +1414,7 @@ export default function SeriesPage() {
 
                     <div className="text-left min-w-0 flex-1 flex flex-col justify-center">
                       <div className="flex items-center gap-1.5 min-w-0 mb-0.5">
-                        <div className={`svp-title text-[13px] sm:text-[15px] truncate min-w-0 ${allWatched ? 'opacity-55' : ''}`}>
+                        <div className={`svp-title text-[12.5px] sm:text-[15px] truncate min-w-0 ${allWatched ? 'opacity-55' : ''}`}>
                           {s.title}
                         </div>
                         {s.abandoned && (
@@ -1280,71 +1422,141 @@ export default function SeriesPage() {
                             🪦 Otopsi
                           </span>
                         )}
+                        {!allWatched && nextEp && (
+                          <span
+                            className="svp-count-pill shrink-0"
+                            title={`Sıradaki bölüm: S${nextEp.season}B${nextEp.episode}`}
+                          >
+                            S{nextEp.season}B{nextEp.episode}
+                          </span>
+                        )}
                       </div>
 
-                      <div className="svp-mono truncate mb-1.5">
+                      <div className="svp-mono mb-1 sm:mb-1.5 hidden sm:block">
                         {s.genres.join(' · ') || 'Tür yok'} {s.year && `· ${s.year}`}
                       </div>
 
-                      {!allWatched && nextEp && (
-                        <div className="mb-1.5">
-                          <span className="svp-count-pill">
-                            Sıradaki · S{nextEp.season}B{nextEp.episode}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap" data-menu-root>
+                        {(() => {
+                          const primaryLink = watchLinks.find((link) => link.primary) || null;
+                          const secondaryLinks = watchLinks.filter((link) => link !== primaryLink);
+                          const inlineLinks = [...(primaryLink ? [primaryLink] : []), ...secondaryLinks.slice(0, 1)];
+                          const overflowLinks = secondaryLinks.slice(1);
 
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {watchLinks.map((link, idx) => {
-                          const Icon = link.icon;
-                          if (link.primary) {
-                            // Birincil harici aksiyon — kompakt vurgulu çip (svp-link ile aynı ölçü)
-                            return (
-                              <a
-                                key={idx}
-                                href={link.href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                title={`${link.text} — yeni sekmede açılır`}
-                                className="svp-btn-p svp-btn-p--xs"
-                              >
-                                <Icon size={11} />
-                                <span>{link.text}</span>
-                              </a>
-                            );
-                          }
                           return (
-                            <a
-                              key={idx}
-                              href={link.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (link.platform && openPlatform(link.platform, s.title)) {
-                                  e.preventDefault();
+                            <>
+                              {inlineLinks.map((link, idx) => {
+                                const Icon = link.icon;
+                                if (link.primary) {
+                                  // Birincil harici aksiyon — kompakt vurgulu çip (svp-link ile aynı ölçü)
+                                  return (
+                                    <a
+                                      key={`inline-${idx}`}
+                                      href={link.href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title={`${link.text} — yeni sekmede açılır`}
+                                      className="svp-btn-p svp-btn-p--xs ${/alternatif/i.test(link.text) ? 'svp-alt' : ''}"
+                                    >
+                                      <Icon size={10} />
+                                      <span
+                                        className="max-w-[6.5rem] truncate"
+                                        style={/alternatif/i.test(link.text) ? { textTransform: 'lowercase' } : undefined}
+                                      >
+                                        {link.text}
+                                      </span>
+                                    </a>
+                                  );
                                 }
-                              }}
-                              title={link.platform ? `${link.platform} uygulamasında aç` : undefined}
-                              className="svp-link"
-                            >
-                              {link.logo ? <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-3 h-3 rounded-sm object-cover"  onError={handleImgFallback}/> : <Icon size={11} />}
-                              <span>{link.text}</span>
-                            </a>
+                                return (
+                                  <a
+                                    key={`inline-${idx}`}
+                                    href={link.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (link.platform && openPlatform(link.platform, s.title)) {
+                                        e.preventDefault();
+                                      }
+                                    }}
+                                    title={link.platform ? `${link.platform} uygulamasında aç` : undefined}
+                                    className={`svp-link ${/alternatif/i.test(link.text) ? 'svp-alt' : ''}`}
+                                  >
+                                    {link.logo ? <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="w-2.5 h-2.5 rounded-sm object-cover"  onError={handleImgFallback}/> : <Icon size={10} />}
+                                    <span
+                                      className="max-w-[6.5rem] truncate"
+                                      style={/alternatif/i.test(link.text) ? { textTransform: 'lowercase' } : undefined}
+                                    >
+                                      {link.text}
+                                    </span>
+                                  </a>
+                                );
+                              })}
+
+                              {overflowLinks.length > 0 && (
+                                <div className="relative flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setWatchMenuId((prev) => (prev === s.id ? null : s.id));
+                                    }}
+                                    aria-expanded={watchMenuId === s.id}
+                                    aria-label="Diğer izleme bağlantıları"
+                                    title="Diğer izleme bağlantıları"
+                                    className="svp-link"
+                                  >
+                                    <MoreHorizontal size={12} />
+                                  </button>
+                                  {watchMenuId === s.id && (
+                                    <div className="absolute right-0 top-full z-50 mt-1.5 flex max-h-[min(70vh,20rem)] w-44 flex-col gap-1 overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+                                      {overflowLinks.map((link, idx) => {
+                                        const Icon = link.icon;
+                                        return (
+                                          <a
+                                            key={`more-${idx}`}
+                                            href={link.href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (link.platform && openPlatform(link.platform, s.title)) e.preventDefault();
+                                              setWatchMenuId(null);
+                                            }}
+                                            title={link.platform ? `${link.platform} uygulamasında aç` : undefined}
+                                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-ink-200 transition hover:bg-white/10 hover:text-white"
+                                          >
+                                            {link.logo ? (
+                                              <img loading="lazy" decoding="async" src={link.logo} alt="Platform" className="h-3 w-3 flex-shrink-0 rounded-[2px] object-cover" onError={handleImgFallback} />
+                                            ) : (
+                                              <Icon size={11} className="flex-shrink-0" />
+                                            )}
+                                            <span className="truncate">{link.text}</span>
+                                          </a>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </>
                           );
-                        })}
+                        })()}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* mobilde kolon yığın (istatistik → ilerleme → aksiyonlar); sm: masaüstü satır düzenine sabit */}
-                <div className="svp-side flex flex-col sm:flex-col items-stretch sm:items-stretch justify-between sm:justify-center gap-2 px-2.5 py-2.5 sm:p-4 border-t sm:border-t-0 sm:border-l w-full sm:w-auto sm:min-w-[210px] shrink-0">
-                  <div className="flex items-center justify-between sm:justify-start gap-2">
-                    <span className="svp-mono">
-                      <span className="svp-ic-a2">{watchedCount}</span>/{s.episodes.length} bölüm
+                {/* mobilde tek satır (istatistik + yüzde → aksiyonlar); sm: masaüstü kolon düzeni */}
+                <div className="svp-side flex flex-row items-center justify-between sm:flex-col sm:items-stretch sm:justify-center gap-2 px-2 py-1 sm:p-4 border-t sm:border-t-0 sm:border-l w-full sm:w-auto sm:min-w-[210px] shrink-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="svp-mono whitespace-nowrap">
+                      <span className="svp-ic-a2">{watchedCount}</span>/{s.episodes.length}
+                      <span className="hidden sm:inline"> bölüm</span>
                     </span>
+                    <span className="svp-pct whitespace-nowrap sm:hidden" title={`%${progressPct} tamamlandı`}>%{progressPct}</span>
                     {allWatched && (
                       <span className="svp-done-tag"><Check size={10} /> Tamam</span>
                     )}
@@ -1388,7 +1600,7 @@ export default function SeriesPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                  <div className="flex items-center justify-end sm:justify-start gap-1 sm:gap-1.5">
                     {s.abandoned ? (
                       <button
                         onClick={(e) => {
@@ -1396,9 +1608,9 @@ export default function SeriesPage() {
                           reviveMedia('series', s.id);
                         }}
                         title="Operasyonu Geri Al — otopsi kaydı silinir, bölümlere dokunulmaz"
-                        className="svp-act svp-act-revive p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
+                        className="svp-act svp-act-revive p-1 min-h-6 min-w-6 sm:p-2 sm:min-h-0 sm:min-w-0"
                       >
-                        <RotateCcw size={15} />
+                        <RotateCcw size={14} />
                       </button>
                     ) : !allWatched && (
                       <button
@@ -1411,9 +1623,9 @@ export default function SeriesPage() {
                           });
                         }}
                         title="Yarım Bırak (Sinematik Otopsi)"
-                        className="svp-act svp-act-dnf p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
+                        className="svp-act svp-act-dnf p-1 min-h-6 min-w-6 sm:p-2 sm:min-h-0 sm:min-w-0"
                       >
-                        <Skull size={15} />
+                        <Skull size={14} />
                       </button>
                     )}
                     <button
@@ -1422,9 +1634,9 @@ export default function SeriesPage() {
                         openSendModal(s);
                       }}
                       title="Arkadaşına Tavsiye Et"
-                      className="svp-act svp-act-send p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
+                      className="svp-act svp-act-send p-1 min-h-6 min-w-6 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
-                      <Send size={15} />
+                      <Send size={14} />
                     </button>
                     <button
                       onClick={(e) => {
@@ -1432,9 +1644,9 @@ export default function SeriesPage() {
                         setEditTarget(s);
                       }}
                       title="Düzenle"
-                      className="svp-act p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
+                      className="svp-act p-1 min-h-6 min-w-6 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
-                      <Edit2 size={15} />
+                      <Edit2 size={14} />
                     </button>
                     <button
                       onClick={(e) => {
@@ -1442,9 +1654,9 @@ export default function SeriesPage() {
                         setDeleteTarget(s);
                       }}
                       title="Sil"
-                      className="svp-act svp-act-del p-2 min-h-10 min-w-10 sm:p-2 sm:min-h-0 sm:min-w-0"
+                      className="svp-act svp-act-del p-1 min-h-6 min-w-6 sm:p-2 sm:min-h-0 sm:min-w-0"
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>

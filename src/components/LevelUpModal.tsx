@@ -4,6 +4,7 @@ import { ChevronRight, Crown, Sparkles, ArrowRight } from 'lucide-react';
 import { RANK_TIERS, RankEmblem } from '../lib/rankTiers';
 import { SineCoinIcon } from './CoinPill';
 import { levelCoinReward } from '../lib/coins';
+import { milestoneItemForLevel } from '../lib/levelRewards';
 
 export default function LevelUpModal({
   newLevel,
@@ -79,6 +80,7 @@ export default function LevelUpModal({
   if (!mounted) return null;
 
   const accentHex = currentRank.strokeColor || '#f59e0b';
+  const milestoneItem = milestoneItemForLevel(newLevel);
 
   const modalContent = (
     <div
@@ -276,10 +278,19 @@ export default function LevelUpModal({
             </div>
 
             {phase >= 4 && (
-              <div className="animate-fade-in-up relative z-20 mt-2.5 inline-flex items-center gap-2 rounded-full border border-gold-400/45 bg-gradient-to-r from-gold-500/20 via-amber-400/12 to-gold-500/20 px-3.5 py-1.5 shadow-[0_8px_24px_-10px_rgba(245,158,11,0.85)]">
-                <SineCoinIcon className="h-4 w-4" />
-                <span className="text-[9px] font-black uppercase tracking-[0.16em] text-gold-200/75">Seviye ödülü</span>
-                <span className="text-sm font-black tabular-nums text-gold-100">+{levelCoinReward(newLevel)} SC</span>
+              <div className="animate-fade-in-up relative z-20 mt-2.5 flex flex-col items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-gold-400/45 bg-gradient-to-r from-gold-500/20 via-amber-400/12 to-gold-500/20 px-3.5 py-1.5 shadow-[0_8px_24px_-10px_rgba(245,158,11,0.85)]">
+                  <SineCoinIcon className="h-4 w-4" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.16em] text-gold-200/75">Seviye ödülü</span>
+                  <span className="text-sm font-black tabular-nums text-gold-100">+{levelCoinReward(newLevel)} SC</span>
+                </div>
+                {milestoneItem && (
+                  <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/45 bg-gradient-to-r from-cyan-500/20 via-azure-400/12 to-cyan-500/20 px-3.5 py-1.5 shadow-[0_8px_24px_-10px_rgba(34,211,238,0.85)]">
+                    <span className="text-base leading-none">{milestoneItem.icon}</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.16em] text-cyan-200/80">Kilometre taşı</span>
+                    <span className="text-sm font-black text-cyan-100">{milestoneItem.name}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>

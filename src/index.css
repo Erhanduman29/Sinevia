@@ -4,6 +4,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Pazar kartları ve satın alma sahnesi için radyal ışık halesi. */
+@layer utilities {
+  .bg-gradient-radial {
+    background-image: radial-gradient(circle at 50% 50%, var(--tw-gradient-stops));
+  }
+}
+
 :root {
   font-family: 'Archivo', system-ui, -apple-system, sans-serif;
   
