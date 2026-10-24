@@ -8,7 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: {
-        enabled: true
+        // Geliştirme sırasında service worker, güncelleme reload'larında eski önbelleği
+        // servis edip veri kaybı yanılsaması/çakışması yaratabiliyor. Prod PWA etkilenmez.
+        enabled: false
       },
       manifest: {
         name: 'Sinevia - Sinema Takip',

@@ -121,14 +121,29 @@ export function buildYearMonthMap(history: WatchHistoryItem[]): Map<string, numb
 // ============================================================================
 
 export type SeriesSortMode = 'az' | 'recent' | 'rating';
+export type SeriesWatchedFilter = boolean | 'past' | null;
+
+/** Dizinin tek bir temsili puanı: genel puan > sezon ortalaması > bölüm ortalaması. */
+export function seriesRatingScore(series: Series): number {
+  if (series.overallRating !== null && series.overallRating !== undefined) return series.overallRating;
+  const seasonScores = Object.values(series.seasonRatings || {})
+    .map((entry) => entry.rating)
+    .filter((rating) => Number.isFinite(rating));
+  if (seasonScores.length > 0) return seasonScores.reduce((sum, rating) => sum + rating, 0) / seasonScores.length;
+  const episodeScores = series.episodes.map((episode) => episode.rating).filter((rating): rating is number => rating !== null);
+  return episodeScores.length > 0
+    ? episodeScores.reduce((sum, rating) => sum + rating, 0) / episodeScores.length
+    : -1;
+}
 
 /**
  * Dizi filtresi + sıralaması: tamamlanma durumu, türler (AND), arama, sıralama.
- * watchedFilter: null=filtre yok, true=sadece tamamlanan, false=sadece devam eden.
+ * watchedFilter: null=filtre yok, true=sadece tamamlanan, false=sadece devam eden,
+ * 'past'=önceden izlenenler (Önceden sırası + puanlanmış geçmiş diziler).
  */
 export function filterAndSortSeries(
   series: Series[],
-  watchedFilter: boolean | null,
+  watchedFilter: SeriesWatchedFilter,
   selectedGenres: ReadonlySet<string>,
   search: string,
   sortMode: SeriesSortMode
@@ -136,9 +151,12 @@ export function filterAndSortSeries(
   let list = series;
   if (watchedFilter !== null) {
     list = list.filter((s) => {
+      const isPast = Boolean(s.isPastWatch || s.inPastQueue);
+      if (watchedFilter === 'past') return isPast;
       const isCompleted = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
       // İzlenecek: yarım bırakılanlar (abandoned) izlenecek listesine girmez.
-      return watchedFilter ? isCompleted : (!isCompleted && !s.abandoned);
+      if (watchedFilter) return !isPast && isCompleted;
+      return !isPast && !isCompleted && !s.abandoned;
     });
   }
   if (selectedGenres.size > 0) list = list.filter((s) => Array.from(selectedGenres).every((g) => s.genres.includes(g)));
@@ -149,11 +167,7 @@ export function filterAndSortSeries(
   return [...list].sort((a, b) => {
     if (sortMode === 'az') return a.title.localeCompare(b.title, 'tr');
     if (sortMode === 'recent') return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
-    const ratedA = a.episodes.filter((e) => e.rating !== null);
-    const ratedB = b.episodes.filter((e) => e.rating !== null);
-    const avgA = ratedA.length > 0 ? ratedA.reduce((s, e) => s + (e.rating || 0), 0) / ratedA.length : -1;
-    const avgB = ratedB.length > 0 ? ratedB.reduce((s, e) => s + (e.rating || 0), 0) / ratedB.length : -1;
-    return avgB - avgA;
+    return seriesRatingScore(b) - seriesRatingScore(a);
   });
 }
 

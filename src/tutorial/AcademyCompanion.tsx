@@ -90,7 +90,8 @@ export default function AcademyCompanion() {
   /* Balon (daraltılmış / kapatılmış Sini) için sürükleme durumu.
      Balona bas-tut + sürükle = taşı, kısa basıp bırak = tıkla (aç/kapat). */
   const balloonRef = useRef<HTMLButtonElement | null>(null);
-  const balloonDrag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  const balloonCleanup = useRef<(() => void) | null>(null);
+  const balloonDrag = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const [balloonDragging, setBalloonDragging] = useState(false);
 
@@ -121,6 +122,13 @@ export default function AcademyCompanion() {
     const onSync = () => setUi(loadUiState());
     window.addEventListener('sinevia-sync-extras-applied', onSync);
     return () => window.removeEventListener('sinevia-sync-extras-applied', onSync);
+  }, []);
+
+  // Balon sürüklemesi sırasında pencere kapanırsa global dinleyicileri temizle.
+  useEffect(() => {
+    return () => {
+      balloonCleanup.current?.();
+    };
   }, []);
 
   /* ---------- Sürükleme bitişi (early-return ÖNCESİ tanımlı olmalı) ---------- */
@@ -219,6 +227,7 @@ export default function AcademyCompanion() {
     dragRef.current = { offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
     setDragging(true);
     e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
   };
 
   const onDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -228,65 +237,89 @@ export default function AcademyCompanion() {
     const rect = card.getBoundingClientRect();
     const x = Math.min(
       Math.max(8, e.clientX - drag.offsetX),
-      Math.max(8, window.innerWidth - rect.width - 8)
+      window.innerWidth - rect.width - 8
     );
     const y = Math.min(
       Math.max(8, e.clientY - drag.offsetY),
-      Math.max(8, window.innerHeight - rect.height - 8)
+      window.innerHeight - rect.height - 8
     );
     setUi((prev) => ({ ...prev, x, y }));
   };
 
-  /* ---------- Balon sürükleme (bas-tut → taşı, tıkla → aç) ---------- */
+  /* ---------- Balon sürükleme (bas-tut → taşı, tıkla → aç) ----------
+     Mobil tarayıcılarda pointer capture + React sentetik olayları güvenilir
+     çalışmadığı için (özellikle iOS Safari) hareket/bitiş olayları doğrudan
+     window üzerinden dinlenir. Böylece küçültülmüş balon parmağı takip eder,
+     sürükleme sırasında yanlışlıkla "aç" tıklaması tetiklenmez. */
   const onBalloonDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     suppressClick.current = false;
     const el = balloonRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    balloonDrag.current = { x: e.clientX, y: e.clientY, left: rect.left, top: rect.top, moved: false };
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* yoksay */
-    }
-  };
+    balloonDrag.current = {
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      left: rect.left,
+      top: rect.top,
+      moved: false,
+    };
 
-  const onBalloonMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const d = balloonDrag.current;
-    const el = balloonRef.current;
-    if (!d || !el) return;
-    const dx = e.clientX - d.x;
-    const dy = e.clientY - d.y;
-    if (!d.moved) {
-      // Küçük parmak titremesi tıklamayı bozmasın
-      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
-      d.moved = true;
-      setBalloonDragging(true);
-    }
-    const rect = el.getBoundingClientRect();
-    const left = Math.min(Math.max(4, d.left + dx), Math.max(4, window.innerWidth - rect.width - 4));
-    const top = Math.min(Math.max(4, d.top + dy), Math.max(4, window.innerHeight - rect.height - 4));
-    setUi((prev) => ({ ...prev, x: left, y: top }));
-  };
+    const onMove = (event: PointerEvent) => {
+      const d = balloonDrag.current;
+      if (!d || event.pointerId !== d.pointerId) return;
+      const dx = event.clientX - d.x;
+      const dy = event.clientY - d.y;
+      if (!d.moved) {
+        // Küçük parmak titremesi tıklamayı bozmasın
+        if (Math.hypot(dx, dy) < 5) return;
+        d.moved = true;
+        suppressClick.current = true;
+        setBalloonDragging(true);
+      }
+      event.preventDefault();
+      const current = balloonRef.current;
+      if (!current) return;
+      const width = current.offsetWidth;
+      const height = current.offsetHeight;
+      const maxLeft = Math.max(4, window.innerWidth - width - 4);
+      // Mobilde alt navigasyon çubuğunun altına inmesin.
+      const bottomGap = window.innerWidth >= 768 ? 4 : 72;
+      const maxTop = Math.max(4, window.innerHeight - height - bottomGap);
+      const left = Math.min(Math.max(4, d.left + dx), maxLeft);
+      const top = Math.min(Math.max(4, d.top + dy), maxTop);
+      setUi((prev) => ({ ...prev, x: left, y: top }));
+    };
 
-  const onBalloonUp = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const d = balloonDrag.current;
-    if (!d) return;
-    balloonDrag.current = null;
-    setBalloonDragging(false);
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      /* yoksay */
-    }
-    if (d.moved) {
-      // Sürüklendiyse tıklama olayını yut (balon açılmasın), konumu kaydet
-      suppressClick.current = true;
-      setUi((prev) => {
-        saveUiState(prev);
-        return prev;
-      });
-    }
+    const finish = (event: PointerEvent) => {
+      const d = balloonDrag.current;
+      if (!d || event.pointerId !== d.pointerId) return;
+      balloonDrag.current = null;
+      setBalloonDragging(false);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      balloonCleanup.current = null;
+      if (d.moved) {
+        // Sürüklendiyse tıklama olayını yut (balon açılmasın), konumu kaydet
+        suppressClick.current = true;
+        setUi((prev) => {
+          saveUiState(prev);
+          return prev;
+        });
+      }
+    };
+
+    balloonCleanup.current?.();
+    balloonCleanup.current = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+    };
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
   };
 
   const onBalloonClick = (action: () => void) => {
@@ -312,9 +345,6 @@ export default function AcademyCompanion() {
 
   const balloonHandlers = {
     onPointerDown: onBalloonDown,
-    onPointerMove: onBalloonMove,
-    onPointerUp: onBalloonUp,
-    onPointerCancel: onBalloonUp,
   };
 
   // Konum: sürüklendiyse sol/üst, değilse varsayılan köşe
@@ -336,7 +366,10 @@ export default function AcademyCompanion() {
         {...balloonHandlers}
         title="Sinevia Akademisi'ni aç · Taşımak için sürükle"
         className={`fixed ${positioned ? '' : 'bottom-20 right-4 md:bottom-4 md:right-4'} z-[190] group touch-none ${balloonDragging ? 'cursor-grabbing scale-105' : 'cursor-grab active:cursor-grabbing'}`}
-        style={posStyle}
+        /* Global `button { touch-action: manipulation }` kuralını ezmek için
+           inline veriyoruz; aksi hâlde mobil tarayıcı jesti devralıp
+           pointercancel ile sürüklemeyi kesiyor. */
+        style={{ ...posStyle, touchAction: 'none' }}
       >
         <span className="relative block">
           <span className="absolute inset-0 rounded-full bg-gold-500/20 blur-md group-hover:bg-gold-500/30 transition-colors" />
@@ -361,7 +394,7 @@ export default function AcademyCompanion() {
         {...balloonHandlers}
         title="Akademisi'ni genişlet · Taşımak için sürükle"
         className={`fixed ${positioned ? '' : 'bottom-20 right-4 md:bottom-4 md:right-4'} z-[190] group touch-none ${balloonDragging ? 'cursor-grabbing scale-105' : 'cursor-grab active:cursor-grabbing'}`}
-        style={posStyle}
+        style={{ ...posStyle, touchAction: 'none' }}
       >
         <span className="relative block">
           <span className="absolute inset-0 rounded-full bg-gold-500/20 blur-md group-hover:bg-gold-500/35 transition-colors" />
@@ -390,7 +423,9 @@ export default function AcademyCompanion() {
   return (
     <div
       ref={cardRef}
-      className={`fixed ${cornerCls} z-[190] tutorial-card overflow-hidden select-none ${
+      className={`fixed ${cornerCls} z-[190] tutorial-card select-none ${
+        collapsed ? 'overflow-hidden' : 'max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain'
+      } ${
         dragging ? 'cursor-grabbing shadow-[0_30px_90px_rgba(0,0,0,0.85)]' : ''
       }`}
       style={{

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Users, UserPlus, Check, X, Star, Plus, Trash2, Film, Tv, Send,
   Search, BarChart2, MessageCircle, CheckCircle2, LogOut, Settings,
-  UserMinus, Crown, Lock, Unlock, Edit2
+  UserMinus, Crown, Lock, Unlock, Edit2, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { uid } from '../lib/utils';
@@ -1193,23 +1193,27 @@ export default function ChatHubModal({
       {/* ANA MESAJLAŞMA MERKEZİ (CHAT HUB) MODALI */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-5 bg-black/90 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-5 bg-black/90 backdrop-blur-md animate-fade-in"
           onClick={onClose}
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="w-full max-w-5xl h-[85dvh] bg-ink-950 border border-azure-500/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative"
+            className="w-full max-w-5xl h-[100dvh] sm:h-[85dvh] bg-ink-950 border-0 sm:border border-azure-500/30 rounded-none sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] sm:pt-0 sm:pb-0"
           >
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 z-20 text-ink-400 hover:text-white p-2.5 min-h-11 min-w-11 flex items-center justify-center rounded-full hover:bg-ink-800 transition-colors"
+              className="fixed top-3 right-3 sm:top-4 sm:right-4 z-[70] text-white bg-ink-900/90 sm:bg-transparent sm:text-ink-400 hover:text-white p-2.5 min-h-11 min-w-11 flex items-center justify-center rounded-hover bg-ink-800 transition-colors shadow-lg sm:shadow-none"
             >
               <X size={18} />
             </button>
 
-            {/* SOL SOHBET LİSTESİ */}
-            <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/30 flex flex-col shrink-0">
-              <div className="p-4 border-b border-ink-800">
+            {/* SOL SOHBET LİSTESİ — mobilde tek ekran; sohbet açılınca gizlenir */}
+            <div
+              className={`w-full md:w-80 border-b md:border-b-0 md:border-r border-ink-800 bg-ink-900/30 flex-col flex-1 min-h-0 md:flex-none overflow-y-auto md:overflow-hidden custom-scrollbar ${
+                hubActiveChat || hubCreateMode ? 'hidden md:flex' : 'flex'
+              }`}
+            >
+              <div className="p-4 pr-14 sm:pr-4 border-b border-ink-800">
                 <h2 className="text-lg font-black text-white flex items-center gap-2 mb-4">
                   <MessageCircle className="text-azure-400" /> Mesajlar
                 </h2>
@@ -1252,7 +1256,7 @@ export default function ChatHubModal({
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+              <div className="md:flex-1 md:overflow-y-auto custom-scrollbar p-3 space-y-2">
                 {hubTab === 'direct' ? (
                   hubInboxDirect.length === 0 ? (
                     <div className="text-center text-xs text-ink-500 py-10 italic">Birebir sohbetin yok.</div>
@@ -1350,10 +1354,21 @@ export default function ChatHubModal({
               </div>
             </div>
 
-            {/* SAĞ SOHBET EKRANI */}
-            <div className="flex-1 flex flex-col bg-ink-950 relative overflow-hidden">
+            {/* SAĞ SOHBET EKRANI — mobilde sohbet listesinin yerini alır */}
+            <div
+              className={`flex-1 flex-col bg-ink-950 relative overflow-hidden ${
+                hubActiveChat || hubCreateMode ? 'flex' : 'hidden md:flex'
+              }`}
+            >
               {hubCreateMode === 'direct' ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+                  <button
+                    onClick={() => setHubCreateMode(null)}
+                    className="md:hidden absolute top-3 left-3 z-20 p-2.5 min-h-11 min-w-11 rounded-xl bg-ink-900 border border-ink-800 text-ink-300 flex items-center justify-center"
+                    title="Geri"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
                   <div className="w-16 h-16 bg-azure-500/10 rounded-full flex items-center justify-center border border-azure-500/30 mb-4">
                     <UserPlus size={24} className="text-azure-400" />
                   </div>
@@ -1379,6 +1394,13 @@ export default function ChatHubModal({
               ) : hubCreateMode === 'group' ? (
                 <div className="flex-1 flex flex-col p-6 animate-fade-in">
                   <div className="flex items-center gap-3 mb-6 pb-4 border-b border-ink-800">
+                    <button
+                      onClick={() => setHubCreateMode(null)}
+                      className="md:hidden p-2.5 min-h-11 min-w-11 rounded-xl bg-ink-900 border border-ink-800 text-ink-300 flex items-center justify-center shrink-0"
+                      title="Geri"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
                     <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center border border-indigo-500/30">
                       <Users size={20} className="text-indigo-400" />
                     </div>
@@ -1464,10 +1486,17 @@ export default function ChatHubModal({
                 </div>
               ) : (
                 <>
-                  <div className="h-16 border-b border-ink-800 bg-ink-900/40 flex items-center justify-between pl-5 pr-14 sm:pr-16 shrink-0 relative">
-                    <div className="flex items-center gap-3">
+                  <div className="h-16 border-b border-ink-800 bg-ink-900/40 flex items-center justify-between pl-3 sm:pl-5 pr-14 sm:pr-16 shrink-0 relative">
+                    <button
+                      onClick={() => setHubActiveChat(null)}
+                      className="md:hidden p-2.5 min-h-11 min-w-11 mr-1 rounded-xl bg-ink-950/80 border border-ink-800 text-ink-300 flex items-center justify-center shrink-0"
+                      title="Sohbet listesine dön"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center font-black shrink-0 ${
                           hubActiveChat.type === 'group'
                             ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
                             : 'bg-ink-800 text-emerald-400'

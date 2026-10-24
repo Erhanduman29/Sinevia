@@ -6,6 +6,7 @@ export type ActionsSlice = Omit<
   AppContextValue,
   | 'data' | 'syncStatus' | 'isQuestCelebrating' | 'toasts' | 'achievementToasts'
   | 'levelUpData' | 'seasonCompleteData' | 'xpGainData' | 'coinGainData' | 'weeklyPlan'
+  | 'cloudConflict'
 >;
 
 export const ActionsContext = createContext<ActionsSlice | null>(null);

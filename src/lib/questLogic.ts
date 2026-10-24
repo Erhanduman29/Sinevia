@@ -125,7 +125,7 @@ export function evaluateQuestCompletion(
     m.rating !== null && historySince.some(h => h.kind === 'movie' && h.itemId === m.id)
   );
 
-  const watchedEpisodes = historySince.filter(h => h.kind === 'series');
+  const watchedEpisodes = historySince.filter(h => h.kind === 'series' && !h.bulkRating);
 
   // Görev kabulünden SONRA yapılan puan revizyonları (previousRating yalnız değişimde yazılır)
   const revisedMovies = historySince.filter(h =>
@@ -137,6 +137,7 @@ export function evaluateQuestCompletion(
   );
 
   const episodeRuntimeOf = (e: WatchHistoryItem): number => {
+    if (e.bulkRating) return 0;
     const s = series.find(x => x.id === (e.seriesId || e.itemId));
     const ep = s?.episodes.find(x => x.season === e.season && x.episode === e.episode);
     return e.actualRuntime || e.originalRuntime || ep?.runtime || s?.episodeRuntime || 0;

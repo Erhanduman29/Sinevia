@@ -442,7 +442,16 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           </div>
         )}
 
-        <div className="relative z-10 flex items-center justify-between px-4 sm:px-7 py-3 sm:py-4 border-b border-ink-800/70 bg-gradient-to-r from-emerald-950/50 via-ink-900/90 to-ink-950 shrink-0">
+        <button
+          onClick={onClose}
+          className="fixed top-3 right-3 sm:top-4 sm:right-4 z-30 w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-ink-900/95 sm:bg-ink-900 text-ink-300 hover:text-white border border-ink-700 flex items-center justify-center shadow-lg transition-all"
+          title="Kapat"
+        >
+          <X size={17} />
+        </button>
+
+        <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="relative z-10 flex items-center justify-between pl-4 pr-16 sm:px-7 py-3 sm:py-4 border-b border-ink-800/70 bg-gradient-to-r from-emerald-950/50 via-ink-900/90 to-ink-950 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {selectingSlot ? (
               <button
@@ -478,12 +487,6 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
               title="Sabit Matematiksel Oranları Gör"
             >
               <Calculator size={13} /> <span className="hidden xs:inline">Oranlar</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-ink-900 hover:bg-ink-800 text-ink-400 hover:text-white border border-ink-800 flex items-center justify-center transition-all flex-shrink-0"
-            >
-              <X size={17} />
             </button>
           </div>
         </div>
@@ -532,7 +535,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
           </div>
         )}
 
-        <div className="relative z-10 flex-1 overflow-y-auto p-3.5 sm:p-7 custom-scrollbar pb-20 sm:pb-7">
+        <div className="relative z-10 p-3.5 sm:p-7 pb-20 sm:pb-7">
           {selectingSlot && (
             <div className="space-y-3.5 animate-fade-in">
               <div className="flex flex-col sm:flex-row gap-2.5">
@@ -1257,6 +1260,7 @@ export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProp
               )}
             </div>
           )}
+        </div>
         </div>
       </div>
 

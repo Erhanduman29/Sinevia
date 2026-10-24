@@ -66,6 +66,11 @@ export default function HistoryPage() {
 
   const isItemPastWatch = (h: WatchHistoryItem): boolean => {
     if (h.isPastWatch) return true;
+    if (h.kind === 'series' || h.type === 'series') {
+      const s = data.series.find((x) => x.id === (h.seriesId || h.itemId || h.id));
+      if (s?.isPastWatch) return true;
+      return false;
+    }
     if (h.kind === 'movie' || h.type === 'movie') {
       const m = data.movies.find((x) => x.id === (h.itemId || h.id));
       if (m?.isPastWatch) return true;
@@ -75,12 +80,12 @@ export default function HistoryPage() {
 
   const regularHistory = useMemo(
     () => data.history.filter((h) => !isItemPastWatch(h)),
-    [data.history, data.movies]
+    [data.history, data.movies, data.series]
   );
 
   const pastHistory = useMemo(
     () => data.history.filter((h) => isItemPastWatch(h)),
-    [data.history, data.movies]
+    [data.history, data.movies, data.series]
   );
 
   const activeBaseHistory = viewMode === 'past' ? pastHistory : regularHistory;
@@ -106,6 +111,13 @@ export default function HistoryPage() {
     setOnlyHighRated(false);
     setSelectedTagFilter(null);
     setSortMode('newest');
+  };
+
+  // İstatistik hücresine tıklanınca ilgili görünümü/filtreyi uygular.
+  const applyStatFilter = (type: 'movie' | 'series') => {
+    resetAllFilters();
+    if (viewMode === 'past') setViewMode('timeline');
+    setFilterType(type);
   };
 
   // Günlük Özet İstatistikleri
@@ -273,10 +285,42 @@ export default function HistoryPage() {
           data-tutorial="history-stats"
           className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-2 rounded-2xl border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--glass, var(--bg-card))] shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))]"
         >
-          <StatCell tone="red" icon={<Sparkles size={15} className="text-[color:var(--red-hi,var(--color-1))]" />} value={diaryStats.total} label="Toplam Kayıt" accent />
-          <StatCell tone="amber" icon={<Film size={15} className="text-amber-400" />} value={diaryStats.movies} label="İzlenen Film" />
-          <StatCell tone="azure" icon={<Tv size={15} className="text-azure-400" />} value={diaryStats.episodes} label="Dizi Bölümü" />
-          <StatCell tone="emerald" icon={<StickyNote size={15} className="text-emerald-400" />} value={diaryStats.withNotes} label="İnceleme" />
+          <StatCell
+            tone="red"
+            icon={<Sparkles size={15} className="text-[color:var(--red-hi,var(--color-1))]" />}
+            value={diaryStats.total}
+            label="Toplam Kayıt"
+            accent
+            onClick={() => {
+              resetAllFilters();
+              setViewMode('timeline');
+            }}
+            active={viewMode === 'timeline' && activeFilterCount === 0}
+          />
+          <StatCell
+            tone="amber"
+            icon={<Film size={15} className="text-amber-400" />}
+            value={diaryStats.movies}
+            label="İzlenen Film"
+            onClick={() => applyStatFilter('movie')}
+            active={viewMode === 'timeline' && filterType === 'movie'}
+          />
+          <StatCell
+            tone="azure"
+            icon={<Tv size={15} className="text-azure-400" />}
+            value={diaryStats.episodes}
+            label="Dizi Bölümü"
+            onClick={() => applyStatFilter('series')}
+            active={viewMode === 'timeline' && filterType === 'series'}
+          />
+          <StatCell
+            tone="emerald"
+            icon={<StickyNote size={15} className="text-emerald-400" />}
+            value={diaryStats.withNotes}
+            label="İnceleme"
+            onClick={() => setOnlyWithNotes((v) => !v)}
+            active={onlyWithNotes}
+          />
           <StatCell
             tone="violet"
             icon={<Calendar size={15} className="text-violet-400" />}
@@ -489,17 +533,26 @@ export default function HistoryPage() {
       ) : viewMode === 'past' ? (
         <div className="space-y-3 sm:space-y-4 animate-fade-in">
           {displayItems.map(({ item }) => {
-            const movieData = data.movies.find((m) => m.id === (item.itemId || item.id));
+            const isSeries = item.kind === 'series' || item.type === 'series';
+            const movieData = isSeries
+              ? undefined
+              : data.movies.find((m) => m.id === (item.itemId || item.id));
+            const seriesData = isSeries
+              ? data.series.find((s) => s.id === (item.seriesId || item.itemId || item.id))
+              : undefined;
             return (
               <MovieHistoryCard
                 key={item.id}
                 item={item}
                 movieData={movieData}
+                seriesData={seriesData}
                 criteriaList={data.criteria || []}
                 isNoteExpanded={expandedNotes.has(item.id)}
                 onToggleNote={() => toggleNoteExpand(item.id)}
                 onEdit={() => setEditingItem(item)}
-                onSelectDetail={() => openMovieDetail(item, movieData)}
+                onSelectDetail={() =>
+                  isSeries ? openSeriesDetail(item, seriesData) : openMovieDetail(item, movieData)
+                }
               />
             );
           })}
@@ -512,7 +565,7 @@ export default function HistoryPage() {
               ? data.movies.find((m) => m.id === (item.itemId || item.id))
               : undefined;
             const seriesData = !isMovie
-              ? data.series.find((s) => s.id === seriesId)
+              ? data.series.find((s) => s.id === (seriesId || item.seriesId || item.itemId || item.id))
               : undefined;
             const posterUrl = isMovie ? movieData?.posterUrl : seriesData?.posterUrl;
             const epsCount = !isMovie && seriesId ? (seriesGroups.get(seriesId) || []).length : 0;
@@ -887,6 +940,8 @@ function StatCell({
   accent,
   className = '',
   tone = 'red',
+  onClick,
+  active = false,
 }: {
   icon: React.ReactNode;
   value: number;
@@ -895,11 +950,21 @@ function StatCell({
   accent?: boolean;
   className?: string;
   tone?: keyof typeof STAT_TONES;
+  onClick?: () => void;
+  active?: boolean;
 }) {
-  return (
-    <div
-      className={`relative overflow-hidden p-3 rounded-xl border border-[color:var(--line-2,var(--border-dim))] transition-all duration-300 hover:-translate-y-0.5 ${STAT_TONES[tone]} ${className}`}
-    >
+  const baseClass = `relative overflow-hidden p-3 rounded-xl border transition-all duration-300 ${
+    active
+      ? 'border-[color:var(--red,var(--color-1,#e8384f))]/60 ring-1 ring-[color:var(--red,var(--color-1,#e8384f))]/25'
+      : 'border-[color:var(--line-2,var(--border-dim))]'
+  } ${STAT_TONES[tone]} ${
+    onClick
+      ? 'cursor-pointer text-left hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red,var(--color-1,#e8384f))]/50'
+      : 'hover:-translate-y-0.5'
+  } ${className}`;
+
+  const content = (
+    <>
       <div className="flex items-center gap-2.5 min-w-0">
         <div
           className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${STAT_TILES[tone]} ${
@@ -919,8 +984,24 @@ function StatCell({
       <span className="absolute right-1 bottom-[-8px] font-black text-4xl text-[color:var(--ink,var(--text-main))] opacity-[0.05] select-none pointer-events-none">
         {value}
       </span>
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        title={`${label} filtresini uygula`}
+        className={baseClass}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={baseClass}>{content}</div>;
 }
 
 function ViewTab({
@@ -1100,6 +1181,7 @@ function RatingChangeChip({ rating, previousRating, size = 'md' }: { rating: num
 function MovieHistoryCard({
   item,
   movieData,
+  seriesData,
   criteriaList,
   isNoteExpanded,
   onToggleNote,
@@ -1108,6 +1190,7 @@ function MovieHistoryCard({
 }: {
   item: WatchHistoryItem;
   movieData?: Movie;
+  seriesData?: Series;
   criteriaList: { id: string; name: string }[];
   isNoteExpanded: boolean;
   onToggleNote: () => void;
@@ -1120,15 +1203,17 @@ function MovieHistoryCard({
   // Masaüstünde (sm:) grid her zaman açık kalır, buton gizlenir.
   const [showCrit, setShowCrit] = useState(false);
   const [showTags, setShowTags] = useState(false);
-  const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch);
+  const isSeries = Boolean(seriesData) || item.kind === 'series' || item.type === 'series';
+  const posterUrl = movieData?.posterUrl || seriesData?.posterUrl;
+  const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch || seriesData?.isPastWatch);
   // Sinematik Otopsi: item.abandoned yoksa itemId → film lookup ile türetilir.
-  const isDnf = Boolean(item.abandoned ?? movieData?.abandoned);
+  const isDnf = Boolean(item.abandoned ?? movieData?.abandoned ?? seriesData?.abandoned);
 
   return (
     <div className="relative bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[var(--glow)] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all overflow-hidden group">
-      {movieData?.posterUrl && (
+      {posterUrl && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-15 group-hover:opacity-25 transition-opacity">
-          <img loading="lazy" decoding="async" src={movieData.posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150"  onError={handleImgFallback}/>
+          <img loading="lazy" decoding="async" src={posterUrl} alt="" className="w-full h-full object-cover blur-3xl scale-125 saturate-150"  onError={handleImgFallback}/>
           <div className="absolute inset-0 bg-gradient-to-r from-[color:var(--bg-base,#0a0a0d)] via-[color:var(--bg-base,#0a0a0d)]/85 to-transparent" />
         </div>
       )}
@@ -1141,8 +1226,10 @@ function MovieHistoryCard({
             title="Künye"
             className="flex-shrink-0 w-14 sm:w-20 aspect-[2/3] rounded-xl sm:rounded-2xl bg-[color:var(--surface,var(--bg-surface))] border-2 border-[color:var(--line-2,var(--border-dim))] group-hover/poster:border-[color:var(--red, var(--color-1, #e8384f))]/60 flex items-center justify-center overflow-hidden shadow-xl relative group/poster cursor-pointer transition-colors"
           >
-            {movieData?.posterUrl ? (
-              <img loading="lazy" decoding="async" src={movieData.posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
+            {posterUrl ? (
+              <img loading="lazy" decoding="async" src={posterUrl} alt={item.title} className="w-full h-full object-cover group-hover/poster:scale-110 transition-transform duration-300"  onError={handleImgFallback}/>
+            ) : isSeries ? (
+              <Tv size={22} className="text-ink-600" />
             ) : (
               <Film size={22} className="text-ink-600" />
             )}
@@ -1153,6 +1240,10 @@ function MovieHistoryCard({
               {isPast ? (
                 <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30`}>
                   <History size={10} /> Daha Önce İzlendi
+                </span>
+              ) : isSeries ? (
+                <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-azure-500/20 text-azure-300 border border-azure-500/30`}>
+                  <Tv size={10} /> Dizi Kaydı
                 </span>
               ) : (
                 <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[color:var(--blob-1,var(--color-1))] text-[color:var(--red-hi,var(--color-1))] border border-[color:var(--red, var(--color-1, #e8384f))]/30`}>
@@ -1176,7 +1267,9 @@ function MovieHistoryCard({
             </button>
 
             <div className="text-[11px] sm:text-xs text-ink-300 mt-1 flex items-center gap-1.5 flex-wrap font-medium">
-              {(movieData?.year || item.year) && <span className="tabular-nums">{movieData?.year || item.year}</span>}
+              {(seriesData?.year || movieData?.year || item.year) && (
+                <span className="tabular-nums">{seriesData?.year || movieData?.year || item.year}</span>
+              )}
               {movieData?.runtime && (
                 <>
                   <span className="text-ink-600">·</span>

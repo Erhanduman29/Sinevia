@@ -18,11 +18,28 @@ const STORE_NAME = 'kv';
 /** localStorage'da tutulacak küçük boot alanları (FOUC + anında kimlik için). */
 export const BOOT_SNAPSHOT_KEYS = [
   'theme', 'agentId', 'recoveryKey', 'nickname',
-  'lastCloudSync', 'level', 'totalXp', 'dailyStreak',
+  'lastCloudSync', 'level', 'totalXp', 'xp', 'bonusXp', 'dailyStreak',
+  // Başarımlar XP'nin tek kaynağıdır. Snapshot'ta yoksa açılışta XP/level sıfıra
+  // düşüp (kısa süreli "1. seviye" parlaması) yanlış veri buluta yazılabiliyordu.
+  'achievements',
+  'notificationsEnabled', 'notifyMessages', 'notifyFriendRequests', 'notifyLists',
 ] as const;
 
 /** localStorage'a yazarken büyük kütüphaneyi ATLA (quota hatası + 5MB sınırı önlemek için). */
 const LOCAL_SNAPSHOT_KEY = 'sinevia-v1';
+
+/**
+ * Ana IDB kaydının yanında tutulan tam yedek. Ana kayıt bozulur/silinirse
+ * (güncelleme, tarayıcı kesintisi, yarım yazma) kütüphane buradan kurtarılır.
+ */
+export const BACKUP_STORAGE_KEY = 'sinevia-v1-backup';
+
+/** Bir kaydın gerçek kütüphane verisi taşıyıp taşımadığını anlar (boot snapshot değil). */
+export function isFullAppRecord(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return Array.isArray(record.movies) && Array.isArray(record.series);
+}
 
 /**
  * "Önceki hesap" yedeği: Taşıma Kodu ile yeni hesap yüklendiğinde bu cihazdaki
@@ -38,23 +55,33 @@ let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve) => {
+  let failedSync = false;
+  const promise = new Promise<IDBDatabase | null>((resolve) => {
     try {
-      if (typeof indexedDB === 'undefined') return resolve(null);
+      if (typeof indexedDB === 'undefined') { failedSync = true; return resolve(null); }
       const req = indexedDB.open(DB_NAME, DB_VERSION);
+      // Başarısız açılış CACHE'LENMEMELİ: aksi halde tek bir geçici hata
+      // (başka sekme DB'yi tutuyor / tarayıcı kesintisi) tüm oturum boyunca
+      // IndexedDB'yi devre dışı bırakır ve veri kaybı riski doğurur.
+      const fail = () => {
+        if (dbPromise === promise) dbPromise = null;
+        resolve(null);
+      };
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
       };
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
+      req.onerror = fail;
       // Bazı tarayıcılar bloke eder (çok hızlı art arda open vb.) → localStorage'a düş.
-      req.onblocked = () => resolve(null);
+      req.onblocked = fail;
     } catch {
+      failedSync = true;
       resolve(null);
     }
   });
-  return dbPromise;
+  dbPromise = failedSync ? null : promise;
+  return promise;
 }
 
 /** IDB'den oku. Yoksa/hata → null. */
@@ -188,6 +215,7 @@ export async function clearAllLocalAppData(): Promise<void> {
   } catch { /* localStorage erişilemez */ }
 
   try { await idbDel(LOCAL_SNAPSHOT_KEY); } catch { /* devam */ }
+  try { await idbDel(BACKUP_STORAGE_KEY); } catch { /* devam */ }
   try { await idbDel(PREV_ACCOUNT_KEY); } catch { /* devam */ }
 
   try { localStorage.setItem(ZERO_RESET_KEY, '1'); } catch { /* kota */ }
@@ -200,7 +228,9 @@ export async function clearAllLocalAppData(): Promise<void> {
  */
 export async function migrateToIdbIfNeeded(fullKey: string): Promise<boolean> {
   const existing = await idbGet(fullKey);
-  if (existing != null) return true; // IDB zaten dolu
+  // Yalnızca GERÇEK kütüphane kaydı yeterli. Boot snapshot'ı (movies/series yok)
+  // ana kayıt sanılırsa hidrasyon onu yükler ve tüm kütüphane silinir.
+  if (isFullAppRecord(existing)) return true;
 
   let legacy: Record<string, unknown> | null = null;
   try {
@@ -209,7 +239,7 @@ export async function migrateToIdbIfNeeded(fullKey: string): Promise<boolean> {
   } catch {
     legacy = null;
   }
-  if (!legacy) return false;
+  if (!legacy || !isFullAppRecord(legacy)) return false;
 
   const ok = await idbSet(fullKey, legacy);
   if (ok) writeBootSnapshot(legacy); // localStorage'ı küçült

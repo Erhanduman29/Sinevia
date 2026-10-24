@@ -93,6 +93,7 @@ function findSeriesForEntry(entry: WatchHistoryItem, series: Series[]): Series |
 }
 
 function entryMinutes(entry: WatchHistoryItem, data: AppData): number {
+  if (entry.bulkRating) return 0;
   if (entry.kind === 'movie') {
     const direct = entry.originalRuntime || entry.actualRuntime;
     if (direct) return direct;
@@ -145,7 +146,7 @@ export function evaluateContractProgress(
 
   const values: Record<ContractMetric, number> = {
     movies: entries.filter((entry) => entry.kind === 'movie').length,
-    episodes: entries.filter((entry) => entry.kind === 'series').length,
+    episodes: entries.filter((entry) => entry.kind === 'series' && !entry.bulkRating).length,
     items: entries.length,
     minutes: entries.reduce((sum, entry) => sum + entryMinutes(entry, data), 0),
     genres: new Set(entries.flatMap((entry) => entry.genres || []).filter(Boolean)).size,
@@ -157,13 +158,14 @@ export function evaluateContractProgress(
     weekend_movies: entries.filter((entry) => entry.kind === 'movie' && isWeekend(entry.watchedAt))
       .length,
     weekend_episodes: entries.filter(
-      (entry) => entry.kind === 'series' && isWeekend(entry.watchedAt),
+      (entry) => entry.kind === 'series' && !entry.bulkRating && isWeekend(entry.watchedAt),
     ).length,
     distinct_series: new Set(entries.filter((entry) => entry.kind === 'series').map((entry) => entry.seriesId || entry.title)).size,
     watch_days: new Set(entries.map((entry) => localDayKey(entry.watchedAt))).size,
     max_day_items: (() => {
       const groups = new Map<string, number>();
       for (const entry of entries) {
+        if (entry.bulkRating) continue;
         const key = localDayKey(entry.watchedAt);
         groups.set(key, (groups.get(key) || 0) + 1);
       }

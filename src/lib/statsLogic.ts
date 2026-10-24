@@ -30,6 +30,10 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
       const m = data.movies.find((x) => x.id === (h.itemId || h.id));
       if (m?.isPastWatch) return true;
     }
+    if (h.kind === 'series' || h.type === 'series') {
+      const s = data.series.find((x) => x.id === (h.seriesId || h.itemId || h.id));
+      if (s?.isPastWatch) return true;
+    }
     return false;
   };
 
@@ -47,7 +51,12 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
     return true;
   });
 
-  const includeSeries = statsMode !== 'past';
+  const includeSeries = true;
+  const scopedSeries = data.series.filter((s) => {
+    if (statsMode === 'current') return !s.isPastWatch;
+    if (statsMode === 'past') return Boolean(s.isPastWatch);
+    return true;
+  });
 
   const movieHistory = scopedHistory.filter((h) => h.kind === 'movie' || h.type === 'movie');
   const seriesHistory = includeSeries
@@ -111,9 +120,45 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
   const ratedMovies = movieHistory.filter((h) => h.rating !== null);
   const ratedSeries = seriesHistory.filter((h) => h.rating !== null);
   const avgMovie = ratedMovies.length > 0 ? ratedMovies.reduce((s, h) => s + (h.rating || 0), 0) / ratedMovies.length : 0;
-  const avgSeries = ratedSeries.length > 0 ? ratedSeries.reduce((s, h) => s + (h.rating || 0), 0) / ratedSeries.length : 0;
-  const avgAll = scopedHistory.filter((h) => h.rating !== null);
-  const avgTotal = avgAll.length > 0 ? avgAll.reduce((s, h) => s + (h.rating || 0), 0) / avgAll.length : 0;
+
+  // Dizi puanı: bölüm sayısına göre ağırlıklandırma yok. Her dizi tek bir
+  // agregat puanla temsil edilir: genel puan > sezon ortalaması > bölüm ortalaması.
+  const seriesScoreById = new Map<string, number>();
+  const ratedSeriesIds = new Set(ratedSeries.map((h) => h.seriesId || h.itemId || h.id).filter(Boolean));
+  ratedSeriesIds.forEach((sid) => {
+    const s = data.series.find((x) => x.id === sid || x.episodes.some((e) => e.id === sid));
+    const historyScores = ratedSeries
+      .filter((h) => (h.seriesId || h.itemId || h.id) === sid)
+      .map((h) => h.rating as number)
+      .filter((r) => Number.isFinite(r));
+    if (!s) {
+      if (historyScores.length > 0) {
+        seriesScoreById.set(sid, historyScores.reduce((sum, r) => sum + r, 0) / historyScores.length);
+      }
+      return;
+    }
+    let score: number | null = null;
+    if (s.overallRating !== null && s.overallRating !== undefined) score = s.overallRating;
+    else {
+      const seasonScores = Object.values(s.seasonRatings || {})
+        .map((r) => r.rating)
+        .filter((r) => Number.isFinite(r));
+      if (seasonScores.length > 0) {
+        score = seasonScores.reduce((sum, r) => sum + r, 0) / seasonScores.length;
+      } else {
+        const episodeScores = s.episodes.map((e) => e.rating).filter((r): r is number => r !== null);
+        if (episodeScores.length > 0) score = episodeScores.reduce((sum, r) => sum + r, 0) / episodeScores.length;
+      }
+    }
+    if (score === null && historyScores.length > 0) {
+      score = historyScores.reduce((sum, r) => sum + r, 0) / historyScores.length;
+    }
+    if (score !== null) seriesScoreById.set(sid, score);
+  });
+  const seriesScoreValues = Array.from(seriesScoreById.values());
+  const avgSeries = seriesScoreValues.length > 0 ? seriesScoreValues.reduce((s, r) => s + r, 0) / seriesScoreValues.length : 0;
+  const avgAll = [...ratedMovies.map((h) => h.rating as number), ...seriesScoreValues];
+  const avgTotal = avgAll.length > 0 ? avgAll.reduce((s, r) => s + r, 0) / avgAll.length : 0;
 
   let ratingPersona = { label: 'Yeni Başlayan', color: 'text-ink-400' };
   if (avgAll.length > 0) {
@@ -164,7 +209,7 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
 
   const dayOfWeekMap = new Array(7).fill(0);
   scopedHistory.forEach((h) => {
-    if (!h.watchedAt) return;
+    if (!h.watchedAt || h.bulkRating) return;
     const d = new Date(h.watchedAt).getDay();
     if (!isNaN(d)) dayOfWeekMap[d]++;
   });
@@ -185,9 +230,9 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
   const remainingMoviesHours = Math.round(unwatchedMoviesList.reduce((sum, m) => sum + (m.runtime || 115), 0) / 60);
   const movieCompletionPct = data.movies.length > 0 ? Math.round(((data.movies.length - remainingMovies) / data.movies.length) * 100) : 0;
 
-  const ongoingSeriesCount = data.series.filter((s) => s.episodes.length === 0 || s.episodes.some((e) => !e.watched)).length;
-  const totalAllEpisodes = data.series.reduce((sum, s) => sum + s.episodes.length, 0);
-  const remainingEpisodes = data.series.reduce((sum, s) => sum + s.episodes.filter((e) => !e.watched).length, 0);
+  const ongoingSeriesCount = scopedSeries.filter((s) => s.episodes.length === 0 || s.episodes.some((e) => !e.watched)).length;
+  const totalAllEpisodes = scopedSeries.reduce((sum, s) => sum + s.episodes.length, 0);
+  const remainingEpisodes = scopedSeries.reduce((sum, s) => sum + s.episodes.filter((e) => !e.watched).length, 0);
   const remainingEpisodesHours = Math.round((remainingEpisodes * 42) / 60);
   const seriesCompletionPct = totalAllEpisodes > 0 ? Math.round(((totalAllEpisodes - remainingEpisodes) / totalAllEpisodes) * 100) : 0;
 
@@ -200,12 +245,15 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
   }, 0);
 
   const watchedEpisodesCount = includeSeries
-    ? data.series.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0)
+    ? scopedSeries.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0)
     : 0;
   const seriesRuntimeMinutes = watchedEpisodesCount * 42;
+  const bulkRuntimeMinutes = scopedHistory
+    .filter((h) => h.bulkRating)
+    .reduce((sum, h) => sum + (h.bulkRuntimeMinutes || 0), 0);
 
-  const totalActualMinutes = actualMovieRuntimeMinutes + seriesRuntimeMinutes;
-  const totalCatalogMinutes = catalogMovieRuntimeMinutes + seriesRuntimeMinutes;
+  const totalActualMinutes = actualMovieRuntimeMinutes + seriesRuntimeMinutes + bulkRuntimeMinutes;
+  const totalCatalogMinutes = catalogMovieRuntimeMinutes + seriesRuntimeMinutes + bulkRuntimeMinutes;
 
   const runtimeDays = Math.floor(totalActualMinutes / (24 * 60));
   const runtimeHours = Math.floor((totalActualMinutes % (24 * 60)) / 60);
@@ -230,7 +278,7 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
 
   const timeBuckets = { morning: 0, afternoon: 0, evening: 0, night: 0 };
   scopedHistory.forEach((h) => {
-    if (!h.watchedAt) return;
+    if (!h.watchedAt || h.bulkRating) return;
     const hr = new Date(h.watchedAt).getHours();
     if (isNaN(hr)) return;
     if (hr >= 6 && hr < 12) timeBuckets.morning++;
@@ -242,7 +290,7 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
 
   const dailyCountMap = new Map<string, number>();
   scopedHistory.forEach((h) => {
-    if (!h.watchedAt) return;
+    if (!h.watchedAt || h.bulkRating) return;
     const dateStr = localDayKey(h.watchedAt);
     dailyCountMap.set(dateStr, (dailyCountMap.get(dateStr) || 0) + 1);
   });

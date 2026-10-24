@@ -229,7 +229,7 @@ export default function PickModal({
 
   return (
     <div
-      className="fixed inset-0 z-[75] flex items-center justify-center p-2.5 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[75] flex items-center justify-center p-0 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <style>{`
@@ -248,7 +248,7 @@ export default function PickModal({
 
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-2xl bg-ink-950/95 border border-ink-700/80 rounded-3xl sm:rounded-[2rem] overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.85)] flex flex-col max-h-[90svh] sm:max-h-[92dvh] animate-fade-in-up"
+        className="relative w-full max-w-2xl h-[100dvh] sm:h-auto bg-ink-950/95 border-0 sm:border border-ink-700/80 rounded-none sm:rounded-[2rem] overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.85)] flex flex-col max-h-none sm:max-h-[92dvh] animate-fade-in-up pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] sm:pt-0 sm:pb-0"
       >
         {activeBgPoster ? (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-25 transition-all duration-300">
@@ -266,8 +266,17 @@ export default function PickModal({
           </>
         )}
 
+        <button
+          onClick={onClose}
+          className="fixed top-3 right-3 sm:top-4 sm:right-4 z-30 w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-ink-900/95 sm:bg-ink-900 text-ink-300 hover:text-white border border-ink-700 flex items-center justify-center shadow-lg transition-all"
+          title="Kapat"
+        >
+          <X size={17} />
+        </button>
+
+        <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
         {/* ÜST BAŞLIK BARI */}
-        <div className="relative z-10 flex items-center justify-between px-4 pt-3.5 pb-3 sm:px-6 sm:pt-5 sm:pb-4 border-b border-ink-800/60 shrink-0">
+        <div className="relative z-10 flex items-center justify-between pl-4 pr-16 sm:px-6 pt-3.5 pb-3 sm:pt-5 sm:pb-4 border-b border-ink-800/60 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-gold-500/25 to-azure-500/20 border border-gold-500/40 flex items-center justify-center shadow-lg flex-shrink-0">
               <Shuffle size={19} className="text-gold-400" />
@@ -281,16 +290,10 @@ export default function PickModal({
               </h2>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-ink-900 hover:bg-ink-800 text-ink-400 hover:text-white border border-ink-800 flex items-center justify-center transition-all flex-shrink-0"
-          >
-            <X size={17} />
-          </button>
         </div>
 
         {/* İÇERİK GÖVDESİ */}
-        <div className="relative z-10 flex-1 overflow-y-auto p-3.5 sm:p-6 custom-scrollbar">
+        <div className="relative z-10 p-3.5 sm:p-6">
           {/* AŞAMA 1: FİLTRE VE RULET HAZIRLIK EKRANI */}
           {phase === 'setup' && (
             <div className="space-y-4 sm:space-y-6 animate-fade-in">
@@ -722,6 +725,7 @@ export default function PickModal({
               })()}
             </div>
           )}
+        </div>
         </div>
       </div>
 

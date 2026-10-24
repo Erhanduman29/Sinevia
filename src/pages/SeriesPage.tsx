@@ -3,11 +3,11 @@ import {
   Plus, Tv, Trash2, ChevronDown, ChevronRight, Lock, Check, Filter,
   ArrowDownAZ, Star as StarIcon, Search, Edit2, Shuffle, RefreshCw,
   PlayCircle, ExternalLink, Eye, SlidersHorizontal, X, Send, Skull, RotateCcw,
-  Play, Info, Film, MessageSquare, MonitorPlay, MoreHorizontal
+  Play, Info, Film, MessageSquare, MonitorPlay, MoreHorizontal, History
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ratingBgClass, getNextUnwatchedEpisode } from '../lib/utils';
+import { ratingBgClass, getNextUnwatchedEpisode, uid } from '../lib/utils';
 import { normalizeActionLabel, resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDBSeries, fetchSeriesSeasonDetails } from '../lib/tmdb';
 import { useFilteredSeries } from '../lib/selectorHooks';
@@ -20,10 +20,13 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import AbandonModal from '../components/AbandonModal';
+import type { SeriesWatchedFilter } from '../lib/selectors';
 import type { Series, Episode } from '../types';
-import { handleImgFallback } from '../lib/selectors';
+import { handleImgFallback, seriesRatingScore } from '../lib/selectors';
 
 type SortMode = 'az' | 'recent' | 'rating';
+type BulkRatingTarget = { series: Series; scope: 'series' | 'season'; season?: number };
+type PendingBulkClear = { target: BulkRatingTarget; seasons?: number[]; title: string; message: string };
 
 /** Hızlı Aksiyon Köprüsü şablon ikonları (lucide adı → bileşen). */
 const BRIDGE_ICONS: Record<string, LucideIcon> = {
@@ -750,13 +753,15 @@ function saveKeptRatings(map: Record<string, number>) {
 }
 
 export default function SeriesPage() {
-  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia, addEpisodes, setSeriesRuntime } = useApp();
+  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia, restoreEpisodes, setSeriesRuntime, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pickedSeriesItem, setPickedSeriesItem] = useState<{ series: Series; episode: Episode } | null>(null);
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [ratingTarget, setRatingTarget] = useState<{ series: Series; episode: Episode } | null>(null);
+  const [bulkRatingTarget, setBulkRatingTarget] = useState<BulkRatingTarget | null>(null);
+  const [pendingBulkClear, setPendingBulkClear] = useState<PendingBulkClear | null>(null);
   // PUAN DÜZENLEME ONAY Uyarısı: çipteki kalem → 'Değiştirmek istiyor musun?'
   const [ratingEditTarget, setRatingEditTarget] = useState<{ series: Series; episode: Episode } | null>(null);
   const [editTarget, setEditTarget] = useState<Series | null>(null);
@@ -769,7 +774,7 @@ export default function SeriesPage() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendInitial, setSendInitial] = useState<{ title?: string; selectedIds?: string[] }>({});
 
-  const [watchedFilter, setWatchedFilter] = useState<boolean | null>(false);
+  const [watchedFilter, setWatchedFilter] = useState<SeriesWatchedFilter>(false);
   const [graveyardView, setGraveyardView] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   // Kart içi "alternatif izle" ⋯ menüsü — aynı anda tek kartta açık kalır
@@ -902,14 +907,42 @@ export default function SeriesPage() {
             }
           }
           const inSeason = s.episodes.filter((e) => e.season === season);
-          const maxEp = inSeason.length > 0 ? Math.max(...inSeason.map((e) => e.episode)) : 0;
-          const total = episodes.length;
-          if (total > maxEp) {
+          const existingNumbers = new Set(inSeason.map((e) => e.episode));
+          const remoteNumbers = Array.from(
+            new Set(
+              episodes
+                .map((ep) => ep.episode)
+                .filter((n) => Number.isFinite(n) && n > 0)
+            )
+          );
+          const targetNumbers = remoteNumbers.length > 0
+            ? remoteNumbers
+            : Array.from({ length: episodes.length }, (_, i) => i + 1);
+          const missingNumbers = targetNumbers.filter((n) => !existingNumbers.has(n));
+
+          if (missingNumbers.length > 0) {
             const avgForSeason = seasonRuntimes.length > 0
               ? Math.round(seasonRuntimes.reduce((a, b) => a + b, 0) / seasonRuntimes.length)
               : s.episodeRuntime;
-            addEpisodes(s.id, season, total - maxEp, true, avgForSeason);
-            addedEpisodes += total - maxEp;
+            const archive = s.deletedEpisodes || [];
+            const restored = missingNumbers.map((episodeNumber) => {
+              const archived = archive.find(
+                (e) => e.season === season && e.episode === episodeNumber
+              );
+              if (archived) return archived;
+              return {
+                id: uid(),
+                season,
+                episode: episodeNumber,
+                watched: false,
+                rating: null,
+                note: '',
+                watchedAt: null,
+                runtime: avgForSeason,
+              } as Episode;
+            });
+            restoreEpisodes(s.id, restored);
+            addedEpisodes += restored.length;
           }
         }
 
@@ -992,12 +1025,105 @@ export default function SeriesPage() {
     setShowSendModal(true);
   };
 
-  const totalCompleted = data.series.filter((s) => s.episodes.length > 0 && s.episodes.every((e) => e.watched)).length;
+  const totalCompleted = data.series.filter((s) => !s.isPastWatch && !s.inPastQueue && s.episodes.length > 0 && s.episodes.every((e) => e.watched)).length;
   // İzlenecek: yarım bırakılanlar (abandoned) bu sayıya girmez.
   const totalAbandoned = data.series.filter((s) => Boolean(s.abandoned)).length;
   const totalOngoing = data.series.filter(
-    (s) => !s.abandoned && !(s.episodes.length > 0 && s.episodes.every((e) => e.watched))
+    (s) => !s.isPastWatch && !s.inPastQueue && !s.abandoned && !(s.episodes.length > 0 && s.episodes.every((e) => e.watched))
   ).length;
+  const totalPast = data.series.filter((s) => Boolean(s.isPastWatch || s.inPastQueue)).length;
+
+  const requestBulkRating = (series: Series, scope: 'series' | 'season', season?: number) => {
+    const pastOnly = Boolean(series.isPastWatch || series.inPastQueue);
+    const seasonRatings = series.seasonRatings || {};
+
+    if (scope === 'series') {
+      // Genel puan ile sezon puanları aynı anda kullanılamaz.
+      if (Object.keys(seasonRatings).length > 0) {
+        showToast('Genel puan vermek için önce sezon puanlarını kaldır.', 'warning');
+        return;
+      }
+      if (series.episodes.some((e) => e.rating !== null && e.rating !== undefined)) {
+        setPendingBulkClear({
+          target: { series, scope, season },
+          title: 'Bölüm Puanlarını Temizle',
+          message: 'Genel dizi puanı vermek için bölüm puanları temizlenecek. İzleme kayıtların korunacak. Devam etmek istiyor musun?',
+        });
+        return;
+      }
+    } else {
+      if (season === undefined) return;
+      if (pastOnly) {
+        showToast('Önceden izlenen dizilerde yalnızca genel puan verilebilir.', 'warning');
+        return;
+      }
+      if (series.overallRating != null) {
+        showToast('Sezon puanı vermek için önce genel puanı kaldır.', 'warning');
+        return;
+      }
+      if (series.episodes.some((e) => e.season === season && e.rating !== null && e.rating !== undefined)) {
+        setPendingBulkClear({
+          target: { series, scope, season },
+          seasons: [season],
+          title: 'Sezon Puanını Hazırla',
+          message: `${season}. sezon puanı vermek için bu sezonun bölüm puanları temizlenecek. İzleme kayıtların korunacak. Devam etmek istiyor musun?`,
+        });
+        return;
+      }
+    }
+
+    setBulkRatingTarget({ series, scope, season });
+  };
+
+  const clearBulkSummary = (series: Series, scope: 'all' | 'series' | 'season', season?: number) => {
+    clearSeriesRatings(series.id, scope, season);
+    showToast(
+      scope === 'series' ? 'Genel puan kaldırıldı.' : scope === 'season' ? 'Sezon puanı kaldırıldı.' : 'Toplu puanlar kaldırıldı.',
+      'success'
+    );
+  };
+
+  const saveBulkRating = (
+    target: BulkRatingTarget,
+    rating: number,
+    note: string,
+    detailedRating?: Record<string, number>,
+    reviewTags?: string[]
+  ) => {
+    const isPast = Boolean(target.series.isPastWatch || target.series.inPastQueue);
+    rateSeriesBulk(
+      target.series.id,
+      target.scope,
+      rating,
+      note,
+      target.scope === 'season' ? target.season : undefined,
+      isPast,
+      detailedRating,
+      reviewTags
+    );
+    setBulkRatingTarget(null);
+    showToast(
+      target.scope === 'series' ? 'Genel dizi puanı kaydedildi.' : `${target.season}. sezon puanı kaydedildi.`,
+      'success'
+    );
+  };
+
+  const bulkRatingHistory = bulkRatingTarget
+    ? data.history.find(
+        (h) =>
+          h.bulkRating &&
+          h.seriesId === bulkRatingTarget.series.id &&
+          h.ratingScope === bulkRatingTarget.scope &&
+          (bulkRatingTarget.scope !== 'season' || h.season === bulkRatingTarget.season)
+      )
+    : undefined;
+  const bulkRatingSeason =
+    bulkRatingTarget?.scope === 'season' && bulkRatingTarget.season !== undefined
+      ? bulkRatingTarget.series.seasonRatings?.[bulkRatingTarget.season]
+      : undefined;
+  const bulkRatingPast = bulkRatingTarget
+    ? Boolean(bulkRatingTarget.series.isPastWatch || bulkRatingTarget.series.inPastQueue)
+    : false;
 
   return (
     <div className="svp-root space-y-3 sm:space-y-5 overflow-x-clip sm:overflow-x-visible">
@@ -1117,6 +1243,12 @@ export default function SeriesPage() {
                 className={`svp-tab px-2.5 sm:px-3 py-1.5 truncate ${!graveyardView && watchedFilter === false ? 'svp-tab-on' : ''}`}
               >
                 İzlenecek <span className="svp-tab-n">({totalOngoing})</span>
+              </button>
+              <button
+                onClick={() => { setGraveyardView(false); setWatchedFilter('past'); }}
+                className={`svp-tab px-2.5 sm:px-3 py-1.5 truncate ${!graveyardView && watchedFilter === 'past' ? 'svp-tab-on' : ''}`}
+              >
+                Önceden <span className="svp-tab-n">({totalPast})</span>
               </button>
               <div className="relative" data-menu-root>
                 <button
@@ -1307,6 +1439,9 @@ export default function SeriesPage() {
             const allWatched = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
             const nextEp = getNextUnwatchedEpisode(s.episodes);
             const progressPct = s.episodes.length > 0 ? Math.round((watchedCount / s.episodes.length) * 100) : 0;
+            const pastOnly = Boolean(s.isPastWatch || s.inPastQueue);
+            const seasonRatings = s.seasonRatings || {};
+            const hasBulkSummary = s.overallRating != null || Object.keys(seasonRatings).length > 0;
 
             const watchLinks: { href: string; text: string; logo: string | null; icon: any; primary?: boolean; platform?: string }[] = [];
 
@@ -1417,6 +1552,14 @@ export default function SeriesPage() {
                         <div className={`svp-title text-[12.5px] sm:text-[15px] truncate min-w-0 ${allWatched ? 'opacity-55' : ''}`}>
                           {s.title}
                         </div>
+                        {seriesRatingScore(s) > 0 && (
+                          <span
+                            className={`shrink-0 rounded-md border px-1 py-0.5 text-[9px] font-black tabular-nums ${ratingBgClass(seriesRatingScore(s))}`}
+                            title={s.overallRating != null ? 'Genel dizi puanı' : 'Sezon/bölüm ortalaması'}
+                          >
+                            ★ {seriesRatingScore(s).toFixed(1)}
+                          </span>
+                        )}
                         {s.abandoned && (
                           <span className="svp-dnf-tag shrink-0" title="Sinematik Otopsi: yarım bırakıldı">
                             🪦 Otopsi
@@ -1440,8 +1583,12 @@ export default function SeriesPage() {
                         {(() => {
                           const primaryLink = watchLinks.find((link) => link.primary) || null;
                           const secondaryLinks = watchLinks.filter((link) => link !== primaryLink);
-                          const inlineLinks = [...(primaryLink ? [primaryLink] : []), ...secondaryLinks.slice(0, 1)];
-                          const overflowLinks = secondaryLinks.slice(1);
+                          // "İzle" her dizide en solda; varsa birincil köprü ikinci sırada.
+                          const izleLink = watchLinks.find((link) => link.text === 'İzle') || null;
+                          const inlineLinks = izleLink
+                            ? [izleLink, ...(primaryLink && primaryLink !== izleLink ? [primaryLink] : [])]
+                            : [...(primaryLink ? [primaryLink] : []), ...secondaryLinks.slice(0, 1)];
+                          const overflowLinks = watchLinks.filter((link) => !inlineLinks.includes(link));
 
                           return (
                             <>
@@ -1495,7 +1642,10 @@ export default function SeriesPage() {
                                 );
                               })}
 
-                              {overflowLinks.length > 0 && (
+                              {(overflowLinks.length > 0 ||
+                                hasBulkSummary ||
+                                (!s.isPastWatch && !s.inPastQueue && !s.episodes.some((e) => e.watched || e.rating !== null)) ||
+                                s.isPastWatch || s.inPastQueue) && (
                                 <div className="relative flex-shrink-0">
                                   <button
                                     type="button"
@@ -1512,6 +1662,48 @@ export default function SeriesPage() {
                                   </button>
                                   {watchMenuId === s.id && (
                                     <div className="absolute right-0 top-full z-50 mt-1.5 flex max-h-[min(70vh,20rem)] w-44 flex-col gap-1 overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+                                      {hasBulkSummary && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            clearBulkSummary(s, 'all');
+                                            setWatchMenuId(null);
+                                          }}
+                                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-ink-200 transition hover:bg-red-500/15 hover:text-red-200"
+                                        >
+                                          <Trash2 size={11} className="flex-shrink-0" />
+                                          <span className="truncate">Toplu Puanları Kaldır</span>
+                                        </button>
+                                      )}
+                                      {!s.isPastWatch && !s.inPastQueue && !hasBulkSummary && !s.episodes.some((e) => e.watched || e.rating !== null) && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSeriesPastQueue(s.id, true);
+                                            setWatchMenuId(null);
+                                          }}
+                                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-ink-200 transition hover:bg-white/10 hover:text-white"
+                                        >
+                                          <History size={11} className="flex-shrink-0" />
+                                          <span className="truncate">Önceden İzlenenler'e Ekle</span>
+                                        </button>
+                                      )}
+                                      {(s.isPastWatch || s.inPastQueue) && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSeriesPastQueue(s.id, false);
+                                            setWatchMenuId(null);
+                                          }}
+                                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-ink-200 transition hover:bg-white/10 hover:text-white"
+                                        >
+                                          <History size={11} className="flex-shrink-0" />
+                                          <span className="truncate">Önceden İzlenenlerden Çıkar</span>
+                                        </button>
+                                      )}
                                       {overflowLinks.map((link, idx) => {
                                         const Icon = link.icon;
                                         return (
@@ -1631,6 +1823,22 @@ export default function SeriesPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        requestBulkRating(s, 'series');
+                      }}
+                      title={
+                        s.overallRating != null
+                          ? 'Genel Puanı Düzenle'
+                          : Object.keys(seasonRatings).length > 0
+                            ? 'Genel puan için önce sezon puanlarını kaldır'
+                            : 'Diziyi Genel Puanla'
+                      }
+                      className="svp-act p-1 min-h-6 min-w-6 sm:p-2 sm:min-h-0 sm:min-w-0"
+                    >
+                      <StarIcon size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         openSendModal(s);
                       }}
                       title="Arkadaşına Tavsiye Et"
@@ -1671,6 +1879,7 @@ export default function SeriesPage() {
                         const seasonAllWatched = eps.length > 0 && eps.every((e) => e.watched);
                         const ratedRuntime = eps.reduce((sum, e) => sum + (e.runtime || 0), 0);
                         const seasonMinutes = ratedRuntime > 0 ? ratedRuntime : (s.episodeRuntime || 0) * eps.length;
+                        const seasonRating = seasonRatings[season];
                         return (
                           <div key={season} className="svp-season-block p-2.5 sm:p-4 border-b last:border-0">
                             <div className="svp-season mb-2 sm:mb-2.5 flex items-center gap-2">
@@ -1683,16 +1892,68 @@ export default function SeriesPage() {
                               {seasonAllWatched && (
                                 <span className="svp-done-tag"><Check size={10} /> Tamamlandı</span>
                               )}
+                              {!pastOnly && (
+                                <div className="ml-auto flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      requestBulkRating(s, 'season', season);
+                                    }}
+                                    title={
+                                      s.overallRating != null
+                                        ? 'Genel puan varken sezon puanlanamaz'
+                                        : seasonRating
+                                          ? `${season}. sezon puanını düzenle`
+                                          : `${season}. sezonu toplu puanla`
+                                    }
+                                    className="svp-link"
+                                    style={{
+                                      textTransform: 'none',
+                                      letterSpacing: '.02em',
+                                      color: seasonRating ? 'var(--svp-a2)' : undefined,
+                                      opacity: s.overallRating != null ? 0.5 : 1,
+                                    }}
+                                  >
+                                    <StarIcon size={11} />
+                                    {seasonRating ? `${seasonRating.rating} · Düzenle` : 'Sezonu Puanla'}
+                                  </button>
+                                  {seasonRating && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearBulkSummary(s, 'season', season);
+                                      }}
+                                      title={`${season}. sezon puanını kaldır`}
+                                      className="svp-link"
+                                      style={{ textTransform: 'none' }}
+                                    >
+                                      <X size={11} />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1.5">
                               {eps.map((ep) => {
                                 const canWatch = canWatchEpisode(s.id, ep.id);
+                                // Toptan puan: dizi geneli varsa tüm bölümlere, sezon puanı varsa
+                                // yalnız o sezonun bölümlerine yansıtılır (görsel olarak puanlanmış görünür).
+                                const bulkDisplayRating =
+                                  s.overallRating ?? seasonRatings[ep.season]?.rating ?? null;
+                                const bulkLocked = bulkDisplayRating != null;
                                 return (
                                   <EpisodeBox
                                     key={ep.id}
                                     episode={ep}
                                     canWatch={canWatch}
+                                    bulkLocked={bulkLocked}
                                     onRate={() => {
+                                      if (bulkLocked) {
+                                        showToast('Bu sezon/dizi toplu puanlanmış. Bölüm puanlamak için önce toplu puanı kaldır.', 'warning');
+                                        return;
+                                      }
                                       if (canWatch) setRatingTarget({ series: s, episode: ep });
                                       else showToast('Önce önceki bölümleri izlemelisin!', 'warning');
                                     }}
@@ -1701,9 +1962,15 @@ export default function SeriesPage() {
                                       keepRating(ep);
                                       unwatchEpisode(s.id, ep.id);
                                     }}
-                                    onEditRating={() => setRatingEditTarget({ series: s, episode: ep })}
+                                    onEditRating={() => {
+          if (bulkLocked) {
+            showToast('Bu sezon/dizi toplu puanlanmış. Bölüm puanlamak için önce toplu puanı kaldır.', 'warning');
+            return;
+          }
+          setRatingEditTarget({ series: s, episode: ep });
+        }}
                                     onDelete={() => setDeleteEpisodeTarget({ series: s, episode: ep })}
-                                    displayRating={ep.rating ?? keptRatings[ep.id] ?? null}
+                                    displayRating={bulkDisplayRating ?? ep.rating ?? keptRatings[ep.id] ?? null}
                                   />
                                 );
                               })}
@@ -1775,6 +2042,58 @@ export default function SeriesPage() {
             else watchEpisode(ratingTarget.series.id, targetEp.id, rating, note, detailedRating, reviewTags);
           }}
           onClose={() => setRatingTarget(null)}
+        />
+      )}
+
+      {bulkRatingTarget && (
+        <RatingModal
+          title={bulkRatingTarget.series.title}
+          subtitle={
+            bulkRatingTarget.scope === 'series'
+              ? `Genel Dizi Puanı${bulkRatingPast ? ' · Önceden İzlendi' : ''}`
+              : `${bulkRatingTarget.season}. Sezon · Sezon Puanı`
+          }
+          initialRating={
+            bulkRatingTarget.scope === 'series'
+              ? bulkRatingTarget.series.overallRating ?? bulkRatingHistory?.rating
+              : bulkRatingSeason?.rating ?? bulkRatingHistory?.rating
+          }
+          initialNote={
+            bulkRatingTarget.scope === 'series'
+              ? bulkRatingTarget.series.overallNote || bulkRatingHistory?.note || ''
+              : bulkRatingSeason?.note || bulkRatingHistory?.note || ''
+          }
+          initialDetailedRating={
+            bulkRatingTarget.scope === 'series'
+              ? bulkRatingTarget.series.overallDetailedRating ?? bulkRatingHistory?.detailedRating
+              : bulkRatingSeason?.detailedRating ?? bulkRatingHistory?.detailedRating
+          }
+          initialReviewTags={
+            bulkRatingTarget.scope === 'series'
+              ? bulkRatingTarget.series.overallReviewTags ?? bulkRatingHistory?.reviewTags
+              : bulkRatingSeason?.reviewTags ?? bulkRatingHistory?.reviewTags
+          }
+          initialIsPastWatch={bulkRatingPast}
+          allowPastWatch={false}
+          disableCalibration
+          onRate={(rating, note, detailedRating, reviewTags) => {
+            saveBulkRating(bulkRatingTarget, rating, note, detailedRating, reviewTags);
+          }}
+          onClose={() => setBulkRatingTarget(null)}
+        />
+      )}
+
+      {pendingBulkClear && (
+        <ConfirmDialog
+          title={pendingBulkClear.title}
+          message={pendingBulkClear.message}
+          confirmLabel="Temizle ve Devam Et"
+          onConfirm={() => {
+            clearSeriesEpisodeRatings(pendingBulkClear.target.series.id, pendingBulkClear.seasons);
+            setBulkRatingTarget(pendingBulkClear.target);
+            setPendingBulkClear(null);
+          }}
+          onCancel={() => setPendingBulkClear(null)}
         />
       )}
 
@@ -1850,6 +2169,7 @@ function EpisodeBox({
   episode,
   canWatch,
   displayRating,
+  bulkLocked = false,
   onRate,
   onUnwatch,
   onEditRating,
@@ -1859,6 +2179,8 @@ function EpisodeBox({
   canWatch: boolean;
   /** Store puanı; yoksa korunan (kept) puan — çip asla kaybolmaz */
   displayRating: number | null;
+  /** Dizi/sezon toptan puanlandıysa bölüm bazlı düzenleme gizlenir. */
+  bulkLocked?: boolean;
   onRate: () => void;
   onUnwatch: () => void;
   /** Çipteki kalem → onay uyarısı → RatingModal */
@@ -1879,22 +2201,25 @@ function EpisodeBox({
             className={`svp-rate font-bold px-1.5 py-0.5 rounded-full ${ratingBgClass(displayRating)} ${
               episode.watched ? '' : 'svp-rate-kept'
             }`}
+            title={bulkLocked ? 'Toplu puan — bölüm bazlı düzenlenemez' : undefined}
           >
             {displayRating}
           </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              onEditRating();
-            }}
-            title="Puanı düzenle"
-            aria-label="Bölüm puanını düzenle"
-            className="svp-rate-edit pointer-events-auto"
-          >
-            <Edit2 size={9} strokeWidth={3} />
-          </button>
+          {!bulkLocked && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onEditRating();
+              }}
+              title="Puanı düzenle"
+              aria-label="Bölüm puanını düzenle"
+              className="svp-rate-edit pointer-events-auto"
+            >
+              <Edit2 size={9} strokeWidth={3} />
+            </button>
+          )}
         </div>
       )}
       <button
@@ -1910,7 +2235,13 @@ function EpisodeBox({
           onRate();
         }}
         disabled={episode.watched ? displayRating !== null : !canWatch}
-        title={episode.watched && displayRating !== null ? 'Puanlı bölüm — puanı düzenlemek için kalem simgesini kullan' : undefined}
+        title={
+          bulkLocked
+            ? 'Toplu puan — bölüm bazlı düzenlenemez'
+            : episode.watched && displayRating !== null
+              ? 'Puanlı bölüm — puanı düzenlemek için kalem simgesini kullan'
+              : undefined
+        }
         className={`svp-ep min-h-10 sm:min-h-11 md:min-h-0 ${
           episode.watched ? 'svp-ep-done' : canWatch ? 'svp-ep-ready' : 'svp-ep-lock'
         } ${episode.watched && displayRating !== null ? 'cursor-not-allowed opacity-80' : ''}`}

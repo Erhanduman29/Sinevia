@@ -17,6 +17,7 @@ import WeeklyPlanPage from './pages/WeeklyPlanPage';
 import NetworkPage from './pages/NetworkPage'; // YENİ: Sinevia Ağı import edildi
 import Toasts from './components/Toasts';
 import AchievementToasts from './components/AchievementToasts';
+import CloudConflictDialog from './components/CloudConflictDialog';
 import LevelUpModal from './components/LevelUpModal';
 import SeasonCompleteModal from './components/SeasonCompleteModal';
 import XpGainOverlay from './components/XpGainOverlay';
@@ -85,6 +86,8 @@ function AppContent() {
     coinGainData,
     contractCelebrationData,
     dismissContractCelebration,
+    cloudConflict,
+    resolveCloudConflict,
   } = useApp();
   // Tutorial Merkezi kısayolla açılıp kapatılabilsin (Esc / F1).
   const { centerOpen, setCenterOpen } = useTutorial();
@@ -228,6 +231,14 @@ function AppContent() {
 
       {/* Kutlamalar eğitim/karşılama katmanının (z-300) üstünde kalmalı. */}
       <div className="relative z-[400]">
+        {cloudConflict && (
+          <CloudConflictDialog
+            conflict={cloudConflict}
+            onUseCloud={() => resolveCloudConflict('cloud')}
+            onUseLocal={() => resolveCloudConflict('local')}
+            onDefer={() => resolveCloudConflict('later')}
+          />
+        )}
         {contractCelebrationData && (
         <ContractCelebrationOverlay
           contractId={contractCelebrationData.contractId}

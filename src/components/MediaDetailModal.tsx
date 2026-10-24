@@ -242,12 +242,12 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:p-6 sm:pt-[max(1.5rem,env(safe-area-inset-top))] sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-0 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full max-w-4xl bg-ink-900/95 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[min(90svh,100%)] sm:max-h-[min(90dvh,100%)] animate-fade-in-up ${senderRating != null ? 'border border-gold-500/40' : 'border border-ink-700/80'}`}
+        className={`relative w-full max-w-4xl h-[100dvh] sm:h-auto bg-ink-900/95 rounded-none sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-none sm:max-h-[min(90dvh,100%)] animate-fade-in-up pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] sm:pt-0 sm:pb-0 ${senderRating != null ? 'border-0 sm:border border-gold-500/40' : 'border-0 sm:border border-ink-700/80'}`}
       >
         {posterUrl && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
@@ -258,13 +258,13 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
 
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-30 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-ink-950/90 hover:bg-ink-800 text-ink-200 hover:text-white border border-ink-700/80 flex items-center justify-center transition-all hover:scale-110 shadow-lg"
+          className="fixed top-3 right-3 sm:top-4 sm:right-4 z-40 w-10 h-10 rounded-full bg-ink-950/90 hover:bg-ink-800 text-ink-200 hover:text-white border border-ink-700/80 flex items-center justify-center transition-all hover:scale-110 shadow-lg"
           title="Kapat"
         >
           <X size={18} />
         </button>
 
-        <div className="relative z-10 flex-1 overflow-y-auto p-4 sm:p-8 space-y-5 sm:space-y-6 custom-scrollbar">
+        <div className="relative z-10 flex-1 overflow-y-auto p-4 pt-14 sm:p-8 sm:pt-8 space-y-5 sm:space-y-6 custom-scrollbar">
           <div className="flex flex-col md:flex-row gap-4 sm:gap-6 items-center md:items-start">
             <div className="w-32 sm:w-48 md:w-52 aspect-[2/3] flex-shrink-0 rounded-2xl overflow-hidden bg-ink-950 border-2 border-ink-700/60 shadow-2xl relative group">
               {posterUrl ? (

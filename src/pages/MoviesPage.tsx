@@ -921,32 +921,48 @@ export default function MoviesPage() {
                         ? libCollections.find((c) => c.id === m.collectionId)?.name
                         : undefined;
                       return (
-                        <div key={m.id} className="mpx-poster aspect-[2/3] group">
-                          {m.posterUrl ? (
-                            <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"  onError={handleImgFallback}/>
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-ink-700">
-                              <Film size={24} />
+                        <div key={m.id} className="flex flex-col gap-1.5 min-w-0">
+                          {/* Afiş: tıklayınca künye açılır. Butonlar afişin ALTINDA (mobil). */}
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setDetailMovieId(m.id)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailMovieId(m.id); } }}
+                            className="mpx-poster relative aspect-[2/3] overflow-hidden cursor-pointer group"
+                            title="Künyeyi gör"
+                          >
+                            {m.posterUrl ? (
+                              <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"  onError={handleImgFallback}/>
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-ink-700">
+                                <Film size={24} />
+                              </div>
+                            )}
+                            <i className="mpx-corner" />
+                            <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
+                              <h3 className="text-[9px] font-bold text-white line-clamp-2 leading-tight">{m.title}</h3>
+                              <div className="text-[8px] text-ink-400 mt-0.5 truncate">{m.year || 'Yıl yok'} {origColName ? `· ${origColName}` : ''}</div>
                             </div>
-                          )}
-                          <i className="mpx-corner" />
-                          <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-ink-950 via-ink-950/80 to-transparent p-2 pt-6">
-                            <h3 className="text-[9px] font-bold text-white line-clamp-2 leading-tight">{m.title}</h3>
-                            <div className="text-[8px] text-ink-400 mt-0.5 truncate">{m.year || 'Yıl yok'} {origColName ? `· ${origColName}` : ''}</div>
-                          </div>
-                          <div className="absolute inset-0 bg-ink-950/80 flex flex-col justify-center items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-2 z-[2]">
-                            <button onClick={() => handleRequestRate(m)} className="mpx-btn mpx-btn-p mpx-btn-xs w-full">
-                              <Star size={10} /> Puanla
-                            </button>
-                            <div className="flex w-full gap-1">
-                              <button onClick={() => setCollectionTargetMovie(m)} className="mpx-btn mpx-btn-s mpx-btn-xs flex-1" title="Koleksiyona Ata">
-                                <Boxes size={12} />
-                              </button>
-                              <button onClick={() => setDetailMovieId(m.id)} className="mpx-btn mpx-btn-s mpx-btn-xs flex-1" title="Künye">
-                                <Eye size={12} />
+                            {/* Masaüstünde hover ile tek aksiyon: Puanla */}
+                            <div className="hidden sm:flex absolute inset-0 z-[2] bg-ink-950/80 flex-col justify-center items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-2">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleRequestRate(m); }}
+                                className="mpx-btn mpx-btn-p mpx-btn-xs w-full"
+                              >
+                                <Star size={10} /> Puanla
                               </button>
                             </div>
                           </div>
+                          {/* Mobil: afişin altında sadece Puanla */}
+                          <button
+                            type="button"
+                            onClick={() => handleRequestRate(m)}
+                            className="sm:hidden mpx-btn mpx-btn-p mpx-btn-xs w-full"
+                            title="Puanla"
+                          >
+                            <Star size={10} /> Puanla
+                          </button>
                         </div>
                       );
                     })}
@@ -1116,6 +1132,7 @@ export default function MoviesPage() {
                               onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
                               onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                               onSendToFriend={openSendModal}
+                              onPastQueue={(movie) => setMoviePastQueue(movie.id, true)}
                               altWatchTemplate={altWatchTemplate}
                               externalActions={externalActions}
                               onAbandon={(movie) => setAbandonTarget(movie)}
@@ -1193,6 +1210,7 @@ export default function MoviesPage() {
                   onAssignCollection={(movie) => setCollectionTargetMovie(movie)}
                   onSelectDetail={(movie) => setDetailMovieId(movie.id)}
                   onSendToFriend={openSendModal}
+                  onPastQueue={(movie) => setMoviePastQueue(movie.id, true)}
                   altWatchTemplate={altWatchTemplate}
                   externalActions={externalActions}
                   onAbandon={(movie) => setAbandonTarget(movie)}
@@ -1206,62 +1224,71 @@ export default function MoviesPage() {
 
       {/* TEKİL FİLM KOLEKSİYON ATAMA MODALI */}
       {collectionTargetMovie && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCollectionTargetMovie(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-md shadow-2xl p-4 sm:p-5 space-y-4 overflow-y-auto max-h-[85dvh]">
-            <div className="flex items-center justify-between border-b border-ink-800 pb-3">
-              <div className="min-w-0 pr-2">
-                <h3 className="text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
-                  <FolderPlus size={16} className="text-gold-400 flex-shrink-0" />
-                  <span className="truncate">Koleksiyona Ata</span>
-                </h3>
-                <p className="mpx-mono font-semibold text-[11px] text-ink-400 truncate mt-0.5">{collectionTargetMovie.title}</p>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4 animate-fade-in" onClick={() => setCollectionTargetMovie(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="mpx-modal relative w-full max-w-md h-[100dvh] sm:h-auto max-h-none sm:max-h-[85dvh] rounded-none sm:rounded-[26px] shadow-2xl overflow-hidden flex flex-col [padding-top:env(safe-area-inset-top)] [padding-bottom:env(safe-area-inset-bottom)] sm:!pt-0 sm:!pb-0">
+            <button
+              onClick={() => setCollectionTargetMovie(null)}
+              className="sm:hidden fixed top-3 right-3 sm:top-3 sm:right-3 z-20 w-10 h-10 rounded-full bg-ink-900/90 border border-ink-700 text-ink-300 hover:text-white flex items-center justify-center backdrop-blur-md"
+              aria-label="Kapat"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-5 space-y-4">
+              <div className="border-b border-ink-800 pb-3 pr-12">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
+                    <FolderPlus size={16} className="text-gold-400 flex-shrink-0" />
+                    <span className="truncate">Koleksiyona Ata</span>
+                  </h3>
+                  <p className="mpx-mono font-semibold text-[11px] text-ink-400 truncate mt-0.5">{collectionTargetMovie.title}</p>
+                </div>
               </div>
-              <button onClick={() => setCollectionTargetMovie(null)} className="mpx-ibtn"><X size={17} /></button>
-            </div>
 
-            <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-              <button
-                type="button"
-                onClick={() => handleAssignCollection(collectionTargetMovie, null)}
-                className={`mpx-chip w-full !justify-between ${!collectionTargetMovie.collectionId ? 'on' : ''}`}
-              >
-                <span>Bağımsız (Koleksiyon Yok)</span>
-                {!collectionTargetMovie.collectionId && <Check size={14} />}
-              </button>
-              {regularCollectionsList.map((col) => {
-                const isCurrent = collectionTargetMovie.collectionId === col.id;
-                return (
-                  <button
-                    key={col.id}
-                    type="button"
-                    onClick={() => handleAssignCollection(collectionTargetMovie, col.id)}
-                    className={`mpx-chip w-full !justify-between ${isCurrent ? 'on' : ''}`}
-                  >
-                    <span className="truncate">{col.name}</span>
-                    {isCurrent && <Check size={14} />}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="pt-3 border-t border-ink-800 space-y-2">
-              <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-wider">Yeni Koleksiyon Oluştur & Ata</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newCollectionName}
-                  onChange={(e) => setNewCollectionName(e.target.value)}
-                  placeholder="Koleksiyon adı..."
-                  className="mpx-input flex-1"
-                />
+              <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                 <button
                   type="button"
-                  disabled={!newCollectionName.trim()}
-                  onClick={handleCreateAndAssignCollection}
-                  className="mpx-btn mpx-btn-p mpx-btn-xs"
+                  onClick={() => handleAssignCollection(collectionTargetMovie, null)}
+                  className={`mpx-chip w-full !justify-between ${!collectionTargetMovie.collectionId ? 'on' : ''}`}
                 >
-                  Ekle
+                  <span>Bağımsız (Koleksiyon Yok)</span>
+                  {!collectionTargetMovie.collectionId && <Check size={14} />}
                 </button>
+                {regularCollectionsList.map((col) => {
+                  const isCurrent = collectionTargetMovie.collectionId === col.id;
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => handleAssignCollection(collectionTargetMovie, col.id)}
+                      className={`mpx-chip w-full !justify-between ${isCurrent ? 'on' : ''}`}
+                    >
+                      <span className="truncate">{col.name}</span>
+                      {isCurrent && <Check size={14} />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="pt-3 border-t border-ink-800 space-y-2">
+                <label className="mpx-mono block text-[10px] font-bold text-ink-400 tracking-wider">Yeni Koleksiyon Oluştur & Ata</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCollectionName}
+                    onChange={(e) => setNewCollectionName(e.target.value)}
+                    placeholder="Koleksiyon adı..."
+                    className="mpx-input flex-1"
+                  />
+                  <button
+                    type="button"
+                    disabled={!newCollectionName.trim()}
+                    onClick={handleCreateAndAssignCollection}
+                    className="mpx-btn mpx-btn-p mpx-btn-xs"
+                  >
+                    Ekle
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1288,22 +1315,31 @@ export default function MoviesPage() {
           modalSelectableMovies.every((m) => bulkSelectedMovieIds.has(m.id));
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={() => setAddMoviesToCollectionId(null)}>
-            <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-4xl flex flex-col max-h-[88svh] animate-fade-in-up">
-              <div className="mpx-modal-bar p-3.5 sm:p-4 flex items-center justify-between shrink-0">
-                <div className="min-w-0 pr-2">
-                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
-                    {isTargetPast ? <History size={16} className="text-violet-400 flex-shrink-0" /> : <Boxes size={16} className="text-gold-400 flex-shrink-0" />}
-                    <span className="truncate">{targetColName} İçin Çoklu Seç</span>
-                  </h3>
-                  <p className="text-[11px] text-ink-400 mt-0.5">
-                    {isTargetPast
-                      ? 'Seçtiğin filmler kendi koleksiyonlarından silinmeden Eskiden İzlenenler sırasına eklenir'
-                      : 'Üstten koleksiyon veya alttan istediğin filmleri topluca seç'}
-                  </p>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-3 md:p-4 animate-fade-in" onClick={() => setAddMoviesToCollectionId(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="mpx-modal relative w-full max-w-4xl h-[100dvh] sm:h-auto max-h-none sm:max-h-[88svh] rounded-none sm:rounded-[26px] flex flex-col overflow-hidden animate-fade-in-up [padding-top:env(safe-area-inset-top)] [padding-bottom:env(safe-area-inset-bottom)] sm:!pt-0 sm:!pb-0">
+              <button
+                onClick={() => setAddMoviesToCollectionId(null)}
+                className="sm:hidden fixed top-3 right-3 z-20 w-10 h-10 rounded-full bg-ink-900/90 border border-ink-700 text-ink-300 flex items-center justify-center backdrop-blur-md"
+                aria-label="Kapat"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex flex-1 min-h-0 flex-col">
+                <div className="mpx-modal-bar p-3.5 pr-14 sm:p-4 sm:pr-4 flex items-center justify-between shrink-0">
+                  <div className="min-w-0 pr-2">
+                    <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
+                      {isTargetPast ? <History size={16} className="text-violet-400 flex-shrink-0" /> : <Boxes size={16} className="text-gold-400 flex-shrink-0" />}
+                      <span className="truncate">{targetColName} İçin Çoklu Seç</span>
+                    </h3>
+                    <p className="text-[11px] text-ink-400 mt-0.5">
+                      {isTargetPast
+                        ? 'Seçtiğin filmler kendi koleksiyonlarından silinmeden Eskiden İzlenenler sırasına eklenir'
+                        : 'Üstten koleksiyon veya alttan istediğin filmleri topluca seç'}
+                    </p>
+                  </div>
+                  <button onClick={() => setAddMoviesToCollectionId(null)} className="mpx-ibtn shrink-0 hidden sm:inline-flex"><X size={18} /></button>
                 </div>
-                <button onClick={() => setAddMoviesToCollectionId(null)} className="mpx-ibtn shrink-0"><X size={18} /></button>
-              </div>
 
               {modalOtherCollections.length > 0 && (
                 <div className="p-3 border-b border-ink-800 bg-ink-950/60 space-y-1.5 shrink-0">
@@ -1366,7 +1402,7 @@ export default function MoviesPage() {
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3 sm:p-4 custom-scrollbar bg-ink-950">
+              <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 custom-scrollbar bg-ink-950">
                 {modalSelectableMovies.length === 0 ? (
                   <div className="text-center py-8 text-xs text-ink-500">
                     Aramaya uygun izlenmemiş film bulunamadı.
@@ -1429,6 +1465,7 @@ export default function MoviesPage() {
                   Kaydet ({bulkSelectedMovieIds.size} Film)
                 </button>
               </div>
+              </div>
             </div>
           </div>
         );
@@ -1441,20 +1478,29 @@ export default function MoviesPage() {
           filteredPastMoviesForMove.every((m) => pastMoveSelectedIds.has(m.id));
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in" onClick={() => setShowMoveFromPastModal(false)}>
-            <div onClick={(e) => e.stopPropagation()} className="mpx-modal w-full max-w-4xl flex flex-col max-h-[88svh] animate-fade-in-up">
-              <div className="mpx-modal-bar p-3.5 sm:p-4 flex items-center justify-between shrink-0">
-                <div className="min-w-0 pr-2">
-                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
-                    <ArrowRightLeft size={16} className="text-amber-400 flex-shrink-0" />
-                    <span className="truncate">Eskiden İzlenenler'den Toplu Taşı / Çıkar</span>
-                  </h3>
-                  <p className="text-[11px] text-ink-400 mt-0.5">
-                    Seçtiğin filmleri sıradan çıkarabilir veya başka bir koleksiyona aktarabilirsin
-                  </p>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-3 md:p-4 animate-fade-in" onClick={() => setShowMoveFromPastModal(false)}>
+            <div onClick={(e) => e.stopPropagation()} className="mpx-modal relative w-full max-w-4xl h-[100dvh] sm:h-auto max-h-none sm:max-h-[88svh] rounded-none sm:rounded-[26px] flex flex-col overflow-hidden animate-fade-in-up [padding-top:env(safe-area-inset-top)] [padding-bottom:env(safe-area-inset-bottom)] sm:!pt-0 sm:!pb-0">
+              <button
+                onClick={() => setShowMoveFromPastModal(false)}
+                className="sm:hidden fixed top-3 right-3 z-20 w-10 h-10 rounded-full bg-ink-900/90 border border-ink-700 text-ink-300 flex items-center justify-center backdrop-blur-md"
+                aria-label="Kapat"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex flex-1 min-h-0 flex-col">
+                <div className="mpx-modal-bar p-3.5 pr-14 sm:p-4 sm:pr-4 flex items-center justify-between shrink-0">
+                  <div className="min-w-0 pr-2">
+                    <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
+                      <ArrowRightLeft size={16} className="text-amber-400 flex-shrink-0" />
+                      <span className="truncate">Eskiden İzlenenler'den Toplu Taşı / Çıkar</span>
+                    </h3>
+                    <p className="text-[11px] text-ink-400 mt-0.5">
+                      Seçtiğin filmleri sıradan çıkarabilir veya başka bir koleksiyona aktarabilirsin
+                    </p>
+                  </div>
+                  <button onClick={() => setShowMoveFromPastModal(false)} className="mpx-ibtn shrink-0 hidden sm:inline-flex"><X size={18} /></button>
                 </div>
-                <button onClick={() => setShowMoveFromPastModal(false)} className="mpx-ibtn shrink-0"><X size={18} /></button>
-              </div>
 
               <div className="p-3 border-b border-ink-800 bg-ink-950/40 flex items-center gap-2 shrink-0">
                 <div className="relative flex-1 mpx-search-field">
@@ -1489,7 +1535,7 @@ export default function MoviesPage() {
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3 sm:p-4 custom-scrollbar bg-ink-950">
+              <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 custom-scrollbar bg-ink-950">
                 {filteredPastMoviesForMove.length === 0 ? (
                   <div className="text-center py-8 text-xs text-ink-500">
                     Aramaya uygun film bulunamadı.
@@ -1603,6 +1649,7 @@ export default function MoviesPage() {
                   </button>
                 </div>
               </div>
+              </div>
             </div>
           </div>
         );
@@ -1709,7 +1756,7 @@ export default function MoviesPage() {
 }
 
 function MovieRow({
-  movie, isHighlighted, nowMs, anotherTimerActive, isPlanned, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, onSendToFriend, altWatchTemplate, externalActions, onAbandon, onRevive,
+  movie, isHighlighted, nowMs, anotherTimerActive, isPlanned, collectionName, onDelete, onRate, onStartWatch, onTogglePause, onCancelWatch, onUnwatch, onEdit, onAssignCollection, onSelectDetail, onSendToFriend, onPastQueue, altWatchTemplate, externalActions, onAbandon, onRevive,
 }: {
   movie: Movie;
   isHighlighted?: boolean;
@@ -1727,6 +1774,7 @@ function MovieRow({
   onAssignCollection: (movie: Movie) => void;
   onSelectDetail: (movie: Movie) => void;
   onSendToFriend: (movie: Movie) => void;
+  onPastQueue: (movie: Movie) => void;
   altWatchTemplate?: string;
   externalActions?: ExternalActionTemplate[];
   onAbandon: (movie: Movie) => void;
@@ -1734,6 +1782,8 @@ function MovieRow({
 }) {
   // Kart içi ⋯ menüleri (izleme köprüleri + araçlar) — mobilde kompakt kart
   const [openMenu, setOpenMenu] = useState<'watch' | 'actions' | null>(null);
+  // Sayfanın en altındaki kartlarda menü ekran dışına taşmasın diye yukarı açılır.
+  const [menuPlacement, setMenuPlacement] = useState<'down' | 'up'>('down');
 
   useEffect(() => {
     if (!openMenu) return;
@@ -1805,7 +1855,7 @@ function MovieRow({
   return (
     <div
       id={`movie-row-${movie.id}`}
-      className={`mpx-row group flex flex-row items-center gap-2 md:gap-4 mb-1.5 md:mb-2 p-1.5 sm:p-3 ${isHighlighted ? 'is-hl' : ''} ${openMenu ? 'z-30' : ''}`}
+      className={`mpx-row group flex flex-row items-center gap-2 md:gap-4 mb-1.5 md:mb-2 p-1.5 sm:p-3 ${isHighlighted ? 'is-hl' : ''} ${openMenu ? 'z-[70]' : ''}`}
     >
       <div className="flex gap-2.5 sm:gap-3.5 flex-1 min-w-0">
         <button
@@ -1890,10 +1940,14 @@ function MovieRow({
             {(() => {
               const primaryLink = watchLinks.find((link) => link.primary) || null;
               const secondaryLinks = watchLinks.filter((link) => link !== primaryLink);
+              // "İzle" her kartta en solda görünmeli; varsa birincil köprü onu takip eder.
+              const izleLink = watchLinks.find((link) => link.text === 'İzle') || null;
               // Mobilde kartı kompakt tutmak için yalnızca bir köprü satır içinde kalır,
               // gerisi "⋯" menüsüne taşınır.
-              const inlineLinks = primaryLink ? [primaryLink] : secondaryLinks.slice(0, 1);
-              const overflowLinks = primaryLink ? secondaryLinks : secondaryLinks.slice(1);
+              const inlineLinks = izleLink
+                ? [izleLink, ...(primaryLink && primaryLink !== izleLink ? [primaryLink] : [])]
+                : primaryLink ? [primaryLink] : secondaryLinks.slice(0, 1);
+              const overflowLinks = watchLinks.filter((link) => !inlineLinks.includes(link));
 
               return (
                 <>
@@ -1941,6 +1995,9 @@ function MovieRow({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const spaceBelow = window.innerHeight - rect.bottom - 72;
+                          setMenuPlacement(spaceBelow < 340 ? 'up' : 'down');
                           setOpenMenu((prev) => (prev === 'watch' ? null : 'watch'));
                         }}
                         aria-expanded={openMenu === 'watch'}
@@ -1951,7 +2008,11 @@ function MovieRow({
                         <MoreHorizontal size={12} />
                       </button>
                       {openMenu === 'watch' && (
-                        <div className="absolute left-0 top-full z-50 mt-1.5 flex max-h-[min(70vh,20rem)] w-44 flex-col gap-1 overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+                        <div
+                          className={`absolute left-0 z-[80] flex max-h-[min(65vh,20rem)] w-44 flex-col gap-1 overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-ink-950/95 p-1.5 shadow-2xl backdrop-blur-md ${
+                            menuPlacement === 'up' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                          }`}
+                        >
                           {overflowLinks.map((link, idx) => {
                             const Icon = link.icon;
                             return (
@@ -1977,6 +2038,22 @@ function MovieRow({
                               </a>
                             );
                           })}
+
+                          {!movie.watched && !movie.inPastQueue && (
+                            <>
+                              <div className="my-0.5 h-px bg-white/10" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenMenu(null);
+                                  onPastQueue(movie);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-violet-200 transition hover:bg-white/10 hover:text-white"
+                              >
+                                <History size={12} className="flex-shrink-0" /> Önceden İzlenenler'e Ekle
+                              </button>
+                            </>
+                          )}
 
                           {/* Mobilde kart içi işlemler de aynı menüde — kartı kısaltır */}
                           <div className="md:hidden flex flex-col gap-1">

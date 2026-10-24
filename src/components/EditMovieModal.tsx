@@ -82,26 +82,35 @@ export default function EditMovieModal({ movie, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2.5 sm:p-4 animate-fade-in"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4 animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="bg-ink-900 border border-ink-700 rounded-2xl sm:rounded-3xl w-full max-w-lg max-h-[90svh] flex flex-col overflow-hidden shadow-2xl animate-fade-in-up"
+        className="relative bg-ink-900 border-0 sm:border border-ink-700 rounded-none sm:rounded-3xl w-full max-w-lg h-[100dvh] sm:h-auto max-h-none sm:max-h-[90svh] flex flex-col overflow-hidden shadow-2xl animate-fade-in-up [padding-top:env(safe-area-inset-top)] [padding-bottom:env(safe-area-inset-bottom)] sm:!pt-0 sm:!pb-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3.5 sm:p-5 border-b border-ink-800 bg-ink-900 shrink-0">
-          <h2 className="text-base sm:text-lg font-bold text-ink-100 truncate">
-            Film Düzenle & Koleksiyon Ata
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-ink-800/80 hover:bg-ink-700 text-ink-400 hover:text-white flex items-center justify-center transition-colors"
-          >
-            <X size={18} />
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="sm:hidden fixed top-3 right-3 z-30 w-10 h-10 rounded-full bg-ink-800/90 border border-ink-700 text-ink-300 flex items-center justify-center backdrop-blur-md"
+          aria-label="Kapat"
+        >
+          <X size={18} />
+        </button>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar">
+        <div className="flex flex-1 min-h-0 flex-col">
+          <div className="flex items-center justify-between px-4 py-3.5 pr-14 sm:p-5 border-b border-ink-800 bg-ink-900 shrink-0 z-20">
+            <h2 className="text-base sm:text-lg font-bold text-ink-100 truncate">
+              Film Düzenle & Koleksiyon Ata
+            </h2>
+            <button
+              onClick={onClose}
+              className="hidden sm:inline-flex w-8 h-8 rounded-full bg-ink-800/80 hover:bg-ink-700 text-ink-400 hover:text-white items-center justify-center transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar">
           <div>
             <label className="block text-xs sm:text-sm font-medium text-ink-300 mb-1.5">Film Adı</label>
             <input
@@ -286,7 +295,7 @@ export default function EditMovieModal({ movie, onClose }: Props) {
           </div>
         </div>
 
-        <div className="p-3.5 sm:p-5 border-t border-ink-800 bg-ink-900 shrink-0">
+        <div className="p-3.5 sm:p-5 border-t border-ink-800 bg-ink-900 shrink-0 z-10">
           <button
             onClick={handleSubmit}
             disabled={!title.trim()}
@@ -295,6 +304,7 @@ export default function EditMovieModal({ movie, onClose }: Props) {
             <Check size={18} strokeWidth={2.5} />
             Kaydet
           </button>
+        </div>
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import type { ExtendedAppData } from '../context/AppContext';
 import { calculateStats } from './statsLogic';
 import type { StatsScopeMode } from './statsLogic';
 import { filterAndSortMovies, filterAndSortSeries, filterAndSortHistory } from './selectors';
-import type { WatchedFilterMode, SortMode, SeriesSortMode, HistorySortMode, HistoryFilterType, HistoryViewMode } from './selectors';
+import type { WatchedFilterMode, SortMode, SeriesSortMode, SeriesWatchedFilter, HistorySortMode, HistoryFilterType, HistoryViewMode } from './selectors';
 
 // ============================================================================
 // MEMOIZE EDİLMİŞ SELECTOR HOOK'LARI (Madde 4)
@@ -55,7 +55,7 @@ export function useComputedStats(
 /** Dizi listesi filtre + sıralamasını memoize eder (SeriesPage). */
 export function useFilteredSeries(
   series: Series[],
-  watchedFilter: boolean | null,
+  watchedFilter: SeriesWatchedFilter,
   selectedGenres: Set<string> | ReadonlySet<string>,
   search: string,
   sortMode: SeriesSortMode

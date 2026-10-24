@@ -131,6 +131,275 @@ describe('REDUCER — DİZİ (SERIES) EYLEMLERİ', () => {
   });
 });
 
+describe('REDUCER — DİZİ TOPLU PUANLAMA', () => {
+  function bulkHistory(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'bh1',
+      itemId: 's1',
+      seriesId: 's1',
+      kind: 'series',
+      type: 'series',
+      title: 'Dizi',
+      rating: 8,
+      note: '',
+      watchedAt: '2026-10-04T21:00:00',
+      genres: ['Dram'],
+      ratingScope: 'season',
+      season: 1,
+      bulkRating: true,
+      bulkRuntimeMinutes: 42,
+      ...overrides,
+    } as any;
+  }
+
+  function baseSeries() {
+    return {
+      id: 's1',
+      title: 'Dizi',
+      genres: ['Dram'],
+      episodes: [
+        { id: 'e1', season: 1, episode: 1, watched: false, rating: null },
+        { id: 'e2', season: 1, episode: 2, watched: false, rating: null },
+        { id: 'e3', season: 2, episode: 1, watched: false, rating: null },
+      ],
+    } as any;
+  }
+
+  test('sezon puanı not, detay puanı ve inceleme etiketleriyle kaydedilir', () => {
+    let state = getInitialState();
+    state.series = [baseSeries()];
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'season',
+      season: 1,
+      rating: 9,
+      note: 'Harika sezon',
+      detailedRating: { Oyunculuk: 9 },
+      reviewTags: ['Sürükleyici'],
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ rating: 9, note: 'Harika sezon', detailedRating: { Oyunculuk: 9 }, reviewTags: ['Sürükleyici'] })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+
+    const season = state.series[0].seasonRatings?.[1];
+    expect(season?.rating).toBe(9);
+    expect(season?.note).toBe('Harika sezon');
+    expect(season?.detailedRating).toEqual({ Oyunculuk: 9 });
+    expect(season?.reviewTags).toEqual(['Sürükleyici']);
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0].bulkRating).toBe(true);
+  });
+
+  test('sezon varken genel puan verilemez; sezon kaldırılınca genel puan verilebilir', () => {
+    let state = getInitialState();
+    state.series = [baseSeries()];
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'season',
+      season: 1,
+      rating: 8,
+      note: '',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory()],
+      bulkRuntimeMinutes: 42,
+    } as any);
+    expect(state.series[0].seasonRatings?.[1]?.rating).toBe(8);
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'series',
+      rating: 7,
+      note: '',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ id: 'bh2', ratingScope: 'series', season: undefined })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+    expect(state.series[0].overallRating).toBeUndefined();
+    expect(state.history).toHaveLength(1);
+
+    state = rootReducer(state, { type: 'CLEAR_SERIES_RATINGS', seriesId: 's1', scope: 'season', season: 1 } as any);
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'series',
+      rating: 7,
+      note: 'Genel',
+      detailedRating: { Hikaye: 7 },
+      reviewTags: ['Dengeli'],
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ id: 'bh2', ratingScope: 'series', season: undefined, rating: 7, note: 'Genel', detailedRating: { Hikaye: 7 }, reviewTags: ['Dengeli'] })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+
+    expect(state.series[0].overallRating).toBe(7);
+    expect(state.series[0].overallNote).toBe('Genel');
+    expect(state.series[0].overallDetailedRating).toEqual({ Hikaye: 7 });
+    expect(state.series[0].overallReviewTags).toEqual(['Dengeli']);
+    expect(state.history).toHaveLength(1);
+  });
+
+  test('genel puan varken sezon puanı verilemez', () => {
+    let state = getInitialState();
+    state.series = [baseSeries()];
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'series',
+      rating: 8,
+      note: '',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ ratingScope: 'series', season: undefined })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+    expect(state.series[0].overallRating).toBe(8);
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'season',
+      season: 1,
+      rating: 9,
+      note: '',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ id: 'bh2', rating: 9 })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+
+    expect(state.series[0].seasonRatings?.[1]).toBeUndefined();
+    expect(state.history).toHaveLength(1);
+  });
+
+  test('bölüm puanı varken genel puan verilemez', () => {
+    let state = getInitialState();
+    const series = baseSeries();
+    series.episodes[0].rating = 9;
+    state.series = [series];
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'series',
+      rating: 8,
+      note: '',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ ratingScope: 'series', season: undefined })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+
+    expect(state.series[0].overallRating).toBeUndefined();
+    expect(state.history).toHaveLength(0);
+  });
+
+  test('aynı kapsam yeniden puanlanınca eski toptan geçmiş kaydı çoğalmaz', () => {
+    let state = getInitialState();
+    state.series = [baseSeries()];
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'season',
+      season: 1,
+      rating: 8,
+      note: 'İlk',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ id: 'bh1', rating: 8, note: 'İlk' })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'season',
+      season: 1,
+      rating: 9,
+      note: 'İkinci',
+      watchedAt: '2026-10-04T22:00:00',
+      historyItems: [bulkHistory({ id: 'bh2', rating: 9, note: 'İkinci', watchedAt: '2026-10-04T22:00:00' })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+
+    expect(state.series[0].seasonRatings?.[1]?.rating).toBe(9);
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0].id).toBe('bh2');
+  });
+
+  test('bölüm puanları temizlenirken izlenme durumu ve geçmiş kaydı korunur', () => {
+    let state = getInitialState();
+    const series = baseSeries();
+    series.episodes[0] = {
+      ...series.episodes[0],
+      watched: true,
+      watchedAt: '2026-10-01T20:00:00',
+      rating: 9,
+      note: 'Bölüm notu',
+      detailedRating: { Hikaye: 9 },
+      reviewTags: ['Etkileyici'],
+    };
+    state.series = [series];
+    state.history = [{
+      id: 'eh1',
+      itemId: 'e1',
+      seriesId: 's1',
+      kind: 'series',
+      type: 'series',
+      title: 'Dizi',
+      rating: 9,
+      note: 'Bölüm notu',
+      detailedRating: { Hikaye: 9 },
+      reviewTags: ['Etkileyici'],
+      watchedAt: '2026-10-01T20:00:00',
+      genres: ['Dram'],
+      season: 1,
+      episode: 1,
+    } as any];
+
+    state = rootReducer(state, { type: 'CLEAR_SERIES_EPISODE_RATINGS', seriesId: 's1' } as any);
+
+    const episode = state.series[0].episodes[0];
+    expect(episode.watched).toBe(true);
+    expect(episode.watchedAt).toBe('2026-10-01T20:00:00');
+    expect(episode.rating).toBeNull();
+    expect(episode.note).toBe('');
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0].rating).toBeNull();
+    expect(state.history[0].watchedAt).toBe('2026-10-01T20:00:00');
+  });
+
+  test('geçmişten genel toptan puan düzenlenince dizi alanları da güncellenir', () => {
+    let state = getInitialState();
+    state.series = [baseSeries()];
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'series',
+      rating: 8,
+      note: 'İlk',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ id: 'bh1', ratingScope: 'series', season: undefined, rating: 8, note: 'İlk' })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+
+    state = rootReducer(state, {
+      type: 'UPDATE_HISTORY_RATING',
+      historyId: 'bh1',
+      rating: 9,
+      note: 'Güncel',
+      detailedRating: { Hikaye: 10 },
+      reviewTags: ['Efsane'],
+    } as any);
+
+    expect(state.series[0].overallRating).toBe(9);
+    expect(state.series[0].overallNote).toBe('Güncel');
+    expect(state.series[0].overallDetailedRating).toEqual({ Hikaye: 10 });
+    expect(state.series[0].overallReviewTags).toEqual(['Efsane']);
+  });
+});
+
 describe('REDUCER — KOLEKSİYON EYLEMLERİ', () => {
   test('ADD_COLLECTION + RENAME_COLLECTION', () => {
     let state = getInitialState();

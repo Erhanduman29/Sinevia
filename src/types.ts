@@ -92,6 +92,8 @@ export interface Series {
   year?: string;
   genres: string[];
   episodes: Episode[];
+  /** Yanlışlıkla silinen bölümler — Eksikleri Bul ile puanı/notu korunarak geri gelir. */
+  deletedEpisodes?: Episode[];
   posterUrl?: string;
   overview?: string;
   tmdbId?: number;
@@ -116,6 +118,24 @@ export interface Series {
   calibratedScore?: number;
   duelCount?: number;
   duelWins?: number;
+  /** Filmlerdeki Eskiden İzlenenler sırasının dizi karşılığı. */
+  inPastQueue?: boolean;
+  /** Önceden izlenen dizi: istatistiklerde yalnız "Önceden" kapsamında sayılır. */
+  isPastWatch?: boolean;
+  /** Dizinin genel (toptan) puanı. */
+  overallRating?: number | null;
+  overallNote?: string;
+  overallRatedAt?: string | null;
+  overallDetailedRating?: Record<string, number>;
+  overallReviewTags?: string[];
+  /** Sezon bazlı toptan puanlar. */
+  seasonRatings?: Record<number, {
+    rating: number;
+    note: string;
+    ratedAt: string;
+    detailedRating?: Record<string, number>;
+    reviewTags?: string[];
+  }>;
 }
 
 export interface Collection {
@@ -149,6 +169,12 @@ export interface WatchHistoryItem {
   previousRating?: number;
   /** Puan değişiminin yapıldığı an — sıralama/tarih önceliğinde kullanılır. */
   ratingChangedAt?: string;
+  /** Toptan puan kaydı: bölüm / sezon / tüm dizi. */
+  ratingScope?: 'episode' | 'season' | 'series';
+  /** Toptan puanlama kaydı mı? (bölüm sayısı/süre hesaplarına girmez) */
+  bulkRating?: boolean;
+  /** Toptan puanlamada istatistiğe eklenen %25 süre (dakika). */
+  bulkRuntimeMinutes?: number;
 }
 
 export interface AchievementProgress {

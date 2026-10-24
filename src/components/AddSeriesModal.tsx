@@ -126,20 +126,30 @@ export default function AddSeriesModal({ onClose }: Props) {
   const displayedGenres = Array.from(new Set([...data.genres, ...selectedGenres])).sort();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]" onClick={onClose}>
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
       <div
-        className="bg-ink-900 border border-ink-700 rounded-2xl w-full max-w-2xl max-h-[min(90dvh,100%)] overflow-y-auto shadow-2xl"
+        className="relative bg-ink-900 border-0 sm:border border-ink-700 rounded-none sm:rounded-2xl w-full max-w-2xl h-[100dvh] sm:h-auto max-h-none sm:max-h-[min(90dvh,100%)] overflow-hidden flex flex-col shadow-2xl [padding-top:env(safe-area-inset-top)] [padding-bottom:env(safe-area-inset-bottom)] sm:!pt-0 sm:!pb-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b border-ink-700 sticky top-0 bg-ink-900 z-20">
-          <h2 className="text-lg font-semibold text-ink-100 flex items-center gap-2">
-            <Plus size={20} className="text-azure-400" /> Dizi Ekle
-          </h2>
-          <button onClick={onClose} data-snd="close" className="text-ink-400 hover:text-ink-200 transition-colors">
-            <X size={22} />
-          </button>
-        </div>
-        <div className="p-5 space-y-6">
+        <button
+          onClick={onClose}
+          data-snd="close"
+          className="sm:hidden fixed top-3 right-3 z-30 w-10 h-10 rounded-full bg-ink-800/90 border border-ink-700 text-ink-300 flex items-center justify-center backdrop-blur-md"
+          aria-label="Kapat"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="flex flex-1 min-h-0 flex-col">
+          <div className="flex items-center justify-between p-5 pr-14 sm:pr-5 border-b border-ink-700 bg-ink-900 shrink-0 z-20">
+            <h2 className="text-lg font-semibold text-ink-100 flex items-center gap-2">
+              <Plus size={20} className="text-azure-400" /> Dizi Ekle
+            </h2>
+            <button onClick={onClose} data-snd="close" className="hidden sm:inline-flex text-ink-400 hover:text-ink-200 transition-colors">
+              <X size={22} />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-5 space-y-6">
           
           <div className="bg-ink-800/40 p-4 rounded-xl border border-ink-700/50">
             <label className="block text-sm font-semibold text-azure-400 mb-2">🔍 İnternetten Otomatik Bul (TMDB)</label>
@@ -327,7 +337,7 @@ export default function AddSeriesModal({ onClose }: Props) {
             </div>
           </div>
         </div>
-        <div className="p-5 border-t border-ink-700 sticky bottom-0 bg-ink-900 z-10">
+          <div className="p-5 border-t border-ink-700 bg-ink-900 z-10 shrink-0">
           <button
             onClick={handleSubmit}
             disabled={!title.trim() || seasons.length === 0}
@@ -336,6 +346,7 @@ export default function AddSeriesModal({ onClose }: Props) {
             <Plus size={20} />
             Dizi Ekle
           </button>
+        </div>
         </div>
       </div>
     </div>

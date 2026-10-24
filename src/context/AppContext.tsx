@@ -44,12 +44,55 @@ import {
 } from '../lib/appBackup';
 import { pruneExpiredPlanItems } from '../lib/planPrune';
 import { supabase } from '../lib/supabase';
-import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, PREV_ACCOUNT_KEY } from '../lib/storageService';
+import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, PREV_ACCOUNT_KEY, BACKUP_STORAGE_KEY, isFullAppRecord, isIdbAvailable } from '../lib/storageService';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
 import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, ActionsSlice } from './slices';
 
 const STORAGE_KEY = 'sinevia-v1';
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
+
+/**
+ * Bildirim tercihleri ayrı ve SENKRON bir localStorage anahtarında tutulur.
+ * IndexedDB yazımı 250ms gecikebildiği / uygulama anında kapatılabildiği için
+ * tam veri hidrasyonu eski `false` değerini geri getirebiliyordu. Bu anahtar
+ * kullanıcının bu cihazdaki açık tercihini her zaman kazanır.
+ */
+const NOTIFICATION_PREFS_KEY = 'sinevia_notification_prefs';
+type NotificationPrefs = {
+  notificationsEnabled?: boolean;
+  notifyMessages?: boolean;
+  notifyFriendRequests?: boolean;
+  notifyLists?: boolean;
+};
+
+function readNotificationPrefs(): NotificationPrefs {
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const prefs: NotificationPrefs = {};
+    if (typeof parsed.notificationsEnabled === 'boolean') prefs.notificationsEnabled = parsed.notificationsEnabled;
+    if (typeof parsed.notifyMessages === 'boolean') prefs.notifyMessages = parsed.notifyMessages;
+    if (typeof parsed.notifyFriendRequests === 'boolean') prefs.notifyFriendRequests = parsed.notifyFriendRequests;
+    if (typeof parsed.notifyLists === 'boolean') prefs.notifyLists = parsed.notifyLists;
+    return prefs;
+  } catch {
+    return {};
+  }
+}
+
+function rememberNotificationPrefs(prefs: NotificationPrefs) {
+  try {
+    const next = { ...readNotificationPrefs(), ...prefs };
+    localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(next));
+  } catch { /* kota / gizli mod */ }
+}
+
+function applyNotificationPrefs<T extends Record<string, any>>(input: T): T {
+  const prefs = readNotificationPrefs();
+  return Object.keys(prefs).length > 0 ? { ...input, ...prefs } : input;
+}
 
 export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
@@ -240,6 +283,75 @@ function defaultData(): ExtendedAppData {
   };
 }
 
+/** Bulut/yerel çakışma diyalogunda gösterilen özet. */
+export interface DataSummary {
+  movies: number;
+  series: number;
+  episodes: number;
+  history: number;
+  achievements: number;
+  totalXp: number;
+  level: number;
+}
+
+export interface CloudConflictInfo {
+  cloudTime: number;
+  agentId: string;
+  nickname: string;
+  local: DataSummary;
+  cloud: DataSummary;
+}
+
+interface PendingCloudArchive {
+  coreData: any;
+  questData: any;
+  incomingJson: any;
+  incomingHash: string;
+  cloudTime: number;
+}
+
+/** Verinin kullanıcıya ait gerçek ilerleme taşıyıp taşımadığını anlar. */
+function summarizeProgress(source: any): DataSummary {
+  const movies = Array.isArray(source?.movies) ? source.movies : [];
+  const series = Array.isArray(source?.series) ? source.series : [];
+  const history = Array.isArray(source?.history) ? source.history : [];
+  const achievements = Array.isArray(source?.achievements) ? source.achievements : [];
+  const episodes = series.reduce((sum: number, s: any) => sum + (Array.isArray(s?.episodes) ? s.episodes.length : 0), 0);
+  const unlocked = achievements.reduce((sum: number, a: any) => sum + (Array.isArray(a?.unlockedTiers) ? a.unlockedTiers.length : 0), 0);
+  return {
+    movies: movies.length,
+    series: series.length,
+    episodes,
+    history: history.length,
+    achievements: unlocked,
+    totalXp: Number(source?.totalXp || 0),
+    level: Number(source?.level || 1),
+  };
+}
+
+function hasMeaningfulProgress(source: any): boolean {
+  if (!source || typeof source !== 'object') return false;
+  const summary = summarizeProgress(source);
+  return summary.movies > 0
+    || summary.series > 0
+    || summary.history > 0
+    || summary.achievements > 0
+    || summary.totalXp > 0
+    || Number(source?.bonusXp || 0) > 0;
+}
+
+/**
+ * Kütüphane içeriği (film / dizi / geçmiş) var mı?
+ * Başarım/XP tek başına kütüphaneyi temsil etmez: kütüphane boşsa applyAchievements
+ * başarımları yeniden hesaplayıp XP'yi de düşürebilir. Bu yüzden hidrasyonda
+ * kütüphanesi boş ana kayıt yerine dolu yedeği tercih ediyoruz.
+ */
+function hasLibraryContent(source: any): boolean {
+  if (!source || typeof source !== 'object') return false;
+  const summary = summarizeProgress(source);
+  return summary.movies > 0 || summary.series > 0 || summary.history > 0;
+}
+
 export function resolveTMDBGenres(incomingGenres: string[], existingGenres: string[]): string[] {
   const resolved = incomingGenres.map((incoming) => {
     const cleanIn = normalize(incoming).replace(/[\s-]/g, '');
@@ -259,6 +371,15 @@ function addNewGenres(currentGenres: string[], incomingGenres: string[]): string
   return newItems.length > 0 ? [...currentGenres, ...newItems] : currentGenres;
 }
 
+/** Anahtar sırasından bağımsız, deterministik JSON (bulut/yerel eşitlik karşılaştırması). */
+function canonicalJson(value: any): string {
+  if (value === undefined) return 'null';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const keys = Object.keys(value).filter((key) => value[key] !== undefined).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+}
+
 function getCleanHashString(stateObj: any, questStateRaw?: any, extrasRaw?: Record<string, any>) {
   const clean = { ...stateObj };
   delete clean.aiChatHistory;
@@ -270,9 +391,9 @@ function getCleanHashString(stateObj: any, questStateRaw?: any, extrasRaw?: Reco
   delete clean.pendingCoinGain;
   
   if (questStateRaw || extrasRaw) {
-     return JSON.stringify({ core: clean, quests: questStateRaw || {}, ...(extrasRaw || {}) });
+     return canonicalJson({ core: clean, quests: questStateRaw || {}, ...(extrasRaw || {}) });
   }
-  return JSON.stringify(clean);
+  return canonicalJson(clean);
 }
 
 /* =========================================================================
@@ -479,8 +600,13 @@ type Action =
   | { type: 'UPDATE_HISTORY_RATING'; historyId: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; isPastWatch?: boolean }
   | { type: 'ADD_SERIES'; series: Series } | { type: 'DELETE_SERIES'; id: string } | { type: 'COMPLETE_SERIES'; id: string; title: string }
   | { type: 'ADD_EPISODES'; seriesId: string; episodes: Episode[] }
+  | { type: 'RESTORE_EPISODES'; seriesId: string; episodes: Episode[] }
   | { type: 'WATCH_EPISODE'; seriesId: string; episodeId: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; historyItem: WatchHistoryItem }
   | { type: 'UNWATCH_EPISODE'; seriesId: string; episodeId: string } | { type: 'DELETE_EPISODE'; seriesId: string; episodeId: string }
+  | { type: 'SET_SERIES_PAST_QUEUE'; id: string; inPastQueue: boolean }
+  | { type: 'RATE_SERIES_BULK'; seriesId: string; scope: 'series' | 'season'; season?: number; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; isPastWatch?: boolean; historyItems: WatchHistoryItem[]; bulkRuntimeMinutes: number }
+  | { type: 'CLEAR_SERIES_RATINGS'; seriesId: string; scope: 'all' | 'series' | 'season'; season?: number }
+  | { type: 'CLEAR_SERIES_EPISODE_RATINGS'; seriesId: string; seasons?: number[] }
   | { type: 'ADD_GENRE'; genre: string } | { type: 'DELETE_GENRE'; genre: string } | { type: 'RENAME_GENRE'; oldName: string; newName: string }
   | { type: 'ADD_REVIEW_TAG'; tag: string; sentiment?: 'positive' | 'negative' } | { type: 'DELETE_REVIEW_TAG'; tag: string } | { type: 'RENAME_REVIEW_TAG'; oldTag: string; newTag: string; sentiment?: 'positive' | 'negative' } | { type: 'SET_TAG_SENTIMENT'; tag: string; sentiment: 'positive' | 'negative' }
   | { type: 'EDIT_MOVIE'; id: string; title: string; year: string; genres: string[]; runtime?: number; posterUrl?: string; overview?: string; tmdbId?: number; customUrl?: string; imdbId?: string; watchProviders?: WatchProvider[]; extra?: MovieExtraData }
@@ -551,7 +677,7 @@ function readTutorialUnitCount(): number {
  */
 const RATING_SCOPED_ACHIEVEMENTS = new Set([
   'perfect_rating', 'high_rating', 'low_rating', 'hater', 'polarization',
-  'selective_critic', 'secret_perfectionist', 'past_masterpiece',
+  'selective_critic', 'secret_perfectionist', 'past_masterpiece', 'past_series_masterpiece',
 ]);
 
 export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnlocks?: boolean }): ExtendedAppData {
@@ -594,6 +720,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   const watchedMovies = state.movies.filter((m) => m.watched && !m.isPastWatch);
   const watchedMoviesWithRuntime = watchedMovies.filter((m) => m.runtime);
   const pastWatchedMovies = state.movies.filter((m) => m.watched && m.isPastWatch);
+  const pastWatchedSeries = state.series.filter((s) => s.isPastWatch && s.overallRating !== null);
 
   for (const def of ACHIEVEMENT_DEFS) {
     const prog = progressMap.get(def.id);
@@ -624,21 +751,27 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'total_watch': case 'sinevia_legend': currentVal = validHistory.length; break;
       case 'genre_explorer': currentVal = new Set(validHistory.flatMap((h) => h.genres || [])).size; break;
       case 'note_taker': currentVal = validHistory.filter((h) => h.note && h.note.trim().length > 0).length; break;
-      case 'night_owl': currentVal = validHistory.filter((h) => { const hr = new Date(h.watchedAt).getHours(); return hr >= 0 && hr < 5; }).length; break;
-      case 'weekend_watcher': currentVal = validHistory.filter((h) => { const d = new Date(h.watchedAt).getDay(); return d === 0 || d === 6; }).length; break;
+      case 'night_owl': currentVal = validHistory.filter((h) => !h.bulkRating && (() => { const hr = new Date(h.watchedAt).getHours(); return hr >= 0 && hr < 5; })()).length; break;
+      case 'weekend_watcher': currentVal = validHistory.filter((h) => !h.bulkRating && (() => { const d = new Date(h.watchedAt).getDay(); return d === 0 || d === 6; })()).length; break;
       case 'marathon': {
-        const days: any = {}; validHistory.forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
+        const days: any = {}; validHistory.filter((h) => !h.bulkRating).forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
         currentVal = Object.values(days).filter((c: any) => c >= 3).length; break;
       }
       case 'secret_binge': {
-        const days: any = {}; seriesHistory.forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
+        const days: any = {}; seriesHistory.filter((h) => !h.bulkRating).forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
         currentVal = Math.max(0, ...Object.values(days as Record<string, number>)); break;
       }
       case 'season_complete': {
         let c = 0;
-        state.series.forEach((s) => {
-          const eps = s.episodes || []; const seas = new Set(eps.map((e) => e.season));
-          seas.forEach((season) => { const sEps = eps.filter((e) => e.season === season); if (sEps.length > 0 && sEps.every((e) => e.watched)) c++; });
+        state.series.filter((s) => !s.isPastWatch).forEach((s) => {
+          const eps = s.episodes || [];
+          const ratedSeasons = new Set(Object.keys(s.seasonRatings || {}).map(Number));
+          const seas = new Set([...eps.map((e) => e.season), ...ratedSeasons]);
+          seas.forEach((season) => {
+            const sEps = eps.filter((e) => e.season === season);
+            const bulkCompleted = s.overallRating != null || ratedSeasons.has(season);
+            if (bulkCompleted || (sEps.length > 0 && sEps.every((e) => e.watched))) c++;
+          });
         });
         currentVal = c; break;
       }
@@ -652,7 +785,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
         currentVal = c; break;
       }
       case 'caveman': {
-        const days: any = {}; validHistory.forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
+        const days: any = {}; validHistory.filter((h) => !h.bulkRating).forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
         let streak = 0, maxS = 0; const sortedDays = Object.keys(days).sort();
         for (let i = 0; i < sortedDays.length; i++) {
           if (days[sortedDays[i]] >= 5) {
@@ -672,6 +805,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       }
       case 'new_year_lonely': {
         currentVal = validHistory.filter((h) => {
+          if (h.bulkRating) return false;
           const d = new Date(h.watchedAt), m = d.getMonth(), hr = d.getHours();
           return (m === 11 && d.getDate() === 31 && hr >= 20) || (m === 0 && d.getDate() === 1 && hr <= 4);
         }).length; break;
@@ -697,8 +831,8 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
         });
         currentVal = Math.max(0, ...Object.values(wknd)); break;
       }
-      case 'episode_monster': currentVal = seriesHistory.length; break;
-      case 'patience_stone': currentVal = state.series.filter((s) => s.episodes && s.episodes.length > 0 && Math.max(...s.episodes.map((e) => e.season)) >= 8 && s.episodes.every((e) => e.watched)).length; break;
+      case 'episode_monster': currentVal = seriesHistory.filter((h) => !h.bulkRating).length; break;
+      case 'patience_stone': currentVal = state.series.filter((s) => !s.isPastWatch && s.episodes && s.episodes.length > 0 && Math.max(...s.episodes.map((e) => e.season)) >= 8 && s.episodes.every((e) => e.watched)).length; break;
       case 'loyalty_test': {
         let maxL = 0; const byS: any = {};
         seriesHistory.forEach((h) => { const sid = h.seriesId || h.itemId || h.id; if (!byS[sid]) byS[sid] = new Set(); byS[sid].add(localDayKey(h.watchedAt)); });
@@ -724,7 +858,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'universe_conqueror': currentVal = (state.collections || []).filter((c) => { if (normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return false; const cM = state.movies.filter((m) => m.collectionId === c.id); return cM.length >= 3 && cM.every((m) => m.watched); }).length; break;
       case 'final_phobia': case 'delayed_goodbye': {
         let phobiaGap = 0, delayedCount = 0;
-        state.series.forEach((s) => {
+        state.series.filter((s) => !s.isPastWatch).forEach((s) => {
           if (!s.episodes || s.episodes.length < 2) return;
           const eps = [...s.episodes].sort((a, b) => (a.season === b.season ? a.episode - b.episode : a.season - b.season));
           const finalEp = eps[eps.length - 1], penEp = eps[eps.length - 2];
@@ -739,9 +873,9 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
         });
         currentVal = def.id === 'final_phobia' ? Math.floor(phobiaGap) : delayedCount; break;
       }
-      case 'half_century_series': currentVal = state.series.filter((s) => s.episodes && s.episodes.length > 100 && s.episodes.every((e) => e.watched)).length; break;
+      case 'half_century_series': currentVal = state.series.filter((s) => !s.isPastWatch && s.episodes && s.episodes.length > 100 && s.episodes.every((e) => e.watched)).length; break;
       case 'series_time': {
-        currentVal = state.series.reduce(
+        currentVal = state.series.filter((s) => !s.isPastWatch).reduce(
           (sum, s) => sum + (s.episodes || []).filter((ep) => ep.watched).reduce((epSum, ep) => epSum + (ep.runtime || s.episodeRuntime || 0), 0),
           0
         );
@@ -749,7 +883,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       }
       case 'series_binge_time': {
         const dayMinutes: Record<string, number> = {};
-        state.series.forEach((s) => {
+        state.series.filter((s) => !s.isPastWatch).forEach((s) => {
           (s.episodes || []).forEach((ep) => {
             if (!ep.watched || !ep.watchedAt) return;
             const mins = ep.runtime || s.episodeRuntime || 0;
@@ -761,7 +895,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
         currentVal = Math.max(0, ...Object.values(dayMinutes)); break;
       }
       case 'series_complete_time': {
-        currentVal = state.series.reduce((sum, s) => {
+        currentVal = state.series.filter((s) => !s.isPastWatch).reduce((sum, s) => {
           const eps = s.episodes || [];
           if (eps.length === 0 || !eps.every((ep) => ep.watched)) return sum;
           return sum + eps.reduce((epSum, ep) => epSum + (ep.runtime || s.episodeRuntime || 0), 0);
@@ -809,6 +943,9 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'past_watcher': currentVal = pastWatchedMovies.length; break;
       case 'past_masterpiece': currentVal = pastWatchedMovies.filter((m) => m.rating === 10).length; break;
       case 'past_critic': currentVal = pastWatchedMovies.filter((m) => m.rating !== null && m.note && m.note.trim().length > 0).length; break;
+      case 'past_series_watcher': currentVal = pastWatchedSeries.length; break;
+      case 'past_series_masterpiece': currentVal = pastWatchedSeries.filter((s) => s.overallRating === 10).length; break;
+      case 'past_series_critic': currentVal = pastWatchedSeries.filter((s) => s.overallNote && s.overallNote.trim().length > 0).length; break;
       case 'ruthless_critic': currentVal = state.movies.filter((m) => m.abandoned && (m.runtime || 0) > 0 && m.abandonedProgress?.unit !== 'episode' && (m.abandonedProgress?.value ?? 0) <= (m.runtime || 0) / 2).length; break;
       case 'scale_master': currentVal = state.totalDuelsCompleted || 0; break;
       case 'secret_duelist': currentVal = (state.movies || []).reduce((sum, m) => sum + (m.duelWins || 0), 0); break;
@@ -889,7 +1026,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     });
     // Bulut uzlaşması ne kutlama üretir ne de eski bulut bildirim kuyruğunu içeri alır;
     // bu sadece yerel (genuine) kuyruk korunur.
-    return { ...syncedFromCloud, pendingLevelUp: undefined, pendingLevelUpQueue: undefined, pendingToasts: state.pendingToasts || [] };
+    return applyNotificationPrefs({ ...syncedFromCloud, pendingLevelUp: undefined, pendingLevelUpQueue: undefined, pendingToasts: state.pendingToasts || [] });
   }
 
   if (action.type === 'HYDRATE_FROM_IDB') {
@@ -905,7 +1042,22 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     };
     // Hidrasyon uzlaşması da kutlama üretmemeli (gerçek seviye atlama sadece oyun içindedir).
     const hydrated = applyAchievements(merged);
-    return { ...hydrated, pendingLevelUp: undefined, pendingLevelUpQueue: undefined };
+    // XP yüksek-su koruması: IDB/başarım kaydı bir şekilde eksikse boot anlık görüntüsündeki
+    // mevcut XP'yi sıfırlama. FORCE_XP_SYNC'in bilinçli yeniden hesaplaması bundan etkilenmez.
+    const hydratedXp = Number(hydrated.totalXp || 0);
+    // Farklı hesabın boot XP'sini bu hesaba taşıma.
+    const sameAccount = !merged.agentId || !state.agentId || merged.agentId === state.agentId;
+    const safeTotalXp = sameAccount ? Math.max(Number(state.totalXp || 0), hydratedXp) : hydratedXp;
+    const safeProgress = safeTotalXp > hydratedXp ? levelFromXp(safeTotalXp) : null;
+    const withSafeXp = safeProgress
+      ? {
+          ...hydrated,
+          totalXp: safeTotalXp,
+          level: Math.max(Number(hydrated.level || 1), safeProgress.level),
+          xp: safeProgress.currentLevelXp,
+        }
+      : hydrated;
+    return applyNotificationPrefs({ ...withSafeXp, pendingLevelUp: undefined, pendingLevelUpQueue: undefined });
   }
 
   if (action.type === 'RECOVER_IDENTITY') {
@@ -1335,6 +1487,33 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       const targetId = hItem.itemId || hItem.id;
       if (hItem.kind === 'movie' || hItem.type === 'movie') {
         nextState.movies = state.movies.map((m) => (m.id === targetId ? { ...m, rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: Boolean(updatedIsPast) } : m));
+      } else if (hItem.bulkRating) {
+        nextState.series = state.series.map((s) => {
+          if (s.id !== targetId && s.id !== hItem.seriesId) return s;
+          if (hItem.ratingScope === 'season' && hItem.season !== undefined) {
+            return {
+              ...s,
+              seasonRatings: {
+                ...(s.seasonRatings || {}),
+                [hItem.season]: {
+                  rating: action.rating,
+                  note: action.note,
+                  ratedAt: hItem.watchedAt,
+                  detailedRating: action.detailedRating,
+                  reviewTags: action.reviewTags,
+                },
+              },
+            };
+          }
+          return {
+            ...s,
+            overallRating: action.rating,
+            overallNote: action.note,
+            overallRatedAt: hItem.watchedAt,
+            overallDetailedRating: action.detailedRating,
+            overallReviewTags: action.reviewTags,
+          };
+        });
       } else {
         nextState.series = state.series.map((s) => ({ ...s, episodes: s.episodes.map((e) => (e.id === targetId ? { ...e, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note } : e)) }));
       }
@@ -1347,6 +1526,18 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'DELETE_SERIES': nextState.series = state.series.filter((s) => s.id !== action.id); break;
     case 'COMPLETE_SERIES': break;
     case 'ADD_EPISODES': nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: [...s.episodes, ...action.episodes] } : s)); break;
+    case 'RESTORE_EPISODES': nextState.series = state.series.map((s) => {
+      if (s.id !== action.seriesId) return s;
+      const existing = new Set(s.episodes.map((e) => `${e.season}:${e.episode}`));
+      const toRestore = action.episodes.filter((e) => !existing.has(`${e.season}:${e.episode}`));
+      if (toRestore.length === 0) return s;
+      const restoredKeys = new Set(toRestore.map((e) => `${e.season}:${e.episode}`));
+      return {
+        ...s,
+        episodes: [...s.episodes, ...toRestore].sort((a, b) => a.season - b.season || a.episode - b.episode),
+        deletedEpisodes: (s.deletedEpisodes || []).filter((e) => !restoredKeys.has(`${e.season}:${e.episode}`)),
+      };
+    }); break;
     case 'WATCH_EPISODE':
       nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => (e.id === action.episodeId ? { ...e, watched: true, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt } : e)) } : s));
       nextState.history = [action.historyItem, ...state.history]; {
@@ -1361,7 +1552,172 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'UNWATCH_EPISODE':
       nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => (e.id === action.episodeId ? { ...e, watched: false, rating: null, detailedRating: undefined, reviewTags: undefined, note: '', watchedAt: null } : e)) } : s));
       nextState.history = state.history.filter((h) => h.itemId !== action.episodeId && h.id !== action.episodeId); break;
-    case 'DELETE_EPISODE': nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: s.episodes.filter((e) => e.id !== action.episodeId) } : s)); break;
+    case 'DELETE_EPISODE': nextState.series = state.series.map((s) => {
+      if (s.id !== action.seriesId) return s;
+      const removed = s.episodes.find((e) => e.id === action.episodeId);
+      if (!removed) return s;
+      return {
+        ...s,
+        episodes: s.episodes.filter((e) => e.id !== action.episodeId),
+        deletedEpisodes: [
+          ...(s.deletedEpisodes || []).filter((e) => !(e.season === removed.season && e.episode === removed.episode)),
+          removed,
+        ],
+      };
+    }); break;
+    case 'SET_SERIES_PAST_QUEUE': nextState.series = state.series.map((s) => (s.id === action.id ? { ...s, inPastQueue: action.inPastQueue } : s)); break;
+    case 'RATE_SERIES_BULK': {
+      const targetSeries = state.series.find((s) => s.id === action.seriesId);
+      if (!targetSeries) break;
+      const existingSeasonRatings = targetSeries.seasonRatings || {};
+      const hasSeasonRating = Object.keys(existingSeasonRatings).length > 0;
+      const hasEpisodeRating = targetSeries.episodes.some((e) => e.rating !== null && e.rating !== undefined);
+      const targetSeason = action.scope === 'season' ? action.season : undefined;
+
+      // Genel puan ile sezon puanı aynı anda/üst üste kullanılamaz.
+      if (action.scope === 'series') {
+        if (hasSeasonRating || hasEpisodeRating) break;
+      } else if (
+        targetSeason === undefined ||
+        targetSeries.overallRating != null ||
+        targetSeries.isPastWatch ||
+        targetSeries.inPastQueue ||
+        targetSeries.episodes.some((e) => e.season === targetSeason && e.rating !== null && e.rating !== undefined)
+      ) {
+        break;
+      }
+
+      const isBulkEdit = action.scope === 'series'
+        ? targetSeries.overallRating != null
+        : existingSeasonRatings[targetSeason!] != null;
+
+      nextState.series = state.series.map((s) => {
+        if (s.id !== action.seriesId) return s;
+        if (action.scope === 'season' && action.season !== undefined) {
+          return {
+            ...s,
+            ...(action.isPastWatch ? { isPastWatch: true, inPastQueue: false } : {}),
+            seasonRatings: {
+              ...(s.seasonRatings || {}),
+              [action.season]: {
+                rating: action.rating,
+                note: action.note,
+                ratedAt: action.watchedAt,
+                detailedRating: action.detailedRating,
+                reviewTags: action.reviewTags,
+              },
+            },
+          };
+        }
+        return {
+          ...s,
+          ...(action.isPastWatch ? { isPastWatch: true, inPastQueue: false } : {}),
+          overallRating: action.rating,
+          overallNote: action.note,
+          overallRatedAt: action.watchedAt,
+          overallDetailedRating: action.detailedRating,
+          overallReviewTags: action.reviewTags,
+        };
+      });
+
+      // Aynı kapsam yeniden puanlanırsa eski toptan geçmiş kaydı çoğaltılmaz.
+      nextState.history = [
+        ...action.historyItems,
+        ...state.history.filter((h) => !(
+          h.bulkRating &&
+          h.seriesId === action.seriesId &&
+          h.ratingScope === action.scope &&
+          (action.scope !== 'season' || h.season === action.season)
+        )),
+      ];
+
+      // Düzenleme yeni bir izleme değildir; seri/günlük ekonomi tekrar tetiklenmez.
+      if (!action.isPastWatch && !isBulkEdit) {
+        const wasNewDay = state.dailyStreakDate !== todayStr();
+        const streakUpdate = applyStreakForWatch(state);
+        nextState.dailyStreak = streakUpdate.dailyStreak;
+        if (streakUpdate.activeEffects) nextState.activeEffects = streakUpdate.activeEffects;
+        nextState.dailyStreakDate = todayStr();
+        nextState.lastWatchDate = todayStr();
+        nextState = withWatchEconomyRewards(nextState, wasNewDay);
+      }
+      break;
+    }
+    case 'CLEAR_SERIES_RATINGS': {
+      nextState.series = state.series.map((s) => {
+        if (s.id !== action.seriesId) return s;
+        if (action.scope === 'all') {
+          return {
+            ...s,
+            overallRating: null,
+            overallNote: '',
+            overallRatedAt: null,
+            overallDetailedRating: undefined,
+            overallReviewTags: undefined,
+            seasonRatings: {},
+          };
+        }
+        if (action.scope === 'series') {
+          return {
+            ...s,
+            overallRating: null,
+            overallNote: '',
+            overallRatedAt: null,
+            overallDetailedRating: undefined,
+            overallReviewTags: undefined,
+          };
+        }
+        const nextSeasonRatings = { ...(s.seasonRatings || {}) };
+        if (action.season !== undefined) delete nextSeasonRatings[action.season];
+        return { ...s, seasonRatings: nextSeasonRatings };
+      });
+      nextState.history = state.history.filter((h) => {
+        if (!(h.bulkRating && h.seriesId === action.seriesId)) return true;
+        if (action.scope === 'all') return false;
+        if (action.scope === 'series') return h.ratingScope !== 'series';
+        return !(h.ratingScope === 'season' && h.season === action.season);
+      });
+      break;
+    }
+    case 'CLEAR_SERIES_EPISODE_RATINGS': {
+      const selected = action.seasons ? new Set(action.seasons) : null;
+      const clearedIds = new Set<string>();
+      const clearedKeys = new Set<string>();
+      nextState.series = state.series.map((s) => {
+        if (s.id !== action.seriesId) return s;
+        return {
+          ...s,
+          episodes: s.episodes.map((e) => {
+            if (selected && !selected.has(e.season)) return e;
+            clearedIds.add(e.id);
+            clearedKeys.add(`${e.season}:${e.episode}`);
+            // Yalnızca puan temizlenir; bölümün izlenme durumu ve tarihi korunur.
+            return {
+              ...e,
+              rating: null,
+              detailedRating: undefined,
+              reviewTags: undefined,
+              note: '',
+            };
+          }),
+        };
+      });
+      nextState.history = state.history.map((h) => {
+        if (!(h.kind === 'series' || h.type === 'series') || h.seriesId !== action.seriesId) return h;
+        if (h.bulkRating) return h;
+        const matchesEpisode = (h.itemId && clearedIds.has(h.itemId)) ||
+          (h.season !== undefined && h.episode !== undefined && clearedKeys.has(`${h.season}:${h.episode}`));
+        if (!matchesEpisode) return h;
+        return {
+          ...h,
+          rating: null,
+          detailedRating: undefined,
+          reviewTags: undefined,
+          note: '',
+        };
+      });
+      break;
+    }
     case 'ADD_GENRE': if (!state.genres.some((x) => normalize(x) === normalize(action.genre))) nextState.genres = [...state.genres, action.genre]; break;
     case 'DELETE_GENRE': nextState.genres = state.genres.filter((g) => g !== action.genre); break;
     case 'RENAME_GENRE':
@@ -1440,6 +1796,9 @@ interface SeasonCompleteData { seriesTitle: string; season: number; }
 export interface AppContextValue {
   data: ExtendedAppData;
   syncStatus: 'syncing' | 'synced' | 'error'; // YENİ: Eşitleme Durum Sinyali
+  /** Aynı hesap için yerel ve bulut sürümü çakıştığında kullanıcıya sorulacak bilgi. */
+  cloudConflict: CloudConflictInfo | null;
+  resolveCloudConflict: (choice: 'cloud' | 'local' | 'later') => void;
   isQuestCelebrating: boolean; setIsQuestCelebrating: (val: boolean) => void; levelUpQueuedRef: { current: boolean }; // gecikmeli seviye modalı bekliyor (dış flush kapıları için)
   // Kutlama kapıları (ref tabanlı, state gecikmesinden etkilenmez)
   contractCelebratingRef: { current: boolean }; contractQueuedRef: { current: { contractId: string; xp: number; coins: number; rarity: ContractRarity } | null };
@@ -1450,6 +1809,7 @@ export interface AppContextValue {
   unwatchMovie: (id: string) => void; updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData, episodeRuntime?: number) => boolean;
   deleteSeries: (id: string) => void; addEpisodes: (sId: string, s: number, ec: number, silent?: boolean, runtime?: number) => void;
+  restoreEpisodes: (sId: string, episodes: Episode[]) => void;
   watchEpisode: (sId: string, eId: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[]) => void;
   canWatchEpisode: (sId: string, eId: string) => boolean; unwatchEpisode: (sId: string, eId: string) => void; deleteEpisode: (sId: string, eId: string) => void;
   addGenre: (g: string) => void; deleteGenre: (g: string) => void; renameGenre: (o: string, n: string) => void;
@@ -1457,6 +1817,10 @@ export interface AppContextValue {
   editMovie: (i: string, t: string, y: string, g: string[], r?: number, p?: string | null, o?: string, tmdbId?: number, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => void;
   editSeries: (i: string, t: string, g: string[], p?: string | null, o?: string, tmdbId?: number, y?: string, silent?: boolean, customUrl?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData) => void;
   addCollection: (n: string) => string; deleteCollection: (i: string) => void; renameCollection: (i: string, n: string) => void; setMovieCollection: (i: string, c: string | null) => void; setMoviePastQueue: (i: string, inPastQueue: boolean) => void;
+  setSeriesPastQueue: (i: string, inPastQueue: boolean) => void;
+  rateSeriesBulk: (seriesId: string, scope: 'series' | 'season', rating: number, note: string, season?: number, isPastWatch?: boolean, detailedRating?: Record<string, number>, reviewTags?: string[]) => void;
+  clearSeriesRatings: (seriesId: string, scope: 'all' | 'series' | 'season', season?: number) => void;
+  clearSeriesEpisodeRatings: (seriesId: string, seasons?: number[]) => void;
   exportData: () => void; importData: (j: string) => boolean; resetData: () => void; exportShareList: () => void; importShareList: (j: string) => boolean;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void; achievementToasts: AchievementToastItem[];
   levelUpData: LevelUpData | null; seasonCompleteData: SeasonCompleteData | null; dismissLevelUp: () => void; dismissSeasonComplete: () => void;
@@ -1504,6 +1868,19 @@ export function useApp() { const ctx = useContext(AppContext); if (!ctx) throw n
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('synced'); // YENİ EKLENDİ
+  // Hidrasyon tamamlanmadan hiçbir yazma/bulut eşitlemesi yapılmaz. Boot anlık
+  // görüntüsü kütüphane içermediği için erken yazma gerçek veriyi ezebiliyordu.
+  const [hydrated, setHydrated] = useState(false);
+  const hydratedRef = useRef(false);
+  const hydrationTrustedRef = useRef(false);
+  // Aynı hesap için iki farklı sürüm varsa kullanıcıya sorulur.
+  const [cloudConflict, setCloudConflict] = useState<CloudConflictInfo | null>(null);
+  const cloudConflictRef = useRef<CloudConflictInfo | null>(null);
+  const pendingCloudRef = useRef<PendingCloudArchive | null>(null);
+  const [syncTick, setSyncTick] = useState(0);
+  const forceUploadRef = useRef(false);
+  // Çakışma "sonra karar ver" ile ertelendiyse bu oturumda eşitleme yapılmaz.
+  const cloudConflictDeferredRef = useRef(false);
 
   const [data, dispatch] = useReducer(rootReducer, undefined, () => {
     try {
@@ -1541,8 +1918,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           parsedData.externalActions = [{ id: 'legacy-alt-izle', label: 'İzle', urlTemplate: rewriteLegacyTemplate(parsedData.altWatchTemplate), icon: 'ExternalLink', targetScope: 'all', isPrimary: true }];
         }
         
-        parsedData = synchronizeXPAndLevel(parsedData, true);
-        return parsedData;
+        parsedData = applyNotificationPrefs(parsedData);
+        const recalculated = synchronizeXPAndLevel(parsedData, true);
+        // Boot snapshot'ı eksik olabilir (eski sürüm, yarım yazma). Hesaplanan XP
+        // snapshot'taki gerçek XP'den düşükse seviyeyi SIFIRLAMA — kısa süreli
+        // "1. seviye" görüntüsü ve yanlış bulut yüklemesi engellenir.
+        const storedTotalXp = Number(parsed.totalXp || 0);
+        const storedLevel = Number(parsed.level || 1);
+        if (storedTotalXp > recalculated.totalXp || storedLevel > recalculated.level) {
+          const safeTotalXp = Math.max(storedTotalXp, Number(recalculated.totalXp || 0));
+          const restoredLevel = levelFromXp(safeTotalXp);
+          return {
+            ...recalculated,
+            totalXp: safeTotalXp,
+            level: Math.max(storedLevel, restoredLevel.level),
+            xp: storedTotalXp > 0 ? restoredLevel.currentLevelXp : Number(parsed.xp || 0),
+          };
+        }
+        return recalculated;
       }
     } catch {} return defaultData();
   });
@@ -1599,6 +1992,137 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { return 0; }
   })());
 
+  /** Bir bulut sürümünü "görüldü" olarak işaretle (tekrar tekrar indirmeyi önler). */
+  function markCloudSeen(cloudTime: number) {
+    lastSeenCloudTimeRef.current = cloudTime;
+    try { localStorage.setItem('sinevia_last_cloud_seen', String(cloudTime)); } catch { /* kota */ }
+    try {
+      const snap = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      snap.lastCloudSync = cloudTime;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+    } catch { /* kota */ }
+  }
+
+  /** Seçilen bulut arşivini uygula (kullanıcı onayından veya güvenli otomatik akıştan sonra). */
+  function applyPendingCloudArchive(payload: PendingCloudArchive, cloudTime: number) {
+    const coreData = { ...payload.coreData, lastCloudSync: cloudTime };
+    applyIncomingExtras(payload.incomingJson);
+    lastSyncedStorageHash.current = payload.incomingHash;
+    markCloudSeen(cloudTime);
+    // Buluttan tam bir kayıt geldiyse artık yerel kayıt güvenilir kabul edilebilir.
+    hydrationTrustedRef.current = true;
+    lmSkipBumpRef.current = true; // bulut senkronu gerçek yerel düzenleme DEĞİLDİR
+    dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData: payload.questData });
+    if (payload.questData) window.dispatchEvent(new CustomEvent('sinevia-quests-restored'));
+  }
+
+  /**
+   * Gelen bulut arşivini güvenlik kontrollerinden geçir.
+   * - Aynı içerik → sadece sürümü görüldü işaretle.
+   * - Bulut boş + yerel dolu → bulutu EZME; yereli yeniden yüklemeye zorla.
+   * - İki taraf da dolu ve farklı → sessizce değiştirme, kullanıcıya sor.
+   */
+  function handleCloudArchive(incomingJson: any, cloudTime: number, opts?: { silent?: boolean; protectCloud?: boolean }): 'applied' | 'ignored' | 'conflict' | 'same' {
+    if (cloudConflictDeferredRef.current) return 'ignored';
+    if (localStorage.getItem('sinevia_zero_reset') === '1') return 'ignored';
+    if (!incomingJson || typeof incomingJson !== 'object') return 'ignored';
+    const coreData = incomingJson.core || incomingJson;
+    const questData = incomingJson.quests;
+    if (!isFullAppRecord(coreData)) {
+      // Bozuk/eksik arşivi "görüldü" işaretle; aksi halde her açılışta aynı bozuk
+      // sürüm indirilip yerel yükleme sonsuza kadar bloke edilir.
+      markCloudSeen(cloudTime);
+      if (!opts?.silent) showToast('Bulut yedeği eksik/bozuk; bu cihazdaki veriler korundu.', 'warning');
+      return 'ignored';
+    }
+    const incomingHash = getCleanHashString(coreData, questData, pickIncomingExtras(incomingJson));
+    const localData = dataRef.current;
+    const localHash = getCleanHashString(localData, readQuestState(), readSyncExtras());
+
+    if (incomingHash === localHash) {
+      // İçerik birebir aynı: yerel kayıt bulut kadar güvenilir. Gereksiz yeniden
+      // yüklemeyi önlemek için hash'i de güncelle.
+      markCloudSeen(cloudTime);
+      hydrationTrustedRef.current = true;
+      lastSyncedStorageHash.current = incomingHash;
+      return 'same';
+    }
+
+    const incomingMeaningful = hasMeaningfulProgress(coreData);
+    const localMeaningful = hasMeaningfulProgress(localData);
+    const payload: PendingCloudArchive = { coreData, questData, incomingJson, incomingHash, cloudTime };
+
+    // Bulut boş/eksik, cihazda gerçek veri var: bulutun yereli silmesine izin verme.
+    if (!incomingMeaningful && localMeaningful) {
+      markCloudSeen(cloudTime);
+      // Yerel kayıt "eksik" olarak işaretliyse (bulut sayaçları dolu ama arşiv boş)
+      // yereli buluta yüklemek de tehlikeli: iki tarafı da olduğu gibi bırak.
+      if (opts?.protectCloud) {
+        if (!opts?.silent) showToast('Bulut yedeği boş/eksik görünüyor; iki taraftaki veriler de korundu.', 'warning');
+        return 'ignored';
+      }
+      forceUploadRef.current = true;
+      hydrationTrustedRef.current = true;
+      lastSyncedStorageHash.current = '__force_upload__';
+      setSyncTick((tick) => tick + 1);
+      if (!opts?.silent) showToast('Buluttaki boş kayıt yok sayıldı; bu cihazdaki veriler korunuyor.', 'warning');
+      return 'ignored';
+    }
+
+    // İki tarafta da gerçek veri var ve içerik farklı: hangi hesabın kullanılacağını sor.
+    if (incomingMeaningful && localMeaningful) {
+      if (cloudConflictRef.current) return 'conflict';
+      const info: CloudConflictInfo = {
+        cloudTime,
+        agentId: String(coreData.agentId || localData.agentId || ''),
+        nickname: String(coreData.nickname || localData.nickname || 'Yeni Üye'),
+        local: summarizeProgress(localData),
+        cloud: summarizeProgress(coreData),
+      };
+      pendingCloudRef.current = payload;
+      cloudConflictRef.current = info;
+      setCloudConflict(info);
+      return 'conflict';
+    }
+
+    // Yerel boş / bulut dolu → güvenle bulutu yükle.
+    applyPendingCloudArchive(payload, cloudTime);
+    if (!opts?.silent) showToast('Bulut yedeğindeki veriler yüklendi.', 'info');
+    return 'applied';
+  }
+
+  /** Çakışma diyaloğu seçimi. Varsayılan (X/ESC) bu cihazdaki veriyi korur. */
+  function resolveCloudConflict(choice: 'cloud' | 'local' | 'later') {
+    const info = cloudConflictRef.current;
+    const payload = pendingCloudRef.current;
+    if (!info || !payload) return;
+    cloudConflictRef.current = null;
+    pendingCloudRef.current = null;
+    setCloudConflict(null);
+
+    if (choice === 'later') {
+      cloudConflictDeferredRef.current = true;
+      showToast('Eşitleme ertelendi; sayfayı yenilediğinde tekrar sorulacak. Veriler korunuyor.', 'info');
+      return;
+    }
+
+    if (choice === 'cloud') {
+      cloudConflictDeferredRef.current = false;
+      applyPendingCloudArchive(payload, info.cloudTime);
+      showToast('Bulut sürümündeki hesap verileri yüklendi.', 'success');
+      return;
+    }
+
+    // Yereli koru: bulut sürümünü görüldü say ve bu cihazın verisini yeniden yükle.
+    cloudConflictDeferredRef.current = false;
+    hydrationTrustedRef.current = true;
+    markCloudSeen(info.cloudTime);
+    lastSyncedStorageHash.current = '__force_upload__';
+    forceUploadRef.current = true;
+    setSyncTick((tick) => tick + 1);
+    showToast('Bu cihazdaki hesap verileri korundu; bulut bu cihazla eşitlenecek.', 'success');
+  }
+
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => { toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return toastsRef.current; }, []);
   const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
   const [levelUpData, setLevelUpData] = useReducer((_s: any, a: any) => a, null); const [seasonCompleteData, setSeasonCompleteData] = useReducer((_s: any, a: any) => a, null);
@@ -1622,71 +2146,142 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (didHydrateRef.current) return;
     didHydrateRef.current = true;
     (async () => {
-      // -1) Hesap geri yükleme: "Cihazdan Çıkış" taşınan hesaptan yerel yedeğe
-      //     dönüyorsa (sinevia_restore_prev bayrağı) önce yedeği IDB'ye kur,
-      //     sonra normal akış (göç + HYDRATE_FROM_IDB) yedeği hidrate etsin.
-      if (localStorage.getItem('sinevia_restore_prev') === '1') {
-        try {
-          localStorage.removeItem('sinevia_restore_prev');
-          const stash = await idbGet<{ data: ExtendedAppData; secretToken?: string | null; quests?: unknown }>(PREV_ACCOUNT_KEY);
-          if (stash?.data?.agentId) {
-            await idbSet(STORAGE_KEY, stash.data);
-            await idbDel(PREV_ACCOUNT_KEY);
-            writeBootSnapshot(stash.data as unknown as Record<string, unknown>);
-            if (stash.quests != null) {
-              try { localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(stash.quests)); } catch { /* kota */ }
-            }
-            if (stash.secretToken) {
-              try { localStorage.setItem('sinevia_secret_token', stash.secretToken); } catch { /* kota */ }
+      let trusted = false;
+      try {
+        // -1) Hesap geri yükleme: "Cihazdan Çıkış" taşınan hesaptan yerel yedeğe
+        //     dönüyorsa (sinevia_restore_prev bayrağı) önce yedeği IDB'ye kur,
+        //     sonra normal akış (göç + HYDRATE_FROM_IDB) yedeği hidrate etsin.
+        if (localStorage.getItem('sinevia_restore_prev') === '1') {
+          try {
+            localStorage.removeItem('sinevia_restore_prev');
+            const stash = await idbGet<{ data: ExtendedAppData; secretToken?: string | null; quests?: unknown }>(PREV_ACCOUNT_KEY);
+            if (stash?.data?.agentId && isFullAppRecord(stash.data)) {
+              await idbSet(STORAGE_KEY, stash.data);
+              await idbDel(PREV_ACCOUNT_KEY);
+              writeBootSnapshot(stash.data as unknown as Record<string, unknown>);
+              if (stash.quests != null) {
+                try { localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(stash.quests)); } catch { /* kota */ }
+              }
+              if (stash.secretToken) {
+                try { localStorage.setItem('sinevia_secret_token', stash.secretToken); } catch { /* kota */ }
+              } else {
+                try { localStorage.removeItem('sinevia_secret_token'); } catch { /* kota */ }
+              }
+              // Geri yüklenen sürüm yerel otoritedir: taşıma anındaki bulut/basitleşme
+              // damgaları sıfırlansın ki sonraki senkron bu hesabı temel alsın.
+              try {
+                localStorage.removeItem('sinevia_last_modified');
+                localStorage.removeItem('sinevia_last_cloud_seen');
+              } catch { /* kota */ }
             } else {
-              try { localStorage.removeItem('sinevia_secret_token'); } catch { /* kota */ }
+              // Yedek yok/bozuksa: sıfır hesap akışına düş.
+              try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
             }
-            // Geri yüklenen sürüm yerel otoritedir: taşıma anındaki bulut/basitleşme
-            // damgaları sıfırlansın ki sonraki senkron bu hesabı temel alsın.
-            try {
-              localStorage.removeItem('sinevia_last_modified');
-              localStorage.removeItem('sinevia_last_cloud_seen');
-            } catch { /* kota */ }
-          } else {
-            // Yedek yok/bozuksa: sıfır hesap akışına düş.
+          } catch {
             try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
           }
-        } catch {
-          try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
         }
+        // 0) Sıfır hesap zorlaması: bayrak varsa ana kütüphaneyi IndexedDB'den sil,
+        //    cihaza özel alanları temizle ve hidratasyonu atla (init zaten taze
+        //    defaultData ile dönmüştü — eski veri geri gelmesin).
+        if (localStorage.getItem('sinevia_zero_reset') === '1') {
+          await idbDel(STORAGE_KEY);
+          await idbDel(BACKUP_STORAGE_KEY);
+          try {
+            [
+              // DİKKAT: STORAGE_KEY (boot anlık görüntüsü) bilinçli olarak silinmez —
+              // init zaten bayrakla taze defaultData ile açtı ve persist efekti yeni
+              // kimliği oraya yazdı; silersek sonraki her açılışta yeni kimlik üretilirdi.
+              'sinevia_zero_reset', QUEST_STORAGE_KEY, 'sinevia_secret_token',
+              'sinevia-tutorial-v1', 'sinevia-academy-ui-v1',
+              'sinevia_last_modified', 'sinevia_last_cloud_seen',
+              'sinevia_active_tab', 'sinevia_settings_tab', 'sinevia_shortcuts_v1',
+            ].forEach((k) => localStorage.removeItem(k));
+          } catch { /* kota */ }
+          trusted = true;
+          return;
+        }
+
+        // IndexedDB açılamıyorsa (başka sekme/geçici kilit) tam veri okunamaz.
+        // Bu durumda boot snapshot'ını yazmak gerçek kütüphaneyi ezebilir → güvenme.
+        const idbOk = await isIdbAvailable();
+        if (!idbOk) {
+          trusted = !hasMeaningfulProgress(dataRef.current);
+          if (!trusted) {
+            // Bir sonraki açılışta buluttan kurtarma denensin.
+            lastSeenCloudTimeRef.current = 0;
+            showToast('Yerel depolama açılamadı. Verileriniz korunuyor; bulut eşitlemesi durduruldu.', 'warning');
+          }
+          return;
+        }
+
+        // 1) Göç: localStorage'da hâlâ TAM kayıt varsa ve IDB boşsa, IDB'ye taşı.
+        await migrateToIdbIfNeeded(STORAGE_KEY);
+        // 2) IDB'den tam veriyi oku. Boot snapshot'ı veya yarım kayıt ASLA hidrate edilmez.
+        // Hesap kimliği kapısı: ana IDB kaydı bu kurulumun otoritesidir; yedek ise
+        // yalnızca aynı hesaba aitse kurtarmada kullanılır (hesap değiştirme sonrası
+        // eski hesabın yedeği yeni hesaba karışmasın). Boot snapshot'ı yoksa IDB otoritedir.
+        const bootAgentId = (() => {
+          try {
+            const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+            return typeof raw?.agentId === 'string' ? raw.agentId : '';
+          } catch { return ''; }
+        })();
+        const full = await idbGet<ExtendedAppData>(STORAGE_KEY);
+        const fullUsable = isFullAppRecord(full);
+        const referenceAgentId = (fullUsable && full?.agentId) || bootAgentId;
+        const backupBelongsToAccount = (record: ExtendedAppData | null): boolean =>
+          !!record && isFullAppRecord(record) && (!referenceAgentId || !record.agentId || record.agentId === referenceAgentId);
+        let hydrateData: ExtendedAppData | null = null;
+        if (fullUsable && hasLibraryContent(full)) {
+          hydrateData = full;
+        } else {
+          // Ana kaydın kütüphanesi boş/bozuksa tam yedekten devam et. Kütüphane kaybı
+          // applyAchievements üzerinden başarımları ve XP'yi de silebildiği için
+          // yalnızca "achievements/XP var" demek yeterli değildir.
+          // (Bilinçli tam sıfırlama zero_reset bayrağıyla yedeği de siler.)
+          const backup = await idbGet<ExtendedAppData>(BACKUP_STORAGE_KEY);
+          const backupUsable = backupBelongsToAccount(backup);
+          if (backupUsable && hasLibraryContent(backup)) {
+            hydrateData = backup;
+            await idbSet(STORAGE_KEY, backup);
+          } else if (fullUsable) {
+            hydrateData = full;
+          } else if (backupUsable) {
+            hydrateData = backup;
+          }
+        }
+
+        if (hydrateData) {
+          trusted = true;
+          lmSkipBumpRef.current = true; // hidrate senkronu gerçek yerel düzenleme DEĞİLDİR
+          dispatch({ type: 'HYDRATE_FROM_IDB', data: hydrateData });
+          lastSyncedStorageHash.current = getCleanHashString(hydrateData, readQuestState(), readSyncExtras());
+          if (hasMeaningfulProgress(hydrateData)) void idbSet(BACKUP_STORAGE_KEY, hydrateData);
+        } else {
+          // Ne ana kayıt ne yedek var. Boot snapshot'ında ilerleme varsa bu yarım
+          // bir durumdur: yazma/bulut yüklemesi yapma, bir sonraki açılışta kurtar.
+          trusted = !hasMeaningfulProgress(dataRef.current);
+          if (!trusted) {
+            lastSeenCloudTimeRef.current = 0;
+            showToast('Yerel kütüphane kaydı bulunamadı; bulut yedeği kontrol edilecek. Verileriniz silinmedi.', 'warning');
+          }
+        }
+      } catch {
+        trusted = !hasMeaningfulProgress(dataRef.current);
+      } finally {
+        hydrationTrustedRef.current = trusted;
+        hydratedRef.current = true;
+        setHydrated(true);
       }
-      // 0) Sıfır hesap zorlaması: bayrak varsa ana kütüphaneyi IndexedDB'den sil,
-      //    cihaza özel alanları temizle ve hidratasyonu atla (init zaten taze
-      //    defaultData ile dönmüştü — eski veri geri gelmesin).
-      if (localStorage.getItem('sinevia_zero_reset') === '1') {
-        await idbDel(STORAGE_KEY);
-        try {
-          [
-            // DİKKAT: STORAGE_KEY (boot anlık görüntüsü) bilinçli olarak silinmez —
-            // init zaten bayrakla taze defaultData ile açtı ve persist efekti yeni
-            // kimliği oraya yazdı; silersek sonraki her açılışta yeni kimlik üretilirdi.
-            'sinevia_zero_reset', QUEST_STORAGE_KEY, 'sinevia_secret_token',
-            'sinevia-tutorial-v1', 'sinevia-academy-ui-v1',
-            'sinevia_last_modified', 'sinevia_last_cloud_seen',
-            'sinevia_active_tab', 'sinevia_settings_tab', 'sinevia_shortcuts_v1',
-          ].forEach((k) => localStorage.removeItem(k));
-        } catch { /* kota */ }
-        return;
-      }
-      // 1) Göç: localStorage'da hâlâ tam kayıt varsa ve IDB boşsa, IDB'ye taşı.
-      const migratedOk = await migrateToIdbIfNeeded(STORAGE_KEY);
-      // 2) IDB'den tam veriyi oku ve hidrate et (reducer init'i sadece snapshot okumuş olabilir).
-      const full = await idbGet<ExtendedAppData>(STORAGE_KEY);
-      if (full && (full.movies?.length || full.series?.length || full.history?.length)) {
-        lmSkipBumpRef.current = true; // hidrate senkronu gerçek yerel düzenleme DEĞİLDİR
-        dispatch({ type: 'HYDRATE_FROM_IDB', data: full });
-      }
-      void migratedOk;
     })();
   }, []);
 
   // YAZMA — veri her değiştiğinde IDB'ye asenkron kuyrukla yaz + localStorage'a küçük anlık görüntü bırak.
+  // KRİTİK: Hidrasyon tamamlanmadan ASLA yazma. Aksi halde kütüphane içermeyen boot
+  // snapshot'ı 250ms sonra gerçek IDB kaydının üzerine yazılıyordu.
   useEffect(() => {
+    if (!hydrated || !hydrationTrustedRef.current || !isFullAppRecord(data)) return;
     // lastModified bump: sadece gerçek yerel değişiklikte (hidrate/indirme senkronunda değil).
     if (lmSkipBumpRef.current) {
       lmSkipBumpRef.current = false;
@@ -1704,7 +2299,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('beforeunload', flushWrites);
     document.addEventListener('visibilitychange', onVisibility);
     return () => { window.removeEventListener('pagehide', flushWrites); window.removeEventListener('beforeunload', flushWrites); document.removeEventListener('visibilitychange', onVisibility); };
-  }, [data]);
+  }, [data, hydrated, syncTick]);
+
+  // TAM YEDEK — ana IDB kaydı bozulursa kütüphaneyi kurtarmak için 10 sn'lik debounce
+  // (ve sekme kapanışında anında) tam kayıt yaz. Boş hesap iyi yedeği ezmesin.
+  const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!hydrated || !hydrationTrustedRef.current) return;
+    if (!isFullAppRecord(data) || !hasMeaningfulProgress(data)) return;
+    if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
+    backupTimerRef.current = setTimeout(() => { void idbSet(BACKUP_STORAGE_KEY, data); }, 10000);
+    const flushBackup = () => {
+      if (backupTimerRef.current) { clearTimeout(backupTimerRef.current); backupTimerRef.current = null; }
+      void idbSet(BACKUP_STORAGE_KEY, data);
+    };
+    window.addEventListener('pagehide', flushBackup);
+    window.addEventListener('beforeunload', flushBackup);
+    return () => {
+      if (backupTimerRef.current) { clearTimeout(backupTimerRef.current); backupTimerRef.current = null; }
+      window.removeEventListener('pagehide', flushBackup);
+      window.removeEventListener('beforeunload', flushBackup);
+    };
+  }, [data, hydrated, syncTick]);
 
   // HAFTALIK PLAN TEMİZLİĞİ — planlanan günün üzerinden 2 gün geçmiş ve film
   // hâlâ izlenmemişse kaydı otomatik kaldır. Kullanıcı tarihi değiştirirse
@@ -1723,9 +2339,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [data.weeklyPlan, data.movies]);
 
-  // AÇILIŞ KONTROLÜ (BOOT CHECK)
+  // AÇILIŞ KONTROLÜ (BOOT CHECK) — hidrasyon bitmeden çalışmaz; yarım boot
+  // state'i ile bulut karşılaştırması yapıp veri ezmeyi önler.
   useEffect(() => {
-    if (!data.agentId) return;
+    if (!hydrated || !data.agentId) return;
     // Tam hesap silme sonrası: sıfırlama bayrağı hâlâ ayaktaysa bulutu ÇEKME
     // (profil satırı + arşiv JSON silinmiş olsa bile kalan izler geri getirmesin).
     if (localStorage.getItem('sinevia_zero_reset') === '1') return;
@@ -1745,34 +2362,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const cloudTime = Number(profile.last_cloud_sync);
           // Kapı: sadece henüz görülmemiş bulut sürümü çekilir (bayat snapshot.lastCloudSync
           // ezikleri her açılışta tam JSON çektirmesin).
-
-          if (cloudTime > lastSeenCloudTimeRef.current + 2000) { 
+          if (cloudTime > lastSeenCloudTimeRef.current + 2000) {
             const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
             const fetchUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
-
             const response = await fetch(fetchUrl, { cache: 'no-store' });
             if (response.ok) {
-              const text = await response.text();
-              const incomingJson = JSON.parse(text);
-              
-              const coreData = incomingJson.core || incomingJson;
-              const questData = incomingJson.quests;
-
-              applyIncomingExtras(incomingJson);
-              lastSyncedStorageHash.current = getCleanHashString(coreData, questData, pickIncomingExtras(incomingJson));
-              coreData.lastCloudSync = cloudTime; 
-              
-              const updatedLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-              updatedLocalData.lastCloudSync = cloudTime;
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLocalData));
-              // Bu bulut sürümü artık görüldü — sonraki açılışta tekrar çekilmesin.
-              lastSeenCloudTimeRef.current = cloudTime;
-              try { localStorage.setItem('sinevia_last_cloud_seen', String(cloudTime)); } catch { /* kota */ }
-
-              lmSkipBumpRef.current = true; // bulut senkronu gerçek yerel düzenleme DEĞİLDİR
-              dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
-              if (questData) window.dispatchEvent(new CustomEvent('sinevia-quests-restored'));
-              showToast('Yokluğunda yapılan güncellemeler eşitlendi!', 'info');
+              const incomingJson = JSON.parse(await response.text());
+              const result = handleCloudArchive(incomingJson, cloudTime, hydrationTrustedRef.current ? undefined : { protectCloud: true });
+              if (result === 'applied') showToast('Yokluğunda yapılan güncellemeler eşitlendi!', 'info');
             }
           }
         }
@@ -1783,7 +2380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     performStartupCheck();
-  }, [data.agentId]);
+  }, [data.agentId, hydrated]);
 
   // ÇEVRİMDIŞI KUYRUK — bağlantı geri geldiğinde bekleyen network_logs satırlarını sırayla gönder.
   const logQueueFiredRef = useRef(false);
@@ -1806,54 +2403,117 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('online', onOnline);
   }, [data.agentId]);
 
-  // YÜKLEYİCİ (UPLOAD)
+  // YÜKLEYİCİ (UPLOAD) — hidrasyon bitmeden ve yerel kayıt güvenilir değilken
+  // buluta ASLA yazmaz. Boş/yarım yerel state'in dolu bulut hesabını ezmesini önler.
   useEffect(() => {
-    if (!data.agentId) return;
+    if (!hydrated || !data.agentId) return;
 
     const syncToStorage = async () => {
       // Sıfırlama bayrağı: silme sırasında/sonrası tetiklenen flush bu fonksiyonu
       // çalıştırırsa profil satırı + arşiv JSON yeniden yüklenmesin (silme boşa gitmesin).
       if (localStorage.getItem('sinevia_zero_reset') === '1') return;
+      // Kullanıcı çakışmada "sonra karar ver" dediyse bu oturumda eşitleme yok.
+      if (cloudConflictDeferredRef.current) return;
+      // Çakışma diyaloğu açıkken (kullanıcı henüz karar vermedi) buluta yazma:
+      // aksi halde arka plandaki bir veri değişikliği bulut sürümünü ezebilir.
+      if (cloudConflictRef.current) return;
+      const forceUpload = forceUploadRef.current;
       try {
         const currentQuestState = JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}');
         const jsonData = getCleanHashString(data, currentQuestState, readSyncExtras());
         
-        if (lastSyncedStorageHash.current === jsonData) return;
+        if (!forceUpload && lastSyncedStorageHash.current === jsonData) return;
 
         // SÜRÜM KONTROLÜ (Madde 3) — bulut daha yeniyse eski yerel veri YENİ veriyi ezmesin.
-        // Kapı: cloudTime henüz GÖRÜLMEMİŞ bir bulut sürümü mü? (localLastModified karşılaştırması
-        // kaldırıldı: yükleyici damgası hep edit+3.5sn olduğundan koşul kalıcı doğru geliyor,
-        // her senkron tam JSON çektirip yüklemeleri engelliyordu → 20-30MB + pull döngüsü.)
+        // Profil sayaçları da çekilir: yerel boş/eksikse dolu bulutun üzerine yazılmasın.
         let cloudTime = 0;
+        let cloudHasProgress = false;
+        const cloudCounts = { movies: 0, series: 0, achievements: 0, xp: 0 };
         try {
-          const { data: prof } = await supabase.from('profiles').select('last_cloud_sync').eq('agent_id', data.agentId).maybeSingle();
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('last_cloud_sync,total_xp,movies_watched,past_movies_watched,series_watched,episodes_watched,achievements_unlocked')
+            .eq('agent_id', data.agentId)
+            .maybeSingle();
           cloudTime = Number(prof?.last_cloud_sync || 0);
+          cloudCounts.movies = Number(prof?.movies_watched || 0) + Number(prof?.past_movies_watched || 0);
+          cloudCounts.series = Number(prof?.series_watched || 0);
+          cloudCounts.achievements = Number(prof?.achievements_unlocked || 0);
+          cloudCounts.xp = Number(prof?.total_xp || 0);
+          cloudHasProgress = !!prof && [
+            prof.total_xp, prof.movies_watched, prof.past_movies_watched,
+            prof.series_watched, prof.episodes_watched, prof.achievements_unlocked,
+          ].some((value) => Number(value || 0) > 0);
         } catch { cloudTime = 0; }
-        if (cloudTime > lastSeenCloudTimeRef.current + 2000) {
+
+        const pullCloudArchive = async (protectCloud = false): Promise<boolean> => {
+          const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
+          const response = await fetch(`${urlData.publicUrl}?t=${cloudTime || Date.now()}`, { cache: 'no-store' });
+          if (!response.ok) return false;
+          const incomingJson = JSON.parse(await response.text());
+          handleCloudArchive(incomingJson, cloudTime, protectCloud ? { protectCloud: true } : undefined);
+          return true;
+        };
+
+        // Hidrasyon güvenilir değil (IDB açılamadı / tam kayıt yok): yükleme yok.
+        // Kullanıcı çakışmada "bu cihazı kullan" demediyse yalnızca buluttan kurtarma dene.
+        if (!hydrationTrustedRef.current && !forceUpload) {
           setSyncStatus('syncing');
-          try {
-            const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
-            const response = await fetch(`${urlData.publicUrl}?t=${cloudTime}`, { cache: 'no-store' });
-            if (response.ok) {
-              const incomingJson = JSON.parse(await response.text());
-              const coreData = incomingJson.core || incomingJson;
-              const questData = incomingJson.quests;
-              applyIncomingExtras(incomingJson);
-              lastSyncedStorageHash.current = getCleanHashString(coreData, questData, pickIncomingExtras(incomingJson));
-              coreData.lastCloudSync = cloudTime;
-              const snap = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-              snap.lastCloudSync = cloudTime;
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
-              // Bu bulut sürümü artık görüldü — tekrar tekrar çekilmesin.
-              lastSeenCloudTimeRef.current = cloudTime;
-              try { localStorage.setItem('sinevia_last_cloud_seen', String(cloudTime)); } catch { /* kota */ }
-              lmSkipBumpRef.current = true; // sürüm kontrolü sonucu çekilen bulut senkronu
-              dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
-            }
-          } catch { /* çekilemediyse bu tur yükleme yok, sonraki turda tekrar denenir */ }
+          try { await pullCloudArchive(true); } catch { /* sonraki açılışta tekrar */ }
           setSyncStatus('synced');
           return;
         }
+
+        // forceUpload: kullanıcı "bu cihazı kullan" / kimlik kurtarma dedi → bulut
+        // sürümünü çekip seçimini ezme; doğrudan yükle.
+        if (!forceUpload && cloudTime > lastSeenCloudTimeRef.current + 2000) {
+          setSyncStatus('syncing');
+          try { await pullCloudArchive(); } catch { /* çekilemediyse bu tur yükleme yok */ }
+          setSyncStatus('synced');
+          return;
+        }
+
+        // Yerel kütüphane, bulut profil sayaçlarına göre bariz eksikse (ör. tarayıcı
+        // güncellemesi sonrası film/dizi/başarım dizileri boş kaldıysa) boş/eksik
+        // kaydı buluta yazma; önce bulut arşivini indirip kullanıcıya göster.
+        const localSummary = summarizeProgress(data);
+        const localLooksIncomplete = !forceUpload && cloudHasProgress && (
+          (localSummary.movies === 0 && cloudCounts.movies > 0) ||
+          (localSummary.series === 0 && cloudCounts.series > 0) ||
+          (localSummary.achievements === 0 && cloudCounts.achievements > 0) ||
+          (localSummary.totalXp === 0 && cloudCounts.xp > 0)
+        );
+        if (localLooksIncomplete) {
+          setSyncStatus('syncing');
+          let recovered = false;
+          try { recovered = await pullCloudArchive(true); } catch { recovered = false; }
+          if (!recovered) {
+            setSyncStatus('error');
+            showToast('Bu cihazdaki veriler eksik görünüyor; bulut yedeği indirilemediği için yükleme durduruldu.', 'warning');
+          } else {
+            setSyncStatus('synced');
+          }
+          return;
+        }
+
+        // Yerelde anlamlı veri yok ama profil sayaçları dolu: boş kayıtla bulutu ezme,
+        // arşivi indirip kurtarmayı dene.
+        if (!forceUpload && !hasMeaningfulProgress(data) && cloudHasProgress) {
+          setSyncStatus('syncing');
+          let recovered = false;
+          try { recovered = await pullCloudArchive(); } catch { recovered = false; }
+          if (!recovered) {
+            setSyncStatus('error');
+            showToast('Bulut hesabında veri var ancak yedek indirilemedi; boş kayıt yüklenmedi.', 'warning');
+          } else {
+            setSyncStatus('synced');
+          }
+          return;
+        }
+
+        // Son kontrol: async profil/arşiv kontrolleri sırasında bir çakışma açıldıysa
+        // kullanıcı karar vermeden buluta yazma.
+        if (cloudConflictRef.current || cloudConflictDeferredRef.current) return;
 
         setSyncStatus('syncing');
 
@@ -1887,6 +2547,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newSyncTime = new Date().getTime();
         const qsCompletedCount = (currentQuestState.completedQuests && Array.isArray(currentQuestState.completedQuests)) ? currentQuestState.completedQuests.length : 0;
 
+        // Kendi yüklememizin realtime yankısını bastır: zaman damgasını upsert'ten
+        // ÖNCE "görüldü" yap; hata olursa geri al.
+        const previousSeen = lastSeenCloudTimeRef.current;
+        lastSeenCloudTimeRef.current = newSyncTime;
+        try { localStorage.setItem('sinevia_last_cloud_seen', String(newSyncTime)); } catch { /* kota */ }
+
         const { error: dbError } = await supabase.from('profiles').upsert({
           agent_id: data.agentId, nickname: data.nickname || 'Yeni Üye', level: data.level || 1, total_xp: data.totalXp || 0,
           movies_watched: watchedMoviesCount, past_movies_watched: pastMoviesCount, series_watched: watchedSeriesCount, episodes_watched: watchedEpisodesCount,
@@ -1896,16 +2562,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           secret_token: currentSecretToken
         }, { onConflict: 'agent_id' });
 
-        if (dbError) throw dbError;
+        if (dbError) {
+          lastSeenCloudTimeRef.current = previousSeen;
+          try { localStorage.setItem('sinevia_last_cloud_seen', String(previousSeen)); } catch { /* kota */ }
+          throw dbError;
+        }
 
-        const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        localData.lastCloudSync = newSyncTime;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
-        // Yüklediğimiz sürüm artık "görüldü" — kendimizin yüklediğimizi geri çekmeyelim.
-        lastSeenCloudTimeRef.current = newSyncTime;
-        try { localStorage.setItem('sinevia_last_cloud_seen', String(newSyncTime)); } catch { /* kota */ }
-
+        markCloudSeen(newSyncTime);
         lastSyncedStorageHash.current = jsonData;
+        forceUploadRef.current = false;
         setSyncStatus('synced');
       } catch { 
         setSyncStatus('error');
@@ -1920,11 +2585,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('beforeunload', flushSync);
     document.addEventListener('visibilitychange', onVis);
     return () => { clearTimeout(syncTimer); window.removeEventListener('pagehide', flushSync); window.removeEventListener('beforeunload', flushSync); document.removeEventListener('visibilitychange', onVis); };
-  }, [data]);
+  }, [data, hydrated, syncTick]);
 
-  // CANLI DİNLEYİCİ (REALTIME DOWNLOAD)
+  // CANLI DİNLEYİCİ (REALTIME DOWNLOAD) — hidrasyon sonrası çalışır; gelen arşiv
+  // güvenlik kontrollerinden (boş kayıt koruması + çakışma sorusu) geçer.
   useEffect(() => {
-    if (!data.agentId) return;
+    if (!hydrated || !data.agentId) return;
 
     const channel = supabase.channel('realtime:cloud_storage_sync')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `agent_id=eq.${data.agentId}` }, async (payload) => {
@@ -1932,39 +2598,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const incomingTime = Number(payload.new.last_cloud_sync);
           // Kapı: henüz görülmemiş bir bulut sürümü mü? (Kendi yüklememizin yankısı veya bayat
           // snapshot.lastCloudSync değeri tam JSON'u gereksiz indirmesin → MB şişirmesin.)
-          if (incomingTime > lastSeenCloudTimeRef.current + 2000) { 
+          if (incomingTime > lastSeenCloudTimeRef.current + 2000) {
             setSyncStatus('syncing');
             const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
             const fetchUrl = `${urlData.publicUrl}?t=${incomingTime}`;
-
             try {
               const response = await fetch(fetchUrl, { cache: 'no-store' });
               if (response.ok) {
-                const text = await response.text();
-                const incomingJson = JSON.parse(text);
-                
-                const coreData = incomingJson.core || incomingJson;
-                const questData = incomingJson.quests;
-
-                applyIncomingExtras(incomingJson);
-                lastSyncedStorageHash.current = getCleanHashString(coreData, questData, pickIncomingExtras(incomingJson));
-                coreData.lastCloudSync = incomingTime; 
-                
-                const updatedLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-                updatedLocalData.lastCloudSync = incomingTime;
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLocalData));
-                // Bu bulut sürümü artık görüldü — tekrar indirilmesin.
-                lastSeenCloudTimeRef.current = incomingTime;
-                try { localStorage.setItem('sinevia_last_cloud_seen', String(incomingTime)); } catch { /* kota */ }
-
-                lmSkipBumpRef.current = true; // realtime indirmesi gerçek yerel düzenleme DEĞİLDİR
-                dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData });
-                if (questData) window.dispatchEvent(new CustomEvent('sinevia-quests-restored'));
+                const incomingJson = JSON.parse(await response.text());
+                handleCloudArchive(incomingJson, incomingTime, hydrationTrustedRef.current ? undefined : { protectCloud: true });
                 setSyncStatus('synced');
               } else {
                 setSyncStatus('error');
               }
-            } catch { 
+            } catch {
               setSyncStatus('error');
             }
           }
@@ -2240,7 +2887,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
   const toggleBadgeDetails = useCallback(() => dispatch({ type: 'TOGGLE_BADGE_DETAILS' }), []);
-  const toggleNotifications = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled }), []);
+  const toggleNotifications = useCallback((enabled: boolean) => {
+    rememberNotificationPrefs({ notificationsEnabled: enabled });
+    dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled });
+  }, []);
   const toggleShareWatched = useCallback((enabled: boolean) => dispatch({ type: 'TOGGLE_SHARE_WATCHED', enabled }), []);
   const toggleSharePastWatched = useCallback((enabled: boolean) => {
     dispatch({ type: 'TOGGLE_SHARE_PAST_WATCHED', enabled });
@@ -2249,12 +2899,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     supabase.from('network_logs').update({ action_type: to }).eq('agent_id', data.agentId).eq('action_type', from)
       .then(({ error }: { error: any }) => { if (error) { console.error(error); showToast('Eski izleme kayıtları güncellenemedi!', 'warning'); } });
   }, [data.agentId, showToast]);
-  const toggleSpecificNotification = useCallback((key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => dispatch({ type: 'TOGGLE_SPECIFIC_NOTIFICATION', key, enabled }), []);
+  const toggleSpecificNotification = useCallback((key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => {
+    rememberNotificationPrefs({ [key]: enabled });
+    dispatch({ type: 'TOGGLE_SPECIFIC_NOTIFICATION', key, enabled });
+  }, []);
   const setNickname = useCallback((nickname: string) => { dispatch({ type: 'SET_NICKNAME', nickname }); showToast('Kullanıcı adı güncellendi!', 'success'); }, [showToast]);
   
   const recoverIdentity = useCallback(async (agentId: string, recoveryKey: string, nickname: string) => { 
-    dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey, nickname }); 
-
     try {
       const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${agentId}.json`);
       const fetchUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
@@ -2267,21 +2918,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const coreData = recoveredData.core || recoveredData;
         const questData = recoveredData.quests;
 
-        applyIncomingExtras(recoveredData);
-        lastSyncedStorageHash.current = getCleanHashString(coreData, questData, pickIncomingExtras(recoveredData));
-        
-        coreData.agentId = agentId;
-        coreData.recoveryKey = recoveryKey;
-        coreData.nickname = nickname;
-        
-        lmSkipBumpRef.current = true; // kurtarma/kimlik indirmesi gerçek yerel düzenleme DEĞİLDİR
-        dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData, questData });
+        // Bozuk/eksik arşivle kimlik değiştirme: eski kütüphane yeni hesaba taşınmasın.
+        if (!isFullAppRecord(coreData)) {
+          showToast('Bu hesabın bulut yedeği eksik/bozuk; kimlik değiştirilmedi.', 'error');
+          return;
+        }
+
+        const normalizedCore = {
+          ...coreData,
+          agentId,
+          recoveryKey,
+          nickname,
+        };
+        const cloudTime = Number(coreData.lastCloudSync || 0) || Date.now();
+        const payload: PendingCloudArchive = {
+          coreData: normalizedCore as ExtendedAppData,
+          questData,
+          incomingJson: recoveredData,
+          incomingHash: getCleanHashString(normalizedCore, questData, pickIncomingExtras(recoveredData)),
+          cloudTime,
+        };
+
+        dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey, nickname });
+        applyPendingCloudArchive(payload, cloudTime);
+        // Kurtarılan kütüphaneyi bulut profil zaman damgasıyla da yayınla.
+        forceUploadRef.current = true;
+        lastSyncedStorageHash.current = '__force_upload__';
+        setSyncTick((tick) => tick + 1);
         showToast('Kimlik ve Tüm Kütüphane başarıyla eşitlendi!', 'success');
         return;
       }
     } catch {}
 
-    showToast('Kimlik aktarıldı (Ancak bulut yedeği bulunamadı).', 'success'); 
+    showToast('Bulut yedeği bulunamadı; kimlik değiştirilmedi.', 'error');
   }, [showToast]);
   
   const updateShowcase = useCallback((showcase: ShowcaseItem[]) => { dispatch({ type: 'SET_SHOWCASE', showcase }); showToast('Profil vitrinin güncellendi!', 'success'); }, [showToast]);
@@ -2396,6 +3065,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const canWatchEpisode = useCallback((sId: string, eId: string): boolean => { const series = data.series.find((s) => s.id === sId); if (!series) return false; const ep = series.episodes.find((e) => e.id === eId); if (!ep || ep.watched) return false; return [...series.episodes].sort((a, b) => a.season - b.season || a.episode - b.episode).find((e) => !e.watched)?.id === eId; }, [data.series]);
   const unwatchEpisode = useCallback((sId: string, eId: string) => dispatch({ type: 'UNWATCH_EPISODE', seriesId: sId, episodeId: eId }), []);
   const deleteEpisode = useCallback((sId: string, eId: string) => dispatch({ type: 'DELETE_EPISODE', seriesId: sId, episodeId: eId }), []);
+  const restoreEpisodes = useCallback((sId: string, episodes: Episode[]) => { if (!episodes.length) return; dispatch({ type: 'RESTORE_EPISODES', seriesId: sId, episodes }); }, []);
   const addGenre = useCallback((g: string) => { if (!data.genres.some((x) => normalize(x) === normalize(g))) { dispatch({ type: 'ADD_GENRE', genre: g.trim() }); showToast('Tür eklendi'); } }, [data.genres, showToast]);
   const deleteGenre = useCallback((g: string) => dispatch({ type: 'DELETE_GENRE', genre: g }), []);
   const renameGenre = useCallback((o: string, n: string) => { if (n.trim()) { dispatch({ type: 'RENAME_GENRE', oldName: o, newName: n.trim() }); showToast('Tür güncellendi'); } }, [showToast]);
@@ -2410,6 +3080,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const renameCollection = useCallback((i: string, n: string) => { dispatch({ type: 'RENAME_COLLECTION', id: i, name: n.trim() }); showToast('Koleksiyon güncellendi'); }, [showToast]);
   const setMovieCollection = useCallback((i: string, c: string | null) => dispatch({ type: 'SET_MOVIE_COLLECTION', id: i, collectionId: c }), []);
   const setMoviePastQueue = useCallback((i: string, inPastQueue: boolean) => dispatch({ type: 'SET_MOVIE_PAST_QUEUE', id: i, inPastQueue }), []);
+  const setSeriesPastQueue = useCallback((i: string, inPastQueue: boolean) => dispatch({ type: 'SET_SERIES_PAST_QUEUE', id: i, inPastQueue }), []);
+  const rateSeriesBulk = useCallback((seriesId: string, scope: 'series' | 'season', rating: number, note: string, season?: number, isPastWatch?: boolean, detailedRating?: Record<string, number>, reviewTags?: string[]) => {
+    const series = data.series.find((s) => s.id === seriesId);
+    if (!series) return;
+    const now = new Date().toISOString();
+    const finalIsPastWatch = isPastWatch ?? Boolean(series.isPastWatch || series.inPastQueue);
+    const targetEpisodes = scope === 'season' && season !== undefined
+      ? series.episodes.filter((e) => e.season === season)
+      : series.episodes;
+    const fallbackRuntime = series.episodeRuntime || 42;
+    const totalRuntime = targetEpisodes.length > 0
+      ? targetEpisodes.reduce((sum, ep) => sum + (ep.runtime && ep.runtime > 0 ? ep.runtime : fallbackRuntime), 0)
+      : fallbackRuntime;
+    const bulkRuntimeMinutes = Math.max(1, Math.round(totalRuntime * 0.25));
+    const historyItem: WatchHistoryItem = {
+      id: uid(),
+      itemId: series.id,
+      seriesId: series.id,
+      kind: 'series',
+      type: 'series',
+      title: series.title,
+      rating,
+      detailedRating,
+      reviewTags,
+      note,
+      watchedAt: now,
+      isPastWatch: finalIsPastWatch,
+      genres: series.genres,
+      year: series.year,
+      ...(scope === 'season' && season !== undefined ? { season } : {}),
+      ratingScope: scope,
+      bulkRating: true,
+      bulkRuntimeMinutes,
+    };
+    dispatch({
+      type: 'RATE_SERIES_BULK',
+      seriesId,
+      scope,
+      season,
+      rating,
+      detailedRating,
+      reviewTags,
+      note,
+      watchedAt: now,
+      isPastWatch: finalIsPastWatch,
+      historyItems: [historyItem],
+      bulkRuntimeMinutes,
+    });
+  }, [data.series]);
+  const clearSeriesRatings = useCallback((seriesId: string, scope: 'all' | 'series' | 'season', season?: number) => {
+    dispatch({ type: 'CLEAR_SERIES_RATINGS', seriesId, scope, season });
+  }, []);
+  const clearSeriesEpisodeRatings = useCallback((seriesId: string, seasons?: number[]) => {
+    dispatch({ type: 'CLEAR_SERIES_EPISODE_RATINGS', seriesId, seasons });
+  }, []);
   const updateAIHistory = useCallback((messages: AIMessage[]) => dispatch({ type: 'UPDATE_AI_HISTORY', messages }), []);
   const addCriterion = useCallback((c: RatingCriterion) => { dispatch({ type: 'ADD_CRITERION', criterion: c }); showToast('Kriter Eklendi'); }, [showToast]);
   const editCriterion = useCallback((id: string, c: RatingCriterion) => { dispatch({ type: 'EDIT_CRITERION', id, criterion: c }); showToast('Kriter Güncellendi'); }, [showToast]);
@@ -2572,17 +3297,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
   const actionDeps = [
     setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase,
     addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer,
-    watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes,
+    watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes,
     watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode,
     addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue,
+    setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings,
     exportData, importData, resetData, exportShareList, importShareList,
     showToast, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, toggleLockedNames, toggleBadgeDetails, updateAIHistory,
     addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme,

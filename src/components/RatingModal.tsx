@@ -16,6 +16,8 @@ interface RatingModalProps {
   initialReviewTags?: string[];
   initialIsPastWatch?: boolean;
   allowPastWatch?: boolean;
+  /** Dizi toptan puanı gibi film kalibrasyonu gerektirmeyen kullanımlar için. */
+  disableCalibration?: boolean;
   onRate: (rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   onClose: () => void;
 }
@@ -67,6 +69,7 @@ export default function RatingModal({
   initialReviewTags = [],
   initialIsPastWatch = false,
   allowPastWatch,
+  disableCalibration = false,
   onRate,
   onClose,
 }: RatingModalProps) {
@@ -78,6 +81,7 @@ export default function RatingModal({
   // havuzundaysa en yakın ikinci adayla düello yapar. pickDuelPair havuz
   // koşulunu (izlenmiş + puanlı + terk edilmemiş) kendisi denetler.
   const targetMovie = useMemo(() => {
+    if (disableCalibration) return null;
     if (subtitle.includes('Sezon')) return null; // dizi puanlaması → film havuzuna girmez
     const sameTitle = data.movies.filter((m) => m.title === title);
     if (sameTitle.length === 0) return null;
@@ -86,7 +90,7 @@ export default function RatingModal({
       ? sameTitle.filter((m) => !m.year || m.year === yearMatch[1])
       : sameTitle;
     return matched[0] ?? null;
-  }, [data.movies, title, subtitle]);
+  }, [data.movies, title, subtitle, disableCalibration]);
 
   const instantPair = useMemo(
     () => (targetMovie ? pickDuelPair(data.movies, targetMovie.id) : null),
@@ -385,18 +389,27 @@ export default function RatingModal({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center p-2.5 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[90] flex items-center justify-center p-0 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-xl bg-ink-950/95 border border-ink-700/80 rounded-3xl sm:rounded-[2rem] overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-[90svh] sm:max-h-[92dvh] animate-fade-in-up"
+        className="relative w-full max-w-xl h-[100dvh] sm:h-auto bg-ink-950/95 border-0 sm:border border-ink-700/80 rounded-none sm:rounded-[2rem] overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-none sm:max-h-[92dvh] animate-fade-in-up pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] sm:pt-0 sm:pb-0"
       >
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-64 bg-gold-500/15 rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute -bottom-24 right-0 w-72 h-72 bg-azure-500/10 rounded-full blur-[110px] pointer-events-none" />
 
+        <button
+          onClick={onClose}
+          className="fixed top-3 right-3 sm:top-4 sm:right-4 z-30 w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-ink-900/95 sm:bg-ink-900 text-ink-300 hover:text-white border border-ink-700 flex items-center justify-center shadow-lg transition-all"
+          title="Kapat (Yazdıkların taslak olarak korunur)"
+        >
+          <X size={17} />
+        </button>
+
+        <div className="relative z-10 flex flex-1 min-h-0 flex-col">
         {/* ÜST BAŞLIK BARI */}
-        <div className="relative z-10 flex items-center justify-between px-4 pt-3.5 pb-3 sm:px-6 sm:pt-5 sm:pb-4 border-b border-ink-800/60 shrink-0">
+        <div className="relative z-10 flex items-center justify-between pl-4 pr-16 sm:px-6 pt-3.5 pb-3 sm:pt-5 sm:pb-4 border-b border-ink-800/60 shrink-0">
           <div className="min-w-0 pr-3">
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <div className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gold-400">
@@ -416,17 +429,10 @@ export default function RatingModal({
             <h2 className="text-base sm:text-xl font-black text-ink-50 truncate">{title}</h2>
             <p className="text-[11px] sm:text-xs text-ink-400 truncate mt-0.5">{subtitle}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-ink-900 hover:bg-ink-800 text-ink-400 hover:text-white border border-ink-800 flex items-center justify-center transition-all flex-shrink-0"
-            title="Kapat (Yazdıkların taslak olarak korunur)"
-          >
-            <X size={17} />
-          </button>
         </div>
 
         {/* İÇERİK GÖVDESİ */}
-        <div className="relative z-10 flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-5 custom-scrollbar">
+        <div className="relative z-10 flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3.5 sm:p-6 space-y-4 sm:space-y-5">
           {/* ÖNCEDEN İZLENDİ SEÇENEĞİ */}
           {canTogglePastWatch && (
             <button
@@ -835,6 +841,7 @@ export default function RatingModal({
               className="w-full bg-ink-900/80 border border-ink-700/80 rounded-2xl p-3 text-xs sm:text-sm text-ink-100 placeholder-ink-500 focus:outline-none focus:border-gold-500/50 transition-all resize-none shadow-inner"
             />
           </div>
+        </div>
         </div>
 
         {/* ALT KAYDET BUTONU */}

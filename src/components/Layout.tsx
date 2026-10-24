@@ -784,22 +784,51 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
 
   useEffect(() => {
     const checkModals = () => {
-      const hasModals = Array.from(document.querySelectorAll('.fixed.inset-0')).some(el => {
-        const zIndexMatch = el.className.match(/z-\[?(\d+)\]?/);
-        if (zIndexMatch) {
-          return parseInt(zIndexMatch[1], 10) > 60; 
+      // Her modal farklı bir z-index kullanıyor (DNA z-60, toplu seçim z-50,
+      // mesaj merkezi z-150...). Alt barı yalnızca belirli bir z-index'e göre
+      // değil, ekranı gerçekten kaplayan tüm katmanlara göre gizle.
+      const hasModals = Array.from(
+        document.querySelectorAll<HTMLElement>('.fixed.inset-0, [role="dialog"]')
+      ).some((el) => {
+        const style = window.getComputedStyle(el);
+        if (
+          style.display === 'none' ||
+          style.visibility === 'hidden' ||
+          style.pointerEvents === 'none' ||
+          el.getAttribute('aria-hidden') === 'true'
+        ) {
+          return false;
         }
-        return false;
+
+        const zIndex = Number.parseInt(style.zIndex, 10);
+        if (!Number.isFinite(zIndex) || zIndex < 50) return false;
+
+        const rect = el.getBoundingClientRect();
+        return (
+          rect.width >= window.innerWidth * 0.85 &&
+          rect.height >= window.innerHeight * 0.85
+        );
       });
+
       setIsModalOpen(hasModals);
+      if (hasModals) setIsMobileMenuOpen(false);
     };
 
     const observer = new MutationObserver(checkModals);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'aria-hidden'],
+    });
+    window.addEventListener('resize', checkModals);
+
     checkModals();
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', checkModals);
+    };
   }, []);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {

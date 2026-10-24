@@ -1011,7 +1011,7 @@ export default function AchievementsPage() {
               <div
                 className={`relative w-14 h-14 rounded-xl grid place-items-center shrink-0 border ${userPersona.border} ${userPersona.bgGlow}`}
               >
-                <PersonaIcon className={`${userPersona.color} w-8 h-8`} />
+                <PersonaIcon className={userPersona.color} size={34} />
               </div>
 
               <div className="min-w-0 flex-1">
@@ -1101,35 +1101,39 @@ export default function AchievementsPage() {
           <div className="hidden sm:block bg-[#0D0D12] border border-[#22222C] rounded-2xl p-4 sm:p-6 shadow-2xl">
             <div className="flex flex-col xl:flex-row items-stretch gap-4 sm:gap-6">
               {/* Sol: Avatar + Rütbe */}
-              <div className="flex items-center gap-4 sm:gap-5 flex-shrink-0">
-                <div className="relative w-16 h-16 sm:w-24 sm:h-24 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-16 h-16 sm:w-24 sm:h-24 -rotate-90 transform" viewBox="0 0 108 108">
-                    <circle cx="54" cy="54" r={circleRadius} stroke="#1C1C26" strokeWidth="7" fill="transparent" />
-                    <circle
-                      cx="54"
-                      cy="54"
-                      r={circleRadius}
-                      stroke={userPersona.strokeColor}
-                      strokeWidth="7"
-                      strokeDasharray={circleCircumference}
-                      strokeDashoffset={circleOffset}
-                      strokeLinecap="round"
-                      fill="transparent"
-                      className="transition-all duration-1000 ease-out"
-                    />
-                  </svg>
+              <div className="flex items-center gap-4 sm:gap-5 flex-shrink-0 min-w-0">
+                <div className="flex flex-col items-center flex-shrink-0 gap-1">
+                  <div className="relative w-16 h-16 sm:w-24 sm:h-24 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-16 h-16 sm:w-24 sm:h-24 -rotate-90 transform" viewBox="0 0 108 108">
+                      <circle cx="54" cy="54" r={circleRadius} stroke="#1C1C26" strokeWidth="7" fill="transparent" />
+                      <circle
+                        cx="54"
+                        cy="54"
+                        r={circleRadius}
+                        stroke={userPersona.strokeColor}
+                        strokeWidth="7"
+                        strokeDasharray={circleCircumference}
+                        strokeDashoffset={circleOffset}
+                        strokeLinecap="round"
+                        fill="transparent"
+                        className="transition-all duration-1000 ease-out"
+                      />
+                    </svg>
 
-                  <div className="absolute inset-2.5 sm:inset-3.5 rounded-full bg-[#14141D] border border-[#282836] flex flex-col items-center justify-center">
-                    <PersonaIcon className={`${userPersona.color} w-5 h-5 sm:w-7 sm:h-7`} />
-                    <span className="hidden sm:block text-[9px] font-black text-ink-400 uppercase mt-0.5">
-                      %{Math.floor(lvl.progress)}
-                    </span>
+                    <div className="absolute inset-2.5 sm:inset-3.5 rounded-full bg-[#14141D] border border-[#282836] flex items-center justify-center">
+                      <PersonaIcon className={userPersona.color} size={44} />
+                    </div>
                   </div>
+                  {/* Yüzde göstergesi ikonun altına alındı — ikon çerçevede daha büyük durur. */}
+                  <span className="text-[9px] sm:text-[10px] font-black text-ink-400 uppercase tabular-nums leading-none">
+                    %{Math.floor(lvl.progress)}
+                  </span>
                 </div>
 
-                <div className="text-left min-w-0">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-widest border mb-1 ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}>
-                    <Icons.Sparkles size={10} /> {userPersona.title}
+                <div className="text-left min-w-0 max-w-[240px]">
+                  <span className={`inline-flex max-w-full items-center gap-1 px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-widest border mb-1 ${userPersona.badgeBg} ${userPersona.color} ${userPersona.border}`}>
+                    <Icons.Sparkles size={10} className="flex-shrink-0" />
+                    <span className="truncate min-w-0">{userPersona.title}</span>
                   </span>
                   <div className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none">
                     Seviye {lvl.level}

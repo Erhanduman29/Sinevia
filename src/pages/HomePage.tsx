@@ -974,25 +974,32 @@ body[data-theme="sepia"] .snv-title-pill svg{
     padding:10px 12px;
     border-radius:13px;
     gap:8px;
+    overflow:hidden;
   }
-  .snv-deck-title{font-size:9px;letter-spacing:.1em}
-  .snv-deck-pill{font-size:8.5px;padding:2.5px 7px}
+  .snv-deck-head{gap:6px;min-width:0}
+  .snv-deck-title{font-size:9px;letter-spacing:.1em;min-width:0}
+  .snv-deck-title svg{flex-shrink:0}
+  .snv-deck-pill{font-size:8.5px;padding:2.5px 7px;max-width:100%;white-space:normal;line-height:1.25;text-align:center;overflow-wrap:anywhere}
 
   .snv-rank-road{gap:6px}
   .snv-rank-Endpoint{gap:6px}
-  .snv-rank-pedestal{width:40px;height:40px;border-radius:11px}
+  .snv-rank-pedestal{width:40px;height:40px;border-radius:11px;grid-template-columns:minmax(0,1fr);overflow:hidden}
+  .snv-rank-pedestal > span{width:28px!important;height:28px!important}
+  .snv-rank-pedestal svg{width:28px;height:28px;display:block}
   .snv-rank-info small{font-size:7.5px;letter-spacing:.06em}
-  .snv-rank-info b{font-size:11.5px}
-  .snv-rank-info span{font-size:9px}
+  .snv-rank-info b{font-size:11.5px;line-height:1.15;overflow-wrap:anywhere}
+  .snv-rank-info span{font-size:9px;overflow-wrap:anywhere}
   .snv-rank-arrow{width:22px;height:22px}
   .snv-rank-progress-labels{font-size:9px}
   .snv-rank-bar{height:5px}
 
-  .snv-badge-body{gap:10px}
-  .snv-badge-pedestal{width:46px;height:46px;border-radius:12px}
-  .snv-badge-info b{font-size:13px}
-  .snv-badge-info p{font-size:10px;line-height:1.3}
-  .snv-badge-foot{font-size:9px;padding-top:6px}
+  .snv-badge-body{gap:10px;min-width:0}
+  .snv-badge-pedestal{width:46px;height:46px;border-radius:12px;grid-template-columns:minmax(0,1fr);overflow:hidden}
+  .snv-badge-pedestal > span{width:34px!important;height:34px!important}
+  .snv-badge-pedestal svg{width:34px;height:34px;display:block}
+  .snv-badge-info b{font-size:13px;line-height:1.15;overflow-wrap:anywhere}
+  .snv-badge-info p{font-size:10px;line-height:1.3;overflow-wrap:anywhere}
+  .snv-badge-foot{font-size:9px;padding-top:6px;flex-wrap:wrap}
 
   /* Mobilde alt istatistik/kupa konsolu gizlenir */
   .snv-id-footer{display:none}

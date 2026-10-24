@@ -760,6 +760,14 @@ export default function StatsPage() {
     () => countPastMovies(movies),
     [movies]
   );
+  const currentSeriesCount = useMemo(
+    () => series.filter((s) => !s.isPastWatch).length,
+    [series]
+  );
+  const pastSeriesCount = useMemo(
+    () => series.filter((s) => Boolean(s.isPastWatch)).length,
+    [series]
+  );
 
   // YENİ: TASARIMI KORUYUP, YÜZLERCE SATIRI TEK FONKSİYONA ÇAĞIRIYORUZ!
   const { ratingChangeCount, lastRatingChange } = useMemo(() => {
@@ -1028,7 +1036,7 @@ export default function StatsPage() {
               }`}
             >
               <Activity size={13} className="flex-shrink-0 hidden xs:inline" />
-              <span className="truncate">Güncel ({currentMoviesCount})</span>
+              <span className="truncate">Güncel ({currentMoviesCount + currentSeriesCount})</span>
             </button>
             <button
               type="button"
@@ -1040,7 +1048,7 @@ export default function StatsPage() {
               }`}
             >
               <History size={13} className="flex-shrink-0 hidden xs:inline" />
-              <span className="truncate">Önceden ({pastMoviesCount})</span>
+              <span className="truncate">Önceden ({pastMoviesCount + pastSeriesCount})</span>
             </button>
             <button
               type="button"
@@ -1052,16 +1060,16 @@ export default function StatsPage() {
               }`}
             >
               <Globe size={13} className="flex-shrink-0 hidden xs:inline" />
-              <span className="truncate">Tümü ({currentMoviesCount + pastMoviesCount})</span>
+              <span className="truncate">Tümü ({currentMoviesCount + currentSeriesCount + pastMoviesCount + pastSeriesCount})</span>
             </button>
           </div>
 
           <span className="text-[11px] font-semibold text-ink-400 px-2 hidden lg:inline">
             {statsMode === 'current'
-              ? 'Önceden izlediğin filmler güncel istatistiklerine dahil edilmez.'
+              ? 'Önceden izlediğin filmler ve diziler güncel istatistiklerine dahil edilmez.'
               : statsMode === 'past'
-              ? 'Yalnızca daha önce izleyip puanladığın filmlerin istatistikleri.'
-              : 'Güncel ve daha önce izlediğin tüm yapımların birleşik istatistikleri.'}
+              ? 'Yalnızca daha önce izleyip puanladığın film ve dizilerin istatistikleri.'
+              : 'Güncel ve daha önce izlediğin tüm film ve dizilerin birleşik istatistikleri.'}
           </span>
         </div>
       </div>
@@ -1069,7 +1077,7 @@ export default function StatsPage() {
       <div data-tutorial="stats-heatmap" className={`${PREMIUM_PANEL} relative overflow-hidden`}>
         <div className="absolute -right-16 -top-16 w-56 h-56 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10">
-          <WatchMap history={stats.scopedHistory} />
+          <WatchMap history={stats.scopedHistory.filter((h) => !h.bulkRating)} />
         </div>
       </div>
 
@@ -1224,11 +1232,13 @@ export default function StatsPage() {
 
         <div className={`${PREMIUM_PANEL} ${PREMIUM_GLOW} !p-3.5 sm:!p-4 flex flex-col justify-between`}>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] sm:text-xs font-bold text-ink-400 uppercase tracking-wider">İzlenen Bölüm</span>
+            <span className="text-[11px] sm:text-xs font-bold text-ink-400 uppercase tracking-wider">
+              {statsMode === 'past' ? 'Önceden Dizi' : 'İzlenen Dizi'}
+            </span>
             <Tv size={16} className="text-rose-400" />
           </div>
-          <div className={`${PREMIUM_NUM} text-2xl sm:text-3xl text-ink-50 mt-1.5`}>{stats.seriesCount}</div>
-          <div className="text-[11px] text-ink-400 mt-1">Ort: <strong className="text-rose-400">{stats.avgSeries.toFixed(1)}</strong> ({stats.uniqueSeriesCount} Dizi)</div>
+          <div className={`${PREMIUM_NUM} text-2xl sm:text-3xl text-ink-50 mt-1.5`}>{stats.uniqueSeriesCount}</div>
+          <div className="text-[11px] text-ink-400 mt-1">Ort: <strong className="text-rose-400">{stats.avgSeries.toFixed(1)}</strong> ({stats.seriesCount} kayıt)</div>
         </div>
 
         <div className={`${PREMIUM_PANEL} ${PREMIUM_GLOW} !p-3.5 sm:!p-4 flex flex-col justify-between`}>

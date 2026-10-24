@@ -342,7 +342,7 @@ export default function TutorialOverlay() {
             width: compactRect.width,
             zIndex: 300,
           }}
-          className="tutorial-card-compact relative overflow-hidden rounded-2xl border border-gold-500/35 bg-gradient-to-br from-ink-900 via-ink-900 to-ink-950 shadow-[0_20px_50px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl"
+          className="tutorial-card-compact relative max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain rounded-2xl border border-gold-500/35 bg-gradient-to-br from-ink-900 via-ink-900 to-ink-950 shadow-[0_20px_50px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl"
         >
           {/* İnce ilerleme çubuğu */}
           <div className="absolute top-0 inset-x-0 h-1 bg-ink-950/90">
@@ -420,7 +420,7 @@ export default function TutorialOverlay() {
       ) : (
       <div
         style={cardStyle}
-        className="tutorial-card relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-ink-900 via-ink-900 to-ink-950 shadow-[0_30px_70px_-25px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
+        className="tutorial-card relative max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-ink-900 via-ink-900 to-ink-950 shadow-[0_30px_70px_-25px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
       >
         {/* Üst: tam genişlikte ilerleme çubuğu */}
         <div className="absolute top-0 inset-x-0 h-1.5 bg-ink-950/90">

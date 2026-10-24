@@ -369,6 +369,30 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     { threshold: 100, xp: 500, tier: 'emerald', name: 'Zamanın Ötesindeki Eleştirmen' },
     { threshold: 250, xp: 1000, tier: 'diamond', name: 'Tarih Yazan' }
   ]},
+  { id: 'past_series_watcher', name: 'Dizi Hafızası', description: 'Daha önceden izlediğin {threshold} diziyi puanlayarak arşivine geçir.', icon: 'History', hidden: false, secret: false, category: 'Nostalji', tiers: [
+    { threshold: 1, xp: 10, tier: 'bronze', name: 'İlk Dizi Hatırası' },
+    { threshold: 5, xp: 30, tier: 'silver', name: 'Sezon Belleği' },
+    { threshold: 15, xp: 75, tier: 'gold', name: 'Nostalji Arşivi' },
+    { threshold: 30, xp: 180, tier: 'platinum', name: 'Yılların Dizisi' },
+    { threshold: 60, xp: 400, tier: 'emerald', name: 'Canlı Dizi Ansiklopedisi' },
+    { threshold: 100, xp: 1000, tier: 'diamond', name: 'Geçmişin Dizi Koruyucusu' }
+  ]},
+  { id: 'past_series_masterpiece', name: 'Unutulmaz Diziler', description: 'Daha önceden izlediğin {threshold} diziye 10 tam puan ver.', icon: 'Award', hidden: false, secret: false, category: 'Nostalji', tiers: [
+    { threshold: 1, xp: 15, tier: 'bronze', name: 'Unutulmayan Dizi' },
+    { threshold: 3, xp: 40, tier: 'silver', name: 'Zamana Direnen Diziler' },
+    { threshold: 10, xp: 100, tier: 'gold', name: 'Altın Arşiv' },
+    { threshold: 20, xp: 250, tier: 'platinum', name: 'Kült Dizi Koleksiyoner' },
+    { threshold: 35, xp: 500, tier: 'emerald', name: 'Ölümsüz Diziler Müzesi' },
+    { threshold: 60, xp: 1200, tier: 'diamond', name: 'Televizyonun Altın Çağı' }
+  ]},
+  { id: 'past_series_critic', name: 'Eski Sezonlar', description: 'Daha önceden izlediğin {threshold} diziye hem puan ver hem de inceleme notu yaz.', icon: 'BookOpen', hidden: false, secret: false, category: 'Nostalji', tiers: [
+    { threshold: 3, xp: 20, tier: 'bronze', name: 'Geriye Dönük Notlar' },
+    { threshold: 10, xp: 50, tier: 'silver', name: 'Hafıza Kayıtları' },
+    { threshold: 20, xp: 120, tier: 'gold', name: 'Eski Sezonlar' },
+    { threshold: 35, xp: 250, tier: 'platinum', name: 'Geçmişin Başyazarı' },
+    { threshold: 60, xp: 500, tier: 'emerald', name: 'Zamanın Ötesindeki Eleştirmen' },
+    { threshold: 100, xp: 1000, tier: 'diamond', name: 'Tarih Yazan' }
+  ]},
 
   // --- SİNEMATİK OTOPSİ (YARIM BIRAKILAN FİLMLER) ---
   { id: 'ruthless_critic', name: 'Sinematik Otopsi', description: 'Film süresinin yarısından önce terk edip otopsisini tamamladığın {threshold} film.', icon: 'Skull', hidden: false, secret: false, category: 'Özel', tiers: [

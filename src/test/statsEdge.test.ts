@@ -55,7 +55,7 @@ describe('İSTATİSTİK MOTORU — BOŞ VERİ GÜVENLİĞİ', () => {
 });
 
 describe('İSTATİSTİK MOTORU — KAPSAM (SCOPE) KURALLARI', () => {
-  test('"past" modunda diziler kapsam DIŞI kalmalı (seriesCount her koşulda 0)', () => {
+  test('"past" modunda önceden izlenen diziler de kapsama girmeli', () => {
     const state = getInitialState();
     state.movies = [{ id: 'm1', watched: true, isPastWatch: true, runtime: 120 } as any];
     state.history = [
@@ -65,8 +65,8 @@ describe('İSTATİSTİK MOTORU — KAPSAM (SCOPE) KURALLARI', () => {
 
     const stats = calculateStats(state, 'past');
     expect(stats.movieCount).toBe(1);
-    expect(stats.seriesCount).toBe(0);
-    expect(stats.avgSeries).toBe(0);
+    expect(stats.seriesCount).toBe(1);
+    expect(stats.avgSeries).toBe(8);
     expect(stats.mostWatchedSeries).toBeNull();
   });
 

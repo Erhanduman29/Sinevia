@@ -390,7 +390,7 @@ export default function BulkAddModal({
   const activeGenres = activeTab === 'movie' ? MOVIE_GENRES : TV_GENRES;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-0 overscroll-none" onTouchMove={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-0 overscroll-none">
       <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-[40px] animate-fade-in" onClick={handleSafeClose} />
 
       {showCloseConfirm && (
@@ -404,8 +404,16 @@ export default function BulkAddModal({
         />
       )}
 
-      <div className="relative z-10 w-full max-w-6xl h-[90svh] md:h-full md:max-w-none bg-ink-900/80 backdrop-blur-md border border-ink-700/50 md:border-0 rounded-2xl md:rounded-none shadow-2xl flex flex-col animate-fade-in-up overflow-hidden">
-        <div className="flex items-center justify-between p-4 md:p-6 border-b border-ink-800/50 bg-ink-900/50 shrink-0">
+      <div className="relative z-10 w-full max-w-none h-[100dvh] md:h-full bg-ink-900/80 backdrop-blur-md border-0 md:border border-ink-700/50 rounded-none md:rounded-none shadow-2xl flex flex-col animate-fade-in-up overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pt-0 md:pb-0">
+        <button
+          onClick={handleSafeClose}
+          className="md:hidden fixed top-3 right-3 z-30 w-11 h-11 flex items-center justify-center rounded-full bg-ink-900/95 border border-ink-700 text-ink-300 hover:text-white shadow-lg"
+          title="Kapat"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="hidden md:flex items-center justify-between p-4 md:p-6 border-b border-ink-800/50 bg-ink-900/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 flex items-center justify-center border border-gold-500/20">
               <Sparkles className="text-gold-400" size={18} />
@@ -423,6 +431,15 @@ export default function BulkAddModal({
         {step === 'browse' && (
           <>
             <div className="flex-1 overflow-y-auto overscroll-contain hide-scrollbar relative z-0 flex flex-col bg-ink-950/30">
+              <div className="md:hidden flex items-center gap-3 p-4 pr-16 border-b border-ink-800/50 bg-ink-900/50">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 flex items-center justify-center border border-gold-500/20 shrink-0">
+                  <Sparkles className="text-gold-400" size={18} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base font-black text-white tracking-wide truncate">Kütüphaneyi Genişlet</h2>
+                  <p className="text-[10px] text-ink-400 font-medium truncate">Film/Dizi adı, oyuncu veya yönetmen ismiyle keşfet</p>
+                </div>
+              </div>
               <div className="p-4 md:p-6 border-b border-ink-800/50 space-y-4 shrink-0 bg-ink-900/40">
                 <div className="flex flex-col md:flex-row gap-3 md:gap-4">
                   <div className="flex bg-ink-950 rounded-xl p-1.5 border border-ink-800/50 flex-shrink-0">
@@ -739,7 +756,8 @@ export default function BulkAddModal({
         )}
 
         {step === 'collection' && (
-          <div className="flex-1 flex flex-col p-4 md:p-8 overflow-y-auto overscroll-contain bg-ink-950/50">
+          <div className="flex flex-1 min-h-0 flex-col bg-ink-950/50">
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-8">
             <div className="max-w-3xl mx-auto w-full space-y-6 md:space-y-8">
               <div className="text-center space-y-2">
                 <h3 className="text-2xl md:text-3xl font-black text-white">Toplu Atama</h3>
@@ -819,7 +837,10 @@ export default function BulkAddModal({
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 md:gap-4 pt-2 md:pt-4">
+            </div>
+            </div>
+            <div className="shrink-0 border-t border-ink-800 bg-ink-900/95 p-3.5 md:p-4">
+              <div className="max-w-3xl mx-auto w-full flex flex-col sm:flex-row gap-3 md:gap-4">
                 <button onClick={() => setStep('browse')} className="w-full sm:flex-1 py-3.5 md:py-4 bg-ink-900 text-ink-300 font-bold rounded-xl hover:bg-ink-800 transition-colors border border-ink-700 text-sm md:text-base">
                   Geri Dön
                 </button>
