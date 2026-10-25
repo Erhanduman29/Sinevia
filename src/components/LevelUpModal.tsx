@@ -5,6 +5,7 @@ import { RANK_TIERS, RankEmblem } from '../lib/rankTiers';
 import { SineCoinIcon } from './CoinPill';
 import { levelCoinReward } from '../lib/coins';
 import { milestoneItemForLevel } from '../lib/levelRewards';
+import { useSettings } from '../context/slices';
 
 export default function LevelUpModal({
   newLevel,
@@ -15,6 +16,7 @@ export default function LevelUpModal({
 }) {
   const [mounted, setMounted] = useState(false);
   const [phase, setPhase] = useState(0);
+  const { fastCelebrations } = useSettings();
 
   // Yeni seviyeye karşılık gelen Unvan Kademesini ve varsa önceki kademeyi bul
   const { currentRankIndex, currentRank, prevRank, nextRank, isRankPromotion } = useMemo(() => {
@@ -53,11 +55,13 @@ export default function LevelUpModal({
 
   useEffect(() => {
     setMounted(true);
-    const t1 = setTimeout(() => setPhase(1), 40);   // Faz 1: Sahne kararır ve derinleşir
-    const t2 = setTimeout(() => setPhase(2), 320);  // Faz 2: Unvan renginde God Rays ve yörünge halkaları açılır
-    const t3 = setTimeout(() => setPhase(3), 680);  // Faz 3: 3 Katmanlı Unvan Arması sahneye iner
-    const t4 = setTimeout(() => setPhase(4), 840);  // Faz 4: Çifte şok dalgası ve yıldız parçacıkları patlar
-    const t5 = setTimeout(() => setPhase(5), 1450); // Faz 5: Seviye plakası, unvan kartı ve aksiyon butonu belirir
+    // Hızlı mod yalnızca giriş fazlarını öne çeker; modal kullanıcı kapatana kadar
+    // açık kalır ve seviye atlama sesi (3.8s) hiç değişmez.
+    const t1 = setTimeout(() => setPhase(1), fastCelebrations ? 30 : 40);   // Faz 1: Sahne kararır ve derinleşir
+    const t2 = setTimeout(() => setPhase(2), fastCelebrations ? 180 : 320);  // Faz 2: Unvan renginde God Rays ve yörünge halkaları açılır
+    const t3 = setTimeout(() => setPhase(3), fastCelebrations ? 380 : 680);  // Faz 3: 3 Katmanlı Unvan Arması sahneye iner
+    const t4 = setTimeout(() => setPhase(4), fastCelebrations ? 470 : 840);  // Faz 4: Çifte şok dalgası ve yıldız parçacıkları patlar
+    const t5 = setTimeout(() => setPhase(5), fastCelebrations ? 820 : 1450); // Faz 5: Seviye plakası, unvan kartı ve aksiyon butonu belirir
 
     return () => {
       clearTimeout(t1);
@@ -66,7 +70,7 @@ export default function LevelUpModal({
       clearTimeout(t4);
       clearTimeout(t5);
     };
-  }, []);
+  }, [fastCelebrations]);
 
   // ESC tuşu ile kapatma desteği
   useEffect(() => {

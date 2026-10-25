@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
   Hourglass, Activity, User, Users, Building2, Crown, Sparkles,
@@ -11,7 +11,7 @@ import { useComputedStats } from '../lib/selectorHooks';
 import { ratingBgClass } from '../lib/utils';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import MediaDetailModal from '../components/MediaDetailModal';
-import WrappedModal from '../components/WrappedModal';
+const WrappedModal = lazy(() => import('../components/WrappedModal'));
 import CalibrationDuelModal from '../components/CalibrationDuelModal';
 import { detectRatingAnomalies } from '../lib/calibrationEngine';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
@@ -2213,7 +2213,11 @@ export default function StatsPage() {
       )}
 
       {detailTarget && <MediaDetailModal target={detailTarget} onClose={() => setDetailTarget(null)} />}
-      {showWrapped && <WrappedModal onClose={() => setShowWrapped(false)} />}
+      {showWrapped && (
+        <Suspense fallback={null}>
+          <WrappedModal onClose={() => setShowWrapped(false)} />
+        </Suspense>
+      )}
       {showCalibration && <CalibrationDuelModal onClose={() => setShowCalibration(false)} />}
     </div>
   );

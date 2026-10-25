@@ -300,6 +300,10 @@ export interface AppData {
   showLockedNames?: boolean;
   /** Rozet vitrininde isim/açıklama/XP detayları görünsün mü. */
   showBadgeDetails?: boolean;
+  /** Süsleme animasyonlarını ve geçişleri sakinleştirir; sesler etkilenmez. */
+  reducedMotion?: boolean;
+  /** XP ve seviye atlama sahnelerini kısaltır; sesler etkilenmez. */
+  fastCelebrations?: boolean;
   altWatchTemplate?: string;
   weeklyPlan?: WeeklyPlanItem[];
   /** Çoklu hızlı aksiyon köprüsü şablonları (varsa altWatchTemplate'i temsil eder). */

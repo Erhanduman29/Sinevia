@@ -1,4 +1,9 @@
-const TMDB_API_KEY = "a6230f08d495e326b7a89e52dc186a45";
+/**
+ * TMDB anahtarı .env dosyasından gelir: VITE_TMDB_API_KEY
+ * Not: VITE_ önekli değişkenler istemci paketinde görünür; bu bir gizlilik
+ * katmanı değildir, sadece anahtarın kod içinde dağınık durmasını engeller.
+ */
+export const TMDB_API_KEY = (import.meta.env.VITE_TMDB_API_KEY ?? '').trim();
 
 export interface WatchProvider {
   logoUrl: string;

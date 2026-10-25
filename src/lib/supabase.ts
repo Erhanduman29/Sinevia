@@ -21,7 +21,7 @@ function getOrCreateSecretToken(): string {
 // - Her yazma (POST/PATCH/PUT/DELETE /rest/v1/*) önbelleği temizler → mutasyon sonrası taze veri.
 type BufferedRead = { ok: boolean; status: number; body: string; contentType: string | null };
 type CachedRead = { exp: number } & BufferedRead;
-const READ_CACHE_TTL_MS = 30000;
+const READ_CACHE_TTL_MS = 15000;
 const READ_CACHE_MAX_ENTRIES = 80;
 const readCache = new Map<string, CachedRead>();
 const inflightReads = new Map<string, Promise<BufferedRead>>();
@@ -39,6 +39,13 @@ const cachedFetch: typeof fetch = async (input: RequestInfo | URL, init?: Reques
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
   if (!url.includes('/rest/v1/')) return fetch(input, init);
 
+  // Token'ı cache anahtarına kat: hesap değişince eski kullanıcının yanıtı
+  // yeni oturuma servis edilmesin.
+  const token = new Headers(init?.headers).get('x-agent-token')
+    || (input instanceof Request ? input.headers.get('x-agent-token') : '')
+    || '';
+  const cacheKey = `${token}::${url}`;
+
   if (method !== 'GET') {
     // Yazma → sadece YAZILAN TABLO okumalarını geçersiz kıl (epoch, yazmayla eşzamanlı biten okumaların cache'e girmesini de engeller).
     readCacheEpoch++;
@@ -52,10 +59,10 @@ const cachedFetch: typeof fetch = async (input: RequestInfo | URL, init?: Reques
     return fetch(input, init);
   }
 
-  const hit = readCache.get(url);
+  const hit = readCache.get(cacheKey);
   if (hit && hit.exp > Date.now()) return bufferedToResponse(hit);
 
-  let pending = inflightReads.get(url);
+  let pending = inflightReads.get(cacheKey);
   if (!pending) {
     const epoch = readCacheEpoch;
     pending = fetch(input, init).then(async (res): Promise<BufferedRead> => {
@@ -66,21 +73,42 @@ const cachedFetch: typeof fetch = async (input: RequestInfo | URL, init?: Reques
         contentType: res.headers.get('content-type'),
       };
       if (entry.ok && epoch === readCacheEpoch) {
-        readCache.set(url, { exp: Date.now() + READ_CACHE_TTL_MS, ...entry });
+        readCache.set(cacheKey, { exp: Date.now() + READ_CACHE_TTL_MS, ...entry });
         if (readCache.size > READ_CACHE_MAX_ENTRIES) {
           const oldest = readCache.keys().next().value;
           if (oldest) readCache.delete(oldest);
         }
       }
       return entry;
-    }).finally(() => { inflightReads.delete(url); });
-    inflightReads.set(url, pending);
+    }).finally(() => { inflightReads.delete(cacheKey); });
+    inflightReads.set(cacheKey, pending);
   }
   // Her çağıran kendi Response nesnesini kurar (gövde tek okuma hakkı olan Response sorununu çözer).
   return bufferedToResponse(await pending);
 };
 
-// 3. SUPABASE BAĞLANTISI (Güvenlik imzasıyla birlikte)
+// 3. SORGU KOLONLARI
+// profiles.secret_token 002_security.sql ile okunamaz hale geliyor.
+// Bu yüzden profil sorgularında ASLA select('*') kullanılmamalı.
+export const PROFILE_PUBLIC_COLUMNS = [
+  'agent_id', 'nickname', 'level', 'total_xp', 'movies_watched',
+  'past_movies_watched', 'series_watched', 'episodes_watched',
+  'achievements_unlocked', 'quests_completed', 'currently_watching',
+  'showcase', 'last_seen',
+].join(',');
+
+export const FRIENDSHIP_COLUMNS = 'id,requester_id,receiver_id,status,created_at';
+
+export const RECOMMENDATION_COLUMNS = 'id,sender_id,receiver_id,list_title,items,status,created_at';
+
+export const NETWORK_LOG_COLUMNS = [
+  'id', 'agent_id', 'action_type', 'item_id', 'item_type', 'item_title',
+  'item_poster', 'rating', 'note', 'genres', 'review_tags', 'is_spoiler', 'created_at',
+].join(',');
+
+export const MESSAGE_COLUMNS = 'id,sender_id,receiver_id,group_id,content,created_at,is_read';
+
+// 4. SUPABASE BAĞLANTISI (Güvenlik imzasıyla birlikte)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     headers: {

@@ -4,7 +4,7 @@ import {
   Search, BarChart2, MessageCircle, CheckCircle2, LogOut, Settings,
   UserMinus, Crown, Lock, Unlock, Edit2, ArrowLeft
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, PROFILE_PUBLIC_COLUMNS, MESSAGE_COLUMNS } from '../lib/supabase';
 import { uid } from '../lib/utils';
 import { handleImgFallback } from '../lib/selectors';
 import ConfirmDialog from './ConfirmDialog';
@@ -468,9 +468,10 @@ export default function ChatHubModal({
     try {
       const { data: rawDirectMsgs } = await supabase
         .from('messages')
-        .select('*')
+        .select(MESSAGE_COLUMNS)
         .or(`sender_id.eq.${myAgentId},receiver_id.eq.${myAgentId}`)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(400);
 
       const directMsgs = (rawDirectMsgs || []).filter(
         (m: any) =>
@@ -504,14 +505,15 @@ export default function ChatHubModal({
       const gMap = new Map();
       if (memberOf && memberOf.length > 0) {
         const gIds = memberOf.map((m: any) => m.group_id);
-        const { data: groupsData } = await supabase.from('chat_groups').select('*').in('id', gIds);
+        const { data: groupsData } = await supabase.from('chat_groups').select('id,name,created_by,created_at').in('id', gIds);
 
         if (groupsData) {
           const { data: gMsgs } = await supabase
             .from('messages')
-            .select('*')
+            .select(MESSAGE_COLUMNS)
             .in('group_id', gIds)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(500);
 
           groupsData.forEach((g: any) => {
             const lastMsg = gMsgs?.find(
@@ -550,7 +552,7 @@ export default function ChatHubModal({
         .filter(i => !profilesMapRef.current[i.id])
         .map(i => i.id);
       if (unknownIds.length > 0) {
-        const { data: newProfs } = await supabase.from('profiles').select('*').in('agent_id', unknownIds);
+        const { data: newProfs } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', unknownIds);
         if (newProfs) {
           setProfilesMap(prev => {
             const updated = { ...prev };
@@ -570,14 +572,16 @@ export default function ChatHubModal({
       if (hubActiveChat.type === 'direct') {
         const { data: rawMsgs } = await supabase
           .from('messages')
-          .select('*')
+          .select(MESSAGE_COLUMNS)
           .or(
             `and(sender_id.eq.${myAgentId},receiver_id.eq.${hubActiveChat.id}),and(sender_id.eq.${hubActiveChat.id},receiver_id.eq.${myAgentId})`
           )
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false })
+          .limit(200);
 
         setHubMessages((prev: any[]) => {
-          const newMsgs = (rawMsgs || []).filter((m: any) => !m.group_id);
+          // Son 200 mesaj; ekranda eskiden yeniye.
+          const newMsgs = [...(rawMsgs || [])].reverse().filter((m: any) => !m.group_id);
           const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
           const localOnly = prev.filter(
             (m: any) =>
@@ -600,12 +604,14 @@ export default function ChatHubModal({
       } else {
         const { data: msgs } = await supabase
           .from('messages')
-          .select('*')
+          .select(MESSAGE_COLUMNS)
           .eq('group_id', hubActiveChat.id)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false })
+          .limit(200);
 
         setHubMessages((prev: any[]) => {
-          const newMsgs = msgs || [];
+          // Son 200 grup mesajı; ekranda eskiden yeniye.
+          const newMsgs = [...(msgs || [])].reverse();
           const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
           const localOnly = prev.filter(
             (m: any) => !fetchedIds.has(m.id) && m.sender_id === myAgentId && m.group_id === hubActiveChat.id
@@ -635,7 +641,7 @@ export default function ChatHubModal({
             }
             const unknownIds = mIds.filter((id: string) => !profilesMapRef.current[id]);
             if (unknownIds.length > 0) {
-              const { data: newProfs } = await supabase.from('profiles').select('*').in('agent_id', unknownIds);
+              const { data: newProfs } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', unknownIds);
               if (newProfs) {
                 setProfilesMap(prev => {
                   const updated = { ...prev };
@@ -880,7 +886,7 @@ export default function ChatHubModal({
     try {
       const { data: targetProfile } = await supabase
         .from('profiles')
-        .select('*')
+        .select(PROFILE_PUBLIC_COLUMNS)
         .eq('agent_id', code)
         .maybeSingle();
       if (!targetProfile) {

@@ -137,6 +137,22 @@ describe('🧠 SİNEVİA ANA VERİTABANI VE AYARLAR (REDUCER) TESTLERİ', () => 
       const newState = rootReducer(state, { type: 'TOGGLE_LOCKED_NAMES' } as any);
       expect(newState.showLockedNames).toBe(true);
     });
+
+    test('TOGGLE_REDUCED_MOTION: Animasyon azaltma tercihi', () => {
+      const state = getInitialState();
+      expect(!!state.reducedMotion).toBe(false);
+
+      const newState = rootReducer(state, { type: 'TOGGLE_REDUCED_MOTION' } as any);
+      expect(newState.reducedMotion).toBe(true);
+    });
+
+    test('TOGGLE_FAST_CELEBRATIONS: Hızlı kutlama tercihi', () => {
+      const state = getInitialState();
+      expect(!!state.fastCelebrations).toBe(false);
+
+      const newState = rootReducer(state, { type: 'TOGGLE_FAST_CELEBRATIONS' } as any);
+      expect(newState.fastCelebrations).toBe(true);
+    });
   });
 
   // ==========================================

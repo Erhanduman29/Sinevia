@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Trophy, PartyPopper } from 'lucide-react';
+import { useSettings } from '../context/slices';
 
 interface Props {
   seriesTitle: string;
@@ -9,6 +10,7 @@ interface Props {
 
 export default function SeasonCompleteModal({ seriesTitle, season, onDismiss }: Props) {
   const [phase, setPhase] = useState<'enter' | 'show' | 'exit'>('enter');
+  const { fastCelebrations } = useSettings();
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase('show'), 50);
@@ -17,7 +19,7 @@ export default function SeasonCompleteModal({ seriesTitle, season, onDismiss }: 
 
   const handleDismiss = () => {
     setPhase('exit');
-    setTimeout(onDismiss, 200);
+    setTimeout(onDismiss, fastCelebrations ? 120 : 200);
   };
 
   return (

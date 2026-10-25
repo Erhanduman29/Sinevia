@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { X, Send, Search, Filter, Check, Film, Tv, Star } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { uid } from '../lib/utils';
-import { supabase } from '../lib/supabase';
+import { supabase, PROFILE_PUBLIC_COLUMNS, FRIENDSHIP_COLUMNS } from '../lib/supabase';
 import type { Movie } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 
@@ -71,14 +71,14 @@ export default function SendRecommendationModal({
         try {
           const { data: fData } = await supabase
             .from('friendships')
-            .select('*')
+            .select(FRIENDSHIP_COLUMNS)
             .or(`requester_id.eq.${agentId},receiver_id.eq.${agentId}`)
             .eq('status', 'accepted');
           const friendIds = (fData || []).map((f: any) =>
             f.requester_id === agentId ? f.receiver_id : f.requester_id
           );
           if (friendIds.length > 0) {
-            const { data: pData } = await supabase.from('profiles').select('*').in('agent_id', friendIds);
+            const { data: pData } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', friendIds).returns<any[]>();
             setFetchedFriends(pData || []);
             if (pData && pData.length > 0) setSendTargetId(pData[0].agent_id);
           } else {

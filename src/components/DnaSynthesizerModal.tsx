@@ -44,7 +44,7 @@ type Step = 'select' | 'synthesizing' | 'result';
 type Slot = 'A' | 'B' | null;
 type SelectionTab = 'library' | 'watched' | 'past';
 
-const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45';
+import { TMDB_API_KEY as API_KEY } from '../lib/tmdb';
 
 export default function DnaSynthesizerModal({ onClose }: DnaSynthesizerModalProps) {
   const { data, watchMovie, editMovie } = useApp();

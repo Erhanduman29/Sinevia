@@ -54,6 +54,10 @@ export interface SettingsSlice {
   showLockedNames: boolean;
   /** Rozet vitrininde isim/açıklama/XP detayları görünsün mü. */
   showBadgeDetails: boolean;
+  /** Süsleme animasyonları ve geçişler sakinleştirilsin mi (sesler etkilenmez). */
+  reducedMotion: boolean;
+  /** XP ve seviye atlama sahneleri kısaltılsın mı (sesler etkilenmez). */
+  fastCelebrations: boolean;
   altWatchTemplate: string;
   /** Hızlı aksiyon köprüsü şablonları (SettingsPage yönetimi + kart butonları). */
   externalActions: NonNullable<ExtendedAppData['externalActions']>;

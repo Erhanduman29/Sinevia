@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import {
   Shuffle, Sparkles, Star, Search,
   Dna, PlayCircle, ExternalLink, Youtube, Eye, Calendar, Flame,
@@ -14,16 +14,21 @@ import CoinPill, { SineCoinIcon } from '../components/CoinPill';
 import { levelFromXp } from '../lib/xp';
 import { ACHIEVEMENT_DEFS, AchievementIcon } from '../lib/achievements';
 import { getNextUnwatchedEpisode, formatDateShort, todayStr, normalize, ratingBgClass } from '../lib/utils';
-import { supabase } from '../lib/supabase';
+import {
+  supabase,
+  PROFILE_PUBLIC_COLUMNS, FRIENDSHIP_COLUMNS, NETWORK_LOG_COLUMNS,
+} from '../lib/supabase';
 import PickModal from '../components/PickModal';
 import RatingModal from '../components/RatingModal';
 import BulkAddModal from '../components/BulkAddModal';
-import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import CalibrationDuelModal from '../components/CalibrationDuelModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
 import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
 import { RANK_TIERS } from '../lib/rankTiers';
+
+// Nadiren açılan ağır modal: yalnızca ilk kez açıldığında indirilir.
+const DnaSynthesizerModal = lazy(() => import('../components/DnaSynthesizerModal'));
 
 // ============================================================
 // PREMIUM HOME STILLERİ (Ferah & Büyük Sinevia Kartı + Mobil Tam Görünüm)
@@ -1226,17 +1231,17 @@ export default function HomePage() {
   const fetchNetworkFeed = useCallback(async () => {
     if (!data.agentId) { setNetworkLoading(false); return; }
     try {
-      const { data: fData } = await supabase.from('friendships').select('*').or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).eq('status', 'accepted');
+      const { data: fData } = await supabase.from('friendships').select(FRIENDSHIP_COLUMNS).or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).eq('status', 'accepted');
       if (!fData || fData.length === 0) { setNetworkFeed([]); setNetworkLoading(false); return; }
       
       const friendIds = fData.map(f => f.requester_id === data.agentId ? f.receiver_id : f.requester_id);
       
-      const { data: pData } = await supabase.from('profiles').select('*').in('agent_id', friendIds);
+      const { data: pData } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', friendIds).returns<any[]>();
       const pMap: Record<string, any> = {};
       (pData || []).forEach(p => pMap[p.agent_id] = p);
       setProfilesMap(pMap);
 
-      const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', friendIds).order('created_at', { ascending: false }).limit(12);
+      const { data: logsData } = await supabase.from('network_logs').select(NETWORK_LOG_COLUMNS).in('agent_id', friendIds).order('created_at', { ascending: false }).limit(12);
       setNetworkFeed((logsData || []).filter((l: any) => l.action_type !== 'watched_hidden').slice(0, 6));
     } catch (err) {
       console.error(err);
@@ -2378,7 +2383,11 @@ export default function HomePage() {
 
       {showBulkAdd && <BulkAddModal initialTab={showBulkAdd} onClose={() => setShowBulkAdd(false)} />}
       {showPick && <PickModal seriesCount={allNextEpisodes.length} unwatchedMovies={eligibleMovies} nextEpisodes={allNextEpisodes} onPick={(item) => setPickedItem(item)} onClose={() => setShowPick(false)} />}
-      {showDnaModal && <DnaSynthesizerModal onClose={() => setShowDnaModal(false)} />}
+      {showDnaModal && (
+        <Suspense fallback={null}>
+          <DnaSynthesizerModal onClose={() => setShowDnaModal(false)} />
+        </Suspense>
+      )}
       {showCalibration && <CalibrationDuelModal onClose={() => setShowCalibration(false)} />}
       {pickedItem && (
         <RatingModal

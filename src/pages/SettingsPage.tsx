@@ -697,7 +697,7 @@ export default function SettingsPage() {
   const {
     data, addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData,
-    toggleLockedNames, toggleBadgeDetails, addCriterion, editCriterion,
+    toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
     setNickname, recoverIdentity, setExternalActions
   } = useApp();
@@ -1699,6 +1699,61 @@ export default function SettingsPage() {
                   </button>
                 );
               })}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Animasyon ve Kutlama Temposu"
+            icon={<Sparkles size={18} className="text-gold-400 flex-shrink-0" />}
+            badge={
+              (data.reducedMotion || data.fastCelebrations) && (
+                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-gold-500/20 text-gold-400 border border-gold-500/30 flex items-center gap-1 flex-shrink-0">
+                  <Zap size={10} /> Aktif
+                </span>
+              )
+            }
+            desc="Süslemeleri sakinleştir veya ödül sahnelerini kısalt. Bu ayarlar sesleri değiştirmez."
+          >
+            <div className="space-y-2.5">
+              <div className="p-4 flex items-center justify-between gap-4" style={premiumRowStyle}>
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-1">Animasyonları azalt</h3>
+                  <p className="text-xs text-ink-400">Dönen ışıklar, süsleme döngüleri ve geçişler sakinleşir. Yükleniyor göstergeleri çalışmaya devam eder.</p>
+                </div>
+                <button
+                  onClick={toggleReducedMotion}
+                  aria-pressed={!!data.reducedMotion}
+                  role="switch"
+                  aria-label="Animasyonları azalt"
+                  className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
+                  style={switchTrackStyle(!!data.reducedMotion)}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.reducedMotion ? 'translate-x-5' : 'translate-x-0'}`}
+                    style={SWITCH_KNOB_STYLE}
+                  />
+                </button>
+              </div>
+
+              <div className="p-4 flex items-center justify-between gap-4" style={premiumRowStyle}>
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-1">Kutlamaları hızlı geç</h3>
+                  <p className="text-xs text-ink-400">XP ve seviye atlama sahnelerini kısaltır. Görev, sözleşme ve coin ödülleri sesleriyle uyumlu kaldığı için aynı kalır.</p>
+                </div>
+                <button
+                  onClick={toggleFastCelebrations}
+                  aria-pressed={!!data.fastCelebrations}
+                  role="switch"
+                  aria-label="Kutlamaları hızlı geç"
+                  className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
+                  style={switchTrackStyle(!!data.fastCelebrations)}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.fastCelebrations ? 'translate-x-5' : 'translate-x-0'}`}
+                    style={SWITCH_KNOB_STYLE}
+                  />
+                </button>
+              </div>
             </div>
           </CollapsibleSection>
 

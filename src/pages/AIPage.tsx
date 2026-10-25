@@ -4,10 +4,10 @@ import { useApp } from '../context/AppContext';
 import { useTutorial } from '../context/TutorialContext';
 import type { AIMessage } from '../context/AppContext';
 import { handleImgFallback } from '../lib/selectors';
+import { TMDB_API_KEY } from '../lib/tmdb';
 import '../components/ai-premium.css';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''; 
-const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 interface TMDBActionItem {
   tmdbData: any;

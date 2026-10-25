@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { useSettings } from './context/slices';
 import { QuestProvider } from './context/QuestContext'; // YENİ: QuestProvider eklendi
 import { TutorialProvider, useTutorial } from './context/TutorialContext';
 import Layout from './components/Layout';
@@ -89,6 +90,7 @@ function AppContent() {
     cloudConflict,
     resolveCloudConflict,
   } = useApp();
+  const { reducedMotion, fastCelebrations } = useSettings();
   // Tutorial Merkezi kısayolla açılıp kapatılabilsin (Esc / F1).
   const { centerOpen, setCenterOpen } = useTutorial();
 
@@ -180,6 +182,13 @@ function AppContent() {
     document.addEventListener('visibilitychange', sync);
     return () => document.removeEventListener('visibilitychange', sync);
   }, []);
+
+  // Kullanıcı tercihleri: süslemeleri sakinleştir / kutlamaları kısalt.
+  // Yalnızca body sınıfı değişir; sesler ve oyun kuralları etkilenmez.
+  useEffect(() => {
+    document.body.classList.toggle('reduce-motion', !!reducedMotion);
+    document.body.classList.toggle('fast-celebrations', !!fastCelebrations);
+  }, [reducedMotion, fastCelebrations]);
 
   // PREMIUM MİKRO-ETKİLEŞİM: global buton tık sesi (stereo, 60ms).
   // Yakalama fazında + 40ms throttle; ses terbiyesi sound.ts içindeki

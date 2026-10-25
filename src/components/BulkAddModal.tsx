@@ -6,6 +6,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { normalize } from '../lib/utils';
 import { handleImgFallback } from '../lib/selectors';
+import { TMDB_API_KEY } from '../lib/tmdb';
 import ConfirmDialog from './ConfirmDialog';
 
 const MOVIE_GENRES = [
@@ -88,7 +89,7 @@ export default function BulkAddModal({
   const [importProgress, setImportProgress] = useState(0);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
-  const API_KEY = import.meta.env.VITE_TMDB_API_KEY || 'a6230f08d495e326b7a89e52dc186a45';
+  const API_KEY = TMDB_API_KEY;
 
   const libraryLookup = useMemo(() => {
     const movieTmdbIds = new Map<number, { watched: boolean; isPastWatch?: boolean }>();

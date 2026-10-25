@@ -6,7 +6,6 @@ import {
   Cloud, CloudOff, RefreshCw, Search, Shuffle, ArrowRight, CornerDownLeft,
   Target, Medal, SearchX, Clapperboard, ShoppingBag
 } from 'lucide-react';
-import WrappedModal from './WrappedModal';
 import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import PickModal from './PickModal';
 import BulkAddModal from './BulkAddModal';
@@ -20,6 +19,9 @@ import { describeCombo, loadBindings } from '../lib/shortcuts';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { useLazyImageActivator } from '../hooks/useLazyImageActivator';
 import CoinPill from './CoinPill';
+
+// Nadiren açılan ağır modal: yalnızca ilk kez açıldığında indirilir.
+const WrappedModal = React.lazy(() => import('./WrappedModal'));
 
 export type TabId = 'home' | 'movies' | 'series' | 'network' | 'plan' | 'history' | 'achievements' | 'market' | 'stats' | 'ai' | 'settings';
 
@@ -1334,7 +1336,11 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
         />
       )}
 
-      {showWrapped && <WrappedModal onClose={() => setShowWrapped(false)} />}
+      {showWrapped && (
+        <React.Suspense fallback={null}>
+          <WrappedModal onClose={() => setShowWrapped(false)} />
+        </React.Suspense>
+      )}
     </div>
   );
 }

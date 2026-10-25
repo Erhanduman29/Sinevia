@@ -1332,6 +1332,22 @@ body[data-theme="premium-dark"] #main-scroll {
 /* Arka plan durgunlu�u (onayl�): sekme gizlenince animasyonlar duraklar */
 body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after { animation-play-state: paused !important; }
 
+/* Kullanıcı tercihi: "Animasyonları azalt" (Ayarlar → Görsel).
+   Seslere dokunmaz. Süsleme döngüleri tek turda durur; tek seferlik giriş
+   animasyonları zaten bir kez çalıştığı için görünürlük bozulmaz.
+   Yükleniyor çarkları dönmeye devam eder. */
+body.reduce-motion *,
+body.reduce-motion *::before,
+body.reduce-motion *::after {
+  transition-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+body.reduce-motion .animate-spin {
+  animation-duration: 1s !important;
+  animation-iteration-count: infinite !important;
+}
+
 /* ============================================================
    PREMIUM MIKRO-ETKILESIM: buton basma hissi
    (sayfanin sonuna ekleme — tema remap kurallarina DOKUNULMADI)

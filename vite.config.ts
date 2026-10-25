@@ -34,6 +34,24 @@ export default defineConfig({
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'maskable'
+          },
+          {
+            src: 'icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'icon-512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       },
@@ -58,5 +76,27 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Büyük ve seyrek değişen bağımlılıkları ayrı parçalara al: ana uygulama
+        // kodu değiştiğinde tarayıcı bu parçaları yeniden indirmez.
+        manualChunks(id) {
+          const path = id.replace(/\\/g, '/');
+          if (!path.includes('node_modules')) return undefined;
+          if (path.includes('/@supabase/')) return 'vendor-supabase';
+          if (path.includes('/lucide-react/')) return 'vendor-icons';
+          if (
+            path.includes('/react/') ||
+            path.includes('/react-dom/') ||
+            path.includes('/scheduler/')
+          ) {
+            return 'vendor-react';
+          }
+          return 'vendor';
+        }
+      }
+    }
+  }
 });

@@ -44,7 +44,7 @@ import {
 } from '../lib/appBackup';
 import { pruneExpiredPlanItems } from '../lib/planPrune';
 import { supabase } from '../lib/supabase';
-import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, PREV_ACCOUNT_KEY, BACKUP_STORAGE_KEY, isFullAppRecord, isIdbAvailable } from '../lib/storageService';
+import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, setStorageErrorHandler, PREV_ACCOUNT_KEY, BACKUP_STORAGE_KEY, isFullAppRecord, isIdbAvailable } from '../lib/storageService';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
 import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, ActionsSlice } from './slices';
 
@@ -270,7 +270,7 @@ function defaultData(): ExtendedAppData {
       { id: 'crit_3', name: 'Görsel Yönetim', weight: 7, appliesTo: 'both', genres: [] }
     ],
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
-    showLockedNames: false, showBadgeDetails: false, aiChatHistory: [], theme: 'premium-dark',
+    showLockedNames: false, showBadgeDetails: false, reducedMotion: false, fastCelebrations: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
     externalActions: [], bonusXp: 0, totalDuelsCompleted: 0, giantSlayerWins: 0,
     weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true, sharePastWatchedInFeed: true,
@@ -617,7 +617,7 @@ type Action =
   | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'MERGE_SHARED_LIST'; movies: Movie[]; series: Series[]; collections: Collection[]; genres: string[] }
   | { type: 'HYDRATE_FROM_IDB'; data: ExtendedAppData }
   | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
-  | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'TOGGLE_BADGE_DETAILS' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'PROMOTE_LEVEL_UP' } | { type: 'CLEAR_LEVEL_UP_QUEUE' } | { type: 'SYNC_ACHIEVEMENTS' }
+  | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'TOGGLE_BADGE_DETAILS' } | { type: 'TOGGLE_REDUCED_MOTION' } | { type: 'TOGGLE_FAST_CELEBRATIONS' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'PROMOTE_LEVEL_UP' } | { type: 'CLEAR_LEVEL_UP_QUEUE' } | { type: 'SYNC_ACHIEVEMENTS' }
   | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }
   | { type: 'ADD_CRITERION'; criterion: RatingCriterion } | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion } | { type: 'DELETE_CRITERION'; id: string }
   | { type: 'UPDATE_ALT_TEMPLATE'; template: string } | { type: 'SET_THEME'; theme: string } | { type: 'GRANT_XP'; xp: number }
@@ -693,8 +693,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   const moviesHistory = validHistory.filter((h) => h.type === 'movie' || h.kind === 'movie');
   const seriesHistory = validHistory.filter((h) => h.type === 'series' || h.kind === 'series');
 
-  const calcMaxStreak = (hist: any[], typeMatch?: string) => {
-    const dates = hist.filter((h) => !typeMatch || h.type === typeMatch || h.kind === typeMatch).map((h) => localDayKey(h.watchedAt));
+  const maxConsecutiveDays = (dates: Iterable<string>) => {
     const unique = Array.from(new Set(dates)).sort();
     let max = 0, current = 0;
     for (let i = 0; i < unique.length; i++) {
@@ -706,14 +705,6 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
     return max;
   };
 
-  const checkGenre = (genres: string[] | undefined, words: string[]) => {
-    if (!genres) return false;
-    return genres.some((g) => {
-      const tr = g.toLocaleLowerCase('tr-TR'), en = g.toLowerCase();
-      return words.some((w) => tr.includes(w) || en.includes(w));
-    });
-  };
-
   const newAchievements = createInitialAchievements(state.achievements);
   const progressMap = new Map(newAchievements.map((a) => [a.achievementId, a]));
 
@@ -721,6 +712,272 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   const watchedMoviesWithRuntime = watchedMovies.filter((m) => m.runtime);
   const pastWatchedMovies = state.movies.filter((m) => m.watched && m.isPastWatch);
   const pastWatchedSeries = state.series.filter((s) => s.isPastWatch && s.overallRating !== null);
+  const movieById = new Map(state.movies.map((m) => [m.id, m]));
+  const seriesById = new Map(state.series.map((s) => [s.id, s]));
+
+  // Tek geçiş: tüm başarımların okuduğu ortak sayaçlar burada bir kez hesaplanır.
+  const M = {
+    tens: 0, nines: 0, low3: 0, low2: 0, rated: 0, ratedWithNote: 0, noted: 0,
+    epicNotes: 0, emptyNotes: 0, trashNotes: 0, capsNotes: 0,
+    nightOwl: 0, weekendWatcher: 0, newYearLonely: 0, lightSpeed: 0,
+    morningSweet: 0, nostalgia: 0, movieRated: 0, movieHasTen: false,
+    seriesBulkCount: 0, timeBender: 0, epicWatcher: 0, shortSweet: 0,
+    liveTimer: 0, speedWatcher: 0, timeSaver: 0, patientPurist: 0, secretSpeedrunner: 0,
+    marathonDays: 0, maxSeriesDay: 0, maxWeekendMovies: 0, caveman: 0,
+    maxLoyalty: 0, maxGap: 0, couchPotatoDays: 0, uniqueRatings: 0,
+    seriesTime: 0, seriesCompleteTime: 0, seriesBingeTime: 0,
+    collectionComplete: 0, universeConqueror: 0,
+    finalPhobia: 0, delayedGoodbye: 0,
+  };
+  const uniqueRatings = new Set<number>();
+  const uniqueGenres = new Set<string>();
+  const movieDays = new Set<string>();
+  const seriesDays = new Set<string>();
+  const allBulkFreeDayCounts: Record<string, number> = {};
+  const seriesBulkFreeDayCounts: Record<string, number> = {};
+  const movieDayCounts: Record<string, number> = {};
+  const movieWeekendCounts: Record<string, number> = {};
+  const loyaltyDaysBySeries: Record<string, Set<string>> = {};
+  const watchTimesBySeries: Record<string, number[]> = {};
+  const couchPotatoDayMinutes: Record<string, number> = {};
+  const movieGenreCounts = { action: 0, comedy: 0, drama: 0, horror: 0, scifi: 0 };
+  const seriesGenreIds = {
+    action: new Set<string>(), comedy: new Set<string>(), drama: new Set<string>(),
+    horror: new Set<string>(), scifi: new Set<string>(),
+  };
+
+  for (const h of validHistory) {
+    const ts = new Date(h.watchedAt);
+    const day = localDayKey(h.watchedAt);
+    const isMovie = h.type === 'movie' || h.kind === 'movie';
+    const isSeries = h.type === 'series' || h.kind === 'series';
+    const rating = h.rating;
+    const note = h.note;
+    const noteLen = note ? note.trim().length : 0;
+    const bulk = Boolean(h.bulkRating);
+    const hr = ts.getHours();
+    const dow = ts.getDay();
+
+    if (h.genres) for (const g of h.genres) uniqueGenres.add(g);
+
+    if (rating !== null && rating !== undefined) {
+      M.rated++;
+      uniqueRatings.add(rating);
+      if (rating === 10) M.tens++;
+      if (rating === 9 || rating === 9.5) M.nines++;
+      if (rating <= 3) M.low3++;
+      if (rating <= 2) M.low2++;
+      if (noteLen > 0) M.ratedWithNote++;
+    }
+    if (noteLen > 0) M.noted++;
+    if (noteLen >= 5000) M.epicNotes++;
+    if (noteLen === 0) M.emptyNotes++;
+    if (rating !== null && rating !== undefined && rating < 3 && noteLen >= 500) M.trashNotes++;
+    if (noteLen >= 5) {
+      const n = note!.trim();
+      if (/[a-zA-ZğüşöçİĞÜŞÖÇ]/.test(n) && n === n.toLocaleUpperCase('tr-TR')) M.capsNotes++;
+    }
+
+    if (!bulk) {
+      if (hr >= 0 && hr < 5) M.nightOwl++;
+      if (dow === 0 || dow === 6) M.weekendWatcher++;
+      if ((ts.getMonth() === 11 && ts.getDate() === 31 && hr >= 20) || (ts.getMonth() === 0 && ts.getDate() === 1 && hr <= 4)) M.newYearLonely++;
+      allBulkFreeDayCounts[day] = (allBulkFreeDayCounts[day] || 0) + 1;
+      if (isSeries) {
+        seriesBulkFreeDayCounts[day] = (seriesBulkFreeDayCounts[day] || 0) + 1;
+        M.seriesBulkCount++;
+      }
+    }
+
+    if (h.genres) {
+      let gAction = false, gComedy = false, gDrama = false, gHorror = false, gScifi = false;
+      for (const g of h.genres) {
+        const tr = g.toLocaleLowerCase('tr-TR');
+        const en = g.toLowerCase();
+        if (!gAction && (tr.includes('aksiyon') || en.includes('action'))) gAction = true;
+        if (!gComedy && (tr.includes('komedi') || en.includes('comedy'))) gComedy = true;
+        if (!gDrama && (tr.includes('dram') || en.includes('drama'))) gDrama = true;
+        if (!gHorror && (tr.includes('korku') || en.includes('horror'))) gHorror = true;
+        if (!gScifi && (tr.includes('bilim kurgu') || tr.includes('bilimkurgu') || en.includes('sci-fi') || en.includes('scifi'))) gScifi = true;
+      }
+      if (isMovie) {
+        if (gAction) movieGenreCounts.action++;
+        if (gComedy) movieGenreCounts.comedy++;
+        if (gDrama) movieGenreCounts.drama++;
+        if (gHorror) movieGenreCounts.horror++;
+        if (gScifi) movieGenreCounts.scifi++;
+      }
+      if (isSeries) {
+        const sid = h.seriesId || h.itemId || h.id;
+        if (gAction) seriesGenreIds.action.add(sid);
+        if (gComedy) seriesGenreIds.comedy.add(sid);
+        if (gDrama) seriesGenreIds.drama.add(sid);
+        if (gHorror) seriesGenreIds.horror.add(sid);
+        if (gScifi) seriesGenreIds.scifi.add(sid);
+      }
+    }
+
+    if (isMovie) {
+      movieDays.add(day);
+      movieDayCounts[day] = (movieDayCounts[day] || 0) + 1;
+      if (rating !== null && rating !== undefined) M.movieRated++;
+      if (rating === 10) M.movieHasTen = true;
+      if (hr >= 6 && hr < 9) M.morningSweet++;
+      if (h.year && parseInt(h.year) <= 1980) M.nostalgia++;
+      if (dow === 0 || dow === 6) {
+        const sat = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate() - (dow === 0 ? 1 : 0));
+        const k = `${sat.getFullYear()}-${String(sat.getMonth() + 1).padStart(2, '0')}-${String(sat.getDate()).padStart(2, '0')}`;
+        movieWeekendCounts[k] = (movieWeekendCounts[k] || 0) + 1;
+      }
+      const m = movieById.get(h.itemId || h.id);
+      const mins = h.actualRuntime || m?.actualRuntime || m?.runtime;
+      if (mins) couchPotatoDayMinutes[day] = (couchPotatoDayMinutes[day] || 0) + mins;
+      if (rating !== null && rating !== undefined && m?.addedAt) {
+        const addTime = new Date(m.addedAt).getTime(), watchTime = ts.getTime();
+        if (!isNaN(addTime) && addTime > 1262304000000 && (watchTime - addTime) / 3600000 <= 24 && watchTime - addTime >= 0) M.lightSpeed++;
+      }
+    }
+
+    if (isSeries) {
+      seriesDays.add(day);
+      const sid = h.seriesId || h.itemId || h.id;
+      if (!loyaltyDaysBySeries[sid]) loyaltyDaysBySeries[sid] = new Set();
+      loyaltyDaysBySeries[sid].add(day);
+      if (!watchTimesBySeries[sid]) watchTimesBySeries[sid] = [];
+      watchTimesBySeries[sid].push(ts.getTime());
+      if (rating !== null && rating !== undefined) {
+        const s = seriesById.get(sid);
+        if (s?.addedAt) {
+          const addTime = new Date(s.addedAt).getTime(), watchTime = ts.getTime();
+          if (!isNaN(addTime) && addTime > 1262304000000 && (watchTime - addTime) / 3600000 <= 24 && watchTime - addTime >= 0) M.lightSpeed++;
+        }
+      }
+    }
+  }
+
+  M.marathonDays = Object.values(allBulkFreeDayCounts).filter((c) => c >= 3).length;
+  M.maxSeriesDay = Math.max(0, ...Object.values(seriesBulkFreeDayCounts));
+  M.maxWeekendMovies = Math.max(0, ...Object.values(movieWeekendCounts));
+  M.uniqueRatings = uniqueRatings.size;
+  M.couchPotatoDays = Object.values(couchPotatoDayMinutes).filter((m) => m > 300).length;
+
+  // "Caveman": günde 5+ izleme yapılan günlerin en uzun kesintisiz serisi.
+  {
+    const qualifying = Object.keys(allBulkFreeDayCounts).filter((d) => allBulkFreeDayCounts[d] >= 5).sort();
+    let streak = 0;
+    for (let i = 0; i < qualifying.length; i++) {
+      if (i === 0) { streak = 1; M.caveman = 1; continue; }
+      const diff = Math.round((new Date(qualifying[i]).getTime() - new Date(qualifying[i - 1]).getTime()) / 86400000);
+      streak = diff === 1 ? streak + 1 : 1;
+      if (streak > M.caveman) M.caveman = streak;
+    }
+  }
+
+  Object.values(loyaltyDaysBySeries).forEach((daySet) => {
+    const maxForSeries = maxConsecutiveDays(daySet);
+    if (maxForSeries > M.maxLoyalty) M.maxLoyalty = maxForSeries;
+  });
+  Object.values(watchTimesBySeries).forEach((times) => {
+    const sorted = [...times].sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = Math.max(0, (sorted[i] - sorted[i - 1]) / 86400000);
+      if (gap > M.maxGap) M.maxGap = gap;
+    }
+  });
+  M.maxGap = Math.floor(M.maxGap);
+
+  for (const m of watchedMovies) {
+    if (m.actualRuntime != null && m.runtime != null && m.actualRuntime < m.runtime) {
+      M.speedWatcher++;
+      M.timeSaver += m.runtime - m.actualRuntime;
+    }
+    if (m.startedAt != null && m.actualRuntime != null) M.liveTimer++;
+    if (m.startedAt != null && m.actualRuntime != null && m.runtime != null && m.actualRuntime >= m.runtime) M.patientPurist++;
+    if (m.actualRuntime != null && m.runtime != null && m.runtime >= 90 && m.actualRuntime <= Math.floor(m.runtime / 2)) M.secretSpeedrunner++;
+  }
+  for (const m of watchedMoviesWithRuntime) {
+    M.timeBender += m.actualRuntime && m.actualRuntime > 0 ? Math.min(m.actualRuntime, m.runtime || 110) : (m.runtime || 0);
+    if ((m.runtime || 0) >= 180) M.epicWatcher++;
+    if ((m.runtime || 0) > 0 && (m.runtime || 0) < 90) M.shortSweet++;
+  }
+
+  // Dizi sezonları: toplam izleme süresi, biten dizi süresi ve günlük binge rekoru.
+  {
+    const bingeDayMinutes: Record<string, number> = {};
+    for (const s of state.series.filter((x) => !x.isPastWatch)) {
+      const eps = s.episodes || [];
+      let total = 0;
+      for (const ep of eps) {
+        if (!ep.watched) continue;
+        const mins = ep.runtime || s.episodeRuntime || 0;
+        total += mins;
+        if (mins > 0 && ep.watchedAt) {
+          const key = localDayKey(ep.watchedAt);
+          bingeDayMinutes[key] = (bingeDayMinutes[key] || 0) + mins;
+        }
+      }
+      M.seriesTime += total;
+      if (eps.length > 0 && eps.every((ep) => ep.watched)) M.seriesCompleteTime += total;
+    }
+    M.seriesBingeTime = Math.max(0, ...Object.values(bingeDayMinutes));
+  }
+
+  // Koleksiyonlar: hem "tamamlanan" hem "3+ filmi tamamlanan evren" sayısı tek gezide.
+  {
+    const moviesByCollection = new Map<string, typeof state.movies>();
+    for (const m of state.movies) {
+      if (!m.collectionId) continue;
+      const list = moviesByCollection.get(m.collectionId) || [];
+      list.push(m);
+      moviesByCollection.set(m.collectionId, list);
+    }
+    for (const col of state.collections || []) {
+      if (normalize(col.name) === normalize(PAST_WATCH_COLLECTION_NAME)) continue;
+      const cm = moviesByCollection.get(col.id) || [];
+      if (cm.length > 0 && cm.every((m) => m.watched)) M.collectionComplete++;
+      if (cm.length >= 3 && cm.every((m) => m.watched)) M.universeConqueror++;
+    }
+  }
+
+  // Sezon finali fobisi / geç vedalaşma: her dizi tek kez gezilir.
+  for (const s of state.series.filter((x) => !x.isPastWatch)) {
+    if (!s.episodes || s.episodes.length < 2) continue;
+    const eps = [...s.episodes].sort((a, b) => (a.season === b.season ? a.episode - b.episode : a.season - b.season));
+    const finalEp = eps[eps.length - 1], penEp = eps[eps.length - 2];
+    if (!(penEp.watched && penEp.watchedAt)) continue;
+    const penTime = new Date(penEp.watchedAt).getTime();
+    const finalTime = finalEp.watched && finalEp.watchedAt ? new Date(finalEp.watchedAt).getTime() : Date.now();
+    if (isNaN(penTime) || penTime < 1262304000000 || isNaN(finalTime) || finalTime < 1262304000000) continue;
+    const gap = Math.max(0, (finalTime - penTime) / 86400000);
+    if (!finalEp.watched) M.finalPhobia = Math.max(M.finalPhobia, gap);
+    if (finalEp.watched && gap >= 90) M.delayedGoodbye++;
+  }
+  M.finalPhobia = Math.floor(M.finalPhobia);
+
+  const maxMovieDayStreak = maxConsecutiveDays(movieDays);
+  const maxSeriesDayStreak = maxConsecutiveDays(seriesDays);
+
+  const ruthlessCritic = state.movies.filter((m) => m.abandoned && (m.runtime || 0) > 0 && m.abandonedProgress?.unit !== 'episode' && (m.abandonedProgress?.value ?? 0) <= (m.runtime || 0) / 2).length;
+  const detailMaster = state.movies.filter((m) => m.detailedRating && Object.keys(m.detailedRating).length > 0).length;
+  const reviewTagger = state.movies.filter((m) => (m.reviewTags || []).length > 0).length;
+  const spiderSense = state.movies.filter((m) => !m.watched && m.year && parseInt(m.year) > new Date().getFullYear()).length;
+  const patienceStone = state.series.filter((s) => !s.isPastWatch && s.episodes && s.episodes.length > 0 && Math.max(...s.episodes.map((e) => e.season)) >= 8 && s.episodes.every((e) => e.watched)).length;
+  const halfCenturySeries = state.series.filter((s) => !s.isPastWatch && s.episodes && s.episodes.length > 100 && s.episodes.every((e) => e.watched)).length;
+  const seasonComplete = (() => {
+    let c = 0;
+    state.series.filter((s) => !s.isPastWatch).forEach((s) => {
+      const eps = s.episodes || [];
+      const ratedSeasons = new Set(Object.keys(s.seasonRatings || {}).map(Number));
+      const seas = new Set([...eps.map((e) => e.season), ...ratedSeasons]);
+      seas.forEach((season) => {
+        const sEps = eps.filter((e) => e.season === season);
+        const bulkCompleted = s.overallRating != null || ratedSeasons.has(season);
+        if (bulkCompleted || (sEps.length > 0 && sEps.every((e) => e.watched))) c++;
+      });
+    });
+    return c;
+  })();
+  const tutorialUnits = readTutorialUnitCount();
 
   for (const def of ACHIEVEMENT_DEFS) {
     const prog = progressMap.get(def.id);
@@ -730,229 +987,86 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
     switch (def.id) {
       case 'movie_add': currentVal = state.movies.length; break;
       case 'series_add': currentVal = state.series.length; break;
-      case 'daily_movie': currentVal = calcMaxStreak(validHistory, 'movie'); break;
-      case 'daily_series': currentVal = calcMaxStreak(validHistory, 'series'); break;
-      case 'movie_genre_action': currentVal = moviesHistory.filter((h) => checkGenre(h.genres, ['aksiyon', 'action'])).length; break;
-      case 'series_genre_action': currentVal = new Set(seriesHistory.filter((h) => checkGenre(h.genres, ['aksiyon', 'action'])).map((h) => h.seriesId)).size; break;
-      case 'movie_genre_comedy': currentVal = moviesHistory.filter((h) => checkGenre(h.genres, ['komedi', 'comedy'])).length; break;
-      case 'series_genre_comedy': currentVal = new Set(seriesHistory.filter((h) => checkGenre(h.genres, ['komedi', 'comedy'])).map((h) => h.seriesId)).size; break;
-      case 'movie_genre_drama': currentVal = moviesHistory.filter((h) => checkGenre(h.genres, ['dram', 'drama'])).length; break;
-      case 'series_genre_drama': currentVal = new Set(seriesHistory.filter((h) => checkGenre(h.genres, ['dram', 'drama'])).map((h) => h.seriesId)).size; break;
-      case 'movie_genre_horror': currentVal = moviesHistory.filter((h) => checkGenre(h.genres, ['korku', 'horror'])).length; break;
-      case 'series_genre_horror': currentVal = new Set(seriesHistory.filter((h) => checkGenre(h.genres, ['korku', 'horror'])).map((h) => h.seriesId)).size; break;
-      case 'movie_genre_scifi': currentVal = moviesHistory.filter((h) => checkGenre(h.genres, ['bilim kurgu', 'bilimkurgu', 'sci-fi', 'scifi'])).length; break;
-      case 'series_genre_scifi': currentVal = new Set(seriesHistory.filter((h) => checkGenre(h.genres, ['bilim kurgu', 'bilimkurgu', 'sci-fi', 'scifi'])).map((h) => h.seriesId)).size; break;
-      case 'perfect_rating': case 'secret_perfectionist': currentVal = validHistory.filter((h) => h.rating === 10).length; break;
-      case 'high_rating': currentVal = validHistory.filter((h) => h.rating === 9 || h.rating === 9.5).length; break;
-      case 'low_rating': currentVal = validHistory.filter((h) => h.rating !== null && h.rating <= 3).length; break;
-      case 'secret_critic': case 'hater': currentVal = validHistory.filter((h) => h.rating !== null && h.rating <= 2).length; break;
-      case 'first_rating': currentVal = validHistory.filter((h) => h.rating !== null).length; break;
-      case 'strict_critic': currentVal = validHistory.filter((h) => h.rating !== null && h.note && h.note.trim().length > 0).length; break;
+      case 'daily_movie': currentVal = maxMovieDayStreak; break;
+      case 'daily_series': currentVal = maxSeriesDayStreak; break;
+      case 'movie_genre_action': currentVal = movieGenreCounts.action; break;
+      case 'series_genre_action': currentVal = seriesGenreIds.action.size; break;
+      case 'movie_genre_comedy': currentVal = movieGenreCounts.comedy; break;
+      case 'series_genre_comedy': currentVal = seriesGenreIds.comedy.size; break;
+      case 'movie_genre_drama': currentVal = movieGenreCounts.drama; break;
+      case 'series_genre_drama': currentVal = seriesGenreIds.drama.size; break;
+      case 'movie_genre_horror': currentVal = movieGenreCounts.horror; break;
+      case 'series_genre_horror': currentVal = seriesGenreIds.horror.size; break;
+      case 'movie_genre_scifi': currentVal = movieGenreCounts.scifi; break;
+      case 'series_genre_scifi': currentVal = seriesGenreIds.scifi.size; break;
+      case 'perfect_rating': case 'secret_perfectionist': currentVal = M.tens; break;
+      case 'high_rating': currentVal = M.nines; break;
+      case 'low_rating': currentVal = M.low3; break;
+      case 'secret_critic': case 'hater': currentVal = M.low2; break;
+      case 'first_rating': currentVal = M.rated; break;
+      case 'strict_critic': currentVal = M.ratedWithNote; break;
       case 'total_watch': case 'sinevia_legend': currentVal = validHistory.length; break;
-      case 'genre_explorer': currentVal = new Set(validHistory.flatMap((h) => h.genres || [])).size; break;
-      case 'note_taker': currentVal = validHistory.filter((h) => h.note && h.note.trim().length > 0).length; break;
-      case 'night_owl': currentVal = validHistory.filter((h) => !h.bulkRating && (() => { const hr = new Date(h.watchedAt).getHours(); return hr >= 0 && hr < 5; })()).length; break;
-      case 'weekend_watcher': currentVal = validHistory.filter((h) => !h.bulkRating && (() => { const d = new Date(h.watchedAt).getDay(); return d === 0 || d === 6; })()).length; break;
-      case 'marathon': {
-        const days: any = {}; validHistory.filter((h) => !h.bulkRating).forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
-        currentVal = Object.values(days).filter((c: any) => c >= 3).length; break;
-      }
-      case 'secret_binge': {
-        const days: any = {}; seriesHistory.filter((h) => !h.bulkRating).forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
-        currentVal = Math.max(0, ...Object.values(days as Record<string, number>)); break;
-      }
-      case 'season_complete': {
-        let c = 0;
-        state.series.filter((s) => !s.isPastWatch).forEach((s) => {
-          const eps = s.episodes || [];
-          const ratedSeasons = new Set(Object.keys(s.seasonRatings || {}).map(Number));
-          const seas = new Set([...eps.map((e) => e.season), ...ratedSeasons]);
-          seas.forEach((season) => {
-            const sEps = eps.filter((e) => e.season === season);
-            const bulkCompleted = s.overallRating != null || ratedSeasons.has(season);
-            if (bulkCompleted || (sEps.length > 0 && sEps.every((e) => e.watched))) c++;
-          });
-        });
-        currentVal = c; break;
-      }
-      case 'collection_complete': {
-        let c = 0;
-        (state.collections || []).forEach((col) => {
-          if (normalize(col.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return;
-          const cm = state.movies.filter((m) => m.collectionId === col.id);
-          if (cm.length > 0 && cm.every((m) => m.watched)) c++;
-        });
-        currentVal = c; break;
-      }
-      case 'caveman': {
-        const days: any = {}; validHistory.filter((h) => !h.bulkRating).forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
-        let streak = 0, maxS = 0; const sortedDays = Object.keys(days).sort();
-        for (let i = 0; i < sortedDays.length; i++) {
-          if (days[sortedDays[i]] >= 5) {
-            const diff = i > 0 ? Math.round((new Date(sortedDays[i]).getTime() - new Date(sortedDays[i - 1]).getTime()) / 86400000) : 0;
-            streak = i > 0 && diff === 1 ? streak + 1 : 1;
-          } else streak = 0;
-          if (streak > maxS) maxS = streak;
-        }
-        currentVal = maxS; break;
-      }
-      case 'epic_writer': currentVal = validHistory.filter((h) => h.note && h.note.trim().length >= 5000).length; break;
-      case 'ghost_viewer': currentVal = validHistory.filter((h) => !h.note || h.note.trim() === '').length; break;
-      case 'trash_lover': currentVal = validHistory.filter((h) => h.rating !== null && h.rating < 3 && h.note && h.note.trim().length >= 500).length; break;
-      case 'polarization': {
-        const tens = validHistory.filter((h) => h.rating === 10).length, lows = validHistory.filter((h) => h.rating !== null && h.rating <= 2).length;
-        currentVal = tens >= 20 && lows >= 20 ? 1 : 0; break;
-      }
-      case 'new_year_lonely': {
-        currentVal = validHistory.filter((h) => {
-          if (h.bulkRating) return false;
-          const d = new Date(h.watchedAt), m = d.getMonth(), hr = d.getHours();
-          return (m === 11 && d.getDate() === 31 && hr >= 20) || (m === 0 && d.getDate() === 1 && hr <= 4);
-        }).length; break;
-      }
+      case 'genre_explorer': currentVal = uniqueGenres.size; break;
+      case 'note_taker': currentVal = M.noted; break;
+      case 'night_owl': currentVal = M.nightOwl; break;
+      case 'weekend_watcher': currentVal = M.weekendWatcher; break;
+      case 'marathon': currentVal = M.marathonDays; break;
+      case 'secret_binge': currentVal = M.maxSeriesDay; break;
+      case 'season_complete': currentVal = seasonComplete; break;
+      case 'collection_complete': currentVal = M.collectionComplete; break;
+      case 'caveman': currentVal = M.caveman; break;
+      case 'epic_writer': currentVal = M.epicNotes; break;
+      case 'ghost_viewer': currentVal = M.emptyNotes; break;
+      case 'trash_lover': currentVal = M.trashNotes; break;
+      case 'polarization': currentVal = M.tens >= 20 && M.low2 >= 20 ? 1 : 0; break;
+      case 'new_year_lonely': currentVal = M.newYearLonely; break;
       case 'cinephile': currentVal = seriesHistory.length > 0 ? 0 : moviesHistory.length; break;
-      case 'short_day_profit': {
-        const days: any = {}; moviesHistory.forEach((h) => { const d = localDayKey(h.watchedAt); days[d] = (days[d] || 0) + 1; });
-        currentVal = Object.values(days).filter((c: any) => c >= 3).length; break;
-      }
-      case 'selective_critic': {
-        const rated = moviesHistory.filter((h) => h.rating !== null);
-        currentVal = !rated.some((r) => r.rating === 10) ? rated.length : 0; break;
-      }
-      case 'weekend_cinema': {
-        const wknd: Record<string, number> = {};
-        moviesHistory.forEach((h) => {
-          const d = new Date(h.watchedAt);
-          if (d.getDay() === 0 || d.getDay() === 6) {
-            const sat = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() === 0 ? 1 : 0));
-            const k = `${sat.getFullYear()}-${String(sat.getMonth() + 1).padStart(2, '0')}-${String(sat.getDate()).padStart(2, '0')}`;
-            wknd[k] = (wknd[k] || 0) + 1;
-          }
-        });
-        currentVal = Math.max(0, ...Object.values(wknd)); break;
-      }
-      case 'episode_monster': currentVal = seriesHistory.filter((h) => !h.bulkRating).length; break;
-      case 'patience_stone': currentVal = state.series.filter((s) => !s.isPastWatch && s.episodes && s.episodes.length > 0 && Math.max(...s.episodes.map((e) => e.season)) >= 8 && s.episodes.every((e) => e.watched)).length; break;
-      case 'loyalty_test': {
-        let maxL = 0; const byS: any = {};
-        seriesHistory.forEach((h) => { const sid = h.seriesId || h.itemId || h.id; if (!byS[sid]) byS[sid] = new Set(); byS[sid].add(localDayKey(h.watchedAt)); });
-        Object.values(byS).forEach((dSet: any) => {
-          const dates = Array.from(dSet).sort() as string[];
-          if (dates.length === 0) return;
-          let s = 1; if (s > maxL) maxL = s;
-          for (let i = 1; i < dates.length; i++) { s = Math.round((new Date(dates[i]).getTime() - new Date(dates[i - 1]).getTime()) / 86400000) === 1 ? s + 1 : 1; if (s > maxL) maxL = s; }
-        });
-        currentVal = maxL; break;
-      }
-      case 'break_taker': case 'lost_colony': {
-        let maxGap = 0; const byS: any = {};
-        seriesHistory.forEach((h) => { const sid = h.seriesId || h.itemId || h.id; if (!byS[sid]) byS[sid] = []; byS[sid].push(new Date(h.watchedAt).getTime()); });
-        Object.values(byS).forEach((dates: any) => {
-          dates.sort((a: number, b: number) => a - b);
-          for (let i = 1; i < dates.length; i++) { const gap = Math.max(0, (dates[i] - dates[i - 1]) / 86400000); if (gap > maxGap) maxGap = gap; }
-        });
-        currentVal = Math.floor(maxGap); break;
-      }
-      case 'morning_sweet': currentVal = moviesHistory.filter((h) => { const hr = new Date(h.watchedAt).getHours(); return hr >= 6 && hr < 9; }).length; break;
-      case 'nostalgia_wind': currentVal = moviesHistory.filter((h) => h.year && parseInt(h.year) <= 1980).length; break;
-      case 'universe_conqueror': currentVal = (state.collections || []).filter((c) => { if (normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME)) return false; const cM = state.movies.filter((m) => m.collectionId === c.id); return cM.length >= 3 && cM.every((m) => m.watched); }).length; break;
-      case 'final_phobia': case 'delayed_goodbye': {
-        let phobiaGap = 0, delayedCount = 0;
-        state.series.filter((s) => !s.isPastWatch).forEach((s) => {
-          if (!s.episodes || s.episodes.length < 2) return;
-          const eps = [...s.episodes].sort((a, b) => (a.season === b.season ? a.episode - b.episode : a.season - b.season));
-          const finalEp = eps[eps.length - 1], penEp = eps[eps.length - 2];
-          if (penEp.watched && penEp.watchedAt) {
-            const penTime = new Date(penEp.watchedAt).getTime();
-            const finalTime = finalEp.watched && finalEp.watchedAt ? new Date(finalEp.watchedAt).getTime() : Date.now();
-            if (isNaN(penTime) || penTime < 1262304000000 || isNaN(finalTime) || finalTime < 1262304000000) return;
-            const gap = Math.max(0, (finalTime - penTime) / 86400000);
-            if (!finalEp.watched) phobiaGap = Math.max(phobiaGap, gap);
-            if (finalEp.watched && gap >= 90) delayedCount++;
-          }
-        });
-        currentVal = def.id === 'final_phobia' ? Math.floor(phobiaGap) : delayedCount; break;
-      }
-      case 'half_century_series': currentVal = state.series.filter((s) => !s.isPastWatch && s.episodes && s.episodes.length > 100 && s.episodes.every((e) => e.watched)).length; break;
-      case 'series_time': {
-        currentVal = state.series.filter((s) => !s.isPastWatch).reduce(
-          (sum, s) => sum + (s.episodes || []).filter((ep) => ep.watched).reduce((epSum, ep) => epSum + (ep.runtime || s.episodeRuntime || 0), 0),
-          0
-        );
-        break;
-      }
-      case 'series_binge_time': {
-        const dayMinutes: Record<string, number> = {};
-        state.series.filter((s) => !s.isPastWatch).forEach((s) => {
-          (s.episodes || []).forEach((ep) => {
-            if (!ep.watched || !ep.watchedAt) return;
-            const mins = ep.runtime || s.episodeRuntime || 0;
-            if (mins <= 0) return;
-            const key = localDayKey(ep.watchedAt);
-            dayMinutes[key] = (dayMinutes[key] || 0) + mins;
-          });
-        });
-        currentVal = Math.max(0, ...Object.values(dayMinutes)); break;
-      }
-      case 'series_complete_time': {
-        currentVal = state.series.filter((s) => !s.isPastWatch).reduce((sum, s) => {
-          const eps = s.episodes || [];
-          if (eps.length === 0 || !eps.every((ep) => ep.watched)) return sum;
-          return sum + eps.reduce((epSum, ep) => epSum + (ep.runtime || s.episodeRuntime || 0), 0);
-        }, 0);
-        break;
-      }
+      case 'short_day_profit': currentVal = Object.values(movieDayCounts).filter((c) => c >= 3).length; break;
+      case 'selective_critic': currentVal = M.movieHasTen ? 0 : M.movieRated; break;
+      case 'weekend_cinema': currentVal = M.maxWeekendMovies; break;
+      case 'episode_monster': currentVal = M.seriesBulkCount; break;
+      case 'patience_stone': currentVal = patienceStone; break;
+      case 'loyalty_test': currentVal = M.maxLoyalty; break;
+      case 'break_taker': case 'lost_colony': currentVal = M.maxGap; break;
+      case 'morning_sweet': currentVal = M.morningSweet; break;
+      case 'nostalgia_wind': currentVal = M.nostalgia; break;
+      case 'universe_conqueror': currentVal = M.universeConqueror; break;
+      case 'final_phobia': case 'delayed_goodbye': currentVal = def.id === 'final_phobia' ? M.finalPhobia : M.delayedGoodbye; break;
+      case 'half_century_series': currentVal = halfCenturySeries; break;
+      case 'series_time': currentVal = M.seriesTime; break;
+      case 'series_binge_time': currentVal = M.seriesBingeTime; break;
+      case 'series_complete_time': currentVal = M.seriesCompleteTime; break;
       case 'market_buyer': currentVal = state.marketStats?.purchases || 0; break;
       case 'market_spender': currentVal = state.marketStats?.coinsSpent || 0; break;
       case 'contract_finisher': currentVal = state.marketStats?.contractsCompleted || 0; break;
       case 'weekly_contract_fail': currentVal = state.marketStats?.weeklyContractsFailed || 0; break;
       case 'contract_cancelled': currentVal = state.marketStats?.contractsCancelled || 0; break;
-      case 'light_speed': {
-        let lsCount = 0;
-        validHistory.forEach((h) => {
-          if (h.rating != null) {
-            const addedAt = h.kind === 'series' ? state.series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.addedAt : state.movies.find((m) => m.id === (h.itemId || h.id))?.addedAt;
-            if (addedAt) {
-              const addTime = new Date(addedAt).getTime(), watchTime = new Date(h.watchedAt).getTime();
-              if (!isNaN(addTime) && addTime > 1262304000000 && (watchTime - addTime) / 3600000 <= 24 && watchTime - addTime >= 0) lsCount++;
-            }
-          }
-        });
-        currentVal = lsCount; break;
-      }
-      case 'color_palette': currentVal = new Set(validHistory.filter((h) => h.rating !== null).map((h) => h.rating)).size; break;
-      case 'caps_lock': currentVal = validHistory.filter((h) => { if (!h.note || h.note.trim().length < 5) return false; const n = h.note.trim(); return /[a-zA-ZğüşöçİĞÜŞÖÇ]/.test(n) && n === n.toLocaleUpperCase('tr-TR'); }).length; break;
-      case 'spider_sense': currentVal = state.movies.filter((m) => !m.watched && m.year && parseInt(m.year) > new Date().getFullYear()).length; break;
-      case 'time_bender': currentVal = watchedMoviesWithRuntime.reduce((sum, m) => sum + (m.actualRuntime && m.actualRuntime > 0 ? Math.min(m.actualRuntime, m.runtime || 110) : (m.runtime || 0)), 0); break;
-      case 'epic_watcher': currentVal = watchedMoviesWithRuntime.filter((m) => (m.runtime || 0) >= 180).length; break;
-      case 'short_sweet': currentVal = watchedMoviesWithRuntime.filter((m) => (m.runtime || 0) > 0 && (m.runtime || 0) < 90).length; break;
-      case 'couch_potato': {
-        const daysRuntime: Record<string, number> = {};
-        moviesHistory.forEach((h) => {
-          const movie = state.movies.find((m) => m.id === (h.itemId || h.id));
-          const mins = h.actualRuntime || movie?.actualRuntime || movie?.runtime;
-          if (mins) { const d = localDayKey(h.watchedAt); daysRuntime[d] = (daysRuntime[d] || 0) + mins; }
-        });
-        currentVal = Object.values(daysRuntime).filter((minutes: any) => minutes > 300).length; break;
-      }
-      case 'live_timer': currentVal = watchedMovies.filter((m) => m.startedAt != null && m.actualRuntime != null).length; break;
-      case 'speed_watcher': currentVal = watchedMovies.filter((m) => m.actualRuntime != null && m.runtime != null && m.actualRuntime < m.runtime).length; break;
-      case 'time_saver': currentVal = watchedMovies.filter((m) => m.actualRuntime != null && m.runtime != null && m.actualRuntime < m.runtime).reduce((sum, m) => sum + ((m.runtime || 0) - (m.actualRuntime || 0)), 0); break;
-      case 'patient_purist': currentVal = watchedMovies.filter((m) => m.startedAt != null && m.actualRuntime != null && m.runtime != null && m.actualRuntime >= m.runtime).length; break;
-      case 'secret_speedrunner': currentVal = watchedMovies.filter((m) => m.actualRuntime != null && m.runtime != null && m.runtime >= 90 && m.actualRuntime <= Math.floor(m.runtime / 2)).length; break;
+      case 'light_speed': currentVal = M.lightSpeed; break;
+      case 'color_palette': currentVal = M.uniqueRatings; break;
+      case 'caps_lock': currentVal = M.capsNotes; break;
+      case 'spider_sense': currentVal = spiderSense; break;
+      case 'time_bender': currentVal = M.timeBender; break;
+      case 'epic_watcher': currentVal = M.epicWatcher; break;
+      case 'short_sweet': currentVal = M.shortSweet; break;
+      case 'couch_potato': currentVal = M.couchPotatoDays; break;
+      case 'live_timer': currentVal = M.liveTimer; break;
+      case 'speed_watcher': currentVal = M.speedWatcher; break;
+      case 'time_saver': currentVal = M.timeSaver; break;
+      case 'patient_purist': currentVal = M.patientPurist; break;
+      case 'secret_speedrunner': currentVal = M.secretSpeedrunner; break;
       case 'past_watcher': currentVal = pastWatchedMovies.length; break;
       case 'past_masterpiece': currentVal = pastWatchedMovies.filter((m) => m.rating === 10).length; break;
       case 'past_critic': currentVal = pastWatchedMovies.filter((m) => m.rating !== null && m.note && m.note.trim().length > 0).length; break;
       case 'past_series_watcher': currentVal = pastWatchedSeries.length; break;
       case 'past_series_masterpiece': currentVal = pastWatchedSeries.filter((s) => s.overallRating === 10).length; break;
       case 'past_series_critic': currentVal = pastWatchedSeries.filter((s) => s.overallNote && s.overallNote.trim().length > 0).length; break;
-      case 'ruthless_critic': currentVal = state.movies.filter((m) => m.abandoned && (m.runtime || 0) > 0 && m.abandonedProgress?.unit !== 'episode' && (m.abandonedProgress?.value ?? 0) <= (m.runtime || 0) / 2).length; break;
+      case 'ruthless_critic': currentVal = ruthlessCritic; break;
       case 'scale_master': currentVal = state.totalDuelsCompleted || 0; break;
       case 'secret_duelist': currentVal = (state.movies || []).reduce((sum, m) => sum + (m.duelWins || 0), 0); break;
       case 'secret_giant_slayer': currentVal = state.giantSlayerWins || 0; break;
-      case 'detail_master': currentVal = state.movies.filter((m) => m.detailedRating && Object.keys(m.detailedRating).length > 0).length; break;
-      case 'review_tagger': currentVal = state.movies.filter((m) => (m.reviewTags || []).length > 0).length; break;
-      case 'tutorial_explorer': currentVal = readTutorialUnitCount(); break;
+      case 'detail_master': currentVal = detailMaster; break;
+      case 'review_tagger': currentVal = reviewTagger; break;
+      case 'tutorial_explorer': currentVal = tutorialUnits; break;
     }
 
     prog.current = currentVal;
@@ -1135,6 +1249,8 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   if (action.type === 'CLEAR_COIN_GAIN') return { ...state, pendingCoinGain: undefined };
   if (action.type === 'TOGGLE_LOCKED_NAMES') return { ...state, showLockedNames: !state.showLockedNames };
   if (action.type === 'TOGGLE_BADGE_DETAILS') return { ...state, showBadgeDetails: !state.showBadgeDetails };
+  if (action.type === 'TOGGLE_REDUCED_MOTION') return { ...state, reducedMotion: !state.reducedMotion };
+  if (action.type === 'TOGGLE_FAST_CELEBRATIONS') return { ...state, fastCelebrations: !state.fastCelebrations };
   if (action.type === 'SET_ACHIEVEMENT_PROGRESS') return { ...state, achievements: action.progress };
   if (action.type === 'UPDATE_AI_HISTORY') return { ...state, aiChatHistory: action.messages };
   if (action.type === 'UPDATE_ALT_TEMPLATE') return { ...state, altWatchTemplate: action.template };
@@ -1824,7 +1940,7 @@ export interface AppContextValue {
   exportData: () => void; importData: (j: string) => boolean; resetData: () => void; exportShareList: () => void; importShareList: (j: string) => boolean;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void; achievementToasts: AchievementToastItem[];
   levelUpData: LevelUpData | null; seasonCompleteData: SeasonCompleteData | null; dismissLevelUp: () => void; dismissSeasonComplete: () => void;
-  toggleLockedNames: () => void; toggleBadgeDetails: () => void; xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
+  toggleLockedNames: () => void; toggleBadgeDetails: () => void; toggleReducedMotion: () => void; toggleFastCelebrations: () => void; xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
   coinGainData: { amount: number; label: string } | null;
   queuedCoinGain: { amount: number; label: string; final?: boolean } | null;
   isContractCelebrating: boolean;
@@ -2290,7 +2406,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localLastModifiedRef.current = now;
       try { localStorage.setItem('sinevia_last_modified', String(now)); } catch { /* kota */ }
     }
-    writeQueue.set(STORAGE_KEY, data, 250);
+    // 600 ms: art arda gelen düzenlemeleri tek yazımda birleştirir. Sekme kapanırken
+    // (pagehide/beforeunload/visibilitychange) bekleyen yazım yine anında uygulanır.
+    writeQueue.set(STORAGE_KEY, data, 600);
     writeBootSnapshot(data as unknown as Record<string, unknown>);
     // Sekme gizlenince / kapanınca bekleyen yazımı anında uygula (veri kaybını önle).
     const flushWrites = () => { writeQueue.flush(); writeBootSnapshot(data as unknown as Record<string, unknown>); };
@@ -2354,7 +2472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .from('profiles')
           .select('last_cloud_sync')
           .eq('agent_id', data.agentId)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
 
@@ -2543,7 +2661,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           cwPayload = { id: activeMovie.id, title: activeMovie.title, posterUrl: activeMovie.posterUrl || null, year: activeMovie.year || '', startedAt: activeMovie.startedAt, runtime: tInfo.maxMins, isPaused: tInfo.isPaused, elapsedMins: tInfo.elapsedMins, updatedAt: new Date().toISOString() };
         }
 
-        const currentSecretToken = localStorage.getItem('sinevia_secret_token') || '';
         const newSyncTime = new Date().getTime();
         const qsCompletedCount = (currentQuestState.completedQuests && Array.isArray(currentQuestState.completedQuests)) ? currentQuestState.completedQuests.length : 0;
 
@@ -2558,8 +2675,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           movies_watched: watchedMoviesCount, past_movies_watched: pastMoviesCount, series_watched: watchedSeriesCount, episodes_watched: watchedEpisodesCount,
           achievements_unlocked: unlockedAchievementsCount, quests_completed: qsCompletedCount,
           currently_watching: cwPayload, showcase: data.showcase || [], last_seen: new Date().toISOString(),
-          last_cloud_sync: newSyncTime,
-          secret_token: currentSecretToken
+          last_cloud_sync: newSyncTime
         }, { onConflict: 'agent_id' });
 
         if (dbError) {
@@ -2587,40 +2703,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { clearTimeout(syncTimer); window.removeEventListener('pagehide', flushSync); window.removeEventListener('beforeunload', flushSync); document.removeEventListener('visibilitychange', onVis); };
   }, [data, hydrated, syncTick]);
 
-  // CANLI DİNLEYİCİ (REALTIME DOWNLOAD) — hidrasyon sonrası çalışır; gelen arşiv
-  // güvenlik kontrollerinden (boş kayıt koruması + çakışma sorusu) geçer.
+  // BULUT YOKLAMASI — realtime yerine 60 saniyede bir + sekme görünürken.
+  // Profiller realtime yayınından çıkarıldı (secret_token sızmasın diye).
   useEffect(() => {
     if (!hydrated || !data.agentId) return;
 
-    const channel = supabase.channel('realtime:cloud_storage_sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `agent_id=eq.${data.agentId}` }, async (payload) => {
-        if (payload.new && payload.new.last_cloud_sync) {
-          const incomingTime = Number(payload.new.last_cloud_sync);
-          // Kapı: henüz görülmemiş bir bulut sürümü mü? (Kendi yüklememizin yankısı veya bayat
-          // snapshot.lastCloudSync değeri tam JSON'u gereksiz indirmesin → MB şişirmesin.)
-          if (incomingTime > lastSeenCloudTimeRef.current + 2000) {
-            setSyncStatus('syncing');
-            const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
-            const fetchUrl = `${urlData.publicUrl}?t=${incomingTime}`;
-            try {
-              const response = await fetch(fetchUrl, { cache: 'no-store' });
-              if (response.ok) {
-                const incomingJson = JSON.parse(await response.text());
-                handleCloudArchive(incomingJson, incomingTime, hydrationTrustedRef.current ? undefined : { protectCloud: true });
-                setSyncStatus('synced');
-              } else {
-                setSyncStatus('error');
-              }
-            } catch {
-              setSyncStatus('error');
-            }
-          }
-        }
-      })
-      .subscribe();
+    let cancelled = false;
 
-    return () => { supabase.removeChannel(channel); };
-  }, [data.agentId]);
+    const checkCloud = async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (cloudConflictRef.current || cloudConflictDeferredRef.current) return;
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('last_cloud_sync')
+          .eq('agent_id', data.agentId)
+          .maybeSingle();
+
+        const incomingTime = Number(prof?.last_cloud_sync || 0);
+        if (!incomingTime || incomingTime <= lastSeenCloudTimeRef.current + 2000) return;
+
+        setSyncStatus('syncing');
+        const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
+        const response = await fetch(`${urlData.publicUrl}?t=${incomingTime}`, { cache: 'no-store' });
+        if (!response.ok) { setSyncStatus('error'); return; }
+
+        const incomingJson = JSON.parse(await response.text());
+        if (cancelled) return;
+        handleCloudArchive(incomingJson, incomingTime, hydrationTrustedRef.current ? undefined : { protectCloud: true });
+        setSyncStatus('synced');
+      } catch {
+        setSyncStatus('error');
+      }
+    };
+
+    const interval = window.setInterval(checkCloud, 60000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkCloud();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [hydrated, data.agentId]);
 
   useEffect(() => {
     if (!data.notificationsEnabled || !data.agentId) return;
@@ -2732,8 +2860,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setXpGainData(null);
       xpTimerRef.current = null;
       setAnimationTick((tick) => tick + 1);
-    }, XP_OVERLAY_DURATION_MS);
-  }, [data.pendingXpGain, animationTick, isContractCelebrating, contractTick, levelUpData, seasonCompleteData, isQuestCelebrating, coinGainData]);
+    }, data.fastCelebrations ? 1900 : XP_OVERLAY_DURATION_MS);
+  }, [data.pendingXpGain, data.fastCelebrations, animationTick, isContractCelebrating, contractTick, levelUpData, seasonCompleteData, isQuestCelebrating, coinGainData]);
 
   // Seviye modalı; XP kartı, başarım kuyruğu, pazar görevi, sezon ve quest
   // bitmeden açılmaz. Böylece sesler de üst üste binmez.
@@ -2885,8 +3013,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     attempt();
   }, []);
+  // DEPOLAMA HATASI — localStorage kotası dolarsa veya IndexedDB yazımı başarısız
+  // olursa sessiz kalmak yerine kullanıcıyı uyar (5 dakikada en fazla bir kez).
+  const storageWarnedAtRef = useRef(0);
+  useEffect(() => {
+    setStorageErrorHandler(() => {
+      const now = Date.now();
+      if (now - storageWarnedAtRef.current < 5 * 60 * 1000) return;
+      storageWarnedAtRef.current = now;
+      showToast('Veriler kaydedilemedi. Hafıza dolu olabilir; lütfen Ayarlar > Veri Yönetimi bölümünden yedek alın.', 'warning');
+    });
+    return () => setStorageErrorHandler(null);
+  }, [showToast]);
+
   const toggleLockedNames = useCallback(() => dispatch({ type: 'TOGGLE_LOCKED_NAMES' }), []);
   const toggleBadgeDetails = useCallback(() => dispatch({ type: 'TOGGLE_BADGE_DETAILS' }), []);
+  const toggleReducedMotion = useCallback(() => dispatch({ type: 'TOGGLE_REDUCED_MOTION' }), []);
+  const toggleFastCelebrations = useCallback(() => dispatch({ type: 'TOGGLE_FAST_CELEBRATIONS' }), []);
   const toggleNotifications = useCallback((enabled: boolean) => {
     rememberNotificationPrefs({ notificationsEnabled: enabled });
     dispatch({ type: 'TOGGLE_NOTIFICATIONS', enabled });
@@ -3283,10 +3426,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     theme: data.theme || 'premium-dark', criteria: data.criteria, reviewTags: data.reviewTags,
     weeklyPlan: data.weeklyPlan || [], notificationsEnabled: !!data.notificationsEnabled,
     shareWatchedInFeed: data.shareWatchedInFeed !== false, sharePastWatchedInFeed: data.sharePastWatchedInFeed !== false,
-    showLockedNames: !!data.showLockedNames, showBadgeDetails: !!data.showBadgeDetails, altWatchTemplate: data.altWatchTemplate || '',
+    showLockedNames: !!data.showLockedNames, showBadgeDetails: !!data.showBadgeDetails,
+    reducedMotion: !!data.reducedMotion, fastCelebrations: !!data.fastCelebrations,
+    altWatchTemplate: data.altWatchTemplate || '',
     externalActions: data.externalActions || [],
     agentId: data.agentId || '',
-  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.showBadgeDetails, data.altWatchTemplate, data.externalActions, data.agentId]);
+  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.showBadgeDetails, data.reducedMotion, data.fastCelebrations, data.altWatchTemplate, data.externalActions, data.agentId]);
 
   // Global tik YOK — sadece aktif timer filmini verir (seyrek değişir); sayfalar kendi
   // yerel nowMs tik'lerini tutmaya devam eder (HomePage dahil — kullanıcıya ait dosya).
@@ -3297,7 +3442,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
@@ -3310,7 +3455,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue,
     setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings,
     exportData, importData, resetData, exportShareList, importShareList,
-    showToast, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, toggleLockedNames, toggleBadgeDetails, updateAIHistory,
+    showToast, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, updateAIHistory,
     addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme,
     addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem,
     equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome,

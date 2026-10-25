@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Crown, Sparkles, Zap, ArrowUpRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useSettings } from '../context/slices';
 import { levelFromXp } from '../lib/xp';
 import { RANK_TIERS, RankEmblem } from '../lib/rankTiers';
 
 export default function XpGainOverlay() {
   const { xpGainData } = useApp();
+  const { fastCelebrations } = useSettings();
   const [animatedXp, setAnimatedXp] = useState<number>(xpGainData?.oldTotal ?? 0);
   const [isExiting, setIsExiting] = useState(false);
   const [leveledUpMidAnimation, setLeveledUpMidAnimation] = useState(false);
@@ -19,8 +21,8 @@ export default function XpGainOverlay() {
 
     const startLevel = levelFromXp(xpGainData.oldTotal).level;
     const startTime = performance.now();
-    const delay = 240; // Kapsül yerine oturduktan sonra akışı başlat
-    const duration = 2000; // 2 saniye boyunca akıcı sayaç ve bar dolumu
+    const delay = fastCelebrations ? 120 : 240; // Kapsül yerine oturduktan sonra akışı başlat
+    const duration = fastCelebrations ? 900 : 2000; // Normalde 2 saniyelik akıcı sayaç
 
     let rafId: number;
 
@@ -51,16 +53,17 @@ export default function XpGainOverlay() {
 
     rafId = requestAnimationFrame(tick);
 
-    // Sayaç 240+2000=2240ms'de biter → ~1sn dinlenme, sonra 380ms çıkış (3200+380=3580)
+    // Sayaç normalde 240+2000=2240ms'de biter → ~1sn dinlenme, sonra 380ms çıkış.
+    // Hızlı modda sayaç 120+900=1020ms'de biter; çıkış animasyonu kısalır.
     const exitTimer = setTimeout(() => {
       setIsExiting(true);
-    }, 3200);
+    }, fastCelebrations ? 1500 : 3200);
 
     return () => {
       cancelAnimationFrame(rafId);
       clearTimeout(exitTimer);
     };
-  }, [xpGainData]);
+  }, [xpGainData, fastCelebrations]);
 
   const currentLvlData = useMemo(() => levelFromXp(animatedXp), [animatedXp]);
   const oldLvlData = useMemo(

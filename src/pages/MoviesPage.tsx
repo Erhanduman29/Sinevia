@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import {
   Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter,
   ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock,
@@ -22,11 +22,13 @@ import RatingModal from '../components/RatingModal';
 import EditMovieModal from '../components/EditMovieModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PickModal from '../components/PickModal';
-import DnaSynthesizerModal from '../components/DnaSynthesizerModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import AbandonModal from '../components/AbandonModal';
 import type { Movie, ExternalActionTemplate } from '../types';
 import '../components/movies-premium.css';
+
+// Nadiren açılan ağır modal: yalnızca ilk kez açıldığında indirilir.
+const DnaSynthesizerModal = lazy(() => import('../components/DnaSynthesizerModal'));
 
 type SortMode = 'az' | 'year' | 'rating' | 'added' | 'calibrated';
 type WatchedFilterMode = 'all' | 'unwatched' | 'watched' | 'past' | 'graveyard';
@@ -1665,7 +1667,11 @@ export default function MoviesPage() {
         />
       )}
 
-      {showDna && <DnaSynthesizerModal onClose={() => setShowDna(false)} />}
+      {showDna && (
+        <Suspense fallback={null}>
+          <DnaSynthesizerModal onClose={() => setShowDna(false)} />
+        </Suspense>
+      )}
 
       {pickedMovie && (
         <RatingModal

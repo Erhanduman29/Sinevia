@@ -23,6 +23,8 @@ export const BOOT_SNAPSHOT_KEYS = [
   // düşüp (kısa süreli "1. seviye" parlaması) yanlış veri buluta yazılabiliyordu.
   'achievements',
   'notificationsEnabled', 'notifyMessages', 'notifyFriendRequests', 'notifyLists',
+  // Görsel tercihler açılışta hemen uygulanmalı (aksi halde ilk karelerde tam animasyon oynar).
+  'reducedMotion', 'fastCelebrations',
 ] as const;
 
 /** localStorage'a yazarken büyük kütüphaneyi ATLA (quota hatası + 5MB sınırı önlemek için). */
@@ -52,6 +54,22 @@ export const PREV_ACCOUNT_KEY = 'sinevia_prev_account';
 export const ZERO_RESET_KEY = 'sinevia_zero_reset';
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
+
+/** Depolama yazımı başarısız olduğunda uygulamayı haberdar etmek için basit köprü. */
+export type StorageErrorKind = 'idb' | 'local';
+let storageErrorHandler: ((kind: StorageErrorKind) => void) | null = null;
+
+export function setStorageErrorHandler(handler: ((kind: StorageErrorKind) => void) | null): void {
+  storageErrorHandler = handler;
+}
+
+function reportStorageError(kind: StorageErrorKind): void {
+  try {
+    storageErrorHandler?.(kind);
+  } catch {
+    /* hata bildirimi de hata vermesin */
+  }
+}
 
 function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise;
@@ -103,15 +121,19 @@ export async function idbGet<T = unknown>(key: string): Promise<T | null> {
 /** IDB'ye yaz. IDB yoksa → false (çağıran taraf localStorage'a düşebilir). */
 export async function idbSet(key: string, value: unknown): Promise<boolean> {
   const db = await openDb();
-  if (!db) return false;
+  if (!db) {
+    reportStorageError('idb');
+    return false;
+  }
   return new Promise((resolve) => {
     try {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       tx.objectStore(STORE_NAME).put(value, key);
       tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
-      tx.onabort = () => resolve(false);
+      tx.onerror = () => { reportStorageError('idb'); resolve(false); };
+      tx.onabort = () => { reportStorageError('idb'); resolve(false); };
     } catch {
+      reportStorageError('idb');
       resolve(false);
     }
   });
@@ -134,15 +156,18 @@ export async function idbDel(key: string): Promise<void> {
 }
 
 /** Boot anlık görüntüsü: localStorage'da sadece küçük alanları tut (büyük kütüphaneyi yazma). */
-export function writeBootSnapshot(data: Record<string, unknown>): void {
+export function writeBootSnapshot(data: Record<string, unknown>): boolean {
   try {
     const snapshot: Record<string, unknown> = {};
     for (const k of BOOT_SNAPSHOT_KEYS) {
       if (data[k] !== undefined) snapshot[k] = data[k];
     }
     localStorage.setItem(LOCAL_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    return true;
   } catch {
-    /* kota dolu / localStorage yok → sessiz geç */
+    // Kota dolu / localStorage kapalı: sessiz kalmak yerine uygulamaya haber ver.
+    reportStorageError('local');
+    return false;
   }
 }
 

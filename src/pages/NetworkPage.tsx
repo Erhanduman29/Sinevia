@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import {
   Users, UserPlus, Trophy, Activity, Check, X, Star, Plus, Copy, RefreshCw,
   Trash2, Medal, Film, Tv, ShieldAlert, Zap, Sparkles, Inbox, Send, Gift,
@@ -8,11 +8,14 @@ import {
 import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
 import { useTutorial } from '../context/TutorialContext';
 import type { ShowcaseItem } from '../context/AppContext';
-import { supabase } from '../lib/supabase';
+import {
+  supabase,
+  PROFILE_PUBLIC_COLUMNS, FRIENDSHIP_COLUMNS, RECOMMENDATION_COLUMNS,
+  NETWORK_LOG_COLUMNS, MESSAGE_COLUMNS,
+} from '../lib/supabase';
 import { uid, ratingBgClass } from '../lib/utils';
 import { levelFromXp } from '../lib/xp';
 import { showcaseLimit } from '../lib/marketItems';
-import AgentProfileModal from '../components/AgentProfileModal';
 import ShowcaseEditorModal from '../components/ShowcaseEditorModal';
 import ChatHubModal, { renderChatMessageBubble } from '../components/ChatHubModal';
 import RecommendationModals from '../components/RecommendationModals';
@@ -20,6 +23,9 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import type { Movie } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 import '../components/network-premium.css';
+
+// Nadiren açılan ağır modal: yalnızca ilk kez açıldığında indirilir.
+const AgentProfileModal = lazy(() => import('../components/AgentProfileModal'));
 
 function timeAgo(dateString: string) {
   if (!dateString) return '';
@@ -146,13 +152,11 @@ export default function NetworkPage() {
   const [friendToRemove, setFriendToRemove] = useState<string | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
-  const viewingProfileIdRef = useRef<string | null>(null);
 
   const [syncTick, setSyncTick] = useState(0);
   const [radarTick, setRadarTick] = useState(Date.now());
 
   useEffect(() => { profilesMapRef.current = profilesMap; }, [profilesMap]);
-  useEffect(() => { viewingProfileIdRef.current = viewingProfileId; }, [viewingProfileId]);
 
   useEffect(() => {
     const t = setInterval(() => setRadarTick(Date.now()), 15000);
@@ -179,8 +183,8 @@ export default function NetworkPage() {
     setChatMessages([]);
 
     const [{ data: logsData }, { data: freshProfile }] = await Promise.all([
-      supabase.from('network_logs').select('*').eq('agent_id', targetId).order('created_at', { ascending: false }).limit(50),
-      supabase.from('profiles').select('*').eq('agent_id', targetId).maybeSingle()
+      supabase.from('network_logs').select(NETWORK_LOG_COLUMNS).eq('agent_id', targetId).order('created_at', { ascending: false }).limit(50),
+      supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('agent_id', targetId).maybeSingle()
     ]);
     if (freshProfile) {
       setProfilesMap(prev => ({ ...prev, [targetId]: freshProfile }));
@@ -192,25 +196,46 @@ export default function NetworkPage() {
   };
 
   useEffect(() => {
+    if (!(viewingProfileId && viewingProfileId !== data.agentId && profileTab === 'chat' && data.agentId)) return;
+
+    let cancelled = false;
+
     const loadProfileChat = async () => {
-      if (viewingProfileId && viewingProfileId !== data.agentId && profileTab === 'chat' && data.agentId) {
-        const { data: rawMsgs } = await supabase
-          .from('messages')
-          .select('*')
-          .or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${viewingProfileId}),and(sender_id.eq.${viewingProfileId},receiver_id.eq.${data.agentId})`)
-          .order('created_at', { ascending: true });
+      const { data: rawMsgs } = await supabase
+        .from('messages')
+        .select(MESSAGE_COLUMNS)
+        .or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${viewingProfileId}),and(sender_id.eq.${viewingProfileId},receiver_id.eq.${data.agentId})`)
+        .order('created_at', { ascending: false })
+        .limit(200);
 
-        setChatMessages((prev: any[]) => {
-          const newMsgs = (rawMsgs || []).filter((m: any) => !m.group_id);
-          const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
-          const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.receiver_id === viewingProfileId && !m.group_id);
-          return [...newMsgs, ...localOnly].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        });
+      if (cancelled) return;
 
-        await supabase.from('messages').update({ is_read: true }).eq('receiver_id', data.agentId).eq('sender_id', viewingProfileId).eq('is_read', false);
-      }
+      // Son 200 mesajı aldık; ekranda eskiden yeniye göster.
+      const newMsgs = [...(rawMsgs || [])].reverse().filter((m: any) => !m.group_id);
+
+      setChatMessages((prev: any[]) => {
+        const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
+        const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.receiver_id === viewingProfileId && !m.group_id);
+        return [...newMsgs, ...localOnly].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      });
+
+      await supabase.from('messages').update({ is_read: true }).eq('receiver_id', data.agentId).eq('sender_id', viewingProfileId).eq('is_read', false);
     };
+
     loadProfileChat();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadProfileChat();
+    }, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadProfileChat();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [viewingProfileId, profileTab, data.agentId, syncTick]);
 
   const fetchData = useCallback(async (isSilent = false) => {
@@ -218,7 +243,14 @@ export default function NetworkPage() {
     if (!isSilent) setRefreshing(true);
 
     try {
-      const { data: friendshipsData } = await supabase.from('friendships').select('*').or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`);
+      // BAĞIMSIZ SORULAR PARALEL: 6 sıralı istek yerine 2 tur.
+      const [friendshipsRes, recRes, unreadRes] = await Promise.all([
+        supabase.from('friendships').select(FRIENDSHIP_COLUMNS).or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`),
+        supabase.from('recommendations').select(RECOMMENDATION_COLUMNS).or(`receiver_id.eq.${data.agentId},sender_id.eq.${data.agentId}`).order('created_at', { ascending: false }).limit(100),
+        supabase.from('messages').select('sender_id, group_id').eq('receiver_id', data.agentId).eq('is_read', false),
+      ]);
+
+      const friendshipsData = friendshipsRes.data;
       const fList = friendshipsData || [];
       const acceptedIds = new Set<string>();
       const incoming: any[] = [];
@@ -231,7 +263,7 @@ export default function NetworkPage() {
 
       const allRelevantIds = Array.from(new Set([data.agentId, ...Array.from(acceptedIds), ...incoming.map((i: any) => i.requester_id), ...outgoing.map((o: any) => o.receiver_id)]));
 
-      const { data: recData } = await supabase.from('recommendations').select('*').or(`receiver_id.eq.${data.agentId},sender_id.eq.${data.agentId}`).order('created_at', { ascending: false });
+      const recData = recRes.data;
       const recList = recData || [];
       recList.forEach((r: any) => {
         if (!allRelevantIds.includes(r.sender_id)) allRelevantIds.push(r.sender_id);
@@ -239,7 +271,7 @@ export default function NetworkPage() {
       });
       setRecommendations(recList);
 
-      const { data: unreadDataRaw } = await supabase.from('messages').select('sender_id, group_id').eq('receiver_id', data.agentId).eq('is_read', false);
+      const unreadDataRaw = unreadRes.data;
       const unreadData = (unreadDataRaw || []).filter((m: any) => !m.group_id);
 
       const unreads: Record<string, number> = {};
@@ -247,27 +279,36 @@ export default function NetworkPage() {
       setUnreadMessages(unreads);
 
       let pMap = { ...profilesMapRef.current };
-      if (allRelevantIds.length > 0) {
-        const { data: profilesData } = await supabase.from('profiles').select('*').in('agent_id', allRelevantIds);
-        (profilesData || []).forEach((p: any) => { 
-          // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
-          if (p.agent_id === data.agentId) {
-            p.movies_watched = localMoviesWatched;
-            p.past_movies_watched = localPastMoviesWatched;
-          }
-          pMap[p.agent_id] = p; 
-        });
-      }
 
-      const { data: leadersData } = await supabase.from('profiles').select('*').order('total_xp', { ascending: false }).limit(100);
+      // İkinci tur: profiller + liderlik + akış paralel.
+      const [profilesRes, leadersRes, logsRes] = await Promise.all([
+        allRelevantIds.length > 0
+          ? supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', allRelevantIds)
+          : Promise.resolve({ data: [] as any[] } as any),
+        supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).order('total_xp', { ascending: false }).limit(50),
+        acceptedIds.size > 0
+          ? supabase.from('network_logs').select(NETWORK_LOG_COLUMNS).in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(100)
+          : Promise.resolve({ data: [] as any[] } as any),
+      ]);
+
+      (profilesRes.data || []).forEach((p: any) => {
+        // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
+        if (p.agent_id === data.agentId) {
+          p.movies_watched = localMoviesWatched;
+          p.past_movies_watched = localPastMoviesWatched;
+        }
+        pMap[p.agent_id] = p;
+      });
+
+      const leadersData = leadersRes.data;
       if (leadersData) {
-        leadersData.forEach((p: any) => { 
+        leadersData.forEach((p: any) => {
           // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
           if (p.agent_id === data.agentId) {
             p.movies_watched = localMoviesWatched;
             p.past_movies_watched = localPastMoviesWatched;
           }
-          pMap[p.agent_id] = p; 
+          pMap[p.agent_id] = p;
         });
       }
       setProfilesMap({ ...pMap });
@@ -282,7 +323,7 @@ export default function NetworkPage() {
       setFriends(acceptedFriends); setPendingIncoming(incoming); setPendingOutgoing(outgoing);
 
       if (acceptedIds.size > 0) {
-        const { data: logsData } = await supabase.from('network_logs').select('*').in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(200);
+        const logsData = logsRes.data;
         // Akıştan gizlenen eski izleme kayıtlarını client-side ele (NULL korunur).
         setFeed((logsData || []).filter((l: any) => l.action_type !== 'watched_hidden'));
       } else { setFeed([]); }
@@ -295,40 +336,22 @@ export default function NetworkPage() {
     fetchData();
     if (!data.agentId) return;
 
-    const channel = supabase.channel('sinevia_global_socket')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload: any) => {
-        const newMsg = payload.new;
-        const vTarget = viewingProfileIdRef.current;
-        if (vTarget && !newMsg.group_id) {
-          if ((newMsg.sender_id === data.agentId && newMsg.receiver_id === vTarget) ||
-              (newMsg.sender_id === vTarget && newMsg.receiver_id === data.agentId)) {
-            setChatMessages((prev: any[]) => prev.some((m: any) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
-          }
-        }
-        setSyncTick(t => t + 1);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload: any) => {
-        if (payload.new && payload.new.agent_id) {
-          setProfilesMap(prev => {
-            const updated = { ...payload.new };
-            // GELEN SOKET VERİSİNDE DE KENDİ VERİMİZİ DÜZELTİYORUZ
-            if (updated.agent_id === data.agentId) {
-              updated.movies_watched = localMoviesWatched;
-              updated.past_movies_watched = localPastMoviesWatched;
-            }
-            return { ...prev, [updated.agent_id]: updated };
-          });
-        }
-        setSyncTick(t => t + 1);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_group_members' }, () => setSyncTick(t => t + 1))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'network_logs' }, () => setSyncTick(t => t + 1))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'recommendations' }, () => setSyncTick(t => t + 1))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => setSyncTick(t => t + 1))
-      .subscribe();
+    // Filtresiz realtime aboneliği kaldırıldı: tek bir yazma tüm istemcileri
+    // uyandırıp 6 sorgu çalıştırıyordu. Artık 45 saniyede bir sessiz yenileme
+    // + sekme görünür olduğunda anında yenileme var.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData(true);
+    }, 45000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchData(true);
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
-    return () => { supabase.removeChannel(channel); };
-  }, [data.agentId, fetchData, localMoviesWatched, localPastMoviesWatched]);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [data.agentId, fetchData]);
 
   useEffect(() => {
     if (syncTick > 0) fetchData(true);
@@ -1457,6 +1480,7 @@ export default function NetworkPage() {
 
       {/* 1. PROFİL MODALI */}
       {viewingProfileId && (
+        <Suspense fallback={null}>
         <AgentProfileModal
           viewingProfileId={viewingProfileId}
           profile={
@@ -1511,6 +1535,7 @@ export default function NetworkPage() {
           onClose={() => setViewingProfileId(null)}
           chatScrollRef={chatScrollRef}
         />
+        </Suspense>
       )}
 
       {/* 2. VİTRİN DÜZENLEME MODALI */}
