@@ -3,6 +3,13 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import './styles/animations.css';
+import { initInstallPromptCapture } from './lib/installPrompt';
+
+// PWA kurulum olayı (`beforeinstallprompt`) sayfa açılışında, kullanıcı
+// Ayarlar'ı açmadan önce tetiklenir. Dinleyici burada erkenden kurulmazsa
+// "Uygulamayı Yükle" düğmesi hiçbir zaman tarayıcının kurulum penceresini
+// açamaz. Üretimde ve geliştirmede zararsızdır.
+initInstallPromptCapture();
 
 // GELİŞTİRME TEMİZLİĞİ: Eski sürümlerden kalan dev service worker'ı ve önbellekleri
 // kaldır. Aksi halde `vite dev` sırasında eski SW yeni JS yerine cache'teki sürümü

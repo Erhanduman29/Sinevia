@@ -13,14 +13,19 @@ export default defineConfig({
         enabled: false
       },
       manifest: {
+        // `id` ve `scope` sabit: kurulum kimliği start_url değişse bile bozulmasın.
+        id: '/',
         name: 'Sinevia - Sinema Takip',
         short_name: 'Sinevia',
         description: 'Kişisel ve yerel sinema kütüphaneniz',
+        lang: 'tr',
         theme_color: '#090a0f',
         background_color: '#090a0f',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
+        scope: '/',
+        prefer_related_applications: false,
         icons: [
           {
             // Statik (animasyonsuz) Sini maskotu

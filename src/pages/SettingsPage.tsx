@@ -16,6 +16,8 @@ import type { RatingCriterion, ExternalActionTemplate } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ShareImportModal from '../components/ShareImportModal';
 import ShortcutsPanel from '../components/ShortcutsPanel';
+import InstallAppCard from '../components/InstallAppCard';
+import { useInstallSignal } from '../hooks/useInstallSignal';
 import { uid } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import {
@@ -720,6 +722,9 @@ export default function SettingsPage() {
   // anahtara göre gruplanır, hiçbir state/handler değişmez.
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTabId>(getInitialSettingsTab);
   const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
+  // PWA kurulum durumu: bölüm rozetini ve bölümün varsayılan açık/kapalı
+  // hâlini belirler (yüklü değilse başlık açık gelir, yönergeler görünür).
+  const installSignal = useInstallSignal();
 
   useEffect(() => {
     try { localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, activeSettingsTab); } catch {}
@@ -1265,6 +1270,26 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Uygulamayı Yükle"
+            icon={<Download size={18} className={installSignal.installed ? 'text-emerald-400 flex-shrink-0' : 'text-azure-400 flex-shrink-0'} />}
+            badge={
+              <span
+                className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border flex items-center gap-1 flex-shrink-0 ${
+                  installSignal.installed
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : 'bg-azure-500/20 text-azure-400 border-azure-500/30'
+                }`}
+              >
+                {installSignal.installed ? 'Yüklü' : 'Kurulabilir'}
+              </span>
+            }
+            defaultOpen={!installSignal.installed}
+            desc="Sinevia'yı telefonuna veya bilgisayarına uygulama olarak ekle; kendi penceresinde açılır, daha hızlı çalışır ve bildirimler için gereklidir."
+          >
+            <InstallAppCard />
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -1816,6 +1841,24 @@ export default function SettingsPage() {
                         ? ' iPhone/iPad: siteyi Safari\'de "Ana Ekrana Ekle" ile yükleyip oradan açmalısın.'
                         : ''}
                     </p>
+
+                    {!installSignal.installed && (
+                      <button
+                        onClick={() => {
+                          // Kurulum bölümü kendi açık/kapalı durumunu localStorage'da tutuyor;
+                          // sekmeyi değiştirmeden önce bölümü açık olarak işaretle.
+                          try {
+                            localStorage.setItem('sinevia_settings_section_Uygulamayı Yükle', 'true');
+                          } catch {}
+                          setActiveSettingsTab('general');
+                          showToast('Genel sekmesinde "Uygulamayı Yükle" adımları açıldı.', 'info');
+                        }}
+                        className={`${BTN_S} px-3 py-2 text-[10px] rounded-[var(--r-sm,10px)] self-start`}
+                        style={BTN_S_STYLE}
+                      >
+                        <Download size={13} /> Kurulum Adımlarını Göster
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
