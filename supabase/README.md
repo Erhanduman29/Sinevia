@@ -153,3 +153,36 @@ güvenlik açığını geri getirir.
 5. Arkadaşlık isteği gönder/kabul et; akış ve liderlik tablosu dolmalı.
 6. Bulut yedeği yüklenmeli; sayfa yenilenince geri gelmeli.
 7. Hesap silme yalnızca "hesabımı sil" akışında çalışmalı.
+
+## Web Push (006_web_push.sql)
+
+Uygulama kapalıyken bildirim için gerçek Web Push kullanılır.
+
+- `push_subscriptions`: her cihazın push aboneliği (endpoint benzersiz).
+- `network_notification_prefs`: bildirim tercihlerinin sunucu kopyası;
+  Edge Function push göndermeden önce buraya bakar.
+- `push_webhook_config`: tek satırlık, istemciye kapalı ayar tablosu
+  (webhook secret + fonksiyon adresi). Proje taşınırsa yalnızca
+  `endpoint` güncellenir.
+- `push_dispatch_webhook`: `messages`, `friendships`, `recommendations`
+  INSERT olaylarını `pg_net` ile Edge Function'a iletir. Hata olsa bile
+  asıl INSERT'i bozmaz.
+
+Kurulum (tek komut):
+
+```powershell
+npm run push:setup
+```
+
+Komut VAPID anahtarlarını üretir, `db push` ile bu migration'ı uygular,
+Edge Function secret'larını yükler ve `send-push` fonksiyonunu
+`--no-verify-jwt` ile yayınlar. Ardından `VITE_VAPID_PUBLIC_KEY`
+değerini Vercel/Netlify ortam değişkenlerine ekleyip yeniden deploy edin.
+
+Notlar:
+- `npm run dev` service worker'ı kapattığı için push yalnızca
+  `npm run build && npm run preview` veya yayındaki sitede test edilir.
+- iOS/iPadOS 16.4+ ve "Ana Ekrana Ekle" ile kurulmuş PWA şarttır.
+- Uygulama açıkken bildirimler ayrıca 45 saniyelik REST yoklamasıyla
+  gösterilir; realtime bu projede `x-agent-token` başlığını websocket
+  üzerinden taşımadığı için kullanılmaz.

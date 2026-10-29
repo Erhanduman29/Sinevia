@@ -44,6 +44,7 @@ import {
 } from '../lib/appBackup';
 import { pruneExpiredPlanItems } from '../lib/planPrune';
 import { supabase } from '../lib/supabase';
+import { ensurePushSubscription, saveNotificationPrefs, showAppNotification } from '../lib/notifications';
 import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, setStorageErrorHandler, PREV_ACCOUNT_KEY, BACKUP_STORAGE_KEY, isFullAppRecord, isIdbAvailable } from '../lib/storageService';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
 import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, ActionsSlice } from './slices';
@@ -2841,27 +2842,180 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [hydrated, data.agentId]);
 
+  // Bildirim tercihleri sunucuya da yazılır: Edge Function push gönderirken
+  // bunları okur, böylece kapatılan tür için bildirim gitmez.
+  useEffect(() => {
+    if (!data.notificationsEnabled || !data.agentId) return;
+    void saveNotificationPrefs(data.agentId, {
+      messages: data.notifyMessages !== false,
+      friendRequests: data.notifyFriendRequests !== false,
+      lists: data.notifyLists !== false,
+    });
+  }, [data.notificationsEnabled, data.agentId, data.notifyMessages, data.notifyFriendRequests, data.notifyLists]);
+
+  // Uygulama AÇIKKEN bildirim: realtime kanalı bu projede x-agent-token
+  // başlığını websocket üzerinden taşımadığı için RLS olayları iletmiyor.
+  // Bu yüzden görünür sekmede 45 saniyede bir REST ile yoklanır.
+  // Uygulama kapalı/arka plandayken devreye Web Push girer
+  // (bkz. supabase/functions/send-push).
   useEffect(() => {
     if (!data.notificationsEnabled || !data.agentId) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    const channel = supabase.channel('realtime:push_notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${data.agentId}` }, () => {
-        if (data.notifyMessages !== false) new Notification('Sinevia - Yeni Mesaj 💬', { body: 'Ağından yeni bir mesajın var!', icon: '/icon.png' });
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friendships', filter: `receiver_id=eq.${data.agentId}` }, (payload) => {
-        if (data.notifyFriendRequests !== false && payload.new.status === 'pending') {
-          new Notification('Sinevia - Yeni Bağlantı 👤', { body: 'Biri sana arkadaşlık isteği gönderdi!', icon: '/icon.png' });
-        }
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'recommendations', filter: `receiver_id=eq.${data.agentId}` }, (payload) => {
-        if (data.notifyLists !== false) {
-          new Notification('Sinevia - Yeni Liste 🎁', { body: `Sana özel bir tavsiye listesi gönderildi: "${payload.new.list_title}"`, icon: '/icon.png' });
-        }
-      })
-      .subscribe();
+    const agentId = data.agentId;
 
-    return () => { supabase.removeChannel(channel); };
+    // Cihazın push aboneliğini tazele (anahtar veya cihaz değişmiş olabilir).
+    void ensurePushSubscription(agentId);
+
+    // İlk kurulumda eski bildirimlerin topluca gösterilmemesi için
+    // başlangıç zamanı "şimdi" kabul edilir.
+    const seenKey = `sinevia_notify_seen_${agentId}`;
+    let lastSeen = 0;
+    try {
+      lastSeen = Number(localStorage.getItem(seenKey) || 0) || 0;
+    } catch {
+      lastSeen = 0;
+    }
+    if (!lastSeen) {
+      lastSeen = Date.now();
+      try {
+        localStorage.setItem(seenKey, String(lastSeen));
+      } catch {
+        /* yoksay */
+      }
+    }
+
+    const notifyMessages = data.notifyMessages !== false;
+    const notifyFriendRequests = data.notifyFriendRequests !== false;
+    const notifyLists = data.notifyLists !== false;
+
+    let cancelled = false;
+
+    const check = async () => {
+      if (cancelled || document.visibilityState !== 'visible') return;
+      const sinceIso = new Date(lastSeen).toISOString();
+      let newest = lastSeen;
+
+      try {
+        const [msgRes, friendRes, listRes] = await Promise.all([
+          notifyMessages
+            ? supabase
+                .from('messages')
+                .select('id,created_at')
+                .eq('receiver_id', agentId)
+                .eq('is_read', false)
+                .gt('created_at', sinceIso)
+                .order('created_at', { ascending: false })
+                .limit(25)
+            : Promise.resolve({ data: [] as Array<{ created_at?: string }> }),
+          notifyFriendRequests
+            ? supabase
+                .from('friendships')
+                .select('id,created_at')
+                .eq('receiver_id', agentId)
+                .eq('status', 'pending')
+                .gt('created_at', sinceIso)
+                .order('created_at', { ascending: false })
+                .limit(25)
+            : Promise.resolve({ data: [] as Array<{ created_at?: string }> }),
+          notifyLists
+            ? supabase
+                .from('recommendations')
+                .select('id,created_at')
+                .eq('receiver_id', agentId)
+                .gt('created_at', sinceIso)
+                .order('created_at', { ascending: false })
+                .limit(25)
+            : Promise.resolve({ data: [] as Array<{ created_at?: string }> }),
+        ]);
+
+        const rowsOf = (res: unknown): Array<{ created_at?: string }> => {
+          const value = (res as { data?: unknown } | null)?.data;
+          return Array.isArray(value) ? (value as Array<{ created_at?: string }>) : [];
+        };
+
+        const messageRows = rowsOf(msgRes);
+        const friendRows = rowsOf(friendRes);
+        const listRows = rowsOf(listRes);
+
+        for (const row of [...messageRows, ...friendRows, ...listRows]) {
+          const time = row.created_at ? new Date(row.created_at).getTime() : NaN;
+          if (Number.isFinite(time) && time > newest) newest = time;
+        }
+
+        if (!cancelled) {
+          if (messageRows.length > 0) {
+            showAppNotification('Sinevia - Yeni Mesaj 💬', {
+              body:
+                messageRows.length > 1
+                  ? `${messageRows.length} yeni mesajın var!`
+                  : 'Ağından yeni bir mesajın var!',
+              url: '/#network',
+              tag: 'sinevia-messages',
+            });
+          }
+          if (friendRows.length > 0) {
+            showAppNotification('Sinevia - Yeni Bağlantı 👤', {
+              body:
+                friendRows.length > 1
+                  ? `${friendRows.length} yeni arkadaşlık isteğin var!`
+                  : 'Biri sana arkadaşlık isteği gönderdi!',
+              url: '/#network',
+              tag: 'sinevia-friendships',
+            });
+          }
+          if (listRows.length > 0) {
+            showAppNotification('Sinevia - Yeni Liste 🎁', {
+              body:
+                listRows.length > 1
+                  ? `${listRows.length} yeni tavsiye listen var!`
+                  : 'Sana özel bir tavsiye listesi gönderildi!',
+              url: '/#network',
+              tag: 'sinevia-lists',
+            });
+          }
+        }
+
+        if (newest > lastSeen) {
+          lastSeen = newest;
+          try {
+            localStorage.setItem(seenKey, String(newest));
+          } catch {
+            /* yoksay */
+          }
+        }
+      } catch (err) {
+        console.warn('[bildirim] yoklama hatası:', err);
+      }
+    };
+
+    // Tarayıcı aboneliği yenilerse (pushsubscriptionchange) yeni aboneliği kaydet.
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      const message = event.data as { type?: string } | null;
+      if (message && message.type === 'sinevia:resubscribe-push') {
+        void ensurePushSubscription(agentId);
+      }
+    };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage);
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void check();
+    };
+
+    const interval = window.setInterval(check, 45000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    void check();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', onServiceWorkerMessage);
+      }
+    };
   }, [data.notificationsEnabled, data.agentId, data.notifyMessages, data.notifyFriendRequests, data.notifyLists]);
 
   const showAchievementToast = useCallback((item: Omit<AchievementToastItem, 'id'>) => { const id = uid(); setAchievementToasts({ type: 'add', toast: { ...item, id } }); setTimeout(() => setAchievementToasts({ type: 'remove', id }), DISPLAY_DURATION_MS); }, []);

@@ -18,6 +18,15 @@ import ShareImportModal from '../components/ShareImportModal';
 import ShortcutsPanel from '../components/ShortcutsPanel';
 import { uid } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import {
+  ensurePushSubscription,
+  removePushSubscription,
+  getPushSupportStatus,
+  getNotificationPermission,
+  showAppNotification,
+  isIosDevice,
+  isStandalonePwa,
+} from '../lib/notifications';
 import { networkChangePassword, networkDeleteAccount } from '../lib/networkAuth';
 import {
   isSoundEnabled, setSoundEnabled,
@@ -1650,19 +1659,41 @@ export default function SettingsPage() {
                   onClick={async () => {
                     if (data.notificationsEnabled) {
                       toggleNotifications(false);
+                      if (data.agentId) void removePushSubscription(data.agentId);
                       showToast('Ana bildirim sistemi kapatıldı.', 'info');
+                      return;
+                    }
+
+                    if (!data.agentId) {
+                      showToast('Bildirimler için önce Sinevia Ağı hesabına giriş yapmalısın.', 'warning');
+                      return;
+                    }
+
+                    const support = getPushSupportStatus();
+                    if (support === 'ios-install-required') {
+                      showToast(
+                        'iPhone/iPad\'de bildirim için siteyi Safari\'de açıp "Ana Ekrana Ekle" ile yükle, sonra uygulamayı ana ekrandan başlat.',
+                        'warning',
+                      );
+                      return;
+                    }
+                    if (support === 'missing-key') {
+                      showToast('Bildirim altyapısı henüz kurulmadı (VAPID anahtarı yok).', 'error');
+                      return;
+                    }
+                    if (support === 'unsupported') {
+                      showToast('Kullandığınız tarayıcı bildirimleri desteklemiyor.', 'error');
+                      return;
+                    }
+
+                    const result = await ensurePushSubscription(data.agentId);
+                    if (result.ok) {
+                      toggleNotifications(true);
+                      showToast('Harika! Bildirim izni alındı ve bu cihaz kaydedildi.', 'success');
+                    } else if (result.reason === 'denied') {
+                      showToast('Bildirim izni reddedildi. Tarayıcı ayarlarından izin vermelisin.', 'warning');
                     } else {
-                      if (!('Notification' in window)) {
-                        showToast('Kullandığınız tarayıcı bildirimleri desteklemiyor.', 'error');
-                        return;
-                      }
-                      const perm = await Notification.requestPermission();
-                      if (perm === 'granted') {
-                        toggleNotifications(true);
-                        showToast('Harika! Bildirim izni alındı.', 'success');
-                      } else {
-                        showToast('Bildirim izni reddedildi. Tarayıcı ayarlarından izin vermelisin.', 'warning');
-                      }
+                      showToast(result.message, 'error');
                     }
                   }}
                   role="switch"
@@ -1749,6 +1780,42 @@ export default function SettingsPage() {
                         style={SWITCH_KNOB_STYLE}
                       />
                     </button>
+                  </div>
+
+                  <div className="pt-3 mt-1 border-t border-ink-800/70 flex flex-col gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!data.agentId) return;
+                        const result = await ensurePushSubscription(data.agentId);
+                        if (!result.ok) {
+                          showToast(result.message, 'error');
+                          return;
+                        }
+                        showAppNotification('Sinevia - Test Bildirimi 🔔', {
+                          body: 'Bildirimler çalışıyor. Bu bildirimi görüyorsan hazırsın!',
+                          url: '/#settings',
+                          tag: 'sinevia-test',
+                        });
+                        showToast('Test bildirimi gönderildi.', 'success');
+                      }}
+                      className={`${BTN_P} px-3 py-2 text-[10px] rounded-[var(--r-sm,10px)] self-start`}
+                      style={BTN_P_STYLE}
+                    >
+                      <BellRing size={13} /> Test Bildirimi Gönder
+                    </button>
+
+                    {getNotificationPermission() !== 'granted' && (
+                      <p className="text-[9px] text-amber-400 font-medium leading-relaxed">
+                        Tarayıcı bildirim izni kapalı görünüyor. Telefon/tarayıcı ayarlarından Sinevia için
+                        bildirimlere izin ver.
+                      </p>
+                    )}
+                    <p className="text-[9px] text-ink-500 leading-relaxed">
+                      Uygulama kapalıyken de bildirim almak için bu cihazın kayıtlı olması gerekir.
+                      {isIosDevice() && !isStandalonePwa()
+                        ? ' iPhone/iPad: siteyi Safari\'de "Ana Ekrana Ekle" ile yükleyip oradan açmalısın.'
+                        : ''}
+                    </p>
                   </div>
                 </div>
               )}
