@@ -5,7 +5,7 @@
  * Oturum token'ı localStorage'da tutulur; sayfa yenilendiğinde korur.
  */
 
-import { supabase } from './supabase';
+import { supabase, clearReadCache } from './supabase';
 
 const SESSION_KEY = 'sinevia_network_session';
 
@@ -45,6 +45,8 @@ export function setStoredSessionToken(token: string | null): void {
       localStorage.removeItem(SESSION_KEY);
     }
   } catch { /* kota / gizli mod */ }
+  // Hesap değişti: önceki hesabın önbelleğe alınmış ağ verileri gösterilmesin.
+  clearReadCache();
 }
 
 /** Ağdan çıkış yap: RPC çağrısı + local temizleme. */

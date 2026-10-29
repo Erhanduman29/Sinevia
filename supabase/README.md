@@ -186,3 +186,15 @@ Notlar:
 - Uygulama açıkken bildirimler ayrıca 45 saniyelik REST yoklamasıyla
   gösterilir; realtime bu projede `x-agent-token` başlığını websocket
   üzerinden taşımadığı için kullanılmaz.
+
+## Ağ kimliği (007_network_identity.sql)
+
+`current_agent_id()` artık sırayla şunlara bakar:
+
+1. `x-network-session` başlığındaki aktif oturum (çoklu hesap desteği),
+2. `profiles.secret_token` (birincil cihaz),
+3. `network_devices` içindeki tek kayıtlı cihaz (oturum yoksa).
+
+Bu sayede ikinci cihazda arkadaşlar, mesajlar, öneriler ve akış görünür;
+aynı cihazda farklı hesaplara girildiğinde her hesap kendi verisini görür.
+İstemci bu başlığı `src/lib/supabase.ts` içinde her isteğe otomatik ekler.

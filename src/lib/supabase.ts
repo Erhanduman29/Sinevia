@@ -34,17 +34,57 @@ function bufferedToResponse(b: BufferedRead): Response {
   });
 }
 
-const cachedFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-  const method = ((init && init.method) || (input instanceof Request ? input.method : 'GET') || 'GET').toUpperCase();
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-  if (!url.includes('/rest/v1/')) return fetch(input, init);
+/**
+ * Aktif ağ oturumunu (hangi hesap açıksa) her istekte başlık olarak gönderir.
+ * Böylece aynı cihazda birden fazla hesap olsa bile sunucu doğru hesabı bilir.
+ * (networkAuth.ts ile aynı localStorage anahtarı; döngüsel import olmasın diye
+ * burada doğrudan okunuyor.)
+ */
+function getNetworkSessionToken(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const raw = localStorage.getItem('sinevia_network_session');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.session_token === 'string' ? parsed.session_token : '';
+  } catch {
+    return '';
+  }
+}
 
-  // Token'ı cache anahtarına kat: hesap değişince eski kullanıcının yanıtı
-  // yeni oturuma servis edilmesin.
-  const token = new Headers(init?.headers).get('x-agent-token')
-    || (input instanceof Request ? input.headers.get('x-agent-token') : '')
-    || '';
-  const cacheKey = `${token}::${url}`;
+/** İsteğe güncel hesap başlıklarını ekler (x-network-session). */
+function withAccountHeaders(input: RequestInfo | URL, init?: RequestInit): RequestInit {
+  const sessionToken = getNetworkSessionToken();
+  const baseHeaders = init?.headers
+    ?? (input instanceof Request ? input.headers : undefined);
+  const headers = new Headers(baseHeaders);
+  if (sessionToken) {
+    headers.set('x-network-session', sessionToken);
+  } else {
+    headers.delete('x-network-session');
+  }
+  return { ...(init || {}), headers };
+}
+
+/** Okuma önbelleğini temizler (giriş/çıkış/hesap değişiminde). */
+export function clearReadCache(): void {
+  readCache.clear();
+  inflightReads.clear();
+  readCacheEpoch++;
+}
+
+const cachedFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const preparedInit = withAccountHeaders(input, init);
+  const method = ((preparedInit.method) || (input instanceof Request ? input.method : 'GET') || 'GET').toUpperCase();
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  if (!url.includes('/rest/v1/')) return fetch(input, preparedInit);
+
+  // Token + oturum bilgisini cache anahtarına kat: hesap değişince eski
+  // kullanıcının yanıtı yeni oturuma servis edilmesin.
+  const headers = new Headers(preparedInit.headers);
+  const token = headers.get('x-agent-token') || '';
+  const sessionToken = headers.get('x-network-session') || '';
+  const cacheKey = `${token}::${sessionToken}::${url}`;
 
   if (method !== 'GET') {
     // Yazma → sadece YAZILAN TABLO okumalarını geçersiz kıl (epoch, yazmayla eşzamanlı biten okumaların cache'e girmesini de engeller).
@@ -56,7 +96,7 @@ const cachedFetch: typeof fetch = async (input: RequestInfo | URL, init?: Reques
     } else {
       readCache.clear();
     }
-    return fetch(input, init);
+    return fetch(input, preparedInit);
   }
 
   const hit = readCache.get(cacheKey);
@@ -65,7 +105,7 @@ const cachedFetch: typeof fetch = async (input: RequestInfo | URL, init?: Reques
   let pending = inflightReads.get(cacheKey);
   if (!pending) {
     const epoch = readCacheEpoch;
-    pending = fetch(input, init).then(async (res): Promise<BufferedRead> => {
+    pending = fetch(input, preparedInit).then(async (res): Promise<BufferedRead> => {
       const entry: BufferedRead = {
         ok: res.ok,
         status: res.status,

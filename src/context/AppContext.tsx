@@ -44,6 +44,7 @@ import {
 } from '../lib/appBackup';
 import { pruneExpiredPlanItems } from '../lib/planPrune';
 import { supabase } from '../lib/supabase';
+import { networkGetMe } from '../lib/networkAuth';
 import { ensurePushSubscription, saveNotificationPrefs, showAppNotification } from '../lib/notifications';
 import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, setStorageErrorHandler, PREV_ACCOUNT_KEY, BACKUP_STORAGE_KEY, isFullAppRecord, isIdbAvailable } from '../lib/storageService';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
@@ -2035,6 +2036,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // görüntüsü kütüphane içermediği için erken yazma gerçek veriyi ezebiliyordu.
   const [hydrated, setHydrated] = useState(false);
   const hydratedRef = useRef(false);
+  const identityReconciledRef = useRef(false);
   const hydrationTrustedRef = useRef(false);
   // Aynı hesap için iki farklı sürüm varsa kullanıcıya sorulur.
   const [cloudConflict, setCloudConflict] = useState<CloudConflictInfo | null>(null);
@@ -3358,6 +3360,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       recoverIdentity(agentId, '', nickname, { keepExistingRecoveryKey: true }),
     [recoverIdentity]
   );
+
+  // AÇILIŞ UZLAŞTIRMASI — Oturumdaki ağ hesabı ile cihazdaki kimlik ayrışmışsa
+  // (önceki giriş yarıda kaldıysa) sessizce düzelt. Böylece arkadaşlar,
+  // mesajlar ve akış yanlış hesap için yüklenmez.
+  useEffect(() => {
+    if (!hydrated || !hydrationTrustedRef.current || !data.agentId) return;
+    if (identityReconciledRef.current) return;
+    identityReconciledRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await networkGetMe();
+        if (!me || cancelled || !me.agent_id || me.agent_id === data.agentId) return;
+        const adopted = await adoptNetworkIdentity(me.agent_id, me.username);
+        if (adopted && !cancelled) window.location.reload();
+      } catch {
+        // Sessiz: bir sonraki açılışta yeniden denenir.
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [hydrated, data.agentId, adoptNetworkIdentity]);
   
   const updateShowcase = useCallback((showcase: ShowcaseItem[]) => { dispatch({ type: 'SET_SHOWCASE', showcase }); showToast('Profil vitrinin güncellendi!', 'success'); }, [showToast]);
 

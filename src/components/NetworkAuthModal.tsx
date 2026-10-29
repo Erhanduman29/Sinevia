@@ -95,22 +95,27 @@ export default function NetworkAuthModal({ onClose }: { onClose: () => void }) {
         await refreshNetworkUser();
         setIsOpen(false);
         onClose();
+        window.location.reload();
       } else {
         const session = await networkLogin(u, p);
 
         // 1) Bu cihazı hesaba kaydet. Profilin gizli anahtarı EZİLMEZ;
         //    böylece aynı hesap diğer cihazlarda da açık kalır (005).
-        let deviceChanged = false;
         try {
-          deviceChanged = await networkClaimDevice(p);
+          await networkClaimDevice(p);
         } catch {
           // Sessiz geç: eşitleme bir sonraki denemede kendini toparlar.
         }
 
         // 2) Farklı bir cihazdan girildiyse kimliği ağ hesabına geçir
         //    (bulut yedeği çekilir; yedek yoksa giriş geri alınır).
+        //    Ağ geçici olarak aksarsa 3 kez denenir.
         if (data.agentId && session.agent_id !== data.agentId) {
-          const adopted = await adoptNetworkIdentity(session.agent_id, session.username);
+          let adopted = false;
+          for (let attempt = 0; attempt < 3 && !adopted; attempt++) {
+            if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 800));
+            adopted = await adoptNetworkIdentity(session.agent_id, session.username);
+          }
           if (!adopted) {
             await networkLogout();
             await refreshNetworkUser();
@@ -127,8 +132,9 @@ export default function NetworkAuthModal({ onClose }: { onClose: () => void }) {
         setIsOpen(false);
         onClose();
 
-        // Anahtar yenilendiyse temiz bir açılış yap (eşitleme hemen çalışsın).
-        if (deviceChanged) window.location.reload();
+        // Her başarılı girişte temiz açılış: kütüphane, arkadaşlar, mesajlar
+        // ve akış aynı anda taze veriyle yüklenir.
+        window.location.reload();
       }
     } catch (err: any) {
       const raw = String(err?.message || '');
