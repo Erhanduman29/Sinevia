@@ -25,7 +25,6 @@ import {
   removePushSubscription,
   getPushSupportStatus,
   getNotificationPermission,
-  showAppNotification,
   isIosDevice,
   isStandalonePwa,
 } from '../lib/notifications';
@@ -1816,12 +1815,39 @@ export default function SettingsPage() {
                           showToast(result.message, 'error');
                           return;
                         }
-                        showAppNotification('Sinevia - Test Bildirimi 🔔', {
-                          body: 'Bildirimler çalışıyor. Bu bildirimi görüyorsan hazırsın!',
-                          url: '/#settings',
-                          tag: 'sinevia-test',
-                        });
-                        showToast('Test bildirimi gönderildi.', 'success');
+                        const { data: testResult, error: testError } = await supabase.rpc('push_self_test');
+                        if (testError) {
+                          showToast('Test isteği gönderilemedi: ' + testError.message, 'error');
+                          return;
+                        }
+                        if (!testResult?.ok) {
+                          const reason = testResult?.reason;
+                          const message =
+                            reason === 'pg_net_missing'
+                              ? 'Sunucuda pg_net eklentisi kapalı. Supabase > Database > Extensions bölümünden açın.'
+                              : reason === 'no_identity'
+                                ? 'Ağ hesabı kimliği bulunamadı. Çıkış yapıp tekrar giriş yapın.'
+                                : reason === 'dispatch_failed'
+                                  ? 'Sunucu isteği gönderemedi: ' + (testResult?.detail || 'bilinmeyen hata')
+                                  : 'Test isteği gönderilemedi (' + (reason || testResult?.error || 'bilinmeyen') + ').';
+                          showToast(message, 'error');
+                          return;
+                        }
+                        showToast('Test bildirimi gönderildi. Uygulamayı kapatıp birkaç saniye bekleyin.', 'success');
+
+                        // 3 sn sonra sunucu yanıtını kontrol et: sessiz hata kalmasın.
+                        await new Promise((resolve) => setTimeout(resolve, 3500));
+                        const { data: status } = await supabase.rpc('push_pipeline_status');
+                        if (status && Number(status.subscriptions) === 0) {
+                          showToast('Bu hesap için kayıtlı cihaz bulunamadı. Bildirim anahtarını kapatıp yeniden aç.', 'warning');
+                          return;
+                        }
+                        const lastResponse = Array.isArray(status?.recent_responses) ? status.recent_responses[0] : null;
+                        const statusCode = Number(lastResponse?.status_code || 0);
+                        if (statusCode >= 300 || lastResponse?.error_msg || lastResponse?.timed_out) {
+                          const detail = String(lastResponse?.body_preview || lastResponse?.error_msg || 'zaman aşımı');
+                          showToast(`Sunucu bildirimi gönderemedi (HTTP ${statusCode || '-'}): ${detail.slice(0, 140)}`, 'error');
+                        }
                       }}
                       className={`${BTN_P} px-3 py-2 text-[10px] rounded-[var(--r-sm,10px)] self-start`}
                       style={BTN_P_STYLE}

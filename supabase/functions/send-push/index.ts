@@ -101,30 +101,35 @@ Deno.serve(async (req: Request) => {
   const table = payload?.table || '';
   const record = payload?.record || {};
   const receiverId = record.receiver_id;
+  // Ayarlar > "Test Bildirimi" bu türle gelir: tercih kontrolü yapılmaz,
+  // böylece kullanıcı zincirin tamamını (pg_net -> function -> cihaz) test eder.
+  const isSelfTest = table === 'self_test';
 
   if (!table || !receiverId) return json({ skipped: 'no_receiver' });
 
-  const { data: prefs } = await admin
-    .from('network_notification_prefs')
-    .select('notify_messages, notify_friend_requests, notify_lists')
-    .eq('agent_id', receiverId)
-    .maybeSingle();
+  if (!isSelfTest) {
+    const { data: prefs } = await admin
+      .from('network_notification_prefs')
+      .select('notify_messages, notify_friend_requests, notify_lists')
+      .eq('agent_id', receiverId)
+      .maybeSingle();
 
-  const allowed =
-    table === 'messages'
-      ? prefs?.notify_messages !== false
-      : table === 'friendships'
-        ? prefs?.notify_friend_requests !== false
-        : table === 'recommendations'
-          ? prefs?.notify_lists !== false
-          : false;
+    const allowed =
+      table === 'messages'
+        ? prefs?.notify_messages !== false
+        : table === 'friendships'
+          ? prefs?.notify_friend_requests !== false
+          : table === 'recommendations'
+            ? prefs?.notify_lists !== false
+            : false;
 
-  if (!allowed) return json({ skipped: 'preference_off' });
+    if (!allowed) return json({ skipped: 'preference_off' });
+  }
 
   // --- 3) Bildirim metnini hazırla --------------------------------------
   const senderId = record.sender_id || record.requester_id || null;
   let senderName = 'Bir Sinevia üyesi';
-  if (senderId) {
+  if (senderId && !isSelfTest) {
     const { data: sender } = await admin
       .from('profiles')
       .select('nickname')
@@ -134,7 +139,14 @@ Deno.serve(async (req: Request) => {
   }
 
   let message: PushPayload;
-  if (table === 'messages') {
+  if (isSelfTest) {
+    message = {
+      title: 'Sinevia - Test Bildirimi',
+      body: 'Bildirimler çalışıyor. Bu bildirimi görüyorsan hazırsın!',
+      url: '/#settings',
+      tag: 'sinevia-test',
+    };
+  } else if (table === 'messages') {
     message = {
       title: 'Sinevia - Yeni Mesaj 💬',
       body: `${senderName}: ${truncate(String(record.content || 'Yeni bir mesajın var.'), 90)}`,
@@ -174,6 +186,7 @@ Deno.serve(async (req: Request) => {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
   const staleEndpoints: string[] = [];
+  const failures: Array<{ statusCode?: number; message?: string }> = [];
   let sent = 0;
   let failed = 0;
 
@@ -195,6 +208,13 @@ Deno.serve(async (req: Request) => {
           staleEndpoints.push(subscription.endpoint);
         } else {
           failed += 1;
+          // Uç nokta adresini gizle, yalnızca teşhis için sebebi sakla.
+          failures.push({
+            statusCode,
+            message: String((err as Error)?.message || '')
+              .replace(/https?:\/\/\S+/g, '[endpoint]')
+              .slice(0, 180),
+          });
           console.error('[send-push] gönderim hatası:', statusCode, (err as Error)?.message);
         }
       }
@@ -205,5 +225,5 @@ Deno.serve(async (req: Request) => {
     await admin.from('push_subscriptions').delete().in('endpoint', staleEndpoints);
   }
 
-  return json({ sent, failed, removed: staleEndpoints.length });
+  return json({ sent, failed, removed: staleEndpoints.length, errors: failures });
 });

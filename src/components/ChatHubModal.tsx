@@ -388,6 +388,8 @@ interface ChatHubModalProps {
   externalMediaShareOpen: boolean;
   onCloseExternalMediaShare: () => void;
   onSendProfileMediaCard: (encodedContent: string) => Promise<void>;
+  // Sohbet açılınca üstteki okunmamış rozetini anında temizlemek için.
+  onMessagesRead?: (chatId: string) => void;
 }
 
 export default function ChatHubModal({
@@ -409,6 +411,7 @@ export default function ChatHubModal({
   externalMediaShareOpen,
   onCloseExternalMediaShare,
   onSendProfileMediaCard,
+  onMessagesRead,
 }: ChatHubModalProps) {
   const [hubTab, setHubTab] = useState<'direct' | 'group'>('direct');
   const [hubActiveChat, setHubActiveChat] = useState<{
@@ -653,10 +656,18 @@ export default function ChatHubModal({
           }
         } catch {}
       }
+
+      // Aktif sohbet okundu sayılır: rozet sayfa yenilemeden temizlenir.
+      const openedChatId = hubActiveChat?.id;
+      if (openedChatId) {
+        setHubInboxDirect(prev => prev.map((c: any) => (c.id === openedChatId ? { ...c, unread: 0 } : c)));
+        setHubInboxGroup(prev => prev.map((c: any) => (c.id === openedChatId ? { ...c, unread: 0 } : c)));
+        onMessagesRead?.(openedChatId);
+      }
     } catch (err) {
       console.error(err);
     }
-  }, [hubActiveChat?.id, hubActiveChat?.type, myAgentId, setProfilesMap, showToast]);
+  }, [hubActiveChat?.id, hubActiveChat?.type, myAgentId, setProfilesMap, showToast, onMessagesRead]);
 
   useEffect(() => {
     if (isOpen) {

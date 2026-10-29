@@ -142,6 +142,18 @@ function waitForServiceWorker(timeoutMs: number): Promise<ServiceWorkerRegistrat
   ]);
 }
 
+/** Mevcut abonelik, elimizdeki VAPID anahtarıyla mı kurulmuş? */
+function sameApplicationServerKey(subscription: PushSubscription, expected: Uint8Array): boolean {
+  const existing = subscription.options?.applicationServerKey;
+  if (!existing) return false;
+  const bytes = new Uint8Array(existing as ArrayBuffer);
+  if (bytes.length !== expected.length) return false;
+  for (let i = 0; i < bytes.length; i += 1) {
+    if (bytes[i] !== expected[i]) return false;
+  }
+  return true;
+}
+
 /**
  * İzin ver + cihazı push aboneliğine kaydet.
  * Idempotent: abonelik zaten varsa yeniden kullanır, sunucudaki satırı tazeler.
@@ -188,12 +200,19 @@ export async function ensurePushSubscription(agentId: string): Promise<PushSetup
 
   try {
     const registration = await waitForServiceWorker(8000);
+    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
     let subscription = await registration.pushManager.getSubscription();
+
+    // VAPID anahtarı değiştiyse eski abonelik sunucuda 403 verir; yenile.
+    if (subscription && !sameApplicationServerKey(subscription, applicationServerKey)) {
+      await subscription.unsubscribe().catch(() => false);
+      subscription = null;
+    }
 
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        applicationServerKey,
       });
     }
 

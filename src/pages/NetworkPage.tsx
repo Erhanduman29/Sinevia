@@ -270,6 +270,8 @@ function NetworkPageContent() {
       });
 
       await supabase.from('messages').update({ is_read: true }).eq('receiver_id', data.agentId).eq('sender_id', viewingProfileId).eq('is_read', false);
+      // Rozet anında temizlenir; sayfa yenilemeyi beklemez.
+      setUnreadMessages((prev) => (prev[viewingProfileId] ? { ...prev, [viewingProfileId]: 0 } : prev));
     };
 
     loadProfileChat();
@@ -1620,6 +1622,7 @@ function NetworkPageContent() {
         externalMediaShareOpen={profileMediaShareOpen}
         onCloseExternalMediaShare={() => setProfileMediaShareOpen(false)}
         onSendProfileMediaCard={(encoded: string) => handleProfileSendMessage(encoded)}
+        onMessagesRead={(chatId: string) => setUnreadMessages(prev => ({ ...prev, [chatId]: 0 }))}
       />
 
       {/* 4. TAVSİYE KOLEKSİYONU GÖNDERME & İNCELEME MODALLARI */}
