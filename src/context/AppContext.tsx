@@ -50,6 +50,13 @@ import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, Action
 
 const STORAGE_KEY = 'sinevia-v1';
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
+/**
+ * Bu cihazın en son eşitlediği İÇERİK parmak izi (cihaza özel alanlar hariç).
+ * Açılışlar arasında korunur; "yüklenmemiş yerel değişiklik var mı?" sorusunu
+ * doğru yanıtlamak için kullanılır. Aksi halde boş/eksik sanıp çakışma
+ * penceresi açılıyordu.
+ */
+const CONTENT_HASH_KEY = 'sinevia_last_synced_content';
 
 /**
  * Bildirim tercihleri ayrı ve SENKRON bir localStorage anahtarında tutulur.
@@ -394,6 +401,43 @@ function getCleanHashString(stateObj: any, questStateRaw?: any, extrasRaw?: Reco
      return canonicalJson({ core: clean, quests: questStateRaw || {}, ...(extrasRaw || {}) });
   }
   return canonicalJson(clean);
+}
+
+/** Kısa, deterministik parmak izi (localStorage'a sığsın diye tam JSON yerine). */
+function shortHash(input: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x1000193;
+  for (let i = 0; i < input.length; i += 1) {
+    const c = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + c * (i + 1), 0x01000193) >>> 0;
+  }
+  return `${h1.toString(36)}-${h2.toString(36)}-${input.length.toString(36)}`;
+}
+
+/**
+ * ÇAKIŞMA / "aynı mı?" KARŞILAŞTIRMASI — yalnızca GERÇEK İÇERİK.
+ *
+ * Fark: cihaza özel alanlar bu hash'e girmez. Aksi halde aynı hesabın iki
+ * cihazı, kullanıcı hiçbir şey değiştirmese bile "farklı" görünüp sürekli
+ * "Hesap Eşitleme Çakışması" gösteriyordu:
+ *   - `recoveryKey` her cihazda farklı üretilir,
+ *   - `activeTab` / `settingsTab` / ses / kısayol gibi arayüz tercihleri
+ *     cihazdan cihaza doğal olarak farklıdır.
+ * Bu alanlar yedekte taşınmaya devam eder; sadece "veri değişti mi?"
+ * kararını etkilemezler.
+ */
+function getContentHash(stateObj: any, questStateRaw?: any) {
+  const clean = { ...stateObj };
+  delete clean.aiChatHistory;
+  delete clean.lastCloudSync;
+  delete clean.pendingToasts;
+  delete clean.pendingLevelUp;
+  delete clean.pendingLevelUpQueue;
+  delete clean.pendingXpGain;
+  delete clean.pendingCoinGain;
+  delete clean.recoveryKey;
+  return shortHash(canonicalJson({ core: clean, quests: questStateRaw || {} }));
 }
 
 /* =========================================================================
@@ -1966,7 +2010,9 @@ export interface AppContextValue {
   grantItem: (itemId: string, label: string, refId: string) => void;
   recordMarketOutcome: (outcome: 'failed' | 'cancelled', weekly: boolean, penalty: number, label: string, refId: string) => void;
   toggleNotifications: (enabled: boolean) => void; toggleShareWatched: (enabled: boolean) => void; toggleSharePastWatched: (enabled: boolean) => void; toggleSpecificNotification: (key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists', enabled: boolean) => void;
-  setNickname: (nickname: string) => void; recoverIdentity: (agentId: string, recoveryKey: string, nickname: string) => void;
+  setNickname: (nickname: string) => void; recoverIdentity: (agentId: string, recoveryKey: string, nickname: string) => Promise<boolean>;
+  /** Ağ girişinden sonra bu cihazı ağ hesabının kimliğine geçirir (bulut yedeğini çeker). */
+  adoptNetworkIdentity: (agentId: string, nickname: string) => Promise<boolean>;
   updateShowcase: (items: ShowcaseItem[]) => void;
   forceXpSync: () => void;
   syncAchievements: () => void;
@@ -2081,6 +2127,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setIsContractCelebrating = useCallback((val: boolean) => { contractCelebratingRef.current = val; setContractCelebratingState(val); }, []);
   
   const lastSyncedStorageHash = useRef<string>(getCleanHashString(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}'), readSyncExtras()));
+  // Son eşitlenen İÇERİK parmak izi (cihaza özel alanlar hariç). "Bu cihazda henüz
+  // buluta yazılmamış değişiklik var mı?" sorusunun tek doğru kaynağı.
+  // Açılışlar arasında localStorage'da korunur; çakışma penceresi YALNIZCA
+  // yerelde gerçek (yüklenmemiş) değişiklik varken açılır.
+  const lastSyncedContentHash = useRef<string>((() => {
+    try {
+      const saved = localStorage.getItem(CONTENT_HASH_KEY);
+      if (saved) return saved;
+    } catch { /* kota / gizli mod */ }
+    try {
+      return getContentHash(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}'));
+    } catch {
+      return '';
+    }
+  })());
   // En güncel reducer durumuna ref üzerinden erişim (localStorage artık sadece küçük bir anlık görüntü tutuyor).
   const dataRef = useRef(data); dataRef.current = data;
   // Yerel verinin son değişiklik zamanı — buluta yazmadan önce sürüm karşılaştırması için (Madde 3).
@@ -2108,9 +2169,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { return 0; }
   })());
 
+  /** Bu cihazın son eşitlediği içerik parmak izini kaydet (ref + localStorage). */
+  function setSyncedContent(hash: string) {
+    lastSyncedContentHash.current = hash;
+    try { localStorage.setItem(CONTENT_HASH_KEY, hash); } catch { /* kota */ }
+  }
+
   /** Bir bulut sürümünü "görüldü" olarak işaretle (tekrar tekrar indirmeyi önler). */
-  function markCloudSeen(cloudTime: number) {
-    lastSeenCloudTimeRef.current = cloudTime;
+  function markCloudSeen(cloudTime: number) {    lastSeenCloudTimeRef.current = cloudTime;
     try { localStorage.setItem('sinevia_last_cloud_seen', String(cloudTime)); } catch { /* kota */ }
     try {
       const snap = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -2123,7 +2189,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   function applyPendingCloudArchive(payload: PendingCloudArchive, cloudTime: number) {
     const coreData = { ...payload.coreData, lastCloudSync: cloudTime };
     applyIncomingExtras(payload.incomingJson);
-    lastSyncedStorageHash.current = payload.incomingHash;
+    // Uygulanan sürüm bulutta zaten var; yükleyici bir sonraki turda yankı
+    // yüklemesi yapmasın diye özel işaret konur.
+    lastSyncedStorageHash.current = '__from_cloud__';
+    // İndirilen sürüm artık "eşitlenmiş" sayılır: bu cihazda bekleyen değişiklik yok.
+    setSyncedContent(getContentHash(coreData, payload.questData));
     markCloudSeen(cloudTime);
     // Buluttan tam bir kayıt geldiyse artık yerel kayıt güvenilir kabul edilebilir.
     hydrationTrustedRef.current = true;
@@ -2153,14 +2223,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const incomingHash = getCleanHashString(coreData, questData, pickIncomingExtras(incomingJson));
     const localData = dataRef.current;
-    const localHash = getCleanHashString(localData, readQuestState(), readSyncExtras());
 
-    if (incomingHash === localHash) {
+    // "Aynı mı?" kararı SADECE içeriğe bakar (cihaza özel alanlar hariç).
+    // Böylece sekme/ayar farkı yüzünden gereksiz çakışma penceresi açılmaz.
+    const incomingContentHash = getContentHash(coreData, questData);
+    const localContentHash = getContentHash(localData, readQuestState());
+
+    if (incomingContentHash === localContentHash) {
       // İçerik birebir aynı: yerel kayıt bulut kadar güvenilir. Gereksiz yeniden
       // yüklemeyi önlemek için hash'i de güncelle.
       markCloudSeen(cloudTime);
       hydrationTrustedRef.current = true;
       lastSyncedStorageHash.current = incomingHash;
+      setSyncedContent(incomingContentHash);
       return 'same';
     }
 
@@ -2183,6 +2258,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSyncTick((tick) => tick + 1);
       if (!opts?.silent) showToast('Buluttaki boş kayıt yok sayıldı; bu cihazdaki veriler korunuyor.', 'warning');
       return 'ignored';
+    }
+
+    // Yerelde yüklenmemiş değişiklik YOKSA çakışma değildir: bulut sadece
+    // başka bir cihazda güncellenmiştir. Sessizce indir.
+    const localDirty = localContentHash !== lastSyncedContentHash.current;
+    if (!localDirty && !forceUploadRef.current) {
+      applyPendingCloudArchive(payload, cloudTime);
+      return 'applied';
     }
 
     // İki tarafta da gerçek veri var ve içerik farklı: hangi hesabın kullanılacağını sor.
@@ -2539,7 +2622,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const currentQuestState = JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}');
         const jsonData = getCleanHashString(data, currentQuestState, readSyncExtras());
-        
+
+        // Az önce buluttan indirilen sürüm uygulandıysa "yankı yüklemesi" yapma:
+        // içerik zaten bulutta. Yalnızca SONRAKİ gerçek değişiklikte yüklenir.
+        if (lastSyncedStorageHash.current === '__from_cloud__') {
+          lastSyncedStorageHash.current = jsonData;
+          return;
+        }
+
         if (!forceUpload && lastSyncedStorageHash.current === jsonData) return;
 
         // SÜRÜM KONTROLÜ (Madde 3) — bulut daha yeniyse eski yerel veri YENİ veriyi ezmesin.
@@ -2686,6 +2776,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         markCloudSeen(newSyncTime);
         lastSyncedStorageHash.current = jsonData;
+        setSyncedContent(getContentHash(data, currentQuestState));
         forceUploadRef.current = false;
         setSyncStatus('synced');
       } catch { 
@@ -3048,7 +3139,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const setNickname = useCallback((nickname: string) => { dispatch({ type: 'SET_NICKNAME', nickname }); showToast('Kullanıcı adı güncellendi!', 'success'); }, [showToast]);
   
-  const recoverIdentity = useCallback(async (agentId: string, recoveryKey: string, nickname: string) => { 
+  const recoverIdentity = useCallback(async (
+    agentId: string,
+    recoveryKey: string,
+    nickname: string,
+    opts?: { keepExistingRecoveryKey?: boolean }
+  ): Promise<boolean> => { 
     try {
       const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${agentId}.json`);
       const fetchUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
@@ -3064,13 +3160,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Bozuk/eksik arşivle kimlik değiştirme: eski kütüphane yeni hesaba taşınmasın.
         if (!isFullAppRecord(coreData)) {
           showToast('Bu hesabın bulut yedeği eksik/bozuk; kimlik değiştirilmedi.', 'error');
-          return;
+          return false;
         }
+
+        // Ağ girişinde kullanıcının kendi kurtarma anahtarı korunur.
+        const keyToStore = opts?.keepExistingRecoveryKey
+          ? (data.recoveryKey || recoveryKey)
+          : recoveryKey;
 
         const normalizedCore = {
           ...coreData,
           agentId,
-          recoveryKey,
+          recoveryKey: keyToStore,
           nickname,
         };
         const cloudTime = Number(coreData.lastCloudSync || 0) || Date.now();
@@ -3082,19 +3183,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
           cloudTime,
         };
 
-        dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey, nickname });
+        dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey: keyToStore, nickname });
         applyPendingCloudArchive(payload, cloudTime);
         // Kurtarılan kütüphaneyi bulut profil zaman damgasıyla da yayınla.
         forceUploadRef.current = true;
         lastSyncedStorageHash.current = '__force_upload__';
         setSyncTick((tick) => tick + 1);
         showToast('Kimlik ve Tüm Kütüphane başarıyla eşitlendi!', 'success');
-        return;
+        return true;
       }
     } catch {}
 
     showToast('Bulut yedeği bulunamadı; kimlik değiştirilmedi.', 'error');
-  }, [showToast]);
+    return false;
+  }, [showToast, data.recoveryKey]);
+
+  /** Ağ hesabına giriş yapıldıktan sonra kimliği ağ hesabına geçirir. */
+  const adoptNetworkIdentity = useCallback(
+    (agentId: string, nickname: string) =>
+      recoverIdentity(agentId, '', nickname, { keepExistingRecoveryKey: true }),
+    [recoverIdentity]
+  );
   
   const updateShowcase = useCallback((showcase: ShowcaseItem[]) => { dispatch({ type: 'SET_SHOWCASE', showcase }); showToast('Profil vitrinin güncellendi!', 'success'); }, [showToast]);
 
@@ -3442,7 +3551,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.

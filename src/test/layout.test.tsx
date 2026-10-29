@@ -11,10 +11,18 @@ import Layout, { type TabId } from '../components/Layout';
 const mocks = vi.hoisted(() => ({
   appCtx: { syncStatus: 'synced' } as { syncStatus?: string },
   tutorialCtx: { activeTutorial: null as unknown },
+  networkAuthCtx: {
+    networkUser: null,
+    isNetworkLoading: false,
+    hasNetworkSession: () => false,
+    refreshNetworkUser: async () => {},
+    logout: async () => {},
+  } as any,
 }));
 
 vi.mock('../context/AppContext', () => ({ useApp: () => mocks.appCtx }));
 vi.mock('../context/TutorialContext', () => ({ useTutorial: () => mocks.tutorialCtx }));
+vi.mock('../context/NetworkAuthContext', () => ({ useNetworkAuth: () => mocks.networkAuthCtx }));
 
 function renderLayout(activeTab: TabId, children: ReactNode = <div>CHILD_CONTENT</div>) {
   return renderToStaticMarkup(

@@ -9,6 +9,7 @@ import {
 import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX, ExternalLink, ChevronUp, Star, Search, Info, Film, Play, MonitorPlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
+import { useNetworkAuth } from '../context/NetworkAuthContext';
 import { useQuests } from '../context/QuestContext';
 import { useTutorial } from '../context/TutorialContext';
 import type { RatingCriterion, ExternalActionTemplate } from '../types';
@@ -17,6 +18,7 @@ import ShareImportModal from '../components/ShareImportModal';
 import ShortcutsPanel from '../components/ShortcutsPanel';
 import { uid } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import { networkChangePassword, networkDeleteAccount } from '../lib/networkAuth';
 import {
   isSoundEnabled, setSoundEnabled,
   // GEÇİCİ-SES-OYNATICI importları (kaldırılacak):
@@ -25,7 +27,7 @@ import {
   playUiClickSound, playRatingArpSound,
 } from '../lib/sound';
 import { ACTION_BRIDGE_PRESETS, newActionId, resolveActionUrl, extractPlaceholders } from '../lib/actionBridge';
-import { idbGet, idbSet, PREV_ACCOUNT_KEY, clearAllLocalAppData } from '../lib/storageService';
+import { clearAllLocalAppData } from '../lib/storageService';
 
 // ---------------------------------------------------------------------------
 // PREMIUM YÜZEY & BUTON DİLİ — sinevia-premium.html ile aynı tokenlar.
@@ -699,10 +701,11 @@ export default function SettingsPage() {
     addCollection, deleteCollection, renameCollection, exportData, importData,
     toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
-    setNickname, recoverIdentity, setExternalActions
+    setNickname, setExternalActions
   } = useApp();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
   const { questState, togglePenalty } = useQuests();
+  const { networkUser, logout: networkLogout } = useNetworkAuth();
 
   // Sekme durumu (localStorage'da saklanır); içerik blokları yalnızca bu
   // anahtara göre gruplanır, hiçbir state/handler değişmez.
@@ -721,23 +724,7 @@ export default function SettingsPage() {
 
   const [editingNickname, setEditingNickname] = useState(false);
   const [tempNickname, setTempNickname] = useState(data.nickname || '');
-  const [isRecoverMode, setIsRecoverMode] = useState(false);
-  const [recAgentId, setRecAgentId] = useState('');
-  const [recKey, setRecKey] = useState('');
-  const [recNickname, setRecNickname] = useState('');
-  const [recSecretToken, setRecSecretToken] = useState('');
-  const [transferBundleInput, setTransferBundleInput] = useState('');
-  const [isTransferPreviewOpen, setIsTransferPreviewOpen] = useState(false);
-  const [transferPreview, setTransferPreview] = useState<{
-    incomingAgentId: string; incomingNickname: string;
-    incoming: { movies: number; series: number; history: number } | null;
-    localAgentId: string; localNickname: string;
-    localMovies: number; localSeries: number; localHistory: number;
-  } | null>(null);
   const [isCheckingName, setIsCheckingName] = useState(false);
-
-  const currentSecretToken = typeof window !== 'undefined' ? (localStorage.getItem('sinevia_secret_token') || '') : '';
-
   const [newGenre, setNewGenre] = useState('');
   const [newCollection, setNewCollection] = useState('');
   const [editingColl, setEditingColl] = useState<string | null>(null);
@@ -745,12 +732,25 @@ export default function SettingsPage() {
   const [confirmDeleteColl, setConfirmDeleteColl] = useState<string | null>(null);
   
   const [confirmResetStage, setConfirmResetStage] = useState<0 | 1>(0);
-  const [showResetModal, setShowResetModal] = useState(false);
   // Bulut silme başarısızsa modalda gösterilir (kullanıcı SQL kodunu girip tekrar denesin).
   const [resetCloudError, setResetCloudError] = useState<string | null>(null);
   
-  // YENİ: Çıkış Yapma Modalı için State
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  // Hesap silme onay şifresi
+  const [deletePassword, setDeletePassword] = useState('');
+
+  // Ağ hesabı şifre değiştirme
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [oldPw, setOldPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newPw2, setNewPw2] = useState('');
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSaving, setPwSaving] = useState(false);
+
+  // Yıkıcı işlem uyarıları
+  const [showNetworkLogoutConfirm, setShowNetworkLogoutConfirm] = useState(false);
+  const [showDeviceResetConfirm, setShowDeviceResetConfirm] = useState(false);
+  const [showDeleteWarn1, setShowDeleteWarn1] = useState(false);
+  const [showDeleteWarnFinal, setShowDeleteWarnFinal] = useState(false);
 
   const [editingGenre, setEditingGenre] = useState<string | null>(null);
   const [editGenreName, setEditGenreName] = useState('');
@@ -835,133 +835,6 @@ export default function SettingsPage() {
     } finally {
       setIsCheckingName(false);
     }
-  };
-
-  const handleCopyTransferCode = () => {
-    try {
-      const payload = {
-        a: data.agentId || '',
-        n: data.nickname || '',
-        r: data.recoveryKey || '',
-        s: localStorage.getItem('sinevia_secret_token') || ''
-      };
-      const encoded = 'SNV-TRANSFER-' + btoa(encodeURIComponent(JSON.stringify(payload)));
-      navigator.clipboard.writeText(encoded);
-      showToast('Cihaz Taşıma Kodu kopyalandı! Yeni cihazına yapıştırabilirsin.', 'success');
-    } catch {
-      showToast('Taşıma kodu oluşturulurken hata oluştu.', 'error');
-    }
-  };
-
-  const handleParseTransferCode = (val: string) => {
-    setTransferBundleInput(val);
-    const trimmed = val.trim();
-    if (trimmed.startsWith('SNV-TRANSFER-')) {
-      try {
-        const base64Part = trimmed.replace('SNV-TRANSFER-', '');
-        const decoded = JSON.parse(decodeURIComponent(atob(base64Part)));
-        if (decoded.a) setRecAgentId(decoded.a);
-        if (decoded.n) setRecNickname(decoded.n);
-        if (decoded.r) setRecKey(decoded.r);
-        if (decoded.s) setRecSecretToken(decoded.s);
-        showToast('Taşıma kodu çözüldü! Bilgiler otomatik dolduruldu.', 'success');
-      } catch {}
-    }
-  };
-
-  /** Taşınan hesabın bulut yedeğinin özetini çeker (çakışma diyaloğu için). */
-  const fetchIncomingSummary = async (agentId: string) => {
-    try {
-      const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${agentId}.json`);
-      const res = await fetch(`${urlData.publicUrl}?t=${Date.now()}`, { cache: 'no-store' });
-      if (!res.ok) return null;
-      const json = JSON.parse(await res.text());
-      const core = json.core || json;
-      if (!core || typeof core !== 'object') return null;
-      return {
-        movies: (core.movies || []).length,
-        series: (core.series || []).length,
-        history: (core.history || []).length,
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const handleRecoverIdentity = async () => {
-    if (!recAgentId.trim() || !recKey.trim() || !recNickname.trim()) {
-      showToast('Lütfen Ağ Kodu, İsim ve Kurtarma Anahtarı alanlarını doldurun!', 'error');
-      return;
-    }
-
-    // Taşıma öncesi onay: yerel ve taşınan hesabın içeriği gösterilir,
-    // kullanıcı hangisini yükleyeceğini bilerek onaylar.
-    const incoming = await fetchIncomingSummary(recAgentId.trim().toUpperCase());
-    setTransferPreview({
-      incomingAgentId: recAgentId.trim().toUpperCase(),
-      incomingNickname: recNickname.trim(),
-      incoming,
-      localAgentId: data.agentId || '',
-      localNickname: data.nickname || '',
-      localMovies: (data.movies || []).length,
-      localSeries: (data.series || []).length,
-      localHistory: (data.history || []).length,
-    });
-    setIsTransferPreviewOpen(true);
-  };
-
-  const handleConfirmTransferImport = async () => {
-    if (!recAgentId.trim() || !recKey.trim() || !recNickname.trim()) {
-      setIsTransferPreviewOpen(false);
-      setTransferPreview(null);
-      return;
-    }
-
-    const hasLocalContent = (data.movies?.length || 0) + (data.series?.length || 0) + (data.history?.length || 0) > 0;
-    try {
-      if (hasLocalContent) {
-        // Yerel hesap yedeği: taşıma üzerine yazılınca kaybolmasın; çıkış yapınca geri gelsin.
-        await idbSet(PREV_ACCOUNT_KEY, {
-          data: JSON.parse(JSON.stringify(data)),
-          secretToken: localStorage.getItem('sinevia_secret_token'),
-          quests: JSON.parse(localStorage.getItem('sinevia-quests-v1') || 'null'),
-        });
-      }
-    } catch (e) {
-      console.error('Yerel hesap yedeği alınamadı', e);
-    }
-
-    const tokenToSave = recSecretToken.trim();
-    if (tokenToSave) {
-      localStorage.setItem('sinevia_secret_token', tokenToSave);
-    }
-
-    recoverIdentity(recAgentId.trim().toUpperCase(), recKey.trim(), recNickname.trim());
-    setIsRecoverMode(false);
-    setIsTransferPreviewOpen(false);
-    setTransferPreview(null);
-    setRecAgentId('');
-    setRecKey('');
-    setRecNickname('');
-    setRecSecretToken('');
-    setTransferBundleInput('');
-
-    if (tokenToSave) {
-      setTimeout(() => {
-        window.location.reload();
-      }, 600);
-    }
-  };
-
-  const handleCancelTransferImport = () => {
-    setIsTransferPreviewOpen(false);
-    setTransferPreview(null);
-    showToast('İptal edildi — bu cihazdaki hesap olduğu gibi korundu.', 'info');
-  };
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    showToast(`${label} kopyalandı!`, 'success');
   };
 
   const handleAddGenre = () => { if (!newGenre.trim()) return; addGenre(newGenre); setNewGenre(''); };
@@ -1071,98 +944,64 @@ export default function SettingsPage() {
     await clearAllLocalAppData();
   };
 
-  const handleDisconnectDevice = async () => {
-    await clearLocalDeviceData();
-    window.location.reload();
+  /** Ağ hesabı şifresini değiştir (mevcut şifre doğrulanır). */
+  const handleChangePassword = async () => {
+    setPwError(null);
+    if (!oldPw || !newPw || !newPw2) { setPwError('Lütfen tüm alanları doldur.'); return; }
+    if (newPw.length < 6) { setPwError('Yeni şifre en az 6 karakter olmalı.'); return; }
+    if (newPw !== newPw2) { setPwError('Yeni şifreler birbiriyle aynı değil.'); return; }
+    if (newPw === oldPw) { setPwError('Yeni şifre mevcut şifreyle aynı olamaz.'); return; }
+    setPwSaving(true);
+    try {
+      await networkChangePassword(oldPw, newPw);
+      showToast('Şifren değiştirildi. Diğer cihazlarda da geçerli.', 'success');
+      setShowChangePassword(false);
+      setOldPw(''); setNewPw(''); setNewPw2('');
+    } catch (err: any) {
+      setPwError(err?.message || 'Şifre değiştirilemedi.');
+    } finally {
+      setPwSaving(false);
+    }
   };
 
-  const handleExecuteFullReset = async () => {
-    setResetCloudError(null);
-    // 0) Sıfırlama bayrağı ÖNCE yazılır: silme sırasında tetiklenen pagehide/visibility
-    //    flush'ları (syncToStorage yükleyicisi) ve senkron çekicileri silinen hesabı
-    //    yeniden yaratmasın (rozet/arşiv geri geliyorsa kök neden buydu).
-    try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
-
-    const agentId = data.agentId;
-    const cloudErrors: string[] = [];
-
-    if (agentId) {
-      const secret = localStorage.getItem('sinevia_secret_token') || '';
-      // 1. yol: security-definer RPC — tüm tablolar + arşiv JSON (sinevia_saves) tek seferde,
-      //    RLS'ten bağımsız. Kod henüz Supabase'e girilmediyse "fonksiyon yok" hatası → fallback.
-      let rpcOk = false;
-      try {
-        const { error } = await supabase.rpc('sinevia_delete_account', {
-          p_agent_id: agentId,
-          p_secret: secret,
-        });
-        rpcOk = !error;
-        if (error) console.warn('sinevia_delete_account RPC hatası — istemci fallback deneniyor:', error.message);
-      } catch (e) {
-        console.warn('sinevia_delete_account RPC erişilemedi — fallback deneniyor:', e);
-      }
-
-      if (!rpcOk) {
-        // 2. yol: istemci fallback'i — arşiv JSON + tüm agent-keyed tablolar tek tek.
-        // Kullanıcının KURDUĞU grupların kimlikleri: grup sohbet mesajları da silinsin;
-        // aksi halde başka üyelerin attığı mesajlar bulutta yetim kalır (RPC ile aynı davranış).
-        let ownedGroupIds: string[] = [];
-        try {
-          const { data: ownedGroups } = await supabase.from('chat_groups').select('id').eq('created_by', agentId);
-          ownedGroupIds = ((ownedGroups as { id: string }[] | null) || []).map((g) => g.id);
-        } catch { /* yoksay — grup yoksa mesaj temizliği atlanır */ }
-
-        const tasks: PromiseLike<unknown>[] = [
-          supabase.storage.from('sinevia_saves').remove([`${agentId}.json`]),
-          supabase.from('profiles').delete().eq('agent_id', agentId),
-          supabase.from('network_logs').delete().eq('agent_id', agentId),
-          supabase.from('messages').delete().or(`sender_id.eq.${agentId},receiver_id.eq.${agentId}`),
-          supabase.from('friendships').delete().or(`requester_id.eq.${agentId},receiver_id.eq.${agentId}`),
-          supabase.from('recommendations').delete().or(`sender_id.eq.${agentId},receiver_id.eq.${agentId}`),
-          supabase.from('chat_group_members').delete().eq('agent_id', agentId),
-        ];
-        const labels = ['arşiv JSON (storage)', 'profiles', 'network_logs', 'messages (bireysel)', 'friendships', 'recommendations', 'chat_group_members'];
-        if (ownedGroupIds.length > 0) {
-          tasks.push(supabase.from('messages').delete().in('group_id', ownedGroupIds));
-          labels.push('messages (kurduğu gruplar)');
-          tasks.push(supabase.from('chat_group_members').delete().in('group_id', ownedGroupIds));
-          labels.push('chat_group_members (kurduğu gruplar)');
-        }
-        tasks.push(supabase.from('chat_groups').delete().eq('created_by', agentId));
-        labels.push('chat_groups');
-
-        const checks = await Promise.allSettled(tasks);
-        checks.forEach((r, i) => {
-          if (r.status === 'rejected') {
-            const reason = (r as PromiseRejectedResult).reason;
-            cloudErrors.push(`${labels[i]}: ${reason?.message || String(reason)}`);
-          } else {
-            const err = (r.value as { error?: { message?: string } | null } | undefined)?.error;
-            if (err) cloudErrors.push(`${labels[i]}: ${err.message}`);
-          }
-        });
-      }
+  /** Ağdan çıkış — yalnızca oturum kapanır, yerel veri korunur. */
+  const handleConfirmNetworkLogout = async () => {
+    setShowNetworkLogoutConfirm(false);
+    try {
+      await networkLogout();
+    } finally {
+      window.location.reload();
     }
+  };
 
-    if (cloudErrors.length > 0) {
-      // Bulut silinemedi → yerel de SİLİNMEZ (silinse bile boot açılışında buluttan
-      // geri gelirdi ve kullanıcı "silindi" sanırdı). Modal açık kalır, tekrar denenir.
-      console.error('Bulut silme hataları (hesap buluttan SİLİNMEDİ):', cloudErrors);
-      try { localStorage.removeItem('sinevia_zero_reset'); } catch { /* kota */ }
-      setResetCloudError(
-        'Bulut tarafı silinemedi — rozetler ve görevler geri gelebilir. Supabase SQL Editor’da verilen ' +
-        'sinevia_delete_account kodunu çalıştırıp tekrar onaylayın. Ayrıntılar tarayıcı konsolunda.'
-      );
-      return;
+  /** Cihazı sıfırla — yalnızca bu cihazdaki yerel veri silinir. */
+  const handleConfirmDeviceReset = async () => {
+    setShowDeviceResetConfirm(false);
+    try {
+      await clearLocalDeviceData();
+    } finally {
+      window.location.reload();
     }
+  };
 
-    // Bulut silindi → cihazdaki HER ŞEYİ (kütüphane, görevler, tutorial,
-    // akademi, ayarlar, kimlik ve önceki hesap yedeği) senkron temizle.
-    await clearLocalDeviceData();
+  /** Hesabı sil — son uyarıdan sonra şifreyle birlikte siler. */
+  const handleConfirmDeleteAccount = async () => {
+    setShowDeleteWarnFinal(false);
+    try {
+      await networkDeleteAccount(deletePassword);
+      await clearLocalDeviceData();
+      setDeletePassword('');
+      setConfirmResetStage(0);
+      setResetCloudError(null);
+      window.location.reload();
+    } catch (err: any) {
+      setResetCloudError(err?.message || 'Hesap silinemedi.');
+    }
+  };
 
-    setShowResetModal(false);
-    setConfirmResetStage(0);
-    window.location.reload(); 
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    showToast(`${label} kopyalandı!`, 'success');
   };
 
   const renderTagChip = (tag: string) => (
@@ -1291,7 +1130,7 @@ export default function SettingsPage() {
       {activeSettingsTab === 'general' && (
         <>
           <CollapsibleSection
-            title="Kişisel Kimlik ve Ağ Yönetimi"
+            title="Sinevia Ağı Hesabı"
             icon={<UserCircle size={18} className="text-emerald-400 flex-shrink-0" />}
             badge={
               <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
@@ -1299,12 +1138,12 @@ export default function SettingsPage() {
               </span>
             }
             defaultOpen={true}
-            desc="Ağ üzerinde görünen ismini değiştir veya başka bir cihaza geçtiğinde kimliğini kurtar."
+            desc="Kullanıcı adın ve şifrenle aynı hesaba istediğin cihazdan bağlan; tüm cihazlar aynı anda açık kalabilir."
           >
             <div className="space-y-4">
               <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={premiumRowStyle}>
                 <div>
-                  <label className="block text-xs font-bold text-ink-400 mb-1 uppercase tracking-wider">Ağ İsminiz</label>
+                  <label className="block text-xs font-bold text-ink-400 mb-1 uppercase tracking-wider">Akışta Görünen Ad</label>
                   {editingNickname ? (
                     <div className="flex items-center gap-2">
                       <input 
@@ -1330,99 +1169,90 @@ export default function SettingsPage() {
             
                 <div className="flex flex-col gap-2">
                   <button onClick={() => copyToClipboard(data.agentId || '', 'Ağ Kodun')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
-                    <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Ağ Kodun:</span>
+                    <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Destek Kodun:</span>
                     <div className="flex items-center gap-2">
                       <span className="text-emerald-400 text-xs sm:text-sm font-bold">{data.agentId}</span>
                       <Copy size={12} className="text-ink-500 group-hover:text-emerald-400" />
                     </div>
                   </button>
-                  <button onClick={() => copyToClipboard(data.recoveryKey || '', 'Kurtarma Anahtarın')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
-                    <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Kurtarma Anahtarın:</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-red-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{data.recoveryKey}</span>
-                      <Copy size={12} className="text-ink-500 group-hover:text-red-400" />
+                </div>
+              </div>
+              <div className="p-4 space-y-3" style={premiumRowStyle}>
+                <div>
+                  <label className="block text-xs font-bold text-ink-400 mb-1 uppercase tracking-wider">Sinevia Ağı Hesabın</label>
+                  {networkUser ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-lg font-black text-white">@{networkUser.username}</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Bağlı</span>
                     </div>
-                  </button>
-                  {currentSecretToken && (
-                    <button onClick={() => copyToClipboard(currentSecretToken, 'Güvenlik İmzan')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
-                      <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Güvenlik İmzan:</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-amber-400 text-[10px] sm:text-xs font-bold truncate max-w-[120px] sm:max-w-[150px]">{currentSecretToken}</span>
-                        <Copy size={12} className="text-ink-500 group-hover:text-amber-400" />
-                      </div>
-                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-amber-400">Ağa bağlı değil</span>
+                      <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('sinevia-open-network-auth'))}
+                        className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 underline"
+                      >
+                        Hesabını Bağla
+                      </button>
+                    </div>
                   )}
+                  <p className="text-[11px] text-ink-500 mt-1 leading-relaxed">
+                    Kullanıcı adı + şifre ile istediğin cihazdan giriş yapabilirsin. Cihaz taşıma kodu veya kurtarma anahtarı artık gerekmiyor.
+                  </p>
                 </div>
-              </div>
 
-              <div className="rounded-[var(--r,16px)] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-white/[.09]" style={{ background: 'linear-gradient(120deg, rgba(232, 56, 79, .12), transparent 80%)' }}>
-                <div className="flex items-start gap-2.5">
-                  <ShieldCheck size={18} className="text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-xs font-black text-white uppercase tracking-wider">Tek Tıkla Cihaz Taşıma Kodu</h4>
-                    <p className="text-[11px] text-ink-300 mt-0.5 leading-relaxed">
-                      Farklı bir tarayıcıya (ör. Opera) veya cihaza geçerken tüm kimlik ve güvenlik imzanı tek seferde taşımak için bu kodu kopyala.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleCopyTransferCode}
-                  className={`${BTN_P} flex-shrink-0 px-4 py-2.5 text-xs`}
-                  style={BTN_P_STYLE}
-                >
-                  <Copy size={14} /> Taşıma Kodunu Kopyala
-                </button>
-              </div>
-
-              <p className="text-xs text-ink-500 italic bg-ink-900/30 p-2 rounded-lg border border-ink-800/50">
-                <strong>ÖNEMLİ:</strong> Cihaz değiştirirsen veya verilerini silersen, sosyal ağdaki seviyeni, mesajlarını ve arkadaşlarını geri getirmek için <strong>Cihaz Taşıma Kodun</strong> (veya Ağ Kodun + Kurtarma Anahtarın + Güvenlik İmzan) gerekir. Lütfen güvenli bir yere kaydet!
-              </p>
-
-              <div className="mt-2 pt-4 border-t border-ink-800">
-                {!isRecoverMode ? (
-                  <button onClick={() => setIsRecoverMode(true)} className="flex items-center gap-2 text-xs font-bold text-azure-400 hover:text-azure-300 transition-colors">
-                    <Key size={14} /> Başka bir hesabı (Kimliği) bu cihaza kurtar / taşı
-                  </button>
-                ) : (
-                  <div className="bg-azure-950/20 border border-azure-500/30 rounded-xl p-4 space-y-3 animate-fade-in">
-                    <h3 className="text-sm font-bold text-azure-400 flex items-center gap-2 mb-2"><Key size={16} /> Kimlik & Cihaz Taşıma Aracı</h3>
-                
-                    <div className="bg-ink-950/80 border border-emerald-500/30 rounded-lg p-3 mb-3">
-                      <label className="block text-[10px] font-black text-emerald-400 mb-1 uppercase tracking-wider">
-                        Hızlı Yöntem: Cihaz Taşıma Kodunu Yapıştır (Otomatik Doldurur)
-                      </label>
+                {networkUser && (
+                  !showChangePassword ? (
+                    <button
+                      onClick={() => { setShowChangePassword(true); setPwError(null); }}
+                      className={`${BTN_S} px-4 py-2 text-xs`}
+                      style={BTN_S_STYLE}
+                    >
+                      <Key size={14} /> Şifre Değiştir
+                    </button>
+                  ) : (
+                    <div className="space-y-2 animate-fade-in">
                       <input
-                        type="text"
-                        value={transferBundleInput}
-                        onChange={(e) => handleParseTransferCode(e.target.value)}
-                        placeholder="SNV-TRANSFER-... ile başlayan kodu buraya yapıştır"
-                        className="w-full px-3 py-2 text-xs text-emerald-300 outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}
+                        type="password"
+                        value={oldPw}
+                        onChange={(e) => setOldPw(e.target.value)}
+                        placeholder="Mevcut şifren"
+                        className="w-full px-3 py-2 text-xs rounded-lg bg-ink-900 border border-ink-700 text-white focus:outline-none focus:border-emerald-500/60"
                       />
+                      <input
+                        type="password"
+                        value={newPw}
+                        onChange={(e) => setNewPw(e.target.value)}
+                        placeholder="Yeni şifre (en az 6 karakter)"
+                        className="w-full px-3 py-2 text-xs rounded-lg bg-ink-900 border border-ink-700 text-white focus:outline-none focus:border-emerald-500/60"
+                      />
+                      <input
+                        type="password"
+                        value={newPw2}
+                        onChange={(e) => setNewPw2(e.target.value)}
+                        placeholder="Yeni şifre (tekrar)"
+                        className="w-full px-3 py-2 text-xs rounded-lg bg-ink-900 border border-ink-700 text-white focus:outline-none focus:border-emerald-500/60"
+                      />
+                      {pwError && <p className="text-[11px] text-red-400 font-bold">{pwError}</p>}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleChangePassword}
+                          disabled={pwSaving}
+                          className={`${BTN_P} px-4 py-2 text-xs ${pwSaving ? 'opacity-50 pointer-events-none' : ''}`}
+                          style={BTN_P_STYLE}
+                        >
+                          {pwSaving ? 'Kaydediliyor...' : 'Şifreyi Kaydet'}
+                        </button>
+                        <button
+                          onClick={() => { setShowChangePassword(false); setOldPw(''); setNewPw(''); setNewPw2(''); setPwError(null); }}
+                          className={`${BTN_S} px-4 py-2 text-xs text-ink-200`}
+                          style={BTN_S_STYLE}
+                        >
+                          İptal
+                        </button>
+                      </div>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ Kodu (SNV-..)</label>
-                        <input type="text" value={recAgentId} onChange={(e) => setRecAgentId(e.target.value)} placeholder="SNV-XXXX-XXXX" className="w-full px-3 py-2 text-xs uppercase text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Kayıtlı Ağ İsmin</label>
-                        <input type="text" value={recNickname} onChange={(e) => setRecNickname(e.target.value)} placeholder="Eski ismin..." className="w-full px-3 py-2 text-xs text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-ink-400 mb-1 uppercase tracking-wider">Gizli Kurtarma Anahtarı</label>
-                        <input type="password" value={recKey} onChange={(e) => setRecKey(e.target.value)} placeholder="Kurtarma anahtarın..." className="w-full px-3 py-2 text-xs text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-amber-400/90 mb-1 uppercase tracking-wider">Güvenlik İmzan (sec_...)</label>
-                        <input type="password" value={recSecretToken} onChange={(e) => setRecSecretToken(e.target.value)} placeholder="Mesaj/Profil yetkisi için (sec_...)" className="w-full px-3 py-2 text-xs text-white outline-none" style={{ background: 'var(--bg-base, #0a0a0d)', border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }} />
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={handleRecoverIdentity} className={`${BTN_P} flex-1 py-2 text-xs`} style={BTN_P_STYLE}>Kimliği Kurtar & Eşitle</button>
-                      <button onClick={() => setIsRecoverMode(false)} className={`${BTN_S} flex-1 py-2 text-xs text-ink-200`} style={BTN_S_STYLE}>İptal</button>
-                    </div>
-                  </div>
+                  )
                 )}
               </div>
             </div>
@@ -1599,50 +1429,86 @@ export default function SettingsPage() {
           >
             <div className="space-y-4">
               {/* Çıkış Yap (Sadece Yerel Silme) */}
-              <div className="bg-ink-950/50 border border-ink-800 hover:border-amber-500/50 transition-colors rounded-2xl p-4 sm:p-5">
-                <h3 className="text-sm sm:text-base font-bold text-amber-400 mb-1.5 flex items-center gap-2">
-                  <LogOut size={18} /> Bu Cihazdan Çıkış Yap
+              {/* Ağdan Çıkış (yalnızca ağ oturumu) */}
+              <div className="bg-ink-950/50 border border-ink-800 hover:border-gold-500/50 transition-colors rounded-2xl p-4 sm:p-5">
+                <h3 className="text-sm sm:text-base font-bold text-gold-400 mb-1.5 flex items-center gap-2">
+                  <LogOut size={18} /> Ağdan Çıkış Yap
                 </h3>
                 <p className="text-xs sm:text-sm text-ink-400 mb-4 leading-relaxed">
-                  Bu cihazdaki <strong>tüm yerel veriler</strong> (kütüphane, görevler, başarımlar, tutorial/akademi ilerlemesi, ayarlar ve oturum bilgisi) kalıcı olarak silinir.
-                  Bulut hesabın silinmez; kurtarma anahtarınla başka bir cihazda geri yükleyebilirsin. <strong>Bu cihazda eski yerel hesap geri gelmez.</strong>
+                  Sinevia Ağı oturumun kapatılır. Kütüphanenin, kayıtların ve ayarların bu cihazda <strong>korunur</strong>. Tekrar bağlanmak istersen "Hesabını Bağla" ile giriş yapabilirsin.
                 </p>
                 <button 
-                  onClick={() => setShowLogoutModal(true)} 
+                  onClick={() => setShowNetworkLogoutConfirm(true)}
                   className={`${BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm tracking-wider`}
                   style={{ ...BTN_S_STYLE, color: '#fbbf24', border: '1px solid rgba(251, 191, 36, .45)' }}
                 >
-                  Cihazdan Çıkış Yap
+                  Ağdan Çıkış Yap
                 </button>
               </div>
 
-              {/* Tamamen Sıfırla (Buluttan Silme) */}
+              {/* Bu Cihazı Sıfırla (yalnızca yerel veriler) */}
+              <div className="bg-ink-950/50 border border-ink-800 hover:border-amber-500/50 transition-colors rounded-2xl p-4 sm:p-5">
+                <h3 className="text-sm sm:text-base font-bold text-amber-400 mb-1.5 flex items-center gap-2">
+                  <Trash2 size={18} /> Bu Cihazı Sıfırla
+                </h3>
+                <p className="text-xs sm:text-sm text-ink-400 mb-4 leading-relaxed">
+                  Bu cihazdaki <strong>tüm yerel veriler</strong> (kütüphane, görevler, başarımlar, tutorial/akademi, ayarlar) silinir. Ağ hesabın ve bulutundaki verilerin silinmez; aynı kullanıcı adı ve şifreyle başka bir cihazdan giriş yapıp verilerini geri alabilirsin.
+                </p>
+                <button 
+                  onClick={() => setShowDeviceResetConfirm(true)}
+                  className={`${BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm tracking-wider`}
+                  style={{ ...BTN_S_STYLE, color: '#fbbf24', border: '1px solid rgba(251, 191, 36, .45)' }}
+                >
+                  Cihazı Sıfırla
+                </button>
+              </div>
+
+              {/* Hesabımı Sil (ağ + yerel tamamen) */}
               <div className="bg-red-950/20 border border-red-800/40 rounded-2xl p-4 sm:p-5 transition-all">
                 <h3 className="text-sm sm:text-base font-bold text-red-400 mb-1.5 flex items-center gap-2">
-                  <Trash2 size={18} /> Hesabı Kalıcı Olarak Yok Et
+                  <Trash2 size={18} /> Hesabımı Sil
                 </h3>
                 <p className="text-xs sm:text-sm text-red-400/70 mb-4 leading-relaxed">
-                  Tüm kütüphanen, görevlerin, başarımların, ayarların ve Ağ Kimliğin hem buluttan hem bu cihazdan <strong>tamamen</strong> silinir. 
-                  Bu işlemi diğer cihazlarından (Örn: Chrome) da geri alamazsın. Sinevia tamamen sıfırlanır.
+                  Ağ hesabın, profilin ve tüm sosyal verilerin hem buluttan hem bu cihazdan <strong>tamamen</strong> silinir. Bu işlem geri alınamaz. Gerçek hesapla deneme yapmayın.
                 </p>
 
                 {confirmResetStage === 0 ? (
                   <button 
-                    onClick={() => setConfirmResetStage(1)} 
+                    onClick={() => setShowDeleteWarn1(true)} 
                     className={`${BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm tracking-wider`}
                     style={{ ...BTN_S_STYLE, color: '#f87171', border: '1px solid rgba(248, 113, 113, .45)', background: 'rgba(248, 113, 113, .08)' }}
                   >
-                    <Trash2 size={16} /> Hesabı Tamamen Yok Et
+                    <Trash2 size={16} /> Hesabımı Sil
                   </button>
                 ) : (
-                  <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-[var(--r,16px)] bg-red-950/40 border border-red-800/60 animate-fade-in">
-                    <span className="text-xs sm:text-sm text-red-400 font-bold w-full sm:w-auto mb-1 sm:mb-0">Emin misin? Bu işlemin geri dönüşü yok!</span>
-                    <button onClick={() => { setResetCloudError(null); setShowResetModal(true); }} className={`${BTN_P} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm`} style={BTN_P_STYLE}>
-                      <AlertTriangle size={14} /> Evet, Eminim (Buluttan Sil)
-                    </button>
-                    <button onClick={() => setConfirmResetStage(0)} className={`${BTN_S} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm text-ink-200`} style={BTN_S_STYLE}>
-                      <X size={14} /> İptal Et
-                    </button>
+                  <div className="space-y-3 animate-fade-in">
+                    <div className="flex items-center gap-2.5 flex-wrap p-3 rounded-[var(--r,16px)] bg-red-950/40 border border-red-800/60">
+                      <span className="text-xs sm:text-sm text-red-400 font-bold w-full sm:w-auto mb-1 sm:mb-0">Onay için şifreni gir:</span>
+                      <input
+                        type="password"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        placeholder="Şifre"
+                        className="flex-1 sm:w-40 px-3 py-1.5 text-xs sm:text-sm rounded border border-red-800/60 bg-red-950/30 focus:outline-none focus:border-red-500"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!deletePassword) {
+                            setResetCloudError('Devam etmek için şifreni gir.');
+                            return;
+                          }
+                          setResetCloudError(null);
+                          setShowDeleteWarnFinal(true);
+                        }}
+                        className={`${BTN_P} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm`} style={BTN_P_STYLE}
+                      >
+                        <AlertTriangle size={14} /> Evet, Sil
+                      </button>
+                      <button onClick={() => { setConfirmResetStage(0); setDeletePassword(''); setResetCloudError(null); }} className={`${BTN_S} flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm text-ink-200`} style={BTN_S_STYLE}>
+                        <X size={14} /> İptal Et
+                      </button>
+                    </div>
+                    {resetCloudError && <p className="text-[11px] text-red-400 font-bold px-1">{resetCloudError}</p>}
                   </div>
                 )}
               </div>
@@ -2281,98 +2147,47 @@ export default function SettingsPage() {
         />
       )}
 
-      {showLogoutModal && (
+      {showNetworkLogoutConfirm && (
         <ConfirmDialog
-          title="Cihazdan Çıkış Yap"
-          message="Bu cihazdaki hesabın kapatılacak ve Sinevia sıfırlanacaktır. Taşıma Kodunu bir yere kaydettiğinden emin misin? Buluttaki verilerin silinmeyecek. Bu cihaza daha önce taşıma ile hesap yüklediysen yerel kaydı saklanır; çıkış yapınca o hesap geri gelir."
-          onConfirm={handleDisconnectDevice}
-          onCancel={() => setShowLogoutModal(false)}
+          title="Ağdan Çıkış Yap"
+          message="Sinevia Ağı oturumun kapatılacak. Kütüphanen, kayıtların ve ayarların bu cihazda KORUNUR. Devam etmek istiyor musun?"
+          confirmLabel="Evet, Çıkış Yap"
+          cancelLabel="Vazgeç"
+          onConfirm={handleConfirmNetworkLogout}
+          onCancel={() => setShowNetworkLogoutConfirm(false)}
         />
       )}
 
-      {isTransferPreviewOpen && transferPreview && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(4, 4, 6, .72)', backdropFilter: 'blur(16px)' }} onClick={handleCancelTransferImport}>
-          <div
-            className="w-full max-w-md animate-uvPop rounded-[22px] overflow-hidden border border-white/12"
-            style={{ background: 'linear-gradient(165deg, #17171C 0%, #0E0E12 60%, #0B0B0E 100%)', boxShadow: '0 50px 110px -30px rgba(0, 0, 0, .95)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 border-b border-white/8" style={{ background: 'linear-gradient(120deg, rgba(212, 165, 60, .16), rgba(212, 165, 60, .02) 70%)' }}>
-              <div className="flex items-center gap-2.5">
-                <span className="w-2 h-2 rounded-full" style={{ background: '#d4a53c', boxShadow: '0 0 8px #d4a53c' }} />
-                <span className="text-xs font-extrabold uppercase tracking-widest text-gold-300">Hesap Taşıma — Hangisini Yükleyelim?</span>
-              </div>
-              <p className="text-[11px] text-ink-400 mt-1.5 leading-relaxed">
-                Taşıma işlemi bu cihazdaki içeriğin yerine taşınan hesabın bulut yedeğini yükler. Aşağıdan kontrol edip onaylayabilirsin:
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 p-4">
-              <div className="rounded-xl border border-ink-800 bg-ink-950/60 p-3">
-                <div className="text-[10px] font-black uppercase tracking-wider text-ink-500 mb-2">Bu Cihazdaki</div>
-                <div className="text-xs font-bold text-ink-200 truncate">{transferPreview.localNickname || 'Yeni Üye'}</div>
-                <div className="text-[10px] text-ink-500 font-mono mb-2 truncate">{transferPreview.localAgentId || '—'}</div>
-                <ul className="text-[11px] text-ink-300 space-y-0.5">
-                  <li>{transferPreview.localMovies} film</li>
-                  <li>{transferPreview.localSeries} dizi</li>
-                  <li>{transferPreview.localHistory} puanlama / geçmiş</li>
-                </ul>
-              </div>
-              <div className="rounded-xl border border-gold-500/30 bg-gold-500/5 p-3">
-                <div className="text-[10px] font-black uppercase tracking-wider text-gold-500/80 mb-2">Taşınan Hesap</div>
-                <div className="text-xs font-bold text-ink-200 truncate">{transferPreview.incomingNickname}</div>
-                <div className="text-[10px] text-ink-500 font-mono mb-2 truncate">{transferPreview.incomingAgentId}</div>
-                {transferPreview.incoming ? (
-                  <ul className="text-[11px] text-ink-300 space-y-0.5">
-                    <li>{transferPreview.incoming.movies} film</li>
-                    <li>{transferPreview.incoming.series} dizi</li>
-                    <li>{transferPreview.incoming.history} puanlama / geçmiş</li>
-                  </ul>
-                ) : (
-                  <p className="text-[11px] text-red-400 leading-snug">Bulut yedeği bulunamadı — yalnızca kimlik taşınacak, içerik yereldeki gibi kalır.</p>
-                )}
-              </div>
-            </div>
-
-            {(transferPreview.localMovies + transferPreview.localSeries + transferPreview.localHistory) > 0 && (
-              <div className="mx-4 mb-1 flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2">
-                <AlertTriangle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-red-300 leading-snug">
-                  <strong>Çakışma:</strong> Bu cihazda da içerik var. "Taşınanı Yükle" dersen bu cihazdaki hesap yedeklenir ve taşınan hesap yüklenir — çıkış yapınca yedek geri gelir.
-                </p>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 p-4 pt-3">
-              <button
-                onClick={handleCancelTransferImport}
-                className="font-bold uppercase tracking-wider px-4 py-2.5 text-xs rounded-[10px] border border-white/12 text-ink-200 transition-all hover:-translate-y-0.5"
-                style={{ background: 'linear-gradient(150deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05))' }}
-              >
-                İptal (Bu Cihazdakiyle Devam)
-              </button>
-              <button
-                onClick={handleConfirmTransferImport}
-                className="font-extrabold uppercase tracking-wider px-4 py-2.5 text-xs rounded-[10px] text-white transition-all hover:-translate-y-0.5"
-                style={{ background: 'linear-gradient(120deg, #d4a53c, #9a7420)', boxShadow: '0 8px 22px -10px rgba(212, 165, 60, .7)' }}
-              >
-                Taşınanı Yükle
-              </button>
-            </div>
-          </div>
-        </div>
+      {showDeviceResetConfirm && (
+        <ConfirmDialog
+          title="Bu Cihazı Sıfırla"
+          message="Bu cihazdaki TÜM yerel veriler (kütüphane, görevler, başarımlar, ayarlar) silinecek. Ağ hesabın ve bulut yedeğin SİLİNMEZ; aynı kullanıcı adı ve şifreyle tekrar giriş yapabilirsin. Devam etmek istiyor musun?"
+          confirmLabel="Evet, Bu Cihazı Sıfırla"
+          cancelLabel="Vazgeç"
+          onConfirm={handleConfirmDeviceReset}
+          onCancel={() => setShowDeviceResetConfirm(false)}
+        />
       )}
 
-      {showResetModal && (
+      {showDeleteWarn1 && (
         <ConfirmDialog
-          title="SON UYARI! HER ŞEY SİLİNECEK!"
-          message={
-            resetCloudError
-              ? `⚠ ${resetCloudError}`
-              : "Kullanıcı kimliğin, ağ ismin, kurtarma anahtarın dahil tüm verilerin tamamen silinecek. Sinevia sanki cihaza yeni kurulmuş gibi sıfırdan başlayacak. Onaylıyor musun?"
-          }
-          onConfirm={handleExecuteFullReset}
-          onCancel={() => { setShowResetModal(false); setConfirmResetStage(0); setResetCloudError(null); }}
+          title="Hesabımı Sil — 1. Uyarı"
+          message="Ağ hesabın, profilin ve tüm sosyal verilerin hem buluttan hem bu cihazdan tamamen silinecek. Bu işlem GERİ ALINAMAZ. Devam etmek istiyor musun?"
+          confirmLabel="Devam Et"
+          cancelLabel="Vazgeç"
+          onConfirm={() => { setShowDeleteWarn1(false); setConfirmResetStage(1); }}
+          onCancel={() => setShowDeleteWarn1(false)}
+        />
+      )}
+
+      {showDeleteWarnFinal && (
+        <ConfirmDialog
+          title="Hesabımı Sil — Son Uyarı"
+          message="SON ONAY: Hesabın ve tüm verilerin kalıcı olarak silinecek. Bu işlem geri alınamaz ve hiçbir cihazdan geri getirilemez. Gerçekten silmek istiyor musun?"
+          confirmLabel="Evet, Hesabımı Kalıcı Olarak Sil"
+          cancelLabel="Vazgeç"
+          onConfirm={handleConfirmDeleteAccount}
+          onCancel={() => setShowDeleteWarnFinal(false)}
         />
       )}
 

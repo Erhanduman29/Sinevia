@@ -3,6 +3,11 @@
 -- ============================================================
 -- Bu dosya HİÇBİR ŞEY DEĞİŞTİRMEZ. Sadece durumu raporlar.
 -- 001/002/003 öncesi ve sonrası çalıştırıp sonuçları karşılaştırın.
+--
+-- ÖNEMLİ: Bu dosyada 9 ayrı sorgu var. Supabase SQL Editor yalnızca
+-- EN SON sorgunun sonucunu gösterir (bu yüzden sadece bulut_arsiv_sayisi
+-- görünür). Tek ekranda tüm özeti görmek için `verify_ozet.sql`
+-- dosyasını kullanın; bu dosyayı ise sorguları tek tek seçerek çalıştırın.
 -- ============================================================
 
 -- 1) Tablo satır sayıları (yedek öncesi/sonrası aynı olmalı)

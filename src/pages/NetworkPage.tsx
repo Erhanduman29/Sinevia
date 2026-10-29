@@ -6,6 +6,7 @@ import {
   ExternalLink, FileText, Award, History, Skull
 } from 'lucide-react';
 import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
+import { useNetworkAuth } from '../context/NetworkAuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import type { ShowcaseItem } from '../context/AppContext';
 import {
@@ -92,7 +93,56 @@ type LeaderboardCategory = 'xp' | 'level' | 'movies' | 'past_movies' | 'episodes
 type LeaderboardScope = 'global' | 'friends';
 type ProfileTabType = 'stats' | 'chat';
 
+/**
+ * Ağ hesabı kapısı.
+ * Hook sırası bozulmasın diye kapı AYRI bileşende tutulur: koşullu `return`
+ * aynı bileşende hook sayısını değiştirirse React "Expected static flag was
+ * missing" hatası verir.
+ */
 export default function NetworkPage() {
+  const { networkUser, isNetworkLoading } = useNetworkAuth();
+
+  if (isNetworkLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="flex items-center gap-3 text-ink-400">
+          <RefreshCw size={18} className="animate-spin" />
+          <span className="text-sm font-semibold">Sinevia Ağı kontrol ediliyor...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!networkUser) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 text-center">
+        <div className="w-full max-w-md space-y-6" style={{ background: 'linear-gradient(165deg, #17171C 0%, #0E0E12 60%, #0B0B0E 100%)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 'var(--r-lg,22px)', padding: '2rem', boxShadow: '0 40px 110px -36px rgba(0,0,0,.95)' }}>
+          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400 mx-auto mb-4">
+            <Users size={28} />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white mb-2">Sinevia Ağı</h2>
+          <p className="text-ink-300 text-sm sm:text-base leading-relaxed mb-6">
+            Sosyal özellikleri kullanmak için Sinevia Ağı'na bağlanmalısın. Kullanıcı adın ve şifrenle hesap oluşturabilir veya giriş yapabilirsin.
+          </p>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('sinevia-open-network-auth'))}
+            className="w-full font-extrabold uppercase tracking-wider px-6 py-3 rounded-xl text-white transition-all hover:-translate-y-0.5 active:translate-y-px shrink-0"
+            style={{ background: 'linear-gradient(120deg, #d4a53c, #9a7420)', boxShadow: '0 8px 22px -10px rgba(212, 165, 60, .7)' }}
+          >
+            Hesabını Bağla / Giriş Yap
+          </button>
+          <p className="text-[11px] text-ink-500 mt-4">
+            <strong>Not:</strong> Kütüphanenin, kayıtların ve ayarların cihazda kalmaya devam eder. Ağ hesabı sadece sosyal özellikler (arkadaşlık, mesaj, öneri, liderlik) için kullanılır.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <NetworkPageContent />;
+}
+
+function NetworkPageContent() {
   const { data, showToast, addMovie, addSeries, updateShowcase } = useApp();
   const { notifyEvent } = useTutorial();
 

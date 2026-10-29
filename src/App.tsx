@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { useSettings } from './context/slices';
 import { QuestProvider } from './context/QuestContext'; // YENİ: QuestProvider eklendi
 import { TutorialProvider, useTutorial } from './context/TutorialContext';
+import { NetworkAuthProvider } from './context/NetworkAuthContext';
 import Layout from './components/Layout';
 import type { TabId } from './components/Layout';
 import HomePage from './pages/HomePage';
@@ -16,6 +17,7 @@ import AIPage from './pages/AIPage';
 import MarketPage from './pages/MarketPage';
 import WeeklyPlanPage from './pages/WeeklyPlanPage';
 import NetworkPage from './pages/NetworkPage'; // YENİ: Sinevia Ağı import edildi
+import NetworkAuthModal from './components/NetworkAuthModal'; // YENİ: Ağ auth modalı
 import Toasts from './components/Toasts';
 import AchievementToasts from './components/AchievementToasts';
 import CloudConflictDialog from './components/CloudConflictDialog';
@@ -76,6 +78,7 @@ function getInitialNotFound(): string | null {
 function AppContent() {
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
   const [notFoundPath, setNotFoundPath] = useState<string | null>(getInitialNotFound);
+  const [showNetworkAuthModal, setShowNetworkAuthModal] = useState(false);
   const {
     toasts,
     achievementToasts,
@@ -169,9 +172,15 @@ function AppContent() {
 
     window.addEventListener('navigate-tab', handleNavigation);
     window.addEventListener('hashchange', handleHashChange);
+
+    // Sinevia Ağı kayıt/giriş modalını açma talebi (Layout.tsx'tan gönderilir)
+    const handleOpenNetworkAuth = () => setShowNetworkAuthModal(true);
+    window.addEventListener('sinevia-open-network-auth', handleOpenNetworkAuth);
+
     return () => {
       window.removeEventListener('navigate-tab', handleNavigation);
       window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('sinevia-open-network-auth', handleOpenNetworkAuth);
     };
   }, []);
 
@@ -267,6 +276,10 @@ function AppContent() {
         <Toasts toasts={toasts} stackOffset={achievementToasts.length > 0 ? achievementToasts.length * 104 : 0} />
         <AchievementToasts toasts={achievementToasts} />
 
+        {showNetworkAuthModal && (
+          <NetworkAuthModal onClose={() => setShowNetworkAuthModal(false)} />
+        )}
+
         {levelUpData && (
           <LevelUpModal newLevel={levelUpData.newLevel} onDismiss={dismissLevelUp} />
         )}
@@ -332,7 +345,9 @@ export default function App() {
     <AppProvider>
       <QuestProvider>
         <TutorialProvider>
-          <AppContent />
+          <NetworkAuthProvider>
+            <AppContent />
+          </NetworkAuthProvider>
         </TutorialProvider>
       </QuestProvider>
     </AppProvider>

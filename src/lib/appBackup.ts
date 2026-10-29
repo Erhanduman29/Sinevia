@@ -14,8 +14,6 @@ export const BACKUP_EXTRA_KEYS = {
   academyUi: 'sinevia-academy-ui-v1',
   sound: 'sinevia_sound_enabled',
   shortcuts: 'sinevia_shortcuts_v1',
-  activeTab: 'sinevia_active_tab',
-  settingsTab: 'sinevia_settings_tab',
 } as const;
 
 export type BackupExtraKey = keyof typeof BACKUP_EXTRA_KEYS;

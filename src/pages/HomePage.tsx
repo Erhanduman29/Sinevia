@@ -6,6 +6,7 @@ import {
   Timer, Play, Pause, X, ShieldAlert, Copy, Crown, Swords, Clapperboard, MoreHorizontal
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { useNetworkAuth } from '../context/NetworkAuthContext';
 import { useQuests } from '../context/QuestContext';
 import { QUEST_DEFS, QuestIcon } from '../lib/quests';
 import { CONTRACT_MAP, CONTRACT_FAILURE_PENALTY, METRIC_LABELS } from '../lib/contracts';
@@ -1199,6 +1200,8 @@ export default function HomePage() {
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, showToast
   } = useApp();
 
+  const { networkUser } = useNetworkAuth();
+
   const { questState, activeContract, activeContractProgress, activeContractRemaining } = useQuests();
 
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
@@ -1511,6 +1514,25 @@ export default function HomePage() {
 
   return (
     <div className="space-y-3.5 sm:space-y-8 animate-fade-in pb-6 sm:pb-10 max-w-[1400px] mx-auto">
+      {!networkUser && (
+        <div className="rounded-[18px] border border-amber-500/30 bg-amber-950/20 p-4 sm:p-6 animate-fade-in" style={{ backgroundColor: 'rgba(245, 158, 11, .12)' }}>
+          <div className="flex items-center gap-3 mb-2">
+            <ShieldAlert size={16} className="text-amber-400 flex-shrink-0" />
+            <span className="font-bold text-amber-300 text-sm sm:text-base">Şu an yerel çalışıyorsun</span>
+          </div>
+          <p className="text-amber-200/90 text-xs sm:text-sm leading-relaxed mb-3">
+            Kütüphanen, kayıtların ve ayarların bu cihazda kalmaya devam ediyor. Sosyal özellikleri
+            (arkadaşlık, mesaj, öneri akışı, liderlik tablosu) kullanmak için <strong>Sinevia Ağı'na bağlanmalısın.</strong>
+          </p>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('sinevia-open-network-auth'))}
+            className="font-extrabold uppercase tracking-wider px-5 py-2 rounded-xl text-white transition-all hover:-translate-y-0.5 active:translate-y-px shrink-0"
+            style={{ background: 'linear-gradient(120deg, #d4a53c, #9a7420)', boxShadow: '0 8px 22px -10px rgba(212, 165, 60, .7)' }}
+          >
+            Hesabını Bağla
+          </button>
+        </div>
+      )}
       <style>{HOME_PREMIUM_CSS}</style>
 
       {/* =========================================================

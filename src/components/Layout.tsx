@@ -7,6 +7,7 @@ import {
   Target, Medal, SearchX, Clapperboard, ShoppingBag
 } from 'lucide-react';
 import { useApp, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { useNetworkAuth } from '../context/NetworkAuthContext';
 import PickModal from './PickModal';
 import BulkAddModal from './BulkAddModal';
 import RatingModal from './RatingModal';
@@ -707,6 +708,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   // karşı: konteynere yaklaşan tembel görselleri erken aktive et
   useLazyImageActivator();
   const appCtx = useApp() as any;
+  const { networkUser, isNetworkLoading, logout } = useNetworkAuth();
   const syncStatus: 'syncing' | 'synced' | 'error' = appCtx.syncStatus || 'synced';
   const { watchMovie, watchEpisode } = appCtx;
 
@@ -1244,10 +1246,18 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           </button>
 
           <button
-            onClick={() => onTabChange('network')}
+            onClick={() => {
+              if (networkUser) {
+                onTabChange('network');
+              } else {
+                // Açılan modal üzerinden kayıt/giriş akışı başlatılacak
+                window.dispatchEvent(new CustomEvent('sinevia-open-network-auth'));
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-ink-900/60 border border-ink-800/60 text-ink-400 hover:text-ink-100 hover:border-ink-700 font-extrabold text-[11.5px] tracking-[0.1em] uppercase whitespace-nowrap transition-all duration-300 hover:-translate-y-[2px] shrink-0"
           >
-            <Users size={15} /> Sinevia Ağı
+            <Users size={15} />
+            {networkUser ? 'Sinevia Ağı' : 'Hesabını Bağla'}
           </button>
 
           <span aria-hidden className="absolute left-0 right-0 bottom-[-1px] h-px pointer-events-none" style={{ background: TOPBAR_HAIRLINE }} />
@@ -1282,7 +1292,7 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
             >
               <Icon size={19} className={isActive ? 'scale-110' : ''} />
               <span className={`text-[9px] tracking-tight whitespace-nowrap ${isActive ? 'font-black' : 'font-semibold'}`}>
-                {tab.label}
+                {tab.id === 'network' && !networkUser ? 'Hesabını Bağla' : tab.label}
               </span>
             </button>
           );
