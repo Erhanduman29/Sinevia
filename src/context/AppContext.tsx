@@ -3341,6 +3341,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey: keyToStore, nickname });
         applyPendingCloudArchive(payload, cloudTime);
+
+        // KRİTİK: Yeni kimliği sayfa yenilenmeden ÖNCE diske yaz. Aksi halde
+        // yenileme eski (önceki hesabın) IDB kaydını geri yükler; kullanıcı
+        // "hesap geldi, sonra geri attı" görür ve giriş sonsuz döngüye girer.
+        try {
+          const adoptedData = rootReducer(dataRef.current, {
+            type: 'SYNC_FROM_CLOUD_STORAGE',
+            data: coreData as ExtendedAppData,
+            questData,
+          });
+          await idbSet(STORAGE_KEY, adoptedData);
+          writeBootSnapshot(adoptedData as unknown as Record<string, unknown>);
+          dataRef.current = adoptedData;
+        } catch {
+          // IDB yazılamazsa kapanıştaki flush devreye girer.
+        }
+
         // Kurtarılan kütüphaneyi bulut profil zaman damgasıyla da yayınla.
         forceUploadRef.current = true;
         lastSyncedStorageHash.current = '__force_upload__';
@@ -3348,7 +3365,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         showToast('Kimlik ve Tüm Kütüphane başarıyla eşitlendi!', 'success');
         return true;
       }
-    } catch {}
+    } catch {
+      // Sessizce yut: kimlik değiştirilmedi, çağıran taraf hata mesajı gösterir.
+    }
 
     showToast('Bulut yedeği bulunamadı; kimlik değiştirilmedi.', 'error');
     return false;
@@ -3372,10 +3391,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
+        // Sonsuz yenileme koruması: 20 saniye içinde ikinci kez deneme.
+        const guardKey = 'sinevia_identity_reconcile_at';
+        try {
+          const lastAttempt = Number(sessionStorage.getItem(guardKey) || 0);
+          if (Date.now() - lastAttempt < 20000) return;
+          sessionStorage.setItem(guardKey, String(Date.now()));
+        } catch { /* gizli mod */ }
+
         const me = await networkGetMe();
         if (!me || cancelled || !me.agent_id || me.agent_id === data.agentId) return;
         const adopted = await adoptNetworkIdentity(me.agent_id, me.username);
-        if (adopted && !cancelled) window.location.reload();
+        // Yalnızca kimlik gerçekten diske/state'e uygulandıysa yenile.
+        if (adopted && !cancelled && dataRef.current?.agentId === me.agent_id) {
+          window.location.reload();
+        }
       } catch {
         // Sessiz: bir sonraki açılışta yeniden denenir.
       }
