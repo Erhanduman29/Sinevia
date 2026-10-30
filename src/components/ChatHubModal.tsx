@@ -687,36 +687,25 @@ export default function ChatHubModal({
     if (!content || !hubActiveChat || !myAgentId) return;
     if (customContent === undefined) setHubInput('');
 
-    try {
-      if (hubActiveChat.type === 'direct') {
-        const newMsg = {
-          id: uid(),
-          sender_id: myAgentId,
-          receiver_id: hubActiveChat.id,
-          group_id: null,
-          content,
-          created_at: new Date().toISOString(),
-          is_read: false,
-        };
-        setHubMessages((prev: any[]) => [...prev, newMsg]);
-        await supabase.from('messages').insert([newMsg]);
-      } else {
-        const newMsg = {
-          id: uid(),
-          group_id: hubActiveChat.id,
-          sender_id: myAgentId,
-          receiver_id: null,
-          content,
-          created_at: new Date().toISOString(),
-          is_read: true,
-        };
-        setHubMessages((prev: any[]) => [...prev, newMsg]);
-        await supabase.from('messages').insert([newMsg]);
-      }
-      onTriggerSync();
-    } catch {
-      showToast('Mesaj gönderilemedi', 'error');
+    const isDirect = hubActiveChat.type === 'direct';
+    const newMsg = {
+      id: uid(),
+      sender_id: myAgentId,
+      receiver_id: isDirect ? hubActiveChat.id : null,
+      group_id: isDirect ? null : hubActiveChat.id,
+      content,
+      created_at: new Date().toISOString(),
+      is_read: !isDirect,
+    };
+    setHubMessages((prev: any[]) => [...prev, newMsg]);
+    const { error } = await supabase.from('messages').insert([newMsg]);
+    if (error) {
+      setHubMessages((prev: any[]) => prev.filter((m: any) => m.id !== newMsg.id));
+      if (customContent === undefined) setHubInput(content);
+      showToast(`Mesaj gönderilemedi: ${error.message}`, 'error');
+      return;
     }
+    onTriggerSync();
   };
 
   const handleSendMediaCard = async (item: any) => {

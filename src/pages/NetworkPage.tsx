@@ -420,7 +420,13 @@ function NetworkPageContent() {
     try {
       const newMsg = { id: uid(), sender_id: data.agentId, receiver_id: viewingProfileId, group_id: null, content, created_at: new Date().toISOString(), is_read: false };
       setChatMessages((prev: any[]) => [...prev, newMsg]);
-      await supabase.from('messages').insert([newMsg]);
+      const { error } = await supabase.from('messages').insert([newMsg]);
+      if (error) {
+        setChatMessages((prev: any[]) => prev.filter((m: any) => m.id !== newMsg.id));
+        if (customContent === undefined) setChatInput(content);
+        showToast(`Mesaj gönderilemedi: ${error.message}`, 'error');
+        return;
+      }
       setSyncTick(t => t + 1);
     } catch { showToast('Mesaj gönderilemedi', 'error'); }
   };
