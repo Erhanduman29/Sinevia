@@ -333,13 +333,15 @@ function NetworkPageContent() {
       let pMap = { ...profilesMapRef.current };
 
       // İkinci tur: profiller + liderlik + akış paralel.
+      // Akış yalnızca sekmesi açıkken çekilir (boşa trafik üretmemek için).
+      const shouldFetchFeed = activeTab === 'feed';
       const [profilesRes, leadersRes, logsRes] = await Promise.all([
         allRelevantIds.length > 0
           ? supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', allRelevantIds)
           : Promise.resolve({ data: [] as any[] } as any),
-        supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).order('total_xp', { ascending: false }).limit(50),
-        acceptedIds.size > 0
-          ? supabase.from('network_logs').select(NETWORK_LOG_COLUMNS).in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(100)
+        supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).order('total_xp', { ascending: false }).limit(20),
+        shouldFetchFeed && acceptedIds.size > 0
+          ? supabase.from('network_logs').select(NETWORK_LOG_COLUMNS).in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(30)
           : Promise.resolve({ data: [] as any[] } as any),
       ]);
 
@@ -374,34 +376,48 @@ function NetworkPageContent() {
 
       setFriends(acceptedFriends); setPendingIncoming(incoming); setPendingOutgoing(outgoing);
 
-      if (acceptedIds.size > 0) {
+      if (shouldFetchFeed) {
         const logsData = logsRes.data;
         // Akıştan gizlenen eski izleme kayıtlarını client-side ele (NULL korunur).
         setFeed((logsData || []).filter((l: any) => l.action_type !== 'watched_hidden'));
-      } else { setFeed([]); }
+      }
 
     } catch (error: any) { console.error('Ağ hatası:', error); }
     finally { if (!isSilent) setLoading(false); setRefreshing(false); }
-  }, [data.agentId, localMoviesWatched, localPastMoviesWatched]);
+  }, [data.agentId, localMoviesWatched, localPastMoviesWatched, activeTab]);
 
   useEffect(() => {
     fetchData();
     if (!data.agentId) return;
 
     // Filtresiz realtime aboneliği kaldırıldı: tek bir yazma tüm istemcileri
-    // uyandırıp 6 sorgu çalıştırıyordu. Artık 45 saniyede bir sessiz yenileme
-    // + sekme görünür olduğunda anında yenileme var.
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') fetchData(true);
-    }, 45000);
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') fetchData(true);
+    // uyandırıp 6 sorgu çalıştırıyordu. Yerine 90 saniyede bir sessiz yenileme
+    // var; sekme gizliyken yoklama tamamen durur (boşa trafik üretmemek için).
+    let interval: number | undefined;
+    const start = () => {
+      if (interval !== undefined) return;
+      interval = window.setInterval(() => fetchData(true), 90000);
     };
-    document.addEventListener('visibilitychange', onVisible);
+    const stop = () => {
+      if (interval !== undefined) {
+        window.clearInterval(interval);
+        interval = undefined;
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData(true);
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [data.agentId, fetchData]);
 

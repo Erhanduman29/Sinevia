@@ -2929,8 +2929,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     
-    const syncTimer = setTimeout(() => syncToStorage(), 3500);
-    // Bekleyen (3.5sn süresi dolmamış) senkron varsa sekme gizlenirken/kapanırken anında tetikle.
+    // 15 sn debounce: her küçük değişiklikte tam arşivi (yüzlerce KB)
+    // yüklememek için. Sekme kapanırken/gizlenirken yine anında flush edilir.
+    const syncTimer = setTimeout(() => syncToStorage(), 15000);
+    // Bekleyen (15 sn süresi dolmamış) senkron varsa sekme gizlenirken/kapanırken anında tetikle.
     const flushSync = () => { clearTimeout(syncTimer); syncToStorage(); };
     const onVis = () => { if (document.visibilityState === 'hidden') flushSync(); };
     window.addEventListener('pagehide', flushSync);
@@ -2939,7 +2941,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { clearTimeout(syncTimer); window.removeEventListener('pagehide', flushSync); window.removeEventListener('beforeunload', flushSync); document.removeEventListener('visibilitychange', onVis); };
   }, [data, hydrated, syncTick]);
 
-  // BULUT YOKLAMASI — realtime yerine 60 saniyede bir + sekme görünürken.
+  // BULUT YOKLAMASI — realtime yerine 120 saniyede bir + sekme görünürken.
   // Profiller realtime yayınından çıkarıldı (secret_token sızmasın diye).
   useEffect(() => {
     if (!hydrated || !data.agentId) return;
@@ -2973,15 +2975,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const interval = window.setInterval(checkCloud, 60000);
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') checkCloud();
+    // 120 sn yoklama; sekme gizliyken durur. Gerçek indirme yalnızca
+    // profiles.last_cloud_sync daha yeni olduğunda yapılır.
+    let interval: number | undefined;
+    const start = () => {
+      if (interval !== undefined) return;
+      interval = window.setInterval(checkCloud, 120000);
     };
+    const stop = () => {
+      if (interval !== undefined) {
+        window.clearInterval(interval);
+        interval = undefined;
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkCloud();
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === 'visible') start();
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      stop();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [hydrated, data.agentId]);
@@ -3158,7 +3178,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState === 'visible') void check();
     };
 
-    const interval = window.setInterval(check, 45000);
+    // 120 sn: sohbet/istek bildirimi için yeterli. Uygulama kapalıyken
+    // zaten Web Push devrede; bu yoklama yalnızca açık sekme içindir.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void check();
+    }, 120000);
     document.addEventListener('visibilitychange', onVisibilityChange);
     void check();
 
