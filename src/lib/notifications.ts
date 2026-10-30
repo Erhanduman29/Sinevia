@@ -25,6 +25,57 @@ export const VAPID_PUBLIC_KEY: string = (
   (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) || ''
 ).trim();
 
+const SERVER_KEY_CACHE = 'sinevia_vapid_server_key';
+
+let cachedServerKey: string | null = null;
+
+function readCachedServerKey(): string {
+  if (cachedServerKey) return cachedServerKey;
+  try {
+    const stored = localStorage.getItem(SERVER_KEY_CACHE);
+    if (stored) {
+      cachedServerKey = stored.trim();
+      return cachedServerKey;
+    }
+  } catch {
+    /* yoksay */
+  }
+  return '';
+}
+
+/**
+ * Abonelik anahtarı.
+ *
+ * Tek doğru kaynak veritabanıdır (`push_config`): sunucu push'u bu anahtarın
+ * özel eşiyle imzalar. Build sırasında gömülen `VITE_VAPID_PUBLIC_KEY` yanlış
+ * ya da eskiyse abonelikler sunucuyla uyuşmaz ve push servisi 400 döner.
+ * Bu yüzden önce sunucudan okunur; erişilemezse build değerine düşülür.
+ */
+export async function resolveVapidPublicKey(): Promise<string> {
+  const cached = readCachedServerKey();
+  if (cached) return cached;
+  try {
+    const { data } = await supabase
+      .from('push_config')
+      .select('vapid_public_key')
+      .eq('id', 1)
+      .maybeSingle();
+    const key = String((data as { vapid_public_key?: string } | null)?.vapid_public_key || '').trim();
+    if (key) {
+      cachedServerKey = key;
+      try {
+        localStorage.setItem(SERVER_KEY_CACHE, key);
+      } catch {
+        /* yoksay */
+      }
+      return key;
+    }
+  } catch {
+    /* yoksay */
+  }
+  return VAPID_PUBLIC_KEY;
+}
+
 export type PushSupportStatus =
   | 'supported'
   | 'unsupported'
@@ -67,7 +118,7 @@ export function isStandalonePwa(): boolean {
 
 export function getPushSupportStatus(): PushSupportStatus {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'unsupported';
-  if (!VAPID_PUBLIC_KEY) return 'missing-key';
+  if (!readCachedServerKey() && !VAPID_PUBLIC_KEY) return 'missing-key';
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
     return 'unsupported';
   }
@@ -163,6 +214,15 @@ export async function ensurePushSubscription(agentId: string): Promise<PushSetup
     return { ok: false, reason: 'error', message: 'Bildirimler için önce Sinevia Ağı hesabına giriş yapmalısın.' };
   }
 
+  const keyString = await resolveVapidPublicKey();
+  if (!keyString) {
+    return {
+      ok: false,
+      reason: 'missing-key',
+      message: 'Bildirim altyapısı kurulmamış (VAPID anahtarı yok). Kurulum komutunu çalıştırın.',
+    };
+  }
+
   const support = getPushSupportStatus();
   if (support === 'missing-key') {
     return {
@@ -200,7 +260,7 @@ export async function ensurePushSubscription(agentId: string): Promise<PushSetup
 
   try {
     const registration = await waitForServiceWorker(8000);
-    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+    const applicationServerKey = urlBase64ToUint8Array(keyString);
     let subscription = await registration.pushManager.getSubscription();
 
     // VAPID anahtarı değiştiyse eski abonelik sunucuda 403 verir; yenile.

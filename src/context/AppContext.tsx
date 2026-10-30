@@ -2125,6 +2125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const hydratedRef = useRef(false);
   const identityReconciledRef = useRef(false);
+  const pushHealRef = useRef(false);
   const hydrationTrustedRef = useRef(false);
   // Aynı hesap için iki farklı sürüm varsa kullanıcıya sorulur.
   const [cloudConflict, setCloudConflict] = useState<CloudConflictInfo | null>(null);
@@ -2995,6 +2996,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       lists: data.notifyLists !== false,
     });
   }, [data.notificationsEnabled, data.agentId, data.notifyMessages, data.notifyFriendRequests, data.notifyLists]);
+
+  // Push aboneliğini kendi kendine onarır. Abonelik eski/yanlış VAPID
+  // anahtarıyla kurulmuşsa (`push_config` ile uyuşmuyorsa) sessizce yenilenir;
+  // böylece ortam değişkeni hatası yüzünden bildirimler ölü kalmaz.
+  useEffect(() => {
+    if (pushHealRef.current || !data.notificationsEnabled || !data.agentId) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    pushHealRef.current = true;
+    void ensurePushSubscription(data.agentId).catch(() => undefined);
+  }, [data.notificationsEnabled, data.agentId]);
 
   // Uygulama AÇIKKEN bildirim: realtime kanalı bu projede x-agent-token
   // başlığını websocket üzerinden taşımadığı için RLS olayları iletmiyor.

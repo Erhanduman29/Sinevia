@@ -676,11 +676,26 @@ export default function ChatHubModal({
     }
   }, [isOpen, syncTick, hubActiveChat?.id, loadHubInbox, loadHubMessages]);
 
+  // Aynı mantık mesaj merkezi için: eski mesajlara bakarken zıplamaz.
+  const hubLastMsgIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (hubScrollRef.current) {
-      hubScrollRef.current.scrollTop = hubScrollRef.current.scrollHeight;
+    hubLastMsgIdRef.current = null;
+  }, [hubActiveChat?.id]);
+
+  useEffect(() => {
+    const el = hubScrollRef.current;
+    if (!el) return;
+    const lastMsg: any = hubMessages.length ? hubMessages[hubMessages.length - 1] : null;
+    const lastId = lastMsg ? String(lastMsg.id) : null;
+    if (lastId === hubLastMsgIdRef.current) return;
+    const isFirstLoad = hubLastMsgIdRef.current === null;
+    hubLastMsgIdRef.current = lastId;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    const isOwnMessage = !!lastMsg && lastMsg.sender_id === myAgentId;
+    if (isFirstLoad || isOwnMessage || nearBottom) {
+      el.scrollTop = el.scrollHeight;
     }
-  }, [hubMessages]);
+  }, [hubMessages, myAgentId]);
 
   const handleHubSendMessage = async (customContent?: string) => {
     const content = (customContent !== undefined ? customContent : hubInput).trim();

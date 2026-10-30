@@ -409,9 +409,29 @@ function NetworkPageContent() {
     if (syncTick > 0) fetchData(true);
   }, [syncTick, fetchData]);
 
+  // Sohbet ilk açıldığında en alta in. Kullanıcı yukarı kaydırıp eski
+  // mesajları okurken 45 saniyelik yoklama listeyi tazelediğinde zorla
+  // aşağı çekmeyiz; yalnızca yeni mesaj / kendi mesajımız geldiğinde
+  // (ya da zaten en alttaysak) kaydırırız.
+  const chatLastMsgIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-  }, [chatMessages]);
+    chatLastMsgIdRef.current = null;
+  }, [viewingProfileId]);
+
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const lastMsg: any = chatMessages.length ? chatMessages[chatMessages.length - 1] : null;
+    const lastId = lastMsg ? String(lastMsg.id) : null;
+    if (lastId === chatLastMsgIdRef.current) return;
+    const isFirstLoad = chatLastMsgIdRef.current === null;
+    chatLastMsgIdRef.current = lastId;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    const isOwnMessage = !!lastMsg && lastMsg.sender_id === data.agentId;
+    if (isFirstLoad || isOwnMessage || nearBottom) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [chatMessages, data.agentId]);
 
   const handleProfileSendMessage = async (customContent?: string) => {
     const content = (customContent !== undefined ? customContent : chatInput).trim();

@@ -28,7 +28,7 @@ import {
   isIosDevice,
   isStandalonePwa,
   showAppNotification,
-  VAPID_PUBLIC_KEY,
+  resolveVapidPublicKey,
 } from '../lib/notifications';
 import { networkChangePassword, networkDeleteAccount } from '../lib/networkAuth';
 import {
@@ -1900,12 +1900,15 @@ export default function SettingsPage() {
                               showToast(`Sunucu bildirimi gönderemedi (HTTP ${httpCode}): ${String(last?.error_msg || '').slice(0, 120)}`, 'error');
                               return;
                             }
-                            if (body?.vapidPublicKey && VAPID_PUBLIC_KEY && body.vapidPublicKey !== VAPID_PUBLIC_KEY) {
-                              showToast(
-                                'Site ile sunucu farklı bildirim anahtarı kullanıyor. Vercel ortam değişkenlerindeki VITE_VAPID_PUBLIC_KEY güncel anahtarla değiştirilip yeniden deploy edilmeli.',
-                                'error',
-                              );
-                              return;
+                            if (body?.vapidPublicKey) {
+                              const expectedKey = await resolveVapidPublicKey();
+                              if (expectedKey && body.vapidPublicKey !== expectedKey) {
+                                showToast(
+                                  'Sunucu ile abonelik anahtarı uyuşmuyor. Supabase Edge Function secret VAPID_PUBLIC_KEY, push_config tablosundaki anahtarla aynı olmalı.',
+                                  'error',
+                                );
+                                return;
+                              }
                             }
                             if (Array.isArray(body?.errors) && body.errors.length > 0) {
                               const first = body.errors[0];
