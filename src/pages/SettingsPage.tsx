@@ -27,6 +27,8 @@ import {
   getNotificationPermission,
   isIosDevice,
   isStandalonePwa,
+  showAppNotification,
+  VAPID_PUBLIC_KEY,
 } from '../lib/notifications';
 import { networkChangePassword, networkDeleteAccount } from '../lib/networkAuth';
 import {
@@ -711,7 +713,7 @@ export default function SettingsPage() {
     addCollection, deleteCollection, renameCollection, exportData, importData,
     toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
-    setNickname, setExternalActions
+    setNickname, setExternalActions, forceCloudUpload
   } = useApp();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
   const { questState, togglePenalty } = useQuests();
@@ -1428,6 +1430,34 @@ export default function SettingsPage() {
             </p>
           </CollapsibleSection>
 
+          {/* --- BULUT EŞİTLEME --- */}
+          <CollapsibleSection
+            title="Bulut Eşitleme"
+            icon={<Upload size={18} className="text-sky-400 flex-shrink-0" />}
+            defaultOpen={false}
+            desc="Cihazındaki veriler ile buluttaki kayıt arasında fark varsa buradan bu cihazdakini buluta gönderebilirsin."
+          >
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={() => {
+                  const ok = window.confirm(
+                    'Bu cihazdaki kütüphane, başarımlar ve görevler buluttaki kaydın üzerine yazılacak. Diğer cihazların bir sonraki açılışta bu verileri alacak. Devam edilsin mi?',
+                  );
+                  if (!ok) return;
+                  forceCloudUpload();
+                }}
+                className={`${BTN_P} px-4 py-2.5 text-xs sm:text-sm self-start`}
+                style={BTN_P_STYLE}
+              >
+                <Upload size={16} /> Bu Cihazı Buluta Yükle
+              </button>
+              <p className="text-[11px] text-ink-500 leading-relaxed">
+                Eşitleme normalde otomatik çalışır. Bir cihazda ilerleme kaybolduysa veya bulut kaydı bu cihazdan geride
+                kaldıysa bu düğmeyi kullan. Önce doğru verinin bu cihazda olduğundan emin ol.
+              </p>
+            </div>
+          </CollapsibleSection>
+
           {/* --- KRTİK İŞLEMLER BÖLÜMÜ (EN ALTA ALINDI) --- */}
           <CollapsibleSection
             title="Tam Yedekle / Geri Yükle"
@@ -1808,6 +1838,24 @@ export default function SettingsPage() {
 
                   <div className="pt-3 mt-1 border-t border-ink-800/70 flex flex-col gap-2">
                     <button
+                      onClick={() => {
+                        if (getNotificationPermission() !== 'granted') {
+                          showToast('Önce bildirim izni vermelisin. Yukarıdaki ana anahtarı aç.', 'warning');
+                          return;
+                        }
+                        showAppNotification('Sinevia', {
+                          body: 'Bildirimler çalışıyor. Bu, uygulama açıkken gösterilen yerel testtir.',
+                          tag: 'sinevia-local-test',
+                        });
+                        showToast('Yerel test bildirimi gönderildi.', 'success');
+                      }}
+                      className={`${BTN_P} px-3 py-2 text-[10px] rounded-[var(--r-sm,10px)] self-start`}
+                      style={BTN_P_STYLE}
+                    >
+                      <BellRing size={13} /> Yerel Test Bildirimi
+                    </button>
+
+                    <button
                       onClick={async () => {
                         if (!data.agentId) return;
                         const result = await ensurePushSubscription(data.agentId);
@@ -1833,26 +1881,53 @@ export default function SettingsPage() {
                           showToast(message, 'error');
                           return;
                         }
-                        showToast('Test bildirimi gönderildi. Uygulamayı kapatıp birkaç saniye bekleyin.', 'success');
+                        showToast('Sunucuya test isteği iletildi. Şimdi uygulamayı kapatabilirsin; bildirim hemen gelir.', 'success');
 
-                        // 3 sn sonra sunucu yanıtını kontrol et: sessiz hata kalmasın.
-                        await new Promise((resolve) => setTimeout(resolve, 3500));
-                        const { data: status } = await supabase.rpc('push_pipeline_status');
-                        if (status && Number(status.subscriptions) === 0) {
-                          showToast('Bu hesap için kayıtlı cihaz bulunamadı. Bildirim anahtarını kapatıp yeniden aç.', 'warning');
-                          return;
-                        }
-                        const lastResponse = Array.isArray(status?.recent_responses) ? status.recent_responses[0] : null;
-                        const statusCode = Number(lastResponse?.status_code || 0);
-                        if (statusCode >= 300 || lastResponse?.error_msg || lastResponse?.timed_out) {
-                          const detail = String(lastResponse?.body_preview || lastResponse?.error_msg || 'zaman aşımı');
-                          showToast(`Sunucu bildirimi gönderemedi (HTTP ${statusCode || '-'}): ${detail.slice(0, 140)}`, 'error');
-                        }
+                        // Bloklamadan kısa bir süre sonra sunucu cevabını incele:
+                        // hatanın gerçek nedenini (VAPID uyuşmazlığı, push servisi reddi) göster.
+                        window.setTimeout(async () => {
+                          try {
+                            const { data: status } = await supabase.rpc('push_pipeline_status');
+                            const last = Array.isArray(status?.recent_responses) ? status.recent_responses[0] : null;
+                            const httpCode = Number(last?.status_code || 0);
+                            let body: any = null;
+                            try {
+                              body = JSON.parse(String(last?.body_preview || ''));
+                            } catch {
+                              body = null;
+                            }
+                            if (httpCode >= 300) {
+                              showToast(`Sunucu bildirimi gönderemedi (HTTP ${httpCode}): ${String(last?.error_msg || '').slice(0, 120)}`, 'error');
+                              return;
+                            }
+                            if (body?.vapidPublicKey && VAPID_PUBLIC_KEY && body.vapidPublicKey !== VAPID_PUBLIC_KEY) {
+                              showToast(
+                                'Site ile sunucu farklı bildirim anahtarı kullanıyor. Vercel ortam değişkenlerindeki VITE_VAPID_PUBLIC_KEY güncel anahtarla değiştirilip yeniden deploy edilmeli.',
+                                'error',
+                              );
+                              return;
+                            }
+                            if (Array.isArray(body?.errors) && body.errors.length > 0) {
+                              const first = body.errors[0];
+                              const detail = first?.body || first?.message || `HTTP ${first?.statusCode || '?'}`;
+                              showToast(
+                                `Cihaza ulaşılamadı (${first?.statusCode || '?'}${first?.endpointHost ? ' · ' + first.endpointHost : ''}): ${String(detail).slice(0, 130)}`,
+                                'error',
+                              );
+                              return;
+                            }
+                            if (Number(body?.sent) > 0) {
+                              showToast('Sunucu bildirimi cihaza iletti. Gelmediyse sistem bildirim ayarlarını kontrol et.', 'info');
+                            }
+                          } catch {
+                            /* teşhis başarısız olsa da test akışı bozulmasın */
+                          }
+                        }, 3000);
                       }}
                       className={`${BTN_P} px-3 py-2 text-[10px] rounded-[var(--r-sm,10px)] self-start`}
                       style={BTN_P_STYLE}
                     >
-                      <BellRing size={13} /> Test Bildirimi Gönder
+                      <BellRing size={13} /> Kapalıyken Bildirim Testi
                     </button>
 
                     {getNotificationPermission() !== 'granted' && (

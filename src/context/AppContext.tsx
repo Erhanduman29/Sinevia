@@ -239,6 +239,92 @@ function createInitialAchievements(existingList?: AchievementProgress[]): Achiev
   });
 }
 
+function mergeAchievementProgress(
+  localList: AchievementProgress[] = [],
+  incomingList: AchievementProgress[] = [],
+): AchievementProgress[] {
+  const merged = new Map<string, AchievementProgress>();
+  for (const item of incomingList || []) {
+    if (!item?.achievementId) continue;
+    merged.set(item.achievementId, {
+      ...item,
+      unlockedTiers: Array.isArray(item.unlockedTiers) ? [...item.unlockedTiers] : [],
+      tierDates: { ...(item.tierDates || {}) },
+    });
+  }
+  for (const item of localList || []) {
+    if (!item?.achievementId) continue;
+    const existing = merged.get(item.achievementId);
+    if (!existing) {
+      merged.set(item.achievementId, {
+        ...item,
+        unlockedTiers: Array.isArray(item.unlockedTiers) ? [...item.unlockedTiers] : [],
+        tierDates: { ...(item.tierDates || {}) },
+      });
+      continue;
+    }
+    // Kademeler birleşir: hiçbir tarafın açtığı kademe kaybolmaz (XP düşmesini engeller).
+    const tiers = Array.from(new Set([...(existing.unlockedTiers || []), ...(item.unlockedTiers || [])]));
+    const dates: Record<string, string> = { ...(existing.tierDates || {}) };
+    for (const [tier, date] of Object.entries(item.tierDates || {})) {
+      if (!dates[tier] || (date && date < dates[tier])) dates[tier] = date;
+    }
+    merged.set(item.achievementId, {
+      ...existing,
+      current: Math.max(Number(existing.current || 0), Number(item.current || 0)),
+      unlockedTiers: tiers,
+      tierDates: dates,
+      lastNotifiedTier: existing.lastNotifiedTier ?? item.lastNotifiedTier ?? null,
+    });
+  }
+  return Array.from(merged.values());
+}
+
+/** Bir medya kaydının "ne kadar dolu" olduğunu puanlar; birleştirmede daha zengin kayıt kazanır. */
+function mediaRichnessScore(item: any): number {
+  if (!item || typeof item !== 'object') return 0;
+  let score = 0;
+  if (item.watched) score += 50;
+  if (item.rating !== null && item.rating !== undefined) score += 20;
+  if (item.review) score += 12;
+  if (item.notes) score += 6;
+  if (Array.isArray(item.episodes)) score += item.episodes.length;
+  if (Array.isArray(item.deletedEpisodes)) score += item.deletedEpisodes.length;
+  for (const value of Object.values(item)) {
+    if (value === null || value === undefined || value === '') continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    score += 0.05;
+  }
+  return score;
+}
+
+function mergeMediaById<T extends { id: string }>(localList: T[] = [], incomingList: T[] = []): T[] {
+  const merged = new Map<string, T>();
+  for (const item of localList || []) if (item?.id) merged.set(item.id, item);
+  for (const item of incomingList || []) {
+    if (!item?.id) continue;
+    const existing = merged.get(item.id);
+    if (!existing) {
+      merged.set(item.id, item);
+      continue;
+    }
+    merged.set(item.id, mediaRichnessScore(item) > mediaRichnessScore(existing) ? item : existing);
+  }
+  return Array.from(merged.values());
+}
+
+function mergeByIdKeepingBoth<T>(localList: T[] = [], incomingList: T[] = []): T[] {
+  const seen = new Set<string>();
+  const merged: T[] = [];
+  for (const item of [...(incomingList || []), ...(localList || [])]) {
+    const key = item && typeof item === 'object' ? String((item as any).id ?? JSON.stringify(item)) : String(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged;
+}
+
 function migrateLegacyPastCollection(movies: Movie[] = [], collections: Collection[] = []): { movies: Movie[]; collections: Collection[] } {
   const pastColIds = new Set(
     collections
@@ -2018,6 +2104,8 @@ export interface AppContextValue {
   updateShowcase: (items: ShowcaseItem[]) => void;
   forceXpSync: () => void;
   syncAchievements: () => void;
+  /** Bu cihazdaki veriyi buluta zorla yükler (çakışma/geri dönüş korumasını atlar). */
+  forceCloudUpload: () => void;
   /** Sinematik Otopsi: film/diziyi yarım bırak (otopi). */
   abandonMedia: (mediaType: 'movie' | 'series', id: string, opts?: { abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }) => void;
   reviveMedia: (mediaType: 'movie' | 'series', id: string) => void;
@@ -2244,6 +2332,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const incomingMeaningful = hasMeaningfulProgress(coreData);
     const localMeaningful = hasMeaningfulProgress(localData);
+
+    // İLERLEME KAYBI YOK: bulut bu cihazdan geride olsa bile hiçbir taraf atılmaz.
+    // İki taraf birleştirilir (başarım kademeleri, görevler, geçmiş, kütüphane) ve
+    // birleşik kayıt buluta geri yazılır. Böylece XP asla düşmez.
+    const incomingAchCount = summarizeProgress(coreData).achievements;
+    const localAchCount = summarizeProgress(localData).achievements;
+    const incomingXpValue = Number((coreData as any).totalXp || 0);
+    const localXpValue = Number((localData as any).totalXp || 0);
+    const progressRegression = incomingAchCount < localAchCount || incomingXpValue + 5 < localXpValue;
+
+    if (!opts?.protectCloud && progressRegression) {
+      const localQuestState: any = readQuestState() || {};
+      const mergedCore = {
+        ...coreData,
+        movies: mergeMediaById(localData.movies as any, coreData.movies as any),
+        series: mergeMediaById(localData.series as any, coreData.series as any),
+        history: mergeByIdKeepingBoth(localData.history as any, coreData.history as any),
+        achievements: mergeAchievementProgress(localData.achievements as any, coreData.achievements as any),
+        bonusXp: Math.max(Number((localData as any).bonusXp || 0), Number((coreData as any).bonusXp || 0)),
+      };
+      const mergedQuests = {
+        ...(questData || {}),
+        completedQuests: Array.from(
+          new Set([
+            ...(((localQuestState.completedQuests as string[]) || [])),
+            ...(((questData as any)?.completedQuests as string[]) || []),
+          ]),
+        ),
+      };
+      const mergedJson = { ...incomingJson, core: mergedCore, quests: mergedQuests };
+      applyPendingCloudArchive(
+        {
+          coreData: mergedCore as ExtendedAppData,
+          questData: mergedQuests,
+          incomingJson: mergedJson,
+          incomingHash: getCleanHashString(mergedCore, mergedQuests, pickIncomingExtras(mergedJson)),
+          cloudTime,
+        },
+        cloudTime,
+      );
+      forceUploadRef.current = true;
+      lastSyncedStorageHash.current = '__force_upload__';
+      setSyncTick((tick) => tick + 1);
+      if (!opts?.silent) {
+        showToast('Bu cihazdaki ve buluttaki ilerleme birleştirildi; hiçbir başarım/XP silinmedi.', 'success');
+      }
+      return 'applied';
+    }
+
     const payload: PendingCloudArchive = { coreData, questData, incomingJson, incomingHash, cloudTime };
 
     // Bulut boş/eksik, cihazda gerçek veri var: bulutun yereli silmesine izin verme.
@@ -2692,7 +2829,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           (localSummary.movies === 0 && cloudCounts.movies > 0) ||
           (localSummary.series === 0 && cloudCounts.series > 0) ||
           (localSummary.achievements === 0 && cloudCounts.achievements > 0) ||
-          (localSummary.totalXp === 0 && cloudCounts.xp > 0)
+          (localSummary.totalXp === 0 && cloudCounts.xp > 0) ||
+          // Bulutta bu cihazdan DAHA FAZLA ilerleme varsa yerel kayıt eskidir:
+          // üzerine yazma, önce bulutu çek. (XP/başarım asla kendiliğinden azalmaz.)
+          localSummary.achievements < cloudCounts.achievements ||
+          localSummary.totalXp + 5 < cloudCounts.xp
         );
         if (localLooksIncomplete) {
           setSyncStatus('syncing');
@@ -3729,6 +3870,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SYNC_ACHIEVEMENTS' });
   }, []);
 
+  /**
+   * "Bu cihazı buluta yükle": geri dönüş korumasını bilerek atlar.
+   * Kullanıcı, elindeki cihazın doğru veri olduğunu bildiğinde kullanır.
+   */
+  const forceCloudUpload = useCallback(() => {
+    forceUploadRef.current = true;
+    hydrationTrustedRef.current = true;
+    lastSyncedStorageHash.current = '__force_upload__';
+    setSyncTick((tick) => tick + 1);
+    showToast('Bu cihazdaki veriler buluta yükleniyor...', 'info');
+  }, [showToast]);
+
   // State Slicing — yoğun sayfaların re-render izolasyonu için memo'lu dilimler (opt-in).
   const librarySlice = useMemo<LibrarySlice>(() => ({
     movies: data.movies, series: data.series, collections: data.collections,
@@ -3760,7 +3913,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.

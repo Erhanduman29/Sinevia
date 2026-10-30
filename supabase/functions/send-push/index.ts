@@ -181,12 +181,12 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'subscriptions_query_failed' }, 500);
   }
 
-  if (!subscriptions || subscriptions.length === 0) return json({ sent: 0, reason: 'no_devices' });
+  if (!subscriptions || subscriptions.length === 0) return json({ sent: 0, reason: 'no_devices', vapidPublicKey });
 
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
   const staleEndpoints: string[] = [];
-  const failures: Array<{ statusCode?: number; message?: string }> = [];
+  const failures: Array<{ statusCode?: number; message?: string; body?: string; endpointHost?: string }> = [];
   let sent = 0;
   let failed = 0;
 
@@ -214,6 +214,17 @@ Deno.serve(async (req: Request) => {
             message: String((err as Error)?.message || '')
               .replace(/https?:\/\/\S+/g, '[endpoint]')
               .slice(0, 180),
+            // Push servisinin (FCM/APNs) gerçek cevabı; 400'ün nedenini gösterir.
+            body: String((err as { body?: unknown })?.body || '')
+              .replace(/https?:\/\/\S+/g, '[endpoint]')
+              .slice(0, 220),
+            endpointHost: (() => {
+              try {
+                return new URL(subscription.endpoint).host;
+              } catch {
+                return 'unknown';
+              }
+            })(),
           });
           console.error('[send-push] gönderim hatası:', statusCode, (err as Error)?.message);
         }
@@ -225,5 +236,5 @@ Deno.serve(async (req: Request) => {
     await admin.from('push_subscriptions').delete().in('endpoint', staleEndpoints);
   }
 
-  return json({ sent, failed, removed: staleEndpoints.length, errors: failures });
+  return json({ sent, failed, removed: staleEndpoints.length, errors: failures, vapidPublicKey });
 });
