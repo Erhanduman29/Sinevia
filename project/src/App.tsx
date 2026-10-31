@@ -20,7 +20,7 @@ import NetworkPage from './pages/NetworkPage'; // YENİ: Sinevia Ağı import ed
 import NetworkAuthModal from './components/NetworkAuthModal'; // YENİ: Ağ auth modalı
 import Toasts from './components/Toasts';
 import AchievementToasts from './components/AchievementToasts';
-import CloudConflictDialog from './components/CloudConflictDialog';
+import CloudConflictModal from './components/CloudConflictModal';
 import LevelUpModal from './components/LevelUpModal';
 import SeasonCompleteModal from './components/SeasonCompleteModal';
 import XpGainOverlay from './components/XpGainOverlay';
@@ -92,6 +92,7 @@ function AppContent() {
     dismissContractCelebration,
     cloudConflict,
     resolveCloudConflict,
+    syncStatus,
   } = useApp();
   const { reducedMotion, fastCelebrations } = useSettings();
   // Tutorial Merkezi kısayolla açılıp kapatılabilsin (Esc / F1).
@@ -250,11 +251,10 @@ function AppContent() {
       {/* Kutlamalar eğitim/karşılama katmanının (z-300) üstünde kalmalı. */}
       <div className="relative z-[400]">
         {cloudConflict && (
-          <CloudConflictDialog
+          <CloudConflictModal
             conflict={cloudConflict}
-            onUseCloud={() => resolveCloudConflict('cloud')}
-            onUseLocal={() => resolveCloudConflict('local')}
-            onDefer={() => resolveCloudConflict('later')}
+            busy={syncStatus === 'syncing'}
+            onChoose={resolveCloudConflict}
           />
         )}
         {contractCelebrationData && (

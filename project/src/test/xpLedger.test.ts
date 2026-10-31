@@ -11,9 +11,10 @@ import {
   xpEventKey,
   LEGACY_MIGRATION_ID,
 } from '../lib/xpLedger';
-import { applyAchievements, buildExactCloudData, rootReducer, type ExtendedAppData } from '../context/AppContext';
+import { applyAchievements, rootReducer, type ExtendedAppData } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
+import { migrateLegacyToV3, toLegacyCoreView } from '../lib/localStateV3';
 
 /* ============================================================================
    XP DEFTERİ — saf fonksiyonlar + AppContext reducer entegrasyonu
@@ -264,11 +265,12 @@ describe('AppContext — XP defteri tek kaynak', () => {
   });
 
   test('REPLACE_FROM_CLOUD_STORAGE defteri korur ve totalXp yeniden hesaplar', () => {
-    const cloud = buildExactCloudData({
+    // Bulut kaydı: V2 toplamı tek seferlik `legacy` kaydına çevrilmiş kanonik görünüm.
+    const cloud = {
       ...baseState(),
       totalXp: 1850,
-      xpEvents: undefined,
-    } as any, {}, 123456);
+      xpEvents: [makeXpEvent({ source: 'legacy', sourceId: 'migration-v3', base: 1850 })],
+    } as any;
 
     expect(cloud.totalXp).toBe(1850);
     expect(cloud.xpEvents).toHaveLength(1);
@@ -279,6 +281,39 @@ describe('AppContext — XP defteri tek kaynak', () => {
     expect(next.xpEvents).toHaveLength(1);
     expect(sumXpEvents(next.xpEvents)).toBe(1850);
     expect('xpBaseline' in next).toBe(false);
+  });
+
+  test('art arda iki bulut indirmesi defteri takip eder (eski toplamda takılmaz)', () => {
+    // Gerçek köprü: kanonik V3 kaydı → redüktör görünümü (toLegacyCoreView).
+    const cloud1850 = toLegacyCoreView(migrateLegacyToV3({
+      core: { ...baseState(), movies: [], totalXp: 1850, level: 20 } as any,
+      quests: {},
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      cloudTotalXp: 1850,
+    })) as unknown as ExtendedAppData;
+
+    const afterFirst = rootReducer(baseState(), {
+      type: 'REPLACE_FROM_CLOUD_STORAGE', data: cloud1850,
+    } as any);
+    expect(afterFirst.totalXp).toBe(1850);
+    expect(afterFirst.xpEvents?.[0].source).toBe('legacy');
+
+    // İkinci (daha yeni) bulut kaydı: defter köprüden aynen geçmeli, toplam 2000 olmalı.
+    const cloud2000 = toLegacyCoreView(migrateLegacyToV3({
+      core: { ...baseState(), movies: [], totalXp: 2000, level: 21 } as any,
+      quests: {},
+      updatedAt: '2026-02-01T00:00:00.000Z',
+      cloudTotalXp: 2000,
+    })) as unknown as ExtendedAppData;
+
+    expect((cloud2000 as any).xpEvents).toHaveLength(1);
+
+    const afterSecond = rootReducer(afterFirst, {
+      type: 'REPLACE_FROM_CLOUD_STORAGE', data: cloud2000,
+    } as any);
+    expect(afterSecond.totalXp).toBe(2000);
+    expect(sumXpEvents(afterSecond.xpEvents)).toBe(2000);
+    expect(afterSecond.level).toBe(levelFromXp(2000).level);
   });
 
   test('HYDRATE_FROM_IDB defteri birleştirir (kayıp yok, çift sayım yok)', () => {

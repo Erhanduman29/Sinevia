@@ -46,30 +46,49 @@ import {
   applyBackupExtras,
   buildBackupPayload,
   parseBackupPayload,
-  pickBackupExtras,
   readBackupExtras,
   readQuestState,
   writeQuestState,
-  type BackupExtras,
 } from '../lib/appBackup';
 import { pruneExpiredPlanItems } from '../lib/planPrune';
 import { supabase } from '../lib/supabase';
 import { networkGetMe } from '../lib/networkAuth';
 import { ensurePushSubscription, saveNotificationPrefs, showAppNotification } from '../lib/notifications';
-import { idbGet, idbSet, idbDel, writeQueue, writeBootSnapshot, migrateToIdbIfNeeded, setStorageErrorHandler, PREV_ACCOUNT_KEY, BACKUP_STORAGE_KEY, isFullAppRecord, isIdbAvailable } from '../lib/storageService';
+import {
+  idbGet,
+  idbDel,
+  loadStateV3,
+  saveStateV3,
+  saveStateV3Immediate,
+  readBootSnapshotV3,
+  readLegacyExtras,
+  migrateToIdbIfNeeded,
+  setStorageErrorHandler,
+  PREV_ACCOUNT_KEY,
+  isFullAppRecord,
+  isIdbAvailable,
+} from '../lib/storageService';
+import {
+  fromLegacyCore,
+  isAppStateV3,
+  migrateLegacyToV3,
+  toLegacyCoreView,
+} from '../lib/localStateV3';
+import {
+  createSupabaseSyncClient,
+  createSyncEngine,
+  type SyncEngine,
+  type SyncMetaStore,
+  type SyncRpcClient,
+} from '../lib/syncEngine';
+import { makeSaveHash } from '../lib/syncContract';
+import type { AppStateV3 } from '../types/appState';
+import type { ConflictChoice, SyncConflict, SyncResult } from '../types/sync';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
 import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, ActionsSlice } from './slices';
 
 const STORAGE_KEY = 'sinevia-v1';
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
-/**
- * Bu cihazın en son eşitlediği İÇERİK parmak izi (cihaza özel alanlar hariç).
- * Açılışlar arasında korunur; "yüklenmemiş yerel değişiklik var mı?" sorusunu
- * doğru yanıtlamak için kullanılır. Aksi halde boş/eksik sanıp çakışma
- * penceresi açılıyordu.
- */
-const CONTENT_HASH_KEY = 'sinevia_last_synced_content';
-
 /**
  * Bildirim tercihleri ayrı ve SENKRON bir localStorage anahtarında tutulur.
  * IndexedDB yazımı 250ms gecikebildiği / uygulama anında kapatılabildiği için
@@ -111,38 +130,6 @@ function rememberNotificationPrefs(prefs: NotificationPrefs) {
 function applyNotificationPrefs<T extends Record<string, any>>(input: T): T {
   const prefs = readNotificationPrefs();
   return Object.keys(prefs).length > 0 ? { ...input, ...prefs } : input;
-}
-
-/**
- * Eşitleme meta verileri (son görülen bulut, içerik hash'i, son değişiklik)
- * hesaba göre ayrılır. Aksi halde aynı tarayıcıda hesap değiştirince eski
- * hesabın "bulutu gördüm" damgası yeni hesaba taşınıyordu.
- */
-const SYNC_META_OWNER_KEY = 'sinevia_sync_meta_agent';
-function scopedSyncMetaKey(base: string, agentId?: string): string {
-  return agentId ? `${base}:${agentId}` : base;
-}
-function readScopedSyncMeta(base: string, agentId?: string): string | null {
-  try {
-    const scoped = localStorage.getItem(scopedSyncMetaKey(base, agentId));
-    if (scoped !== null) return scoped;
-    const legacy = localStorage.getItem(base);
-    if (legacy === null) return null;
-    const owner = localStorage.getItem(SYNC_META_OWNER_KEY);
-    // Eski sürümden gelen anahtarın sahibi yoksa (veya aynı hesapsa) bir kez devral.
-    if (!owner || !agentId || owner === agentId) return legacy;
-    return null;
-  } catch {
-    return null;
-  }
-}
-function writeScopedSyncMeta(base: string, agentId: string | undefined, value: string) {
-  try {
-    localStorage.setItem(scopedSyncMetaKey(base, agentId), value);
-    if (agentId) localStorage.setItem(SYNC_META_OWNER_KEY, agentId);
-    // Eski sürüm/başka ekranlar okuyabilsin diye global anahtar da güncel tutulur.
-    localStorage.setItem(base, value);
-  } catch { /* kota / gizli mod */ }
 }
 
 export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
@@ -221,6 +208,22 @@ function generateRecoveryKey() {
   return `${uid()}-${uid()}`;
 }
 
+/**
+ * Bu cihazın kalıcı kimliği (zarf `deviceId`). İlk çağrıda üretilir.
+ * `localStorage` erişilemezse sabit bir yedek değer döner (senkron bozulmaz).
+ */
+function readDeviceId(): string {
+  try {
+    const existing = localStorage.getItem('sinevia_device_id');
+    if (existing) return existing;
+    const id = `dev-${uid()}`;
+    localStorage.setItem('sinevia_device_id', id);
+    return id;
+  } catch {
+    return 'unknown-device';
+  }
+}
+
 export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
   const maxMins = movie.runtime && movie.runtime > 0 ? movie.runtime : 115;
   const totalSec = maxMins * 60;
@@ -286,92 +289,6 @@ function createInitialAchievements(existingList?: AchievementProgress[]): Achiev
     if (ex) return { ...ex, unlockedTiers: Array.isArray(ex.unlockedTiers) ? [...ex.unlockedTiers] : [], tierDates: ex.tierDates ? { ...ex.tierDates } : {} };
     return { achievementId: def.id, current: 0, unlockedTiers: [], tierDates: {}, lastNotifiedTier: null };
   });
-}
-
-function mergeAchievementProgress(
-  localList: AchievementProgress[] = [],
-  incomingList: AchievementProgress[] = [],
-): AchievementProgress[] {
-  const merged = new Map<string, AchievementProgress>();
-  for (const item of incomingList || []) {
-    if (!item?.achievementId) continue;
-    merged.set(item.achievementId, {
-      ...item,
-      unlockedTiers: Array.isArray(item.unlockedTiers) ? [...item.unlockedTiers] : [],
-      tierDates: { ...(item.tierDates || {}) },
-    });
-  }
-  for (const item of localList || []) {
-    if (!item?.achievementId) continue;
-    const existing = merged.get(item.achievementId);
-    if (!existing) {
-      merged.set(item.achievementId, {
-        ...item,
-        unlockedTiers: Array.isArray(item.unlockedTiers) ? [...item.unlockedTiers] : [],
-        tierDates: { ...(item.tierDates || {}) },
-      });
-      continue;
-    }
-    // Kademeler birleşir: hiçbir tarafın açtığı kademe kaybolmaz (XP düşmesini engeller).
-    const tiers = Array.from(new Set([...(existing.unlockedTiers || []), ...(item.unlockedTiers || [])]));
-    const dates: Record<string, string> = { ...(existing.tierDates || {}) };
-    for (const [tier, date] of Object.entries(item.tierDates || {})) {
-      if (!dates[tier] || (date && date < dates[tier])) dates[tier] = date;
-    }
-    merged.set(item.achievementId, {
-      ...existing,
-      current: Math.max(Number(existing.current || 0), Number(item.current || 0)),
-      unlockedTiers: tiers,
-      tierDates: dates,
-      lastNotifiedTier: existing.lastNotifiedTier ?? item.lastNotifiedTier ?? null,
-    });
-  }
-  return Array.from(merged.values());
-}
-
-/** Bir medya kaydının "ne kadar dolu" olduğunu puanlar; birleştirmede daha zengin kayıt kazanır. */
-function mediaRichnessScore(item: any): number {
-  if (!item || typeof item !== 'object') return 0;
-  let score = 0;
-  if (item.watched) score += 50;
-  if (item.rating !== null && item.rating !== undefined) score += 20;
-  if (item.review) score += 12;
-  if (item.notes) score += 6;
-  if (Array.isArray(item.episodes)) score += item.episodes.length;
-  if (Array.isArray(item.deletedEpisodes)) score += item.deletedEpisodes.length;
-  for (const value of Object.values(item)) {
-    if (value === null || value === undefined || value === '') continue;
-    if (Array.isArray(value) && value.length === 0) continue;
-    score += 0.05;
-  }
-  return score;
-}
-
-function mergeMediaById<T extends { id: string }>(localList: T[] = [], incomingList: T[] = []): T[] {
-  const merged = new Map<string, T>();
-  for (const item of localList || []) if (item?.id) merged.set(item.id, item);
-  for (const item of incomingList || []) {
-    if (!item?.id) continue;
-    const existing = merged.get(item.id);
-    if (!existing) {
-      merged.set(item.id, item);
-      continue;
-    }
-    merged.set(item.id, mediaRichnessScore(item) > mediaRichnessScore(existing) ? item : existing);
-  }
-  return Array.from(merged.values());
-}
-
-function mergeByIdKeepingBoth<T>(localList: T[] = [], incomingList: T[] = []): T[] {
-  const seen = new Set<string>();
-  const merged: T[] = [];
-  for (const item of [...(incomingList || []), ...(localList || [])]) {
-    const key = item && typeof item === 'object' ? String((item as any).id ?? JSON.stringify(item)) : String(item);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(item);
-  }
-  return merged;
 }
 
 function migrateLegacyPastCollection(movies: Movie[] = [], collections: Collection[] = []): { movies: Movie[]; collections: Collection[] } {
@@ -467,138 +384,22 @@ function applyLedgerTotals(state: ExtendedAppData): ExtendedAppData {
   };
 }
 
-/**
- * Bulut arşivini BİREBİR uygulanacak hale getirir.
- *
- * XP kuralı: kayıtta `xpEvents` varsa aynen kullanılır. Yoksa (V2 kaydı)
- * `totalXp` → `legacy` göçü yapılır. Başarım/görev listesi XP'yi ASLA
- * yeniden toplamaz; böylece buluttaki 1850 XP, eksik başarım listesiyle
- * 95'e düşmez.
- */
-export function buildExactCloudData(coreData: any, questData: any, cloudTime: number): ExtendedAppData {
-  const base = defaultData();
-  const migrated = migrateLegacyPastCollection(
-    Array.isArray(coreData?.movies) ? coreData.movies : [],
-    Array.isArray(coreData?.collections) ? coreData.collections : [],
-  );
-  const achievements = createInitialAchievements(
-    Array.isArray(coreData?.achievements) ? coreData.achievements : [],
-  );
-  // Kaldırılan türetilmiş XP alanları yeni kayda taşınmaz.
-  const {
-    bonusXp: _legacyBonus,
-    xpBaseline: _legacyBaseline,
-    xpEvents: incomingEvents,
-    ...coreRest
-  } = (coreData || {}) as Record<string, any>;
-  const merged: ExtendedAppData = applyNotificationPrefs({
-    ...base,
-    ...coreRest,
-    movies: migrated.movies,
-    series: Array.isArray(coreData?.series) ? coreData.series : [],
-    collections: migrated.collections,
-    genres: Array.isArray(coreData?.genres) && coreData.genres.length ? coreData.genres : base.genres,
-    reviewTags: Array.isArray(coreData?.reviewTags) ? coreData.reviewTags : DEFAULT_REVIEW_TAGS,
-    criteria: Array.isArray(coreData?.criteria) && coreData.criteria.length ? coreData.criteria : base.criteria,
-    achievements,
-    showcase: Array.isArray(coreData?.showcase) ? coreData.showcase : [],
-  });
-
-  const xpEvents = migrateLegacyXp({
-    events: incomingEvents,
-    localTotalXp: Number(coreData?.totalXp ?? 0),
-    cloudTotalXp: Number(coreData?.totalXp ?? 0),
-    createdAt: new Date(cloudTime || Date.now()).toISOString(),
-  });
-  const totalXp = sumXpEvents(xpEvents);
-  const levelInfo = levelFromXp(totalXp);
-
-  return {
-    ...merged,
-    xpEvents,
-    totalXp,
-    // Seviye her zaman defterden türetilir; buluttaki `level` alanı otorite değildir.
-    level: levelInfo.level,
-    xp: levelInfo.currentLevelXp,
-    lastCloudSync: cloudTime,
-    // Bulut indirmesi birebir ayna olmalı: yerel kutlama/XP kuyrukları taşınmaz.
-    pendingToasts: [],
-    pendingLevelUp: undefined,
-    pendingLevelUpQueue: undefined,
-    pendingXpGain: undefined,
-    pendingCoinGain: undefined,
-  };
-}
-
-/** Bulut/yerel çakışma diyalogunda gösterilen özet. */
-export interface DataSummary {
-  movies: number;
-  series: number;
-  episodes: number;
-  history: number;
-  achievements: number;
-  totalXp: number;
-  level: number;
-}
-
-export interface CloudConflictInfo {
-  cloudTime: number;
-  agentId: string;
-  nickname: string;
-  local: DataSummary;
-  cloud: DataSummary;
-}
-
-interface PendingCloudArchive {
-  coreData: any;
-  questData: any;
-  incomingJson: any;
-  incomingHash: string;
-  cloudTime: number;
-}
-
 /** Verinin kullanıcıya ait gerçek ilerleme taşıyıp taşımadığını anlar. */
-function summarizeProgress(source: any): DataSummary {
-  const movies = Array.isArray(source?.movies) ? source.movies : [];
-  const series = Array.isArray(source?.series) ? source.series : [];
-  const history = Array.isArray(source?.history) ? source.history : [];
-  const achievements = Array.isArray(source?.achievements) ? source.achievements : [];
-  const episodes = series.reduce((sum: number, s: any) => sum + (Array.isArray(s?.episodes) ? s.episodes.length : 0), 0);
-  const unlocked = achievements.reduce((sum: number, a: any) => sum + (Array.isArray(a?.unlockedTiers) ? a.unlockedTiers.length : 0), 0);
-  return {
-    movies: movies.length,
-    series: series.length,
-    episodes,
-    history: history.length,
-    achievements: unlocked,
-    // V3 kaydında XP defterden türetilir; V2 kaydında düz `totalXp` alanı vardır.
-    totalXp: Array.isArray(source?.xpEvents)
-      ? sumXpEvents(source.xpEvents)
-      : Number(source?.totalXp || 0),
-    level: Number(source?.level || 1),
-  };
-}
-
 function hasMeaningfulProgress(source: any): boolean {
   if (!source || typeof source !== 'object') return false;
-  const summary = summarizeProgress(source);
-  return summary.movies > 0
-    || summary.series > 0
-    || summary.history > 0
-    || summary.achievements > 0
-    || summary.totalXp > 0;
-}
-
-/**
- * Kütüphane içeriği (film / dizi / geçmiş) var mı?
- * Başarım/XP tek başına kütüphaneyi temsil etmez: kütüphane boşsa applyAchievements
- * başarımları yeniden hesaplayıp XP'yi de düşürebilir. Bu yüzden hidrasyonda
- * kütüphanesi boş ana kayıt yerine dolu yedeği tercih ediyoruz.
- */
-function hasLibraryContent(source: any): boolean {
-  if (!source || typeof source !== 'object') return false;
-  const summary = summarizeProgress(source);
-  return summary.movies > 0 || summary.series > 0 || summary.history > 0;
+  const movies = Array.isArray(source.movies) ? source.movies.length : 0;
+  const series = Array.isArray(source.series) ? source.series.length : 0;
+  const history = Array.isArray(source.history) ? source.history.length : 0;
+  const achievements = Array.isArray(source.achievements)
+    ? source.achievements.reduce(
+      (sum: number, item: any) => sum + (Array.isArray(item?.unlockedTiers) ? item.unlockedTiers.length : 0),
+      0,
+    )
+    : 0;
+  const totalXp = Array.isArray(source.xpEvents)
+    ? sumXpEvents(source.xpEvents)
+    : Number(source.totalXp || 0);
+  return movies > 0 || series > 0 || history > 0 || achievements > 0 || totalXp > 0;
 }
 
 export function resolveTMDBGenres(incomingGenres: string[], existingGenres: string[]): string[] {
@@ -618,92 +419,6 @@ export function resolveTMDBGenres(incomingGenres: string[], existingGenres: stri
 function addNewGenres(currentGenres: string[], incomingGenres: string[]): string[] {
   const newItems = incomingGenres.filter((inc) => !currentGenres.some((cur) => normalize(cur) === normalize(inc)));
   return newItems.length > 0 ? [...currentGenres, ...newItems] : currentGenres;
-}
-
-/** Anahtar sırasından bağımsız, deterministik JSON (bulut/yerel eşitlik karşılaştırması). */
-function canonicalJson(value: any): string {
-  if (value === undefined) return 'null';
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const keys = Object.keys(value).filter((key) => value[key] !== undefined).sort();
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
-}
-
-function getCleanHashString(stateObj: any, questStateRaw?: any, extrasRaw?: Record<string, any>) {
-  const clean = { ...stateObj };
-  delete clean.aiChatHistory;
-  delete clean.lastCloudSync;
-  delete clean.pendingToasts;
-  delete clean.pendingLevelUp;
-  delete clean.pendingLevelUpQueue;
-  delete clean.pendingXpGain;
-  delete clean.pendingCoinGain;
-  // Kaldırılan V2 XP alanları eski kayıtlarda kalmış olabilir; hash'e girmesin.
-  delete clean.xpBaseline;
-  delete clean.bonusXp;
-  
-  if (questStateRaw || extrasRaw) {
-     return canonicalJson({ core: clean, quests: questStateRaw || {}, ...(extrasRaw || {}) });
-  }
-  return canonicalJson(clean);
-}
-
-/** Kısa, deterministik parmak izi (localStorage'a sığsın diye tam JSON yerine). */
-function shortHash(input: string): string {
-  let h1 = 0x811c9dc5;
-  let h2 = 0x1000193;
-  for (let i = 0; i < input.length; i += 1) {
-    const c = input.charCodeAt(i);
-    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
-    h2 = Math.imul(h2 + c * (i + 1), 0x01000193) >>> 0;
-  }
-  return `${h1.toString(36)}-${h2.toString(36)}-${input.length.toString(36)}`;
-}
-
-/**
- * ÇAKIŞMA / "aynı mı?" KARŞILAŞTIRMASI — yalnızca GERÇEK İÇERİK.
- *
- * Fark: cihaza özel alanlar bu hash'e girmez. Aksi halde aynı hesabın iki
- * cihazı, kullanıcı hiçbir şey değiştirmese bile "farklı" görünüp sürekli
- * "Hesap Eşitleme Çakışması" gösteriyordu:
- *   - `recoveryKey` her cihazda farklı üretilir,
- *   - `activeTab` / `settingsTab` / ses / kısayol gibi arayüz tercihleri
- *     cihazdan cihaza doğal olarak farklıdır.
- * Bu alanlar yedekte taşınmaya devam eder; sadece "veri değişti mi?"
- * kararını etkilemezler.
- */
-function getContentHash(stateObj: any, questStateRaw?: any) {
-  const clean = { ...stateObj };
-  delete clean.aiChatHistory;
-  delete clean.lastCloudSync;
-  delete clean.pendingToasts;
-  delete clean.pendingLevelUp;
-  delete clean.pendingLevelUpQueue;
-  delete clean.pendingXpGain;
-  delete clean.pendingCoinGain;
-  delete clean.recoveryKey;
-  delete clean.xpBaseline;
-  delete clean.bonusXp;
-  return shortHash(canonicalJson({ core: clean, quests: questStateRaw || {} }));
-}
-
-/* =========================================================================
-   BULUT EŞİTLEME EK DURUMLARI — tutorial, akademi, ses/kısayol ve sekme
-   tercihleri (core/quests gibi aynı JSON dosyasına gömülür; şema DEĞİŞMEZ.)
-   ========================================================================= */
-/** Bu cihazdaki ek durumları oku (yükleme/payload için). */
-function readSyncExtras(): BackupExtras {
-  return readBackupExtras();
-}
-
-/** Bulut dosyasındaki mevcut ek durumları seç (eski yedeklerde hiçbiri olmayabilir). */
-function pickIncomingExtras(incomingJson: unknown): BackupExtras {
-  return pickBackupExtras(incomingJson);
-}
-
-/** İnen ek durumları yerel depoya yaz ve dinleyicilere (TutorialContext vb.) duyur. */
-function applyIncomingExtras(incomingJson: unknown) {
-  applyBackupExtras(pickBackupExtras(incomingJson));
 }
 
 /**
@@ -906,7 +621,6 @@ type Action =
   | { type: 'TOGGLE_SPECIFIC_NOTIFICATION'; key: 'notifyMessages' | 'notifyFriendRequests' | 'notifyLists'; enabled: boolean }
   | { type: 'SET_SHOWCASE'; showcase: ShowcaseItem[] }
   | { type: 'FORCE_XP_SYNC' }
-  | { type: 'SYNC_FROM_CLOUD_STORAGE'; data: ExtendedAppData; questData?: any }
   | { type: 'REPLACE_FROM_CLOUD_STORAGE'; data: ExtendedAppData; questData?: any }
   | { type: 'ABANDON_MEDIA'; mediaType: 'movie' | 'series'; id: string; abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }
   | { type: 'REVIVE_MEDIA'; mediaType: 'movie' | 'series'; id: string }
@@ -1426,22 +1140,6 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(action.questData));
     }
     return applyLedgerTotals(reconcileXpLedger({ ...defaultData(), ...action.data }));
-  }
-
-  if (action.type === 'SYNC_FROM_CLOUD_STORAGE') {
-    // Tam hesap silme yarışı: sıfırlama bayrağı ayaktaysa gelen bulut verisi (çekirdek +
-    // görev/rozet deposu) uygulanmaz — silinen hesap geri getirilmesin.
-    if (localStorage.getItem('sinevia_zero_reset') === '1') return state;
-    if (action.questData) {
-      localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(action.questData));
-    }
-    // Bulut uzlaşması seviye kutlaması tetiklememeli (açılışta sahte "Seviye X" animasyonu engeli).
-    const syncedFromCloud = applyAchievements(
-      reconcileXpLedger({ ...defaultData(), ...(action.data as any) })
-    );
-    // Bulut uzlaşması ne kutlama üretir ne de eski bulut bildirim kuyruğunu içeri alır;
-    // bu sadece yerel (genuine) kuyruk korunur.
-    return applyNotificationPrefs({ ...syncedFromCloud, pendingLevelUp: undefined, pendingLevelUpQueue: undefined, pendingToasts: state.pendingToasts || [] });
   }
 
   if (action.type === 'HYDRATE_FROM_IDB') {
@@ -2275,8 +1973,8 @@ export interface AppContextValue {
   data: ExtendedAppData;
   syncStatus: 'syncing' | 'synced' | 'error'; // YENİ: Eşitleme Durum Sinyali
   /** Aynı hesap için yerel ve bulut sürümü çakıştığında kullanıcıya sorulacak bilgi. */
-  cloudConflict: CloudConflictInfo | null;
-  resolveCloudConflict: (choice: 'cloud' | 'local' | 'later') => void;
+  cloudConflict: SyncConflict | null;
+  resolveCloudConflict: (choice: ConflictChoice) => void;
   isQuestCelebrating: boolean; setIsQuestCelebrating: (val: boolean) => void; levelUpQueuedRef: { current: boolean }; // gecikmeli seviye modalı bekliyor (dış flush kapıları için)
   // Kutlama kapıları (ref tabanlı, state gecikmesinden etkilenmez)
   contractCelebratingRef: { current: boolean }; contractQueuedRef: { current: { contractId: string; xp: number; coins: number; rarity: ContractRarity } | null };
@@ -2359,58 +2057,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const identityReconciledRef = useRef(false);
   const pushHealRef = useRef(false);
   const hydrationTrustedRef = useRef(false);
-  // Aynı hesap için iki farklı sürüm varsa kullanıcıya sorulur.
-  const [cloudConflict, setCloudConflict] = useState<CloudConflictInfo | null>(null);
-  const cloudConflictRef = useRef<CloudConflictInfo | null>(null);
-  const pendingCloudRef = useRef<PendingCloudArchive | null>(null);
-  const [syncTick, setSyncTick] = useState(0);
-  const forceUploadRef = useRef(false);
-  // Çakışma "sonra karar ver" ile ertelendiyse bu oturumda eşitleme yapılmaz.
-  const cloudConflictDeferredRef = useRef(false);
 
   const [data, dispatch] = useReducer(rootReducer, undefined, () => {
+    const base = defaultData();
     try {
       // "Cihazdan Çıkış Yap" sonrası: bayrak varsa eski snapshot'ı tamamen atla.
-      // IMPORT_DATA kimliği koruduğu (preservedIdentity) ve reload anındaki
-      // flushWrites eski boot anlık görüntüsünü geri yazabildiği için silme
-      // yaklaşımı güvenilmez — init bayrağı doğrudan görüp taze başlar.
-      if (localStorage.getItem('sinevia_zero_reset') === '1') return defaultData();
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored); const migrated = migrateLegacyPastCollection(parsed.movies, parsed.collections);
-        let parsedData: ExtendedAppData = { ...defaultData(), ...parsed, collections: migrated.collections, movies: migrated.movies, achievements: createInitialAchievements(parsed.achievements) };
-        if (!parsedData.agentId) parsedData.agentId = generateAgentId(); if (!parsedData.nickname) parsedData.nickname = 'Yeni Üye'; if (!parsedData.recoveryKey) parsedData.recoveryKey = generateRecoveryKey();
-        if (parsedData.aiChatHistory) parsedData.aiChatHistory = parsedData.aiChatHistory.filter((msg: AIMessage) => msg.timestamp >= Date.now() - 3 * 86400000);
-        if (!parsedData.criteria) parsedData.criteria = defaultData().criteria; if (!parsedData.reviewTags || !Array.isArray(parsedData.reviewTags)) parsedData.reviewTags = DEFAULT_REVIEW_TAGS; if (!parsedData.theme || parsedData.theme === 'default') parsedData.theme = 'premium-dark';
-        if (!Array.isArray(parsedData.weeklyPlan) || parsedData.weeklyPlan.some((p: any) => !p.date)) parsedData.weeklyPlan = [];
-        if (parsedData.notificationsEnabled === undefined) parsedData.notificationsEnabled = false;
-        if (parsedData.shareWatchedInFeed == null) parsedData.shareWatchedInFeed = true;
-        if (parsedData.sharePastWatchedInFeed == null) parsedData.sharePastWatchedInFeed = true;
-        if (parsedData.notifyMessages === undefined) parsedData.notifyMessages = true;
-        if (parsedData.notifyFriendRequests === undefined) parsedData.notifyFriendRequests = true;
-        if (parsedData.notifyLists === undefined) parsedData.notifyLists = true;
-        if (!Array.isArray(parsedData.showcase)) parsedData.showcase = [];
-        // Hızlı Aksiyon Köprüsü göçü: eski tekli altWatchTemplate, externalActions
-        // listesinin ilk (primary) şablonu olarak taşınır — eski "Alternatif İzle"
-        // davranışı kaybolmaz, kullanıcı yeni listeyi düzenleyebilir.
-        if (!Array.isArray(parsedData.externalActions)) parsedData.externalActions = [];
-        // Eski kayıtlı "Alternatif İzle" etiketlerini görünürde "İzle" olarak normalize et.
-        parsedData.externalActions = parsedData.externalActions.map((action: any) => (
-          action && typeof action === 'object'
-            ? { ...action, label: normalizeActionLabel(action.label) }
-            : action
-        ));
-        if (parsedData.externalActions.length === 0 && parsedData.altWatchTemplate) {
-          parsedData.externalActions = [{ id: 'legacy-alt-izle', label: 'İzle', urlTemplate: rewriteLegacyTemplate(parsedData.altWatchTemplate), icon: 'ExternalLink', targetScope: 'all', isPrimary: true }];
-        }
-        
-        parsedData = applyNotificationPrefs(parsedData);
-        // XP: defter varsa aynen korunur, yoksa V2 toplamı tek seferlik göç eder.
-        // Eski `bonusXp`/`xpBaseline` alanları yeni kayda TAŞINMAZ (toplamları
-        // zaten `totalXp` içindeydi) — böylece 1855 XP aynen korunur.
-        return synchronizeXPAndLevel(parsedData, true);
-      }
-    } catch {} return defaultData();
+      if (localStorage.getItem('sinevia_zero_reset') === '1') return base;
+      // Boot anlık görüntüsü YALNIZ tema/kimlik/özet taşır; kütüphane içermez.
+      // Tam V3 kaydı hidrasyonda gelir, o zamana kadar yazma yapılmaz.
+      const boot = readBootSnapshotV3();
+      if (!boot) return base;
+      return applyNotificationPrefs({
+        ...base,
+        theme: boot.theme || base.theme,
+        agentId: boot.agentId ?? base.agentId,
+        nickname: boot.nickname ?? base.nickname,
+        totalXp: Number(boot.totalXp || 0),
+        level: Number(boot.level || 1),
+        xp: Number(boot.xp || 0),
+        dailyStreak: Number(boot.dailyStreak || 0),
+      });
+    } catch {
+      return base;
+    }
   });
 
   const [isQuestCelebrating, setQuestCelebratingState] = useState(false);
@@ -2437,294 +2106,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setIsQuestCelebrating = useCallback((val: boolean) => { questCelebratingRef.current = val; setQuestCelebratingState(val); }, []);
   const setIsContractCelebrating = useCallback((val: boolean) => { contractCelebratingRef.current = val; setContractCelebratingState(val); }, []);
   
-  const lastSyncedStorageHash = useRef<string>(getCleanHashString(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}'), readSyncExtras()));
-  // Son eşitlenen İÇERİK parmak izi (cihaza özel alanlar hariç). "Bu cihazda henüz
-  // buluta yazılmamış değişiklik var mı?" sorusunun tek doğru kaynağı.
-  // Açılışlar arasında localStorage'da korunur; çakışma penceresi YALNIZCA
-  // yerelde gerçek (yüklenmemiş) değişiklik varken açılır.
-  const lastSyncedContentHash = useRef<string>((() => {
-    try {
-      const saved = readScopedSyncMeta(CONTENT_HASH_KEY, data.agentId);
-      if (saved) return saved;
-    } catch { /* kota / gizli mod */ }
-    try {
-      return getContentHash(data, JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}'));
-    } catch {
-      return '';
-    }
-  })());
-  // En güncel reducer durumuna ref üzerinden erişim (localStorage artık sadece küçük bir anlık görüntü tutuyor).
-  const dataRef = useRef(data); dataRef.current = data;
-  // Yerel verinin son değişiklik zamanı — buluta yazmadan önce sürüm karşılaştırması için (Madde 3).
-  // Başlangıçta son gerçek düzenleme zamanından okunur; hidrate/indirme senkronları bunu BUMPLAMAZ
-  // (yoksa eski yerel veri "en yeni" görünür ve bulutu ezerdi).
-  const localLastModifiedRef = useRef<number>((() => {
-    try {
-      const saved = Number(readScopedSyncMeta('sinevia_last_modified', data.agentId) || 0);
-      // Anahtar henüz yoksa (bu güncellemeyi ilk gören kullanıcılar): yerel otorite kabul edilir,
-      // yoksa cloudTime > 0+2000 şartı her şeyi "daha yeni" yapıp yerel veriyi çekerdi (veri kaybı).
-      if (!saved) { const now = Date.now(); writeScopedSyncMeta('sinevia_last_modified', data.agentId, String(now)); return now; }
-      return saved;
-    } catch { return Date.now(); }
-  })());
-  const lmSkipBumpRef = useRef(false);
-  // Görülen son bulut sürümü (last_cloud_sync). Sürüm kapısı buna bakar: sadece HENÜZ
-  // görülmemiş bulut sürümü çekilir. (Eski kapı localLastModified ile karşılaştırıyordu;
-  // yükleyici cloudTime'ı edit'ten ~3.5sn sonra yazdığı için koşul kalıcı doğru olup her
-  // senkron tam JSON çekiyordu → her açılışta/senkronda 20-30MB indirme döngüsü.)
-  const lastSeenCloudTimeRef = useRef<number>((() => {
-    try {
-      const saved = Number(readScopedSyncMeta('sinevia_last_cloud_seen', data.agentId) || 0);
-      if (saved) return saved;
-      return Number(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').lastCloudSync || 0);
-    } catch { return 0; }
-  })());
-
-  /** Bu cihazın son eşitlediği içerik parmak izini kaydet (ref + hesaba özel localStorage). */
-  function setSyncedContent(hash: string, agentIdOverride?: string) {
-    lastSyncedContentHash.current = hash;
-    writeScopedSyncMeta(CONTENT_HASH_KEY, agentIdOverride || dataRef.current.agentId, hash);
-  }
-
-  /** Bir bulut sürümünü "görüldü" olarak işaretle (tekrar tekrar indirmeyi önler). */
-  function markCloudSeen(cloudTime: number, agentIdOverride?: string) {
-    lastSeenCloudTimeRef.current = cloudTime;
-    writeScopedSyncMeta('sinevia_last_cloud_seen', agentIdOverride || dataRef.current.agentId, String(cloudTime));
-    try {
-      const snap = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      snap.lastCloudSync = cloudTime;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
-    } catch { /* kota */ }
-  }
-
-  // Hesap değiştiğinde eşitleme referanslarını o hesabın kendi anahtarlarından
-  // yeniden yükle. Böylece eski hesabın "bulut görüldü" damgası yeni hesabı kilitlemez.
-  useEffect(() => {
-    if (!hydrated || !data.agentId) return;
-    const savedSeen = Number(readScopedSyncMeta('sinevia_last_cloud_seen', data.agentId) || 0);
-    const savedHash = readScopedSyncMeta(CONTENT_HASH_KEY, data.agentId);
-    const savedModified = Number(readScopedSyncMeta('sinevia_last_modified', data.agentId) || 0);
-    lastSeenCloudTimeRef.current = savedSeen;
-    localLastModifiedRef.current = savedModified || Date.now();
-    try {
-      lastSyncedContentHash.current = savedHash || getContentHash(dataRef.current, readQuestState());
-    } catch {
-      lastSyncedContentHash.current = savedHash || '';
-    }
-  }, [data.agentId, hydrated]);
-
-  /** Seçilen bulut arşivini BİREBİR uygula (kullanıcı onayı veya güvenli otomatik akış). */
-  function applyPendingCloudArchive(payload: PendingCloudArchive, cloudTime: number) {
-    const coreData = { ...payload.coreData, lastCloudSync: cloudTime };
-    const exactData = buildExactCloudData(coreData, payload.questData, cloudTime);
-    applyIncomingExtras(payload.incomingJson);
-    // Uygulanan sürüm bulutta zaten var; yükleyici bir sonraki turda yankı
-    // yüklemesi yapmasın diye özel işaret konur.
-    lastSyncedStorageHash.current = '__from_cloud__';
-    // İndirilen sürüm artık "eşitlenmiş" sayılır: bu cihazda bekleyen değişiklik yok.
-    setSyncedContent(getContentHash(exactData, payload.questData), exactData.agentId);
-    markCloudSeen(cloudTime, exactData.agentId);
-    // Buluttan tam bir kayıt geldiyse artık yerel kayıt güvenilir kabul edilebilir.
-    hydrationTrustedRef.current = true;
-    forceUploadRef.current = false;
-    lmSkipBumpRef.current = true; // bulut senkronu gerçek yerel düzenleme DEĞİLDİR
-    dataRef.current = exactData;
-    dispatch({ type: 'REPLACE_FROM_CLOUD_STORAGE', data: exactData, questData: payload.questData });
-    // Sayfa hemen kapanırsa bile indirilen veri kaybolmasın: IDB + boot anlık görüntüsü.
-    void idbSet(STORAGE_KEY, exactData);
-    writeBootSnapshot(exactData as unknown as Record<string, unknown>);
-    if (payload.questData) window.dispatchEvent(new CustomEvent('sinevia-quests-restored'));
-  }
-
-  /**
-   * Gelen bulut arşivini güvenlik kontrollerinden geçir.
-   * - Aynı içerik → sadece sürümü görüldü işaretle.
-   * - Bulut boş + yerel dolu → bulutu EZME; yereli yeniden yüklemeye zorla.
-   * - İki taraf da dolu ve farklı → sessizce değiştirme, kullanıcıya sor.
-   */
-  function handleCloudArchive(incomingJson: any, cloudTime: number, opts?: { silent?: boolean; protectCloud?: boolean }): 'applied' | 'ignored' | 'conflict' | 'same' {
-    if (cloudConflictDeferredRef.current) return 'ignored';
-    if (localStorage.getItem('sinevia_zero_reset') === '1') return 'ignored';
-    if (!incomingJson || typeof incomingJson !== 'object') return 'ignored';
-    const coreData = incomingJson.core || incomingJson;
-    const questData = incomingJson.quests;
-    if (!isFullAppRecord(coreData)) {
-      // Bozuk/eksik arşivi "görüldü" işaretle; aksi halde her açılışta aynı bozuk
-      // sürüm indirilip yerel yükleme sonsuza kadar bloke edilir.
-      markCloudSeen(cloudTime);
-      if (!opts?.silent) showToast('Bulut yedeği eksik/bozuk; bu cihazdaki veriler korundu.', 'warning');
-      return 'ignored';
-    }
-    const incomingHash = getCleanHashString(coreData, questData, pickIncomingExtras(incomingJson));
-    const localData = dataRef.current;
-
-    // "Aynı mı?" kararı SADECE içeriğe bakar (cihaza özel alanlar hariç).
-    // Böylece sekme/ayar farkı yüzünden gereksiz çakışma penceresi açılmaz.
-    const incomingContentHash = getContentHash(coreData, questData);
-    const localContentHash = getContentHash(localData, readQuestState());
-
-    if (incomingContentHash === localContentHash) {
-      // İçerik birebir aynı: yerel kayıt bulut kadar güvenilir. Gereksiz yeniden
-      // yüklemeyi önlemek için hash'i de güncelle.
-      markCloudSeen(cloudTime);
-      hydrationTrustedRef.current = true;
-      lastSyncedStorageHash.current = incomingHash;
-      setSyncedContent(incomingContentHash);
-      return 'same';
-    }
-
-    const incomingMeaningful = hasMeaningfulProgress(coreData);
-    const localMeaningful = hasMeaningfulProgress(localData);
-
-    // Yerelde yüklenmemiş değişiklik var mı? (Bulut ileride olsa bile yerelde
-    // yeni izlenen film/başarım olabilir; bunu asla ezmiyoruz.)
-    const localDirty = localContentHash !== lastSyncedContentHash.current;
-
-    // İLERLEME KAYBI YOK: iki yönde de birleştir. Bulut ileride + yerelde yeni
-    // veri varsa bulut taban alınır, yereldeki YENİ başarım/görev/film eklenir ve
-    // birleşik kayıt buluta geri yazılır. Eski kod yalnızca "bulut geride"yi
-    // birleştiriyor, "bulut ileride + yerel yeni" durumunda yükleme kilidi
-    // oluşturuyordu.
-    const incomingAchCount = summarizeProgress(coreData).achievements;
-    const localAchCount = summarizeProgress(localData).achievements;
-    const incomingXpValue = Number((coreData as any).totalXp || 0);
-    const localXpValue = Number((localData as any).totalXp || 0);
-    const incomingAhead = incomingAchCount > localAchCount || incomingXpValue > localXpValue + 5;
-    const progressRegression = incomingAchCount < localAchCount || incomingXpValue + 5 < localXpValue;
-
-    if (!opts?.protectCloud && localMeaningful && incomingMeaningful && (progressRegression || (incomingAhead && localDirty))) {
-      const localQuestState: any = readQuestState() || {};
-      const mergedAchievements = mergeAchievementProgress(localData.achievements as any, coreData.achievements as any);
-      const mergedQuests = {
-        ...(questData || {}),
-        completedQuests: Array.from(
-          new Set([
-            ...(((localQuestState.completedQuests as string[]) || [])),
-            ...(((questData as any)?.completedQuests as string[]) || []),
-          ]),
-        ),
-      };
-
-      // İki defter `(source, sourceId)` ile birleştirilir; bulut kopyası kazanır.
-      // Yerelde olup bulutta olmayan başarım/görev kayıtları defterde zaten
-      // kendi anahtarlarıyla durur → 1850 + yeni 5 XP = 1855; çift sayım yok.
-      const cloudLedger = migrateLegacyXp({
-        events: (coreData as any).xpEvents,
-        localTotalXp: incomingXpValue,
-      });
-      const mergedLedger = mergeXpLedgers(cloudLedger, (localData as any).xpEvents);
-      const mergedTotalXp = sumXpEvents(mergedLedger);
-      const mergedLevel = levelFromXp(mergedTotalXp);
-      const mergedCore = {
-        ...coreData,
-        movies: mergeMediaById(localData.movies as any, coreData.movies as any),
-        series: mergeMediaById(localData.series as any, coreData.series as any),
-        history: mergeByIdKeepingBoth(localData.history as any, coreData.history as any),
-        achievements: mergedAchievements,
-        xpEvents: mergedLedger,
-        totalXp: mergedTotalXp,
-        level: mergedLevel.level,
-        xp: mergedLevel.currentLevelXp,
-      };
-      const mergedJson = { ...incomingJson, core: mergedCore, quests: mergedQuests };
-      applyPendingCloudArchive(
-        {
-          coreData: mergedCore as ExtendedAppData,
-          questData: mergedQuests,
-          incomingJson: mergedJson,
-          incomingHash: getCleanHashString(mergedCore, mergedQuests, pickIncomingExtras(mergedJson)),
-          cloudTime,
-        },
-        cloudTime,
-      );
-      forceUploadRef.current = true;
-      lastSyncedStorageHash.current = '__force_upload__';
-      setSyncTick((tick) => tick + 1);
-      if (!opts?.silent) {
-        showToast('Bu cihazdaki ve buluttaki ilerleme birleştirildi; hiçbir başarım/XP silinmedi.', 'success');
-      }
-      return 'applied';
-    }
-
-    const payload: PendingCloudArchive = { coreData, questData, incomingJson, incomingHash, cloudTime };
-
-    // Bulut boş/eksik, cihazda gerçek veri var: bulutun yereli silmesine izin verme.
-    if (!incomingMeaningful && localMeaningful) {
-      markCloudSeen(cloudTime);
-      // Yerel kayıt "eksik" olarak işaretliyse (bulut sayaçları dolu ama arşiv boş)
-      // yereli buluta yüklemek de tehlikeli: iki tarafı da olduğu gibi bırak.
-      if (opts?.protectCloud) {
-        if (!opts?.silent) showToast('Bulut yedeği boş/eksik görünüyor; iki taraftaki veriler de korundu.', 'warning');
-        return 'ignored';
-      }
-      forceUploadRef.current = true;
-      hydrationTrustedRef.current = true;
-      lastSyncedStorageHash.current = '__force_upload__';
-      setSyncTick((tick) => tick + 1);
-      if (!opts?.silent) showToast('Buluttaki boş kayıt yok sayıldı; bu cihazdaki veriler korunuyor.', 'warning');
-      return 'ignored';
-    }
-
-    // Yerelde yüklenmemiş değişiklik YOKSA çakışma değildir: bulut sadece
-    // başka bir cihazda güncellenmiştir. Sessizce indir.
-    if (!localDirty && !forceUploadRef.current) {
-      applyPendingCloudArchive(payload, cloudTime);
-      return 'applied';
-    }
-
-    // İki tarafta da gerçek veri var ve içerik farklı: hangi hesabın kullanılacağını sor.
-    if (incomingMeaningful && localMeaningful) {
-      if (cloudConflictRef.current) return 'conflict';
-      const info: CloudConflictInfo = {
-        cloudTime,
-        agentId: String(coreData.agentId || localData.agentId || ''),
-        nickname: String(coreData.nickname || localData.nickname || 'Yeni Üye'),
-        local: summarizeProgress(localData),
-        cloud: summarizeProgress(coreData),
-      };
-      pendingCloudRef.current = payload;
-      cloudConflictRef.current = info;
-      setCloudConflict(info);
-      return 'conflict';
-    }
-
-    // Yerel boş / bulut dolu → güvenle bulutu yükle.
-    applyPendingCloudArchive(payload, cloudTime);
-    if (!opts?.silent) showToast('Bulut yedeğindeki veriler yüklendi.', 'info');
-    return 'applied';
-  }
-
-  /** Çakışma diyaloğu seçimi. Varsayılan (X/ESC) bu cihazdaki veriyi korur. */
-  function resolveCloudConflict(choice: 'cloud' | 'local' | 'later') {
-    const info = cloudConflictRef.current;
-    const payload = pendingCloudRef.current;
-    if (!info || !payload) return;
-    cloudConflictRef.current = null;
-    pendingCloudRef.current = null;
-    setCloudConflict(null);
-
-    if (choice === 'later') {
-      cloudConflictDeferredRef.current = true;
-      showToast('Eşitleme ertelendi; sayfayı yenilediğinde tekrar sorulacak. Veriler korunuyor.', 'info');
-      return;
-    }
-
-    if (choice === 'cloud') {
-      cloudConflictDeferredRef.current = false;
-      applyPendingCloudArchive(payload, info.cloudTime);
-      showToast('Bulut sürümündeki hesap verileri yüklendi.', 'success');
-      return;
-    }
-
-    // Yereli koru: bulut sürümünü görüldü say ve bu cihazın verisini yeniden yükle.
-    cloudConflictDeferredRef.current = false;
-    hydrationTrustedRef.current = true;
-    markCloudSeen(info.cloudTime);
-    lastSyncedStorageHash.current = '__force_upload__';
-    forceUploadRef.current = true;
-    setSyncTick((tick) => tick + 1);
-    showToast('Bu cihazdaki hesap verileri korundu; bulut bu cihazla eşitlenecek.', 'success');
-  }
+  // V3 kanonik kayıt — kalıcılık ve senkron bu nesne üzerinden yürür.
+  const lastV3Ref = useRef<AppStateV3 | null>(null);
+  // Her zaman en güncel reducer durumu (asenkron senkron/persist için).
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  // Aynı hesap için yerel ve bulut sürümü çakıştığında kullanıcıya sorulur.
+  const [cloudConflict, setCloudConflict] = useState<SyncConflict | null>(null);
+  const cloudConflictRef = useRef<SyncConflict | null>(null);
+  // "Sonra karar ver" seçildiyse bu oturumda otomatik senkron yapılmaz.
+  const syncDeferredRef = useRef(false);
+  const syncInFlightRef = useRef(false);
+  // Buluttan uygulanan kayıtta updatedAt bump edilmez (yankı yüklemesi olmasın).
+  const skipUpdatedAtBumpRef = useRef(false);
 
   const [toasts, setToasts] = useReducer((state: ToastItem[], a: any) => { toastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return toastsRef.current; }, []);
   const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
@@ -2742,8 +2136,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { document.body.setAttribute('data-theme', !data.theme ? 'premium-dark' : data.theme); }, [data.theme]);
 
-  // KALICILIK — IndexedDB ana depo + localStorage boot anlık görüntüsü.
-  // mount'ta bir kez: localStorage→IDB göçü yap, sonra IDB'den tam veriyi hidrate et.
+  // KALICILIK — tek kanonik kayıt IndexedDB'deki AppStateV3'tür. localStorage'da
+  // yalnız küçük boot anlık görüntüsü (tema/kimlik/özet) tutulur.
   const didHydrateRef = useRef(false);
   useEffect(() => {
     if (didHydrateRef.current) return;
@@ -2751,53 +2145,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (async () => {
       let trusted = false;
       try {
-        // -1) Hesap geri yükleme: "Cihazdan Çıkış" taşınan hesaptan yerel yedeğe
-        //     dönüyorsa (sinevia_restore_prev bayrağı) önce yedeği IDB'ye kur,
-        //     sonra normal akış (göç + HYDRATE_FROM_IDB) yedeği hidrate etsin.
-        if (localStorage.getItem('sinevia_restore_prev') === '1') {
-          try {
-            localStorage.removeItem('sinevia_restore_prev');
-            const stash = await idbGet<{ data: ExtendedAppData; secretToken?: string | null; quests?: unknown }>(PREV_ACCOUNT_KEY);
-            if (stash?.data?.agentId && isFullAppRecord(stash.data)) {
-              await idbSet(STORAGE_KEY, stash.data);
-              await idbDel(PREV_ACCOUNT_KEY);
-              writeBootSnapshot(stash.data as unknown as Record<string, unknown>);
-              if (stash.quests != null) {
-                try { localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(stash.quests)); } catch { /* kota */ }
-              }
-              if (stash.secretToken) {
-                try { localStorage.setItem('sinevia_secret_token', stash.secretToken); } catch { /* kota */ }
-              } else {
-                try { localStorage.removeItem('sinevia_secret_token'); } catch { /* kota */ }
-              }
-              // Geri yüklenen sürüm yerel otoritedir: taşıma anındaki bulut/basitleşme
-              // damgaları sıfırlansın ki sonraki senkron bu hesabı temel alsın.
-              try {
-                localStorage.removeItem('sinevia_last_modified');
-                localStorage.removeItem('sinevia_last_cloud_seen');
-              } catch { /* kota */ }
-            } else {
-              // Yedek yok/bozuksa: sıfır hesap akışına düş.
-              try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
-            }
-          } catch {
-            try { localStorage.setItem('sinevia_zero_reset', '1'); } catch { /* kota */ }
-          }
-        }
-        // 0) Sıfır hesap zorlaması: bayrak varsa ana kütüphaneyi IndexedDB'den sil,
-        //    cihaza özel alanları temizle ve hidratasyonu atla (init zaten taze
-        //    defaultData ile dönmüştü — eski veri geri gelmesin).
+        // 0) Sıfır hesap zorlaması: bayrak varsa kanonik kaydı da sil.
         if (localStorage.getItem('sinevia_zero_reset') === '1') {
           await idbDel(STORAGE_KEY);
-          await idbDel(BACKUP_STORAGE_KEY);
+          await idbDel('sinevia-v1-backup');
           try {
             [
-              // DİKKAT: STORAGE_KEY (boot anlık görüntüsü) bilinçli olarak silinmez —
-              // init zaten bayrakla taze defaultData ile açtı ve persist efekti yeni
-              // kimliği oraya yazdı; silersek sonraki her açılışta yeni kimlik üretilirdi.
               'sinevia_zero_reset', QUEST_STORAGE_KEY, 'sinevia_secret_token',
               'sinevia-tutorial-v1', 'sinevia-academy-ui-v1',
-              'sinevia_last_modified', 'sinevia_last_cloud_seen',
               'sinevia_active_tab', 'sinevia_settings_tab', 'sinevia_shortcuts_v1',
             ].forEach((k) => localStorage.removeItem(k));
           } catch { /* kota */ }
@@ -2805,68 +2160,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // IndexedDB açılamıyorsa (başka sekme/geçici kilit) tam veri okunamaz.
-        // Bu durumda boot snapshot'ını yazmak gerçek kütüphaneyi ezebilir → güvenme.
+        // IndexedDB açılamıyorsa (başka sekme/geçici kilit) tam veri okunamaz ve
+        // yazma gerçek kütüphaneyi ezebilir → güvenme, eşitleme durur.
         const idbOk = await isIdbAvailable();
         if (!idbOk) {
           trusted = !hasMeaningfulProgress(dataRef.current);
           if (!trusted) {
-            // Bir sonraki açılışta buluttan kurtarma denensin.
-            lastSeenCloudTimeRef.current = 0;
             showToast('Yerel depolama açılamadı. Verileriniz korunuyor; bulut eşitlemesi durduruldu.', 'warning');
           }
           return;
         }
 
-        // 1) Göç: localStorage'da hâlâ TAM kayıt varsa ve IDB boşsa, IDB'ye taşı.
+        // 1) V2 kalıntısı varsa tek kez V3'e yükselt.
         await migrateToIdbIfNeeded(STORAGE_KEY);
-        // 2) IDB'den tam veriyi oku. Boot snapshot'ı veya yarım kayıt ASLA hidrate edilmez.
-        // Hesap kimliği kapısı: ana IDB kaydı bu kurulumun otoritesidir; yedek ise
-        // yalnızca aynı hesaba aitse kurtarmada kullanılır (hesap değiştirme sonrası
-        // eski hesabın yedeği yeni hesaba karışmasın). Boot snapshot'ı yoksa IDB otoritedir.
-        const bootAgentId = (() => {
-          try {
-            const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-            return typeof raw?.agentId === 'string' ? raw.agentId : '';
-          } catch { return ''; }
-        })();
-        const full = await idbGet<ExtendedAppData>(STORAGE_KEY);
-        const fullUsable = isFullAppRecord(full);
-        const referenceAgentId = (fullUsable && full?.agentId) || bootAgentId;
-        const backupBelongsToAccount = (record: ExtendedAppData | null): boolean =>
-          !!record && isFullAppRecord(record) && (!referenceAgentId || !record.agentId || record.agentId === referenceAgentId);
-        let hydrateData: ExtendedAppData | null = null;
-        if (fullUsable && hasLibraryContent(full)) {
-          hydrateData = full;
-        } else {
-          // Ana kaydın kütüphanesi boş/bozuksa tam yedekten devam et. Kütüphane kaybı
-          // applyAchievements üzerinden başarımları ve XP'yi de silebildiği için
-          // yalnızca "achievements/XP var" demek yeterli değildir.
-          // (Bilinçli tam sıfırlama zero_reset bayrağıyla yedeği de siler.)
-          const backup = await idbGet<ExtendedAppData>(BACKUP_STORAGE_KEY);
-          const backupUsable = backupBelongsToAccount(backup);
-          if (backupUsable && hasLibraryContent(backup)) {
-            hydrateData = backup;
-            await idbSet(STORAGE_KEY, backup);
-          } else if (fullUsable) {
-            hydrateData = full;
-          } else if (backupUsable) {
-            hydrateData = backup;
-          }
-        }
-
-        if (hydrateData) {
+        // 2) Kanonik V3 kaydını oku (ana kayıt bozuksa tam yedekten).
+        const state = await loadStateV3();
+        if (state) {
+          lastV3Ref.current = state;
           trusted = true;
-          lmSkipBumpRef.current = true; // hidrate senkronu gerçek yerel düzenleme DEĞİLDİR
-          dispatch({ type: 'HYDRATE_FROM_IDB', data: hydrateData });
-          lastSyncedStorageHash.current = getCleanHashString(hydrateData, readQuestState(), readSyncExtras());
-          if (hasMeaningfulProgress(hydrateData)) void idbSet(BACKUP_STORAGE_KEY, hydrateData);
+          skipUpdatedAtBumpRef.current = true;
+          dispatch({
+            type: 'HYDRATE_FROM_IDB',
+            data: toLegacyCoreView(state) as unknown as ExtendedAppData,
+          });
         } else {
-          // Ne ana kayıt ne yedek var. Boot snapshot'ında ilerleme varsa bu yarım
-          // bir durumdur: yazma/bulut yüklemesi yapma, bir sonraki açılışta kurtar.
+          // Tam V3 yok: boot anlık görüntüsü yalnız tema/kimlik/özet için
+          // init'te uygulandı. Kütüphane içermediği için YAZMA yapılmaz.
           trusted = !hasMeaningfulProgress(dataRef.current);
           if (!trusted) {
-            lastSeenCloudTimeRef.current = 0;
             showToast('Yerel kütüphane kaydı bulunamadı; bulut yedeği kontrol edilecek. Verileriniz silinmedi.', 'warning');
           }
         }
@@ -2880,43 +2201,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  // YAZMA — veri her değiştiğinde IDB'ye asenkron kuyrukla yaz + localStorage'a küçük anlık görüntü bırak.
-  // KRİTİK: Hidrasyon tamamlanmadan ASLA yazma. Aksi halde kütüphane içermeyen boot
-  // snapshot'ı 250ms sonra gerçek IDB kaydının üzerine yazılıyordu.
+  // YAZMA — her durum değişiminde canlı state'i kanonik V3 kaydına çevir.
+  // Eski `sinevia-v1` localStorage anahtarına HAM yazım YOKTUR.
   useEffect(() => {
     if (!hydrated || !hydrationTrustedRef.current || !isFullAppRecord(data)) return;
-    // lastModified bump: sadece gerçek yerel değişiklikte (hidrate/indirme senkronunda değil).
-    if (lmSkipBumpRef.current) {
-      lmSkipBumpRef.current = false;
-    } else {
-      const now = Date.now();
-      localLastModifiedRef.current = now;
-      writeScopedSyncMeta('sinevia_last_modified', data.agentId, String(now));
-    }
-    // 600 ms: art arda gelen düzenlemeleri tek yazımda birleştirir. Sekme kapanırken
-    // (pagehide/beforeunload/visibilitychange) bekleyen yazım yine anında uygulanır.
-    writeQueue.set(STORAGE_KEY, data, 600);
-    writeBootSnapshot(data as unknown as Record<string, unknown>);
-    // Sekme gizlenince / kapanınca bekleyen yazımı anında uygula (veri kaybını önle).
-    const flushWrites = () => { writeQueue.flush(); writeBootSnapshot(data as unknown as Record<string, unknown>); };
-    const onVisibility = () => { if (document.visibilityState === 'hidden') flushWrites(); };
+    const previous = lastV3Ref.current;
+    const bumpUpdatedAt = !skipUpdatedAtBumpRef.current;
+    skipUpdatedAtBumpRef.current = false;
+    const quests = readQuestState();
+    const extras = readLegacyExtras();
+
+    // İçerik değişmediyse (yalnız geçici UI state'i değişti) updatedAt bump etme
+    // ve diske yeniden yazma: hash sabit kalır, gereksiz bulut yüklemesi olmaz.
+    const contentCandidate = fromLegacyCore(dataRef.current, previous, {
+      quests,
+      extras,
+      updatedAt: previous?.updatedAt ?? new Date().toISOString(),
+    });
+    const contentChanged = !previous || makeSaveHash(contentCandidate) !== makeSaveHash(previous);
+
+    const next = contentChanged && bumpUpdatedAt
+      ? fromLegacyCore(dataRef.current, previous, {
+          quests,
+          extras,
+          updatedAt: new Date().toISOString(),
+        })
+      : contentCandidate;
+    lastV3Ref.current = next;
+    // 600 ms debounce + küçük boot anlık görüntüsü (saveStateV3 içinde).
+    if (contentChanged) saveStateV3(next);
+
+    // Sekme gizlenince / kapanınca bekleyen yazımı anında uygula + tam yedek.
+    const flushWrites = () => {
+      void saveStateV3Immediate(lastV3Ref.current ?? next, { backup: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushWrites();
+    };
     window.addEventListener('pagehide', flushWrites);
     window.addEventListener('beforeunload', flushWrites);
     document.addEventListener('visibilitychange', onVisibility);
-    return () => { window.removeEventListener('pagehide', flushWrites); window.removeEventListener('beforeunload', flushWrites); document.removeEventListener('visibilitychange', onVisibility); };
-  }, [data, hydrated, syncTick]);
+    return () => {
+      window.removeEventListener('pagehide', flushWrites);
+      window.removeEventListener('beforeunload', flushWrites);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [data, hydrated]);
 
-  // TAM YEDEK — ana IDB kaydı bozulursa kütüphaneyi kurtarmak için 10 sn'lik debounce
-  // (ve sekme kapanışında anında) tam kayıt yaz. Boş hesap iyi yedeği ezmesin.
+  // TAM YEDEK — ana IDB kaydı bozulursa kütüphaneyi kurtarmak için 10 sn debounce.
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!hydrated || !hydrationTrustedRef.current) return;
     if (!isFullAppRecord(data) || !hasMeaningfulProgress(data)) return;
     if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
-    backupTimerRef.current = setTimeout(() => { void idbSet(BACKUP_STORAGE_KEY, data); }, 10000);
+    backupTimerRef.current = setTimeout(() => {
+      if (lastV3Ref.current) void saveStateV3Immediate(lastV3Ref.current, { backup: true });
+    }, 10000);
     const flushBackup = () => {
       if (backupTimerRef.current) { clearTimeout(backupTimerRef.current); backupTimerRef.current = null; }
-      void idbSet(BACKUP_STORAGE_KEY, data);
+      if (lastV3Ref.current) void saveStateV3Immediate(lastV3Ref.current, { backup: true });
     };
     window.addEventListener('pagehide', flushBackup);
     window.addEventListener('beforeunload', flushBackup);
@@ -2925,7 +2268,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('pagehide', flushBackup);
       window.removeEventListener('beforeunload', flushBackup);
     };
-  }, [data, hydrated, syncTick]);
+  }, [data, hydrated]);
 
   // HAFTALIK PLAN TEMİZLİĞİ — planlanan günün üzerinden 2 gün geçmiş ve film
   // hâlâ izlenmemişse kaydı otomatik kaldır. Kullanıcı tarihi değiştirirse
@@ -2943,49 +2286,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', onPlanVisibility);
     };
   }, [data.weeklyPlan, data.movies]);
-
-  // AÇILIŞ KONTROLÜ (BOOT CHECK) — hidrasyon bitmeden çalışmaz; yarım boot
-  // state'i ile bulut karşılaştırması yapıp veri ezmeyi önler.
-  useEffect(() => {
-    if (!hydrated || !data.agentId) return;
-    // Tam hesap silme sonrası: sıfırlama bayrağı hâlâ ayaktaysa bulutu ÇEKME
-    // (profil satırı + arşiv JSON silinmiş olsa bile kalan izler geri getirmesin).
-    if (localStorage.getItem('sinevia_zero_reset') === '1') return;
-
-    const performStartupCheck = async () => {
-      setSyncStatus('syncing');
-      try {
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('last_cloud_sync')
-          .eq('agent_id', data.agentId)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (profile && profile.last_cloud_sync) {
-          const cloudTime = Number(profile.last_cloud_sync);
-          // Kapı: sadece henüz görülmemiş bulut sürümü çekilir (bayat snapshot.lastCloudSync
-          // ezikleri her açılışta tam JSON çektirmesin).
-          if (cloudTime > lastSeenCloudTimeRef.current + 2000) {
-            const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
-            const fetchUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
-            const response = await fetch(fetchUrl, { cache: 'no-store' });
-            if (response.ok) {
-              const incomingJson = JSON.parse(await response.text());
-              const result = handleCloudArchive(incomingJson, cloudTime, hydrationTrustedRef.current ? undefined : { protectCloud: true });
-              if (result === 'applied') showToast('Yokluğunda yapılan güncellemeler eşitlendi!', 'info');
-            }
-          }
-        }
-        setSyncStatus('synced');
-      } catch {
-        setSyncStatus('error');
-      }
-    };
-
-    performStartupCheck();
-  }, [data.agentId, hydrated]);
 
   // ÇEVRİMDIŞI KUYRUK — bağlantı geri geldiğinde bekleyen network_logs satırlarını sırayla gönder.
   const logQueueFiredRef = useRef(false);
@@ -3007,292 +2307,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);
   }, [data.agentId]);
-
-  // YÜKLEYİCİ (UPLOAD) — hidrasyon bitmeden ve yerel kayıt güvenilir değilken
-  // buluta ASLA yazmaz. Boş/yarım yerel state'in dolu bulut hesabını ezmesini önler.
-  useEffect(() => {
-    if (!hydrated || !data.agentId) return;
-
-    const syncToStorage = async () => {
-      // Sıfırlama bayrağı: silme sırasında/sonrası tetiklenen flush bu fonksiyonu
-      // çalıştırırsa profil satırı + arşiv JSON yeniden yüklenmesin (silme boşa gitmesin).
-      if (localStorage.getItem('sinevia_zero_reset') === '1') return;
-      // Kullanıcı çakışmada "sonra karar ver" dediyse bu oturumda eşitleme yok.
-      if (cloudConflictDeferredRef.current) return;
-      // Çakışma diyaloğu açıkken (kullanıcı henüz karar vermedi) buluta yazma:
-      // aksi halde arka plandaki bir veri değişikliği bulut sürümünü ezebilir.
-      if (cloudConflictRef.current) return;
-      const forceUpload = forceUploadRef.current;
-      try {
-        const currentQuestState = JSON.parse(localStorage.getItem(QUEST_STORAGE_KEY) || '{}');
-        const jsonData = getCleanHashString(data, currentQuestState, readSyncExtras());
-
-        // Az önce buluttan indirilen sürüm uygulandıysa "yankı yüklemesi" yapma:
-        // içerik zaten bulutta. Yalnızca SONRAKİ gerçek değişiklikte yüklenir.
-        if (lastSyncedStorageHash.current === '__from_cloud__') {
-          lastSyncedStorageHash.current = jsonData;
-          return;
-        }
-
-        if (!forceUpload && lastSyncedStorageHash.current === jsonData) return;
-
-        // SÜRÜM KONTROLÜ (Madde 3) — bulut daha yeniyse eski yerel veri YENİ veriyi ezmesin.
-        // Profil sayaçları da çekilir: yerel boş/eksikse dolu bulutun üzerine yazılmasın.
-        let cloudTime = 0;
-        let cloudHasProgress = false;
-        const cloudCounts = {
-          movies: 0, pastMovies: 0, series: 0, episodes: 0,
-          achievements: 0, xp: 0, quests: 0,
-        };
-        try {
-          const { data: prof } = await supabase
-            .from('profiles')
-            .select('last_cloud_sync,total_xp,movies_watched,past_movies_watched,series_watched,episodes_watched,achievements_unlocked,quests_completed')
-            .eq('agent_id', data.agentId)
-            .maybeSingle();
-          cloudTime = Number(prof?.last_cloud_sync || 0);
-          cloudCounts.movies = Number(prof?.movies_watched || 0);
-          cloudCounts.pastMovies = Number(prof?.past_movies_watched || 0);
-          cloudCounts.series = Number(prof?.series_watched || 0);
-          cloudCounts.episodes = Number(prof?.episodes_watched || 0);
-          cloudCounts.achievements = Number(prof?.achievements_unlocked || 0);
-          cloudCounts.xp = Number(prof?.total_xp || 0);
-          cloudCounts.quests = Number(prof?.quests_completed || 0);
-          cloudHasProgress = !!prof && [
-            prof.total_xp, prof.movies_watched, prof.past_movies_watched,
-            prof.series_watched, prof.episodes_watched, prof.achievements_unlocked,
-          ].some((value) => Number(value || 0) > 0);
-        } catch { cloudTime = 0; }
-
-        const pullCloudArchive = async (protectCloud = false): Promise<boolean> => {
-          const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
-          const response = await fetch(`${urlData.publicUrl}?t=${cloudTime || Date.now()}`, { cache: 'no-store' });
-          if (!response.ok) return false;
-          const incomingJson = JSON.parse(await response.text());
-          handleCloudArchive(incomingJson, cloudTime, protectCloud ? { protectCloud: true } : undefined);
-          return true;
-        };
-
-        // Hidrasyon güvenilir değil (IDB açılamadı / tam kayıt yok): yükleme yok.
-        // Kullanıcı çakışmada "bu cihazı kullan" demediyse yalnızca buluttan kurtarma dene.
-        if (!hydrationTrustedRef.current && !forceUpload) {
-          setSyncStatus('syncing');
-          try { await pullCloudArchive(true); } catch { /* sonraki açılışta tekrar */ }
-          setSyncStatus('synced');
-          return;
-        }
-
-        // forceUpload: kullanıcı "bu cihazı kullan" / kimlik kurtarma dedi → bulut
-        // sürümünü çekip seçimini ezme; doğrudan yükle.
-        if (!forceUpload && cloudTime > lastSeenCloudTimeRef.current + 2000) {
-          setSyncStatus('syncing');
-          try { await pullCloudArchive(); } catch { /* çekilemediyse bu tur yükleme yok */ }
-          setSyncStatus('synced');
-          return;
-        }
-
-        // Yerel kütüphane, bulut profil sayaçlarına göre bariz eksikse (ör. tarayıcı
-        // güncellemesi sonrası film/dizi/başarım dizileri boş kaldıysa) boş/eksik
-        // kaydı buluta yazma; önce bulut arşivini indirip kullanıcıya göster.
-        // ÖNEMLİ: Burada XP/başarım "daha düşük" karşılaştırması YÜKLEMEYİ BLOKLAMAZ.
-        // 95 XP'li ikinci cihazın yeni başarımını sonsuza kadar kilitleyen eski hata buydu.
-        const localSummary = summarizeProgress(data);
-        const localLooksIncomplete = !forceUpload && cloudHasProgress && (
-          (localSummary.movies === 0 && (cloudCounts.movies + cloudCounts.pastMovies) > 0) ||
-          (localSummary.series === 0 && cloudCounts.series > 0) ||
-          (localSummary.achievements === 0 && cloudCounts.achievements > 0) ||
-          (localSummary.totalXp === 0 && cloudCounts.xp > 0)
-        );
-        if (localLooksIncomplete) {
-          setSyncStatus('syncing');
-          let recovered = false;
-          try { recovered = await pullCloudArchive(true); } catch { recovered = false; }
-          if (!recovered) {
-            setSyncStatus('error');
-            showToast('Bu cihazdaki veriler eksik görünüyor; bulut yedeği indirilemediği için yükleme durduruldu.', 'warning');
-          } else {
-            setSyncStatus('synced');
-          }
-          return;
-        }
-
-        // Bulut ileride ama yerelde de yeni başarım/film olabilir: protectCloud ile
-        // bulutu indirip yereli ezmek yerine birleştirmeye izin ver. handleCloudArchive
-        // bulut tabanını + yereldeki yeni kazanımları birleştirip forceUpload kurar.
-        const cloudAhead = !forceUpload && cloudHasProgress && (
-          localSummary.achievements < cloudCounts.achievements ||
-          localSummary.totalXp + 5 < cloudCounts.xp
-        );
-        if (cloudAhead) {
-          setSyncStatus('syncing');
-          let merged = false;
-          try { merged = await pullCloudArchive(false); } catch { merged = false; }
-          setSyncStatus(merged ? 'synced' : 'error');
-          return;
-        }
-
-        // Yerelde anlamlı veri yok ama profil sayaçları dolu: boş kayıtla bulutu ezme,
-        // arşivi indirip kurtarmayı dene.
-        if (!forceUpload && !hasMeaningfulProgress(data) && cloudHasProgress) {
-          setSyncStatus('syncing');
-          let recovered = false;
-          try { recovered = await pullCloudArchive(); } catch { recovered = false; }
-          if (!recovered) {
-            setSyncStatus('error');
-            showToast('Bulut hesabında veri var ancak yedek indirilemedi; boş kayıt yüklenmedi.', 'warning');
-          } else {
-            setSyncStatus('synced');
-          }
-          return;
-        }
-
-        // Son kontrol: async profil/arşiv kontrolleri sırasında bir çakışma açıldıysa
-        // kullanıcı karar vermeden buluta yazma.
-        if (cloudConflictRef.current || cloudConflictDeferredRef.current) return;
-
-        setSyncStatus('syncing');
-
-        const fileName = `${data.agentId}.json`;
-        const fileObj = new Blob([jsonData], { type: 'application/json' });
-
-        const { error: uploadError } = await supabase.storage
-          .from('sinevia_saves')
-          .upload(fileName, fileObj, {
-            cacheControl: '0',
-            upsert: true,
-            contentType: 'application/json'
-          });
-
-        if (uploadError) throw uploadError;
-
-        const watchedMoviesCount = data.movies.filter(m => m.watched && !m.isPastWatch).length;
-        const pastMoviesCount = data.movies.filter(m => m.watched && m.isPastWatch).length;
-        const watchedSeriesCount = data.series.filter(s => s.episodes?.every(e => e.watched)).length;
-        const watchedEpisodesCount = data.series.reduce((sum, s) => sum + (s.episodes?.filter(e => e.watched).length || 0), 0);
-        const unlockedAchievementsCount = data.achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0);
-        
-        const activeMovie = data.movies.find(m => !m.watched && m.startedAt);
-        let cwPayload: any = null;
-        if (activeMovie && activeMovie.startedAt) {
-          const tInfo = getMovieTimerInfo(activeMovie);
-          cwPayload = { id: activeMovie.id, title: activeMovie.title, posterUrl: activeMovie.posterUrl || null, year: activeMovie.year || '', startedAt: activeMovie.startedAt, runtime: tInfo.maxMins, isPaused: tInfo.isPaused, elapsedMins: tInfo.elapsedMins, updatedAt: new Date().toISOString() };
-        }
-
-        // Bulut sayaçları ASLA aşağı yazılmaz: 95 XP'li cihaz 1850 XP'li profili ezmesin.
-        const safeTotalXp = Math.max(Number(data.totalXp || 0), cloudCounts.xp);
-        const safeLevel = Math.max(Number(data.level || 1), levelFromXp(safeTotalXp).level);
-        // Sürüm damgası sunucudaki son damgadan her zaman ileri olsun (cihaz saati geride olsa bile).
-        const newSyncTime = Math.max(Date.now(), cloudTime + 2001);
-        const qsCompletedCount = (currentQuestState.completedQuests && Array.isArray(currentQuestState.completedQuests)) ? currentQuestState.completedQuests.length : 0;
-
-        // Kendi yüklememizin realtime yankısını bastır: zaman damgasını upsert'ten
-        // ÖNCE "görüldü" yap; hata olursa geri al.
-        const previousSeen = lastSeenCloudTimeRef.current;
-        markCloudSeen(newSyncTime, data.agentId);
-
-        const { error: dbError } = await supabase.from('profiles').upsert({
-          agent_id: data.agentId, nickname: data.nickname || 'Yeni Üye', level: safeLevel, total_xp: safeTotalXp,
-          movies_watched: Math.max(watchedMoviesCount, cloudCounts.movies),
-          past_movies_watched: Math.max(pastMoviesCount, cloudCounts.pastMovies),
-          series_watched: Math.max(watchedSeriesCount, cloudCounts.series),
-          episodes_watched: Math.max(watchedEpisodesCount, cloudCounts.episodes),
-          achievements_unlocked: Math.max(unlockedAchievementsCount, cloudCounts.achievements),
-          quests_completed: Math.max(qsCompletedCount, cloudCounts.quests),
-          currently_watching: cwPayload, showcase: data.showcase || [], last_seen: new Date().toISOString(),
-          last_cloud_sync: newSyncTime
-        }, { onConflict: 'agent_id' });
-
-        if (dbError) {
-          markCloudSeen(previousSeen, data.agentId);
-          throw dbError;
-        }
-
-        markCloudSeen(newSyncTime, data.agentId);
-        lastSyncedStorageHash.current = jsonData;
-        setSyncedContent(getContentHash(data, currentQuestState), data.agentId);
-        forceUploadRef.current = false;
-        setSyncStatus('synced');
-      } catch { 
-        setSyncStatus('error');
-      }
-    };
-    
-    // 15 sn debounce: her küçük değişiklikte tam arşivi (yüzlerce KB)
-    // yüklememek için. Sekme kapanırken/gizlenirken yine anında flush edilir.
-    const syncTimer = setTimeout(() => syncToStorage(), 15000);
-    // Bekleyen (15 sn süresi dolmamış) senkron varsa sekme gizlenirken/kapanırken anında tetikle.
-    const flushSync = () => { clearTimeout(syncTimer); syncToStorage(); };
-    const onVis = () => { if (document.visibilityState === 'hidden') flushSync(); };
-    window.addEventListener('pagehide', flushSync);
-    window.addEventListener('beforeunload', flushSync);
-    document.addEventListener('visibilitychange', onVis);
-    return () => { clearTimeout(syncTimer); window.removeEventListener('pagehide', flushSync); window.removeEventListener('beforeunload', flushSync); document.removeEventListener('visibilitychange', onVis); };
-  }, [data, hydrated, syncTick]);
-
-  // BULUT YOKLAMASI — realtime yerine 120 saniyede bir + sekme görünürken.
-  // Profiller realtime yayınından çıkarıldı (secret_token sızmasın diye).
-  useEffect(() => {
-    if (!hydrated || !data.agentId) return;
-
-    let cancelled = false;
-
-    const checkCloud = async () => {
-      if (document.visibilityState !== 'visible') return;
-      if (cloudConflictRef.current || cloudConflictDeferredRef.current) return;
-      try {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('last_cloud_sync')
-          .eq('agent_id', data.agentId)
-          .maybeSingle();
-
-        const incomingTime = Number(prof?.last_cloud_sync || 0);
-        if (!incomingTime || incomingTime <= lastSeenCloudTimeRef.current + 2000) return;
-
-        setSyncStatus('syncing');
-        const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${data.agentId}.json`);
-        const response = await fetch(`${urlData.publicUrl}?t=${incomingTime}`, { cache: 'no-store' });
-        if (!response.ok) { setSyncStatus('error'); return; }
-
-        const incomingJson = JSON.parse(await response.text());
-        if (cancelled) return;
-        handleCloudArchive(incomingJson, incomingTime, hydrationTrustedRef.current ? undefined : { protectCloud: true });
-        setSyncStatus('synced');
-      } catch {
-        setSyncStatus('error');
-      }
-    };
-
-    // 120 sn yoklama; sekme gizliyken durur. Gerçek indirme yalnızca
-    // profiles.last_cloud_sync daha yeni olduğunda yapılır.
-    let interval: number | undefined;
-    const start = () => {
-      if (interval !== undefined) return;
-      interval = window.setInterval(checkCloud, 120000);
-    };
-    const stop = () => {
-      if (interval !== undefined) {
-        window.clearInterval(interval);
-        interval = undefined;
-      }
-    };
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        checkCloud();
-        start();
-      } else {
-        stop();
-      }
-    };
-    if (document.visibilityState === 'visible') start();
-    document.addEventListener('visibilitychange', onVisible);
-
-    return () => {
-      cancelled = true;
-      stop();
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [hydrated, data.agentId]);
 
   // Bildirim tercihleri sunucuya da yazılır: Edge Function push gönderirken
   // bunları okur, böylece kapatılan tür için bildirim gitmez.
@@ -3565,7 +2579,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (inBoot) return;
     if (xpTimerRef.current) clearTimeout(xpTimerRef.current);
     xpGainOpenRef.current = true;
-    setXpGainData(data.pendingXpGain as XpGainPayload);
+    setXpGainData(data.pendingXpGain);
     xpTimerRef.current = setTimeout(() => {
       xpGainOpenRef.current = false;
       setXpGainData(null);
@@ -3724,6 +2738,166 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     attempt();
   }, []);
+  /* =======================================================================
+     SENKRON — revizyon tabanlı protokol (src/lib/syncEngine.ts)
+     Tek yazma yolu `sync_commit`, tek okuma yolu `sync_get_state`'tir.
+     Otomatik birleştirme YOKTUR; `merge` yalnız kullanıcı seçimindedir.
+     ======================================================================= */
+  const syncMetaStore = useMemo<SyncMetaStore>(() => ({
+    getLastSyncedHash: (agentId: string) => {
+      try { return localStorage.getItem(`sinevia_last_synced_hash:${agentId}`); } catch { return null; }
+    },
+    setLastSyncedHash: (agentId: string, hash: string | null) => {
+      try {
+        if (hash) localStorage.setItem(`sinevia_last_synced_hash:${agentId}`, hash);
+        else localStorage.removeItem(`sinevia_last_synced_hash:${agentId}`);
+      } catch { /* kota / gizli mod */ }
+    },
+  }), []);
+
+  /** Motorun indirdiği/commit ettiği kanonik kaydı yerel state'e uygular. */
+  function applySyncedState(state: AppStateV3) {
+    lastV3Ref.current = state;
+    skipUpdatedAtBumpRef.current = true;
+    writeQuestState(state.quests);
+    const view = toLegacyCoreView(state) as unknown as ExtendedAppData;
+    dataRef.current = view;
+    dispatch({ type: 'REPLACE_FROM_CLOUD_STORAGE', data: view, questData: state.quests });
+    void saveStateV3Immediate(state, { backup: true });
+  }
+
+  const syncEngine = useMemo<SyncEngine>(() => {
+    const engine = createSyncEngine({
+      client: createSupabaseSyncClient(supabase as unknown as SyncRpcClient),
+      deviceId: readDeviceId(),
+      getState: () => lastV3Ref.current ?? fromLegacyCore(dataRef.current, null, {
+        quests: readQuestState(),
+        extras: readLegacyExtras(),
+        updatedAt: new Date().toISOString(),
+      }),
+      setState: applySyncedState,
+      meta: syncMetaStore,
+    });
+    return engine;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applySyncedState yalnız ref/dispatch kullanır
+  }, [syncMetaStore]);
+
+  function handleSyncResult(result: SyncResult, manual = false) {
+    switch (result.status) {
+      case 'conflict':
+        if (!cloudConflictRef.current) {
+          cloudConflictRef.current = result.conflict;
+          setCloudConflict(result.conflict);
+          showToast('Cihaz ve bulut kaydı çakıştı; hangi verinin kullanılacağını seç.', 'warning');
+        }
+        setSyncStatus('synced');
+        return;
+      case 'cloud-loaded':
+        setSyncStatus('synced');
+        if (manual) showToast('Bulut kaydındaki veriler bu cihaza yüklendi.', 'success');
+        return;
+      case 'local-uploaded':
+        setSyncStatus('synced');
+        if (manual) showToast('Bu cihazdaki veriler buluta yüklendi.', 'success');
+        return;
+      case 'up-to-date':
+        setSyncStatus('synced');
+        if (manual) showToast('Cihaz ve bulut zaten eşit.', 'info');
+        return;
+      case 'error':
+      default:
+        setSyncStatus('error');
+        if (manual) {
+          showToast(
+            result.status === 'error' && result.error.code === 'network'
+              ? 'Buluta ulaşılamadı; bu cihazdaki veriler korunuyor.'
+              : 'Eşitleme tamamlanamadı; bu cihazdaki veriler korunuyor.',
+            'error',
+          );
+        }
+        return;
+    }
+  }
+
+  /** Karar matrisini çalıştırır (getRemote → karar → gerekirse commit). */
+  const runSync = useCallback(async (manual = false) => {
+    const agentId = dataRef.current.agentId;
+    if (!hydrated || !agentId) return;
+    if (cloudConflictRef.current || syncDeferredRef.current) return;
+    if (!manual && !hydrationTrustedRef.current) return;
+    if (syncInFlightRef.current) return;
+    try {
+      if (localStorage.getItem('sinevia_zero_reset') === '1') return;
+    } catch { /* gizli mod */ }
+
+    if (!lastV3Ref.current) {
+      lastV3Ref.current = fromLegacyCore(dataRef.current, null, {
+        quests: readQuestState(),
+        extras: readLegacyExtras(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    syncInFlightRef.current = true;
+    setSyncStatus('syncing');
+    try {
+      const result = await syncEngine.sync(agentId);
+      handleSyncResult(result, manual);
+    } catch {
+      setSyncStatus('error');
+    } finally {
+      syncInFlightRef.current = false;
+    }
+  }, [hydrated, syncEngine]);
+
+  /**
+   * Çakışma diyaloğu seçimi. 'merge' YALNIZ burada, açık kullanıcı seçimiyle
+   * çalışır; varsayılan (X/ESC) 'later' → hiçbir veri değişmez.
+   */
+  const resolveCloudConflict = useCallback(async (choice: ConflictChoice) => {
+    const agentId = dataRef.current.agentId;
+    if (!agentId) return;
+    cloudConflictRef.current = null;
+    setCloudConflict(null);
+
+    if (choice === 'later') {
+      syncDeferredRef.current = true;
+      syncEngine.clearPendingConflict();
+      showToast('Eşitleme ertelendi; sayfayı yenilediğinde tekrar sorulacak. Veriler korunuyor.', 'info');
+      return;
+    }
+
+    setSyncStatus('syncing');
+    try {
+      const result = await syncEngine.resolveConflict(agentId, choice);
+      handleSyncResult(result, true);
+    } catch {
+      setSyncStatus('error');
+      showToast('Seçim uygulanamadı; bu cihazdaki veriler korunuyor.', 'error');
+    }
+  }, [showToast, syncEngine]);
+
+  // Otomatik senkron: veri değişiminde 15 sn debounce; sekme görünür/odaklanınca hemen.
+  useEffect(() => {
+    if (!hydrated || !data.agentId || !hydrationTrustedRef.current) return;
+    const timer = window.setTimeout(() => { void runSync(); }, 15000);
+    const onVisible = () => { if (document.visibilityState === 'visible') void runSync(); };
+    const onFocus = () => { void runSync(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [data, hydrated, runSync]);
+
+  // İlk hidrasyondan hemen sonra bir kez dene (açılış kontrolü).
+  useEffect(() => {
+    if (!hydrated) return;
+    void runSync();
+  }, [hydrated, runSync]);
+
   // DEPOLAMA HATASI — localStorage kotası dolarsa veya IndexedDB yazımı başarısız
   // olursa sessiz kalmak yerine kullanıcıyı uyar (5 dakikada en fazla bir kez).
   const storageWarnedAtRef = useRef(0);
@@ -3764,76 +2938,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
     recoveryKey: string,
     nickname: string,
     opts?: { keepExistingRecoveryKey?: boolean }
-  ): Promise<boolean> => { 
+  ): Promise<boolean> => {
     try {
-      const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${agentId}.json`);
-      const fetchUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
-
-      const response = await fetch(fetchUrl, { cache: 'no-store' });
-      if (response.ok) {
-        const text = await response.text();
-        const recoveredData = JSON.parse(text);
-        
-        const coreData = recoveredData.core || recoveredData;
-        const questData = recoveredData.quests;
-
-        // Bozuk/eksik arşivle kimlik değiştirme: eski kütüphane yeni hesaba taşınmasın.
-        if (!isFullAppRecord(coreData)) {
-          showToast('Bu hesabın bulut yedeği eksik/bozuk; kimlik değiştirilmedi.', 'error');
-          return false;
-        }
-
-        // Ağ girişinde kullanıcının kendi kurtarma anahtarı korunur.
-        const keyToStore = opts?.keepExistingRecoveryKey
-          ? (data.recoveryKey || recoveryKey)
-          : recoveryKey;
-
-        const normalizedCore = {
-          ...coreData,
-          agentId,
-          recoveryKey: keyToStore,
-          nickname,
-        };
-        const cloudTime = Number(coreData.lastCloudSync || 0) || Date.now();
-        const payload: PendingCloudArchive = {
-          coreData: normalizedCore as ExtendedAppData,
-          questData,
-          incomingJson: recoveredData,
-          incomingHash: getCleanHashString(normalizedCore, questData, pickIncomingExtras(recoveredData)),
-          cloudTime,
-        };
-
-        dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey: keyToStore, nickname });
-        // Buluttan gelen kayıt BİREBİR uygulanır; burada XP yeniden hesaplanmaz.
-        // Giriş sırasında başarısız/eski bir yerel kaydı buluta geri yazmak da yok:
-        // giriş yalnızca okur ve bu cihazı bulutun aynası yapar.
-        const exactData = buildExactCloudData(normalizedCore, questData, cloudTime);
-        applyPendingCloudArchive(payload, cloudTime);
-
-        // KRİTİK: Yeni kimliği sayfa yenilenmeden ÖNCE diske yaz. Aksi halde
-        // yenileme eski (önceki hesabın) IDB kaydını geri yükler; kullanıcı
-        // "hesap geldi, sonra geri attı" görür ve giriş sonsuz döngüye girer.
-        try {
-          await idbSet(STORAGE_KEY, exactData);
-          writeBootSnapshot(exactData as unknown as Record<string, unknown>);
-          dataRef.current = exactData;
-        } catch {
-          // IDB yazılamazsa kapanıştaki flush devreye girer.
-        }
-
-        forceUploadRef.current = false;
-        lastSyncedStorageHash.current = '__from_cloud__';
-        setSyncTick((tick) => tick + 1);
-        showToast('Kimlik ve tüm kütüphane buluttan yüklendi!', 'success');
-        return true;
+      const client = createSupabaseSyncClient(supabase as unknown as SyncRpcClient);
+      const remote = await client.getRemote(agentId);
+      if (!remote) {
+        showToast('Bulut yedeği bulunamadı; kimlik değiştirilmedi.', 'error');
+        return false;
       }
+
+      const keyToStore = opts?.keepExistingRecoveryKey
+        ? (data.recoveryKey || recoveryKey)
+        : recoveryKey;
+
+      // Buluttan gelen kayıt BİREBİR uygulanır; XP yeniden hesaplanmaz.
+      const state: AppStateV3 = {
+        ...remote.payload,
+        schemaVersion: 3,
+        ownerAgentId: agentId,
+        revision: remote.revision,
+        deviceId: remote.payload.deviceId || readDeviceId(),
+        updatedAt: remote.payload.updatedAt || new Date().toISOString(),
+        settings: {
+          ...remote.payload.settings,
+          nickname: nickname || remote.payload.settings?.nickname,
+        },
+        // recoveryKey cihaza özeldir ve V3'te yerel `legacy` torbasında taşınır.
+        legacy: {
+          ...(remote.payload.legacy ?? {}),
+          core: {
+            ...((remote.payload.legacy?.core as Record<string, unknown> | undefined) ?? {}),
+            recoveryKey: keyToStore,
+          },
+        },
+      };
+
+      dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey: keyToStore, nickname });
+      applySyncedState(state);
+      syncMetaStore.setLastSyncedHash(agentId, makeSaveHash(state));
+      syncDeferredRef.current = false;
+      showToast('Kimlik ve tüm kütüphane buluttan yüklendi!', 'success');
+      return true;
     } catch {
-      // Sessizce yut: kimlik değiştirilmedi, çağıran taraf hata mesajı gösterir.
+      // Sessiz: kimlik değişmedi, çağıran taraf hata mesajı gösterir.
     }
 
     showToast('Bulut yedeği bulunamadı; kimlik değiştirilmedi.', 'error');
     return false;
-  }, [showToast, data.recoveryKey]);
+  }, [data.recoveryKey, showToast, syncMetaStore]);
 
   /** Ağ hesabına giriş yapıldıktan sonra kimliği ağ hesabına geçirir. */
   const adoptNetworkIdentity = useCallback(
@@ -4194,72 +3346,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
-   * "Bu cihazı buluta yükle": geri dönüş korumasını bilerek atlar.
-   * Kullanıcı, elindeki cihazın doğru veri olduğunu bildiğinde kullanır.
+   * "Bu cihazı buluta yükle": kullanıcı seçimi otoritedir.
+   * Karar matrisi atlanır; yerel kayıt güncel sunucu revizyonunun üstüne yazılır.
    */
   const forceCloudUpload = useCallback(() => {
-    forceUploadRef.current = true;
+    const agentId = dataRef.current.agentId;
+    if (!agentId) {
+      showToast('Bulut hesabı bulunamadı; yükleme yapılamadı.', 'error');
+      return;
+    }
     hydrationTrustedRef.current = true;
-    lastSyncedStorageHash.current = '__force_upload__';
-    setSyncTick((tick) => tick + 1);
-    showToast('Bu cihazdaki veriler buluta yükleniyor...', 'info');
-  }, [showToast]);
+    syncDeferredRef.current = false;
+    setSyncStatus('syncing');
+    void (async () => {
+      try {
+        const result = await syncEngine.pushLocal(agentId);
+        handleSyncResult(result, true);
+      } catch {
+        setSyncStatus('error');
+        showToast('Bu cihazdaki veriler yüklenemedi; veriler korunuyor.', 'error');
+      }
+    })();
+  }, [showToast, syncEngine]);
 
   /**
-   * "Bulutu bu cihaza indir": bulut arşivini BİREBİR uygular.
-   * Yerel film/dizi/başarım/görev/XP verisi buluttakiyle değiştirilir; hemen
-   * ardından buluta geri yükleme yapılmaz (yankı engellenir).
+   * "Bulutu bu cihaza indir": `sync_get_state` sonucu BİREBİR uygulanır.
+   * Yerel kütüphane buluttakiyle değiştirilir; yankı yüklemesi yapılmaz.
    */
   const forceCloudDownload = useCallback(async () => {
-    const current = dataRef.current;
-    const agentId = current.agentId;
+    const agentId = dataRef.current.agentId;
     if (!agentId) {
       showToast('Bulut hesabı bulunamadı; indirme yapılamadı.', 'error');
       return;
     }
+    syncDeferredRef.current = false;
     setSyncStatus('syncing');
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('last_cloud_sync')
-        .eq('agent_id', agentId)
-        .maybeSingle();
-
-      const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${agentId}.json`);
-      const response = await fetch(`${urlData.publicUrl}?t=${Date.now()}`, { cache: 'no-store' });
-      if (!response.ok) throw new Error('cloud archive not found');
-      const incomingJson = JSON.parse(await response.text());
-      const coreData = incomingJson.core || incomingJson;
-      if (!isFullAppRecord(coreData)) throw new Error('cloud archive invalid');
-
-      const cloudTime = Number(profile?.last_cloud_sync || coreData.lastCloudSync || 0) || Date.now();
-      const normalizedCore = {
-        ...coreData,
-        // Cihaz kimliği ve kurtarma anahtarı cihaza özeldir; hesap kimliği korunur.
-        agentId,
-        recoveryKey: current.recoveryKey || coreData.recoveryKey,
-        nickname: coreData.nickname || current.nickname,
-      };
-      const payload: PendingCloudArchive = {
-        coreData: normalizedCore as ExtendedAppData,
-        questData: incomingJson.quests,
-        incomingJson,
-        incomingHash: getCleanHashString(normalizedCore, incomingJson.quests, pickIncomingExtras(incomingJson)),
-        cloudTime,
-      };
-
-      cloudConflictRef.current = null;
-      pendingCloudRef.current = null;
-      setCloudConflict(null);
-      cloudConflictDeferredRef.current = false;
-      applyPendingCloudArchive(payload, cloudTime);
-      setSyncStatus('synced');
-      showToast('Buluttaki tüm veriler bu cihaza birebir indirildi.', 'success');
+      const result = await syncEngine.pullRemote(agentId);
+      handleSyncResult(result, true);
     } catch {
       setSyncStatus('error');
       showToast('Bulut yedeği indirilemedi; bu cihazdaki veriler korundu.', 'error');
     }
-  }, [showToast]);
+  }, [showToast, syncEngine]);
 
   // State Slicing — yoğun sayfaların re-render izolasyonu için memo'lu dilimler (opt-in).
   const librarySlice = useMemo<LibrarySlice>(() => ({

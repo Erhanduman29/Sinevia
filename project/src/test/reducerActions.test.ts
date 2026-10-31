@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { rootReducer, resolveTMDBGenres, PAST_WATCH_COLLECTION_NAME, buildExactCloudData } from '../context/AppContext';
+import { rootReducer, resolveTMDBGenres, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { migrateLegacyToV3, toLegacyCoreView } from '../lib/localStateV3';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
 import { makeXpEvent, sumXpEvents } from '../lib/xpLedger';
@@ -43,6 +44,20 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+/** V2 biçimli bulut çekirdeğini kanonik V3 üzerinden redüktör görünümüne çevirir. */
+function buildCloudCore(core: any, quests: any, cloudTime: number): ExtendedAppData {
+  const state = migrateLegacyToV3({
+    core,
+    quests,
+    updatedAt: new Date(cloudTime).toISOString(),
+    cloudTotalXp: Number(core?.totalXp ?? 0),
+  });
+  const view = toLegacyCoreView(state) as unknown as ExtendedAppData & { pendingToasts?: unknown };
+  // Kanonik görünüm defteri (`xpEvents`) aynen taşır; redüktör XP'yi ondan türetir.
+  view.pendingToasts = [];
+  return view as unknown as ExtendedAppData;
+}
 
 describe('REDUCER — DİZİ (SERIES) EYLEMLERİ', () => {
   test('ADD_SERIES: bilinmeyen türleri kütüphaneye ekler, mevcut türü kopyalamaz', () => {
@@ -727,34 +742,6 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
 });
 
 describe('REDUCER — BULUT SENKRONU & İÇE AKTARMA', () => {
-  test('SYNC_FROM_CLOUD_STORAGE: bulut verisi uygulanır, quest verisi depoya yazılır', () => {
-    const state = getInitialState();
-    const cloudData = {
-      movies: [{ id: 'cloud1', title: 'Bulut Film', watched: true } as any],
-      agentId: 'CLOUD-AGENT',
-      theme: 'matrix',
-    } as any;
-
-    const next = rootReducer(state, {
-      type: 'SYNC_FROM_CLOUD_STORAGE',
-      data: cloudData,
-      questData: { completedQuests: ['c_short_movie'] },
-    } as any);
-
-    expect(next.movies).toHaveLength(1);
-    expect(next.movies[0].id).toBe('cloud1');
-    expect(next.agentId).toBe('CLOUD-AGENT');
-    expect(next.theme).toBe('matrix');
-
-    // Quest verisi yerel depoya yazılmış olmalı
-    const stored = storageMap.get(QUEST_STORAGE_KEY);
-    expect(stored).toBeTruthy();
-    expect(JSON.parse(stored!).completedQuests).toEqual(['c_short_movie']);
-
-    // Tüm başarım kayıtları (yeni cihaz) oluşturulmuş olmalı
-    expect(next.achievements).toHaveLength(ACHIEVEMENT_DEFS.length);
-  });
-
   test('IMPORT_DATA: yerel kimlik korunur, "Eskiden İzlenenler" koleksiyonu göç ettirilir', () => {
     let state = getInitialState();
     state = rootReducer(state, {
@@ -784,8 +771,8 @@ describe('REDUCER — BULUT SENKRONU & İÇE AKTARMA', () => {
 });
 
 describe('BULUTTAN BİREBİR İNDİRME', () => {
-  test('buildExactCloudData buluttaki 1850 XP değerini başarımlardan yeniden hesaplayıp düşürmez', () => {
-    const cloud = buildExactCloudData({
+  test('buildCloudCore buluttaki 1850 XP değerini başarımlardan yeniden hesaplayıp düşürmez', () => {
+    const cloud = buildCloudCore({
       ...getInitialState(),
       totalXp: 1850,
       level: 20,
@@ -810,7 +797,7 @@ describe('BULUTTAN BİREBİR İNDİRME', () => {
       pendingToasts: [{ id: 'old-toast' }],
       pendingLevelUp: { level: 2 },
     } as any;
-    const cloud = buildExactCloudData({
+    const cloud = buildCloudCore({
       ...getInitialState(),
       totalXp: 1850,
       level: 20,
@@ -829,7 +816,7 @@ describe('BULUTTAN BİREBİR İNDİRME', () => {
   });
 
   test('birebir indirmeden sonra defter korunur, yeni başarım kaydı üzerine eklenir', () => {
-    let state = buildExactCloudData({
+    let state = buildCloudCore({
       ...getInitialState(),
       totalXp: 1850,
       level: 20,
