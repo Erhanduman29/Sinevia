@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { rootReducer, resolveTMDBGenres, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { rootReducer, resolveTMDBGenres, PAST_WATCH_COLLECTION_NAME, buildExactCloudData } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
 import { todayStr } from '../lib/utils';
@@ -767,5 +767,72 @@ describe('REDUCER — BULUT SENKRONU & İÇE AKTARMA', () => {
     expect(next.movies[0].isPastWatch).toBe(true);
     expect(next.genres).toContain('Korku');
     expect(next.achievements).toHaveLength(ACHIEVEMENT_DEFS.length);
+  });
+});
+
+describe('BULUTTAN BİREBİR İNDİRME', () => {
+  test('buildExactCloudData buluttaki 1850 XP değerini başarımlardan yeniden hesaplayıp düşürmez', () => {
+    const cloud = buildExactCloudData({
+      ...getInitialState(),
+      totalXp: 1850,
+      level: 20,
+      movies: [{ id: 'm1', title: 'Bulut Filmi' }],
+    } as any, {}, 123456);
+
+    expect(cloud.totalXp).toBe(1850);
+    expect(cloud.movies).toHaveLength(1);
+    expect(cloud.movies[0].id).toBe('m1');
+    // Cloud XP'sinin başarımlarla açıklanmayan kısmı taban olarak korunur.
+    expect(cloud.xpBaseline).toBe(1850);
+  });
+
+  test('REPLACE_FROM_CLOUD_STORAGE bulut verisini birebir uygular ve bekleyen kuyrukları temizler', () => {
+    const local = {
+      ...getInitialState(),
+      totalXp: 95,
+      level: 2,
+      pendingToasts: [{ id: 'old-toast' }],
+      pendingLevelUp: { level: 2 },
+    } as any;
+    const cloud = buildExactCloudData({
+      ...getInitialState(),
+      totalXp: 1850,
+      level: 20,
+      movies: [{ id: 'cloud-movie', title: 'Bulut Filmi' }],
+      achievements: [{ achievementId: 'movie_add', current: 1, unlockedTiers: ['bronze'], tierDates: {} }],
+    } as any, { completedQuests: [] }, 123456);
+
+    const next = rootReducer(local, { type: 'REPLACE_FROM_CLOUD_STORAGE', data: cloud, questData: { completedQuests: [] } } as any);
+
+    expect(next.totalXp).toBe(1850);
+    expect(next.level).toBe(20);
+    expect(next.movies[0].id).toBe('cloud-movie');
+    expect(next.pendingToasts).toEqual([]);
+    expect(next.pendingLevelUp).toBeUndefined();
+    expect(storageMap.get(QUEST_STORAGE_KEY)).toContain('completedQuests');
+  });
+
+  test('birebir indirmeden sonra XP yeniden hesaplansa da 1850 korunur, yeni başarım üzerine eklenir', () => {
+    let state = buildExactCloudData({
+      ...getInitialState(),
+      totalXp: 1850,
+      level: 20,
+      achievements: [{ achievementId: 'movie_add', current: 1, unlockedTiers: ['bronze'], tierDates: {} }],
+    } as any, { completedQuests: [] }, 123456);
+
+    state = rootReducer(state, { type: 'FORCE_XP_SYNC' } as any);
+    expect(state.totalXp).toBe(1850);
+
+    // Yeni bir başarım katmanı eklendiğinde taban XP korunmalı, üzerine yalnızca fark eklenmeli.
+    state = {
+      ...state,
+      achievements: state.achievements.map((a) =>
+        a.achievementId === 'series_add'
+          ? { ...a, current: 1, unlockedTiers: ['bronze'] }
+          : a
+      ),
+    };
+    state = rootReducer(state, { type: 'FORCE_XP_SYNC' } as any);
+    expect(state.totalXp).toBe(1855);
   });
 });

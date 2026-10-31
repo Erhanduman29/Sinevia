@@ -103,6 +103,38 @@ function applyNotificationPrefs<T extends Record<string, any>>(input: T): T {
   return Object.keys(prefs).length > 0 ? { ...input, ...prefs } : input;
 }
 
+/**
+ * Eşitleme meta verileri (son görülen bulut, içerik hash'i, son değişiklik)
+ * hesaba göre ayrılır. Aksi halde aynı tarayıcıda hesap değiştirince eski
+ * hesabın "bulutu gördüm" damgası yeni hesaba taşınıyordu.
+ */
+const SYNC_META_OWNER_KEY = 'sinevia_sync_meta_agent';
+function scopedSyncMetaKey(base: string, agentId?: string): string {
+  return agentId ? `${base}:${agentId}` : base;
+}
+function readScopedSyncMeta(base: string, agentId?: string): string | null {
+  try {
+    const scoped = localStorage.getItem(scopedSyncMetaKey(base, agentId));
+    if (scoped !== null) return scoped;
+    const legacy = localStorage.getItem(base);
+    if (legacy === null) return null;
+    const owner = localStorage.getItem(SYNC_META_OWNER_KEY);
+    // Eski sürümden gelen anahtarın sahibi yoksa (veya aynı hesapsa) bir kez devral.
+    if (!owner || !agentId || owner === agentId) return legacy;
+    return null;
+  } catch {
+    return null;
+  }
+}
+function writeScopedSyncMeta(base: string, agentId: string | undefined, value: string) {
+  try {
+    localStorage.setItem(scopedSyncMetaKey(base, agentId), value);
+    if (agentId) localStorage.setItem(SYNC_META_OWNER_KEY, agentId);
+    // Eski sürüm/başka ekranlar okuyabilsin diye global anahtar da güncel tutulur.
+    localStorage.setItem(base, value);
+  } catch { /* kota / gizli mod */ }
+}
+
 export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
 const DEFAULT_GENRES = ['Aksiyon', 'Macera', 'Komedi', 'Dram', 'Korku', 'Bilim Kurgu', 'Fantastik', 'Romantik', 'Gerilim', 'Suç', 'Belgesel', 'Animasyon'];
 export const DEFAULT_REVIEW_TAGS = ['🔥 Başyapıt', '🎭 Oyunculuk Muazzam', '🤯 Ters Köşe Final', '🎵 Müzikler Efsane', '🎬 Görsellik Şahane', '🍿 Akıcı & Keyifli', '🧠 Beyin Yakan Kurgu', '💪 Tempo Yavaştı', '📉 Beklentimin Altında', '💩 Bok Gibi'];
@@ -159,6 +191,12 @@ export interface ExtendedAppData extends AppData {
   recoveryKey?: string;  
   showcase?: ShowcaseItem[];
   lastCloudSync?: number;
+  /**
+   * Buluttan gelen toplam XP'nin, başarım/görev/bonus XP'siyle açıklanamayan
+   * kısmı. synchronizeXPAndLevel bu tabanı her hesapta korur; böylece buluttaki
+   * 1850 XP, başarım listesi eksik gelse bile 95'e düşmez.
+   */
+  xpBaseline?: number;
 }
 
 function generateAgentId() {
@@ -367,7 +405,7 @@ function defaultData(): ExtendedAppData {
     xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
     showLockedNames: false, showBadgeDetails: false, reducedMotion: false, fastCelebrations: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
-    externalActions: [], bonusXp: 0, totalDuelsCompleted: 0, giantSlayerWins: 0,
+    externalActions: [], bonusXp: 0, xpBaseline: 0, totalDuelsCompleted: 0, giantSlayerWins: 0,
     weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true, sharePastWatchedInFeed: true,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
     coins: 150, coinLedger: [{ id: 'welcome', amount: 150, kind: 'welcome', label: 'Pazar açılış hediyesi', refId: 'welcome', createdAt: new Date().toISOString() }], inventory: [], equipped: {}, activeEffects: [],
@@ -375,6 +413,86 @@ function defaultData(): ExtendedAppData {
     marketStats: { purchases: 0, coinsSpent: 0, contractsCompleted: 0, contractsFailed: 0, weeklyContractsFailed: 0, contractsCancelled: 0 },
     showcase: [],
     lastCloudSync: Date.now()
+  };
+}
+
+/** Bir başarım listesindeki açılmış kademelerin toplam XP'si. */
+function achievementXpFromProgress(list: AchievementProgress[] = []): number {
+  const defs = new Map(ACHIEVEMENT_DEFS.map((def) => [def.id, def]));
+  return (list || []).reduce((sum, prog) => {
+    const def = defs.get(prog?.achievementId);
+    if (!def || !Array.isArray(prog?.unlockedTiers)) return sum;
+    return sum + prog.unlockedTiers.reduce((tierSum, tier) => {
+      const tierDef = def.tiers.find((t) => t.tier === tier);
+      return tierSum + Number(tierDef?.xp || 0);
+    }, 0);
+  }, 0);
+}
+
+/** Görev deposundaki tamamlanmış görevlerin toplam XP'si. */
+function questXpFromState(questStateRaw: any): number {
+  const completed = Array.isArray(questStateRaw?.completedQuests)
+    ? questStateRaw.completedQuests
+    : (Array.isArray(questStateRaw) ? questStateRaw : []);
+  return completed.reduce((sum: number, questId: string) => {
+    const questDef = QUEST_DEFS.find((q) => q.id === questId);
+    return sum + Number(questDef?.xpReward || 0);
+  }, 0);
+}
+
+/**
+ * Bulut arşivini BİREBİR uygulanacak hale getirir.
+ *
+ * Kritik fark: `applyAchievements` / `synchronizeXPAndLevel` burada ÇAĞRILMAZ.
+ * Buluttaki totalXp/level/xp neyse o kullanılır; aradaki fark `xpBaseline`
+ * alanına yazılır. Böylece sonraki başarım hesaplamaları da bulut XP'sini
+ * aşağı çekmez, yeni kazanılan XP'nin üzerine ekler.
+ */
+export function buildExactCloudData(coreData: any, questData: any, cloudTime: number): ExtendedAppData {
+  const base = defaultData();
+  const migrated = migrateLegacyPastCollection(
+    Array.isArray(coreData?.movies) ? coreData.movies : [],
+    Array.isArray(coreData?.collections) ? coreData.collections : [],
+  );
+  const achievements = createInitialAchievements(
+    Array.isArray(coreData?.achievements) ? coreData.achievements : [],
+  );
+  const merged: ExtendedAppData = applyNotificationPrefs({
+    ...base,
+    ...(coreData || {}),
+    movies: migrated.movies,
+    series: Array.isArray(coreData?.series) ? coreData.series : [],
+    collections: migrated.collections,
+    genres: Array.isArray(coreData?.genres) && coreData.genres.length ? coreData.genres : base.genres,
+    reviewTags: Array.isArray(coreData?.reviewTags) ? coreData.reviewTags : DEFAULT_REVIEW_TAGS,
+    criteria: Array.isArray(coreData?.criteria) && coreData.criteria.length ? coreData.criteria : base.criteria,
+    achievements,
+    showcase: Array.isArray(coreData?.showcase) ? coreData.showcase : [],
+    bonusXp: Number(coreData?.bonusXp || 0),
+  });
+
+  const totalXp = Math.max(0, Number(coreData?.totalXp ?? merged.totalXp ?? 0) || 0);
+  const levelInfo = levelFromXp(totalXp);
+  const cloudLevel = Number(coreData?.level || 0);
+  const cloudXp = Number(coreData?.xp);
+  const xpBaseline = totalXp
+    - achievementXpFromProgress(achievements)
+    - questXpFromState(questData)
+    - Number(merged.bonusXp || 0);
+
+  return {
+    ...merged,
+    totalXp,
+    level: Math.max(levelInfo.level, Number.isFinite(cloudLevel) ? cloudLevel : 0) || levelInfo.level,
+    xp: Number.isFinite(cloudXp) ? cloudXp : levelInfo.currentLevelXp,
+    xpBaseline,
+    lastCloudSync: cloudTime,
+    // Bulut indirmesi birebir ayna olmalı: yerel kutlama/XP kuyrukları taşınmaz.
+    pendingToasts: [],
+    pendingLevelUp: undefined,
+    pendingLevelUpQueue: undefined,
+    pendingXpGain: undefined,
+    pendingCoinGain: undefined,
   };
 }
 
@@ -484,6 +602,8 @@ function getCleanHashString(stateObj: any, questStateRaw?: any, extrasRaw?: Reco
   delete clean.pendingLevelUpQueue;
   delete clean.pendingXpGain;
   delete clean.pendingCoinGain;
+  // xpBaseline türetilmiş bir alandır; bulut dosyasına/hash'e yazılmaz.
+  delete clean.xpBaseline;
   
   if (questStateRaw || extrasRaw) {
      return canonicalJson({ core: clean, quests: questStateRaw || {}, ...(extrasRaw || {}) });
@@ -525,6 +645,7 @@ function getContentHash(stateObj: any, questStateRaw?: any) {
   delete clean.pendingXpGain;
   delete clean.pendingCoinGain;
   delete clean.recoveryKey;
+  delete clean.xpBaseline;
   return shortHash(canonicalJson({ core: clean, quests: questStateRaw || {} }));
 }
 
@@ -585,6 +706,9 @@ function synchronizeXPAndLevel(
   // Kalıcı bonus XP (terk ödülü, düello ödülleri vb.) — recalc'e dahil edilir;
   // böylece sonraki her applyAchievements totalXp'yi bu değerle eşitler (XP kaybolmaz).
   recalculatedXp += state.bonusXp || 0;
+  // Buluttan gelen ve başarım/görev/bonus ile açıklanamayan XP tabanı da korunur.
+  // Bu satır olmadan 1850 XP'lik bulut kaydı, eksik başarım listesiyle 95'e düşüyordu.
+  recalculatedXp += Number(state.xpBaseline || 0);
 
   const correctedLevelInfo = levelFromXp(recalculatedXp);
   const oldLevel = state.level || 1; 
@@ -766,6 +890,7 @@ type Action =
   | { type: 'SET_SHOWCASE'; showcase: ShowcaseItem[] }
   | { type: 'FORCE_XP_SYNC' }
   | { type: 'SYNC_FROM_CLOUD_STORAGE'; data: ExtendedAppData; questData?: any }
+  | { type: 'REPLACE_FROM_CLOUD_STORAGE'; data: ExtendedAppData; questData?: any }
   | { type: 'ABANDON_MEDIA'; mediaType: 'movie' | 'series'; id: string; abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }
   | { type: 'REVIVE_MEDIA'; mediaType: 'movie' | 'series'; id: string }
   | { type: 'RESOLVE_DUEL'; winnerId: string; loserId: string; mediaType?: 'movie' | 'series' }
@@ -1258,6 +1383,17 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
 }
 
 export function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
+  if (action.type === 'REPLACE_FROM_CLOUD_STORAGE') {
+    // "Bulutu bu cihaza indir" yolu: veri birebir buluttaki halidir. Burada
+    // applyAchievements/synchronizeXPAndLevel ÇALIŞMAZ; aksi halde bulutun
+    // 1850 XP'si başarım listesinden yeniden hesaplanıp düşebiliyordu.
+    if (localStorage.getItem('sinevia_zero_reset') === '1') return state;
+    if (action.questData) {
+      localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(action.questData));
+    }
+    return action.data;
+  }
+
   if (action.type === 'SYNC_FROM_CLOUD_STORAGE') {
     // Tam hesap silme yarışı: sıfırlama bayrağı ayaktaysa gelen bulut verisi (çekirdek +
     // görev/rozet deposu) uygulanmaz — silinen hesap geri getirilmesin.
@@ -1301,6 +1437,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
           totalXp: safeTotalXp,
           level: Math.max(Number(hydrated.level || 1), safeProgress.level),
           xp: safeProgress.currentLevelXp,
+          xpBaseline: Number(hydrated.xpBaseline || 0) + Math.max(0, safeTotalXp - hydratedXp),
         }
       : hydrated;
     return applyNotificationPrefs({ ...withSafeXp, pendingLevelUp: undefined, pendingLevelUpQueue: undefined });
@@ -2106,6 +2243,8 @@ export interface AppContextValue {
   syncAchievements: () => void;
   /** Bu cihazdaki veriyi buluta zorla yükler (çakışma/geri dönüş korumasını atlar). */
   forceCloudUpload: () => void;
+  /** Buluttaki kaydı bu cihaza BİREBİR indirir (yerel veri bulutla değiştirilir). */
+  forceCloudDownload: () => Promise<void>;
   /** Sinematik Otopsi: film/diziyi yarım bırak (otopi). */
   abandonMedia: (mediaType: 'movie' | 'series', id: string, opts?: { abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }) => void;
   reviveMedia: (mediaType: 'movie' | 'series', id: string) => void;
@@ -2182,11 +2321,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (storedTotalXp > recalculated.totalXp || storedLevel > recalculated.level) {
           const safeTotalXp = Math.max(storedTotalXp, Number(recalculated.totalXp || 0));
           const restoredLevel = levelFromXp(safeTotalXp);
+          // Yüksek-su korumasını kalıcı hale getir: aradaki farkı XP tabanına yaz.
+          // Aksi halde ilk başarım güncellemesi boot'taki 1850 XP'yi tekrar düşürürdü.
+          const baselineDelta = Math.max(0, safeTotalXp - Number(recalculated.totalXp || 0));
           return {
             ...recalculated,
             totalXp: safeTotalXp,
             level: Math.max(storedLevel, restoredLevel.level),
             xp: storedTotalXp > 0 ? restoredLevel.currentLevelXp : Number(parsed.xp || 0),
+            xpBaseline: Number(recalculated.xpBaseline || 0) + baselineDelta,
           };
         }
         return recalculated;
@@ -2225,7 +2368,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // yerelde gerçek (yüklenmemiş) değişiklik varken açılır.
   const lastSyncedContentHash = useRef<string>((() => {
     try {
-      const saved = localStorage.getItem(CONTENT_HASH_KEY);
+      const saved = readScopedSyncMeta(CONTENT_HASH_KEY, data.agentId);
       if (saved) return saved;
     } catch { /* kota / gizli mod */ }
     try {
@@ -2241,10 +2384,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // (yoksa eski yerel veri "en yeni" görünür ve bulutu ezerdi).
   const localLastModifiedRef = useRef<number>((() => {
     try {
-      const saved = Number(localStorage.getItem('sinevia_last_modified') || 0);
+      const saved = Number(readScopedSyncMeta('sinevia_last_modified', data.agentId) || 0);
       // Anahtar henüz yoksa (bu güncellemeyi ilk gören kullanıcılar): yerel otorite kabul edilir,
       // yoksa cloudTime > 0+2000 şartı her şeyi "daha yeni" yapıp yerel veriyi çekerdi (veri kaybı).
-      if (!saved) { const now = Date.now(); localStorage.setItem('sinevia_last_modified', String(now)); return now; }
+      if (!saved) { const now = Date.now(); writeScopedSyncMeta('sinevia_last_modified', data.agentId, String(now)); return now; }
       return saved;
     } catch { return Date.now(); }
   })());
@@ -2255,21 +2398,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // senkron tam JSON çekiyordu → her açılışta/senkronda 20-30MB indirme döngüsü.)
   const lastSeenCloudTimeRef = useRef<number>((() => {
     try {
-      const saved = Number(localStorage.getItem('sinevia_last_cloud_seen') || 0);
+      const saved = Number(readScopedSyncMeta('sinevia_last_cloud_seen', data.agentId) || 0);
       if (saved) return saved;
       return Number(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').lastCloudSync || 0);
     } catch { return 0; }
   })());
 
-  /** Bu cihazın son eşitlediği içerik parmak izini kaydet (ref + localStorage). */
-  function setSyncedContent(hash: string) {
+  /** Bu cihazın son eşitlediği içerik parmak izini kaydet (ref + hesaba özel localStorage). */
+  function setSyncedContent(hash: string, agentIdOverride?: string) {
     lastSyncedContentHash.current = hash;
-    try { localStorage.setItem(CONTENT_HASH_KEY, hash); } catch { /* kota */ }
+    writeScopedSyncMeta(CONTENT_HASH_KEY, agentIdOverride || dataRef.current.agentId, hash);
   }
 
   /** Bir bulut sürümünü "görüldü" olarak işaretle (tekrar tekrar indirmeyi önler). */
-  function markCloudSeen(cloudTime: number) {    lastSeenCloudTimeRef.current = cloudTime;
-    try { localStorage.setItem('sinevia_last_cloud_seen', String(cloudTime)); } catch { /* kota */ }
+  function markCloudSeen(cloudTime: number, agentIdOverride?: string) {
+    lastSeenCloudTimeRef.current = cloudTime;
+    writeScopedSyncMeta('sinevia_last_cloud_seen', agentIdOverride || dataRef.current.agentId, String(cloudTime));
     try {
       const snap = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
       snap.lastCloudSync = cloudTime;
@@ -2277,20 +2421,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { /* kota */ }
   }
 
-  /** Seçilen bulut arşivini uygula (kullanıcı onayından veya güvenli otomatik akıştan sonra). */
+  // Hesap değiştiğinde eşitleme referanslarını o hesabın kendi anahtarlarından
+  // yeniden yükle. Böylece eski hesabın "bulut görüldü" damgası yeni hesabı kilitlemez.
+  useEffect(() => {
+    if (!hydrated || !data.agentId) return;
+    const savedSeen = Number(readScopedSyncMeta('sinevia_last_cloud_seen', data.agentId) || 0);
+    const savedHash = readScopedSyncMeta(CONTENT_HASH_KEY, data.agentId);
+    const savedModified = Number(readScopedSyncMeta('sinevia_last_modified', data.agentId) || 0);
+    lastSeenCloudTimeRef.current = savedSeen;
+    localLastModifiedRef.current = savedModified || Date.now();
+    try {
+      lastSyncedContentHash.current = savedHash || getContentHash(dataRef.current, readQuestState());
+    } catch {
+      lastSyncedContentHash.current = savedHash || '';
+    }
+  }, [data.agentId, hydrated]);
+
+  /** Seçilen bulut arşivini BİREBİR uygula (kullanıcı onayı veya güvenli otomatik akış). */
   function applyPendingCloudArchive(payload: PendingCloudArchive, cloudTime: number) {
     const coreData = { ...payload.coreData, lastCloudSync: cloudTime };
+    const exactData = buildExactCloudData(coreData, payload.questData, cloudTime);
     applyIncomingExtras(payload.incomingJson);
     // Uygulanan sürüm bulutta zaten var; yükleyici bir sonraki turda yankı
     // yüklemesi yapmasın diye özel işaret konur.
     lastSyncedStorageHash.current = '__from_cloud__';
     // İndirilen sürüm artık "eşitlenmiş" sayılır: bu cihazda bekleyen değişiklik yok.
-    setSyncedContent(getContentHash(coreData, payload.questData));
-    markCloudSeen(cloudTime);
+    setSyncedContent(getContentHash(exactData, payload.questData), exactData.agentId);
+    markCloudSeen(cloudTime, exactData.agentId);
     // Buluttan tam bir kayıt geldiyse artık yerel kayıt güvenilir kabul edilebilir.
     hydrationTrustedRef.current = true;
+    forceUploadRef.current = false;
     lmSkipBumpRef.current = true; // bulut senkronu gerçek yerel düzenleme DEĞİLDİR
-    dispatch({ type: 'SYNC_FROM_CLOUD_STORAGE', data: coreData as ExtendedAppData, questData: payload.questData });
+    dataRef.current = exactData;
+    dispatch({ type: 'REPLACE_FROM_CLOUD_STORAGE', data: exactData, questData: payload.questData });
+    // Sayfa hemen kapanırsa bile indirilen veri kaybolmasın: IDB + boot anlık görüntüsü.
+    void idbSet(STORAGE_KEY, exactData);
+    writeBootSnapshot(exactData as unknown as Record<string, unknown>);
     if (payload.questData) window.dispatchEvent(new CustomEvent('sinevia-quests-restored'));
   }
 
@@ -2334,25 +2500,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const incomingMeaningful = hasMeaningfulProgress(coreData);
     const localMeaningful = hasMeaningfulProgress(localData);
 
-    // İLERLEME KAYBI YOK: bulut bu cihazdan geride olsa bile hiçbir taraf atılmaz.
-    // İki taraf birleştirilir (başarım kademeleri, görevler, geçmiş, kütüphane) ve
-    // birleşik kayıt buluta geri yazılır. Böylece XP asla düşmez.
+    // Yerelde yüklenmemiş değişiklik var mı? (Bulut ileride olsa bile yerelde
+    // yeni izlenen film/başarım olabilir; bunu asla ezmiyoruz.)
+    const localDirty = localContentHash !== lastSyncedContentHash.current;
+
+    // İLERLEME KAYBI YOK: iki yönde de birleştir. Bulut ileride + yerelde yeni
+    // veri varsa bulut taban alınır, yereldeki YENİ başarım/görev/film eklenir ve
+    // birleşik kayıt buluta geri yazılır. Eski kod yalnızca "bulut geride"yi
+    // birleştiriyor, "bulut ileride + yerel yeni" durumunda yükleme kilidi
+    // oluşturuyordu.
     const incomingAchCount = summarizeProgress(coreData).achievements;
     const localAchCount = summarizeProgress(localData).achievements;
     const incomingXpValue = Number((coreData as any).totalXp || 0);
     const localXpValue = Number((localData as any).totalXp || 0);
+    const incomingAhead = incomingAchCount > localAchCount || incomingXpValue > localXpValue + 5;
     const progressRegression = incomingAchCount < localAchCount || incomingXpValue + 5 < localXpValue;
 
-    if (!opts?.protectCloud && progressRegression) {
+    if (!opts?.protectCloud && localMeaningful && incomingMeaningful && (progressRegression || (incomingAhead && localDirty))) {
       const localQuestState: any = readQuestState() || {};
-      const mergedCore = {
-        ...coreData,
-        movies: mergeMediaById(localData.movies as any, coreData.movies as any),
-        series: mergeMediaById(localData.series as any, coreData.series as any),
-        history: mergeByIdKeepingBoth(localData.history as any, coreData.history as any),
-        achievements: mergeAchievementProgress(localData.achievements as any, coreData.achievements as any),
-        bonusXp: Math.max(Number((localData as any).bonusXp || 0), Number((coreData as any).bonusXp || 0)),
-      };
+      const mergedAchievements = mergeAchievementProgress(localData.achievements as any, coreData.achievements as any);
       const mergedQuests = {
         ...(questData || {}),
         completedQuests: Array.from(
@@ -2361,6 +2527,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ...(((questData as any)?.completedQuests as string[]) || []),
           ]),
         ),
+      };
+
+      // Bulut ilerideyse yalnızca yerelde OLUP bulutta OLMAYAN kazanımların
+      // XP'sini ekle. Böylece 1850 + yeni 50 XP = 1900 olur; 95'e düşmez,
+      // aynı başarım iki kez sayılmaz.
+      const localBonus = Number((localData as any).bonusXp || 0);
+      const cloudBonus = Number((coreData as any).bonusXp || 0);
+      let additionalXp = Math.max(0, localBonus - cloudBonus);
+      if (incomingXpValue >= localXpValue) {
+        const cloudAch = new Map<string, Set<string>>();
+        for (const item of coreData.achievements || []) {
+          if (item?.achievementId) cloudAch.set(item.achievementId, new Set(item.unlockedTiers || []));
+        }
+        for (const item of localData.achievements || []) {
+          const def = ACHIEVEMENT_DEFS.find((d) => d.id === item?.achievementId);
+          if (!def) continue;
+          const cloudTiers = cloudAch.get(item.achievementId) || new Set<string>();
+          for (const tier of item.unlockedTiers || []) {
+            if (cloudTiers.has(tier)) continue;
+            const tierDef = def.tiers.find((t) => t.tier === tier);
+            additionalXp += Number(tierDef?.xp || 0);
+          }
+        }
+        const cloudQuests = new Set<string>((questData?.completedQuests as string[]) || []);
+        for (const questId of (localQuestState.completedQuests as string[]) || []) {
+          if (cloudQuests.has(questId)) continue;
+          const questDef = QUEST_DEFS.find((q) => q.id === questId);
+          additionalXp += Number(questDef?.xpReward || 0);
+        }
+      }
+
+      const mergedTotalXp = incomingXpValue >= localXpValue
+        ? incomingXpValue + additionalXp
+        : Math.max(incomingXpValue, localXpValue);
+      const mergedLevel = levelFromXp(mergedTotalXp);
+      const mergedCore = {
+        ...coreData,
+        movies: mergeMediaById(localData.movies as any, coreData.movies as any),
+        series: mergeMediaById(localData.series as any, coreData.series as any),
+        history: mergeByIdKeepingBoth(localData.history as any, coreData.history as any),
+        achievements: mergedAchievements,
+        bonusXp: Math.max(localBonus, cloudBonus),
+        totalXp: mergedTotalXp,
+        level: mergedLevel.level,
+        xp: mergedLevel.currentLevelXp,
       };
       const mergedJson = { ...incomingJson, core: mergedCore, quests: mergedQuests };
       applyPendingCloudArchive(
@@ -2403,7 +2614,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Yerelde yüklenmemiş değişiklik YOKSA çakışma değildir: bulut sadece
     // başka bir cihazda güncellenmiştir. Sessizce indir.
-    const localDirty = localContentHash !== lastSyncedContentHash.current;
     if (!localDirty && !forceUploadRef.current) {
       applyPendingCloudArchive(payload, cloudTime);
       return 'applied';
@@ -2628,7 +2838,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       const now = Date.now();
       localLastModifiedRef.current = now;
-      try { localStorage.setItem('sinevia_last_modified', String(now)); } catch { /* kota */ }
+      writeScopedSyncMeta('sinevia_last_modified', data.agentId, String(now));
     }
     // 600 ms: art arda gelen düzenlemeleri tek yazımda birleştirir. Sekme kapanırken
     // (pagehide/beforeunload/visibilitychange) bekleyen yazım yine anında uygulanır.
@@ -2777,18 +2987,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Profil sayaçları da çekilir: yerel boş/eksikse dolu bulutun üzerine yazılmasın.
         let cloudTime = 0;
         let cloudHasProgress = false;
-        const cloudCounts = { movies: 0, series: 0, achievements: 0, xp: 0 };
+        const cloudCounts = {
+          movies: 0, pastMovies: 0, series: 0, episodes: 0,
+          achievements: 0, xp: 0, quests: 0,
+        };
         try {
           const { data: prof } = await supabase
             .from('profiles')
-            .select('last_cloud_sync,total_xp,movies_watched,past_movies_watched,series_watched,episodes_watched,achievements_unlocked')
+            .select('last_cloud_sync,total_xp,movies_watched,past_movies_watched,series_watched,episodes_watched,achievements_unlocked,quests_completed')
             .eq('agent_id', data.agentId)
             .maybeSingle();
           cloudTime = Number(prof?.last_cloud_sync || 0);
-          cloudCounts.movies = Number(prof?.movies_watched || 0) + Number(prof?.past_movies_watched || 0);
+          cloudCounts.movies = Number(prof?.movies_watched || 0);
+          cloudCounts.pastMovies = Number(prof?.past_movies_watched || 0);
           cloudCounts.series = Number(prof?.series_watched || 0);
+          cloudCounts.episodes = Number(prof?.episodes_watched || 0);
           cloudCounts.achievements = Number(prof?.achievements_unlocked || 0);
           cloudCounts.xp = Number(prof?.total_xp || 0);
+          cloudCounts.quests = Number(prof?.quests_completed || 0);
           cloudHasProgress = !!prof && [
             prof.total_xp, prof.movies_watched, prof.past_movies_watched,
             prof.series_watched, prof.episodes_watched, prof.achievements_unlocked,
@@ -2825,16 +3041,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Yerel kütüphane, bulut profil sayaçlarına göre bariz eksikse (ör. tarayıcı
         // güncellemesi sonrası film/dizi/başarım dizileri boş kaldıysa) boş/eksik
         // kaydı buluta yazma; önce bulut arşivini indirip kullanıcıya göster.
+        // ÖNEMLİ: Burada XP/başarım "daha düşük" karşılaştırması YÜKLEMEYİ BLOKLAMAZ.
+        // 95 XP'li ikinci cihazın yeni başarımını sonsuza kadar kilitleyen eski hata buydu.
         const localSummary = summarizeProgress(data);
         const localLooksIncomplete = !forceUpload && cloudHasProgress && (
-          (localSummary.movies === 0 && cloudCounts.movies > 0) ||
+          (localSummary.movies === 0 && (cloudCounts.movies + cloudCounts.pastMovies) > 0) ||
           (localSummary.series === 0 && cloudCounts.series > 0) ||
           (localSummary.achievements === 0 && cloudCounts.achievements > 0) ||
-          (localSummary.totalXp === 0 && cloudCounts.xp > 0) ||
-          // Bulutta bu cihazdan DAHA FAZLA ilerleme varsa yerel kayıt eskidir:
-          // üzerine yazma, önce bulutu çek. (XP/başarım asla kendiliğinden azalmaz.)
-          localSummary.achievements < cloudCounts.achievements ||
-          localSummary.totalXp + 5 < cloudCounts.xp
+          (localSummary.totalXp === 0 && cloudCounts.xp > 0)
         );
         if (localLooksIncomplete) {
           setSyncStatus('syncing');
@@ -2846,6 +3060,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } else {
             setSyncStatus('synced');
           }
+          return;
+        }
+
+        // Bulut ileride ama yerelde de yeni başarım/film olabilir: protectCloud ile
+        // bulutu indirip yereli ezmek yerine birleştirmeye izin ver. handleCloudArchive
+        // bulut tabanını + yereldeki yeni kazanımları birleştirip forceUpload kurar.
+        const cloudAhead = !forceUpload && cloudHasProgress && (
+          localSummary.achievements < cloudCounts.achievements ||
+          localSummary.totalXp + 5 < cloudCounts.xp
+        );
+        if (cloudAhead) {
+          setSyncStatus('syncing');
+          let merged = false;
+          try { merged = await pullCloudArchive(false); } catch { merged = false; }
+          setSyncStatus(merged ? 'synced' : 'error');
           return;
         }
 
@@ -2896,32 +3125,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
           cwPayload = { id: activeMovie.id, title: activeMovie.title, posterUrl: activeMovie.posterUrl || null, year: activeMovie.year || '', startedAt: activeMovie.startedAt, runtime: tInfo.maxMins, isPaused: tInfo.isPaused, elapsedMins: tInfo.elapsedMins, updatedAt: new Date().toISOString() };
         }
 
-        const newSyncTime = new Date().getTime();
+        // Bulut sayaçları ASLA aşağı yazılmaz: 95 XP'li cihaz 1850 XP'li profili ezmesin.
+        const safeTotalXp = Math.max(Number(data.totalXp || 0), cloudCounts.xp);
+        const safeLevel = Math.max(Number(data.level || 1), levelFromXp(safeTotalXp).level);
+        // Sürüm damgası sunucudaki son damgadan her zaman ileri olsun (cihaz saati geride olsa bile).
+        const newSyncTime = Math.max(Date.now(), cloudTime + 2001);
         const qsCompletedCount = (currentQuestState.completedQuests && Array.isArray(currentQuestState.completedQuests)) ? currentQuestState.completedQuests.length : 0;
 
         // Kendi yüklememizin realtime yankısını bastır: zaman damgasını upsert'ten
         // ÖNCE "görüldü" yap; hata olursa geri al.
         const previousSeen = lastSeenCloudTimeRef.current;
-        lastSeenCloudTimeRef.current = newSyncTime;
-        try { localStorage.setItem('sinevia_last_cloud_seen', String(newSyncTime)); } catch { /* kota */ }
+        markCloudSeen(newSyncTime, data.agentId);
 
         const { error: dbError } = await supabase.from('profiles').upsert({
-          agent_id: data.agentId, nickname: data.nickname || 'Yeni Üye', level: data.level || 1, total_xp: data.totalXp || 0,
-          movies_watched: watchedMoviesCount, past_movies_watched: pastMoviesCount, series_watched: watchedSeriesCount, episodes_watched: watchedEpisodesCount,
-          achievements_unlocked: unlockedAchievementsCount, quests_completed: qsCompletedCount,
+          agent_id: data.agentId, nickname: data.nickname || 'Yeni Üye', level: safeLevel, total_xp: safeTotalXp,
+          movies_watched: Math.max(watchedMoviesCount, cloudCounts.movies),
+          past_movies_watched: Math.max(pastMoviesCount, cloudCounts.pastMovies),
+          series_watched: Math.max(watchedSeriesCount, cloudCounts.series),
+          episodes_watched: Math.max(watchedEpisodesCount, cloudCounts.episodes),
+          achievements_unlocked: Math.max(unlockedAchievementsCount, cloudCounts.achievements),
+          quests_completed: Math.max(qsCompletedCount, cloudCounts.quests),
           currently_watching: cwPayload, showcase: data.showcase || [], last_seen: new Date().toISOString(),
           last_cloud_sync: newSyncTime
         }, { onConflict: 'agent_id' });
 
         if (dbError) {
-          lastSeenCloudTimeRef.current = previousSeen;
-          try { localStorage.setItem('sinevia_last_cloud_seen', String(previousSeen)); } catch { /* kota */ }
+          markCloudSeen(previousSeen, data.agentId);
           throw dbError;
         }
 
-        markCloudSeen(newSyncTime);
+        markCloudSeen(newSyncTime, data.agentId);
         lastSyncedStorageHash.current = jsonData;
-        setSyncedContent(getContentHash(data, currentQuestState));
+        setSyncedContent(getContentHash(data, currentQuestState), data.agentId);
         forceUploadRef.current = false;
         setSyncStatus('synced');
       } catch { 
@@ -3516,29 +3751,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
 
         dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey: keyToStore, nickname });
+        // Buluttan gelen kayıt BİREBİR uygulanır; burada XP yeniden hesaplanmaz.
+        // Giriş sırasında başarısız/eski bir yerel kaydı buluta geri yazmak da yok:
+        // giriş yalnızca okur ve bu cihazı bulutun aynası yapar.
+        const exactData = buildExactCloudData(normalizedCore, questData, cloudTime);
         applyPendingCloudArchive(payload, cloudTime);
 
         // KRİTİK: Yeni kimliği sayfa yenilenmeden ÖNCE diske yaz. Aksi halde
         // yenileme eski (önceki hesabın) IDB kaydını geri yükler; kullanıcı
         // "hesap geldi, sonra geri attı" görür ve giriş sonsuz döngüye girer.
         try {
-          const adoptedData = rootReducer(dataRef.current, {
-            type: 'SYNC_FROM_CLOUD_STORAGE',
-            data: coreData as ExtendedAppData,
-            questData,
-          });
-          await idbSet(STORAGE_KEY, adoptedData);
-          writeBootSnapshot(adoptedData as unknown as Record<string, unknown>);
-          dataRef.current = adoptedData;
+          await idbSet(STORAGE_KEY, exactData);
+          writeBootSnapshot(exactData as unknown as Record<string, unknown>);
+          dataRef.current = exactData;
         } catch {
           // IDB yazılamazsa kapanıştaki flush devreye girer.
         }
 
-        // Kurtarılan kütüphaneyi bulut profil zaman damgasıyla da yayınla.
-        forceUploadRef.current = true;
-        lastSyncedStorageHash.current = '__force_upload__';
+        forceUploadRef.current = false;
+        lastSyncedStorageHash.current = '__from_cloud__';
         setSyncTick((tick) => tick + 1);
-        showToast('Kimlik ve Tüm Kütüphane başarıyla eşitlendi!', 'success');
+        showToast('Kimlik ve tüm kütüphane buluttan yüklendi!', 'success');
         return true;
       }
     } catch {
@@ -3917,6 +4150,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Bu cihazdaki veriler buluta yükleniyor...', 'info');
   }, [showToast]);
 
+  /**
+   * "Bulutu bu cihaza indir": bulut arşivini BİREBİR uygular.
+   * Yerel film/dizi/başarım/görev/XP verisi buluttakiyle değiştirilir; hemen
+   * ardından buluta geri yükleme yapılmaz (yankı engellenir).
+   */
+  const forceCloudDownload = useCallback(async () => {
+    const current = dataRef.current;
+    const agentId = current.agentId;
+    if (!agentId) {
+      showToast('Bulut hesabı bulunamadı; indirme yapılamadı.', 'error');
+      return;
+    }
+    setSyncStatus('syncing');
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('last_cloud_sync')
+        .eq('agent_id', agentId)
+        .maybeSingle();
+
+      const { data: urlData } = supabase.storage.from('sinevia_saves').getPublicUrl(`${agentId}.json`);
+      const response = await fetch(`${urlData.publicUrl}?t=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('cloud archive not found');
+      const incomingJson = JSON.parse(await response.text());
+      const coreData = incomingJson.core || incomingJson;
+      if (!isFullAppRecord(coreData)) throw new Error('cloud archive invalid');
+
+      const cloudTime = Number(profile?.last_cloud_sync || coreData.lastCloudSync || 0) || Date.now();
+      const normalizedCore = {
+        ...coreData,
+        // Cihaz kimliği ve kurtarma anahtarı cihaza özeldir; hesap kimliği korunur.
+        agentId,
+        recoveryKey: current.recoveryKey || coreData.recoveryKey,
+        nickname: coreData.nickname || current.nickname,
+      };
+      const payload: PendingCloudArchive = {
+        coreData: normalizedCore as ExtendedAppData,
+        questData: incomingJson.quests,
+        incomingJson,
+        incomingHash: getCleanHashString(normalizedCore, incomingJson.quests, pickIncomingExtras(incomingJson)),
+        cloudTime,
+      };
+
+      cloudConflictRef.current = null;
+      pendingCloudRef.current = null;
+      setCloudConflict(null);
+      cloudConflictDeferredRef.current = false;
+      applyPendingCloudArchive(payload, cloudTime);
+      setSyncStatus('synced');
+      showToast('Buluttaki tüm veriler bu cihaza birebir indirildi.', 'success');
+    } catch {
+      setSyncStatus('error');
+      showToast('Bulut yedeği indirilemedi; bu cihazdaki veriler korundu.', 'error');
+    }
+  }, [showToast]);
+
   // State Slicing — yoğun sayfaların re-render izolasyonu için memo'lu dilimler (opt-in).
   const librarySlice = useMemo<LibrarySlice>(() => ({
     movies: data.movies, series: data.series, collections: data.collections,
@@ -3948,7 +4237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
@@ -3966,7 +4255,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem,
     equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome,
     toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification,
-    forceXpSync, syncAchievements,
+    forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload,
     abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions,
   ];
   const actionsValue = useMemo<ActionsSlice>(() => {

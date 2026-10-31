@@ -713,7 +713,7 @@ export default function SettingsPage() {
     addCollection, deleteCollection, renameCollection, exportData, importData,
     toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
-    setNickname, setExternalActions, forceCloudUpload
+    setNickname, setExternalActions, forceCloudUpload, forceCloudDownload
   } = useApp();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
   const { questState, togglePenalty } = useQuests();
@@ -1451,9 +1451,22 @@ export default function SettingsPage() {
               >
                 <Upload size={16} /> Bu Cihazı Buluta Yükle
               </button>
+              <button
+                onClick={async () => {
+                  const ok = window.confirm(
+                    'DİKKAT: Bu cihazdaki filmler, diziler, izleme geçmişi, başarımlar, görevler ve XP; buluttaki kayıtla BİREBİR değiştirilecek. Bu cihazda bulutta olmayan yeni veriler varsa kaybolur. Devam edilsin mi?',
+                  );
+                  if (!ok) return;
+                  await forceCloudDownload();
+                }}
+                className={`${BTN_S} px-4 py-2.5 text-xs sm:text-sm self-start text-ink-200`}
+                style={BTN_S_STYLE}
+              >
+                <Download size={16} /> Bulutu Bu Cihaza İndir
+              </button>
               <p className="text-[11px] text-ink-500 leading-relaxed">
-                Eşitleme normalde otomatik çalışır. Bir cihazda ilerleme kaybolduysa veya bulut kaydı bu cihazdan geride
-                kaldıysa bu düğmeyi kullan. Önce doğru verinin bu cihazda olduğundan emin ol.
+                Eşitleme normalde otomatik çalışır. İki cihazda farklı ilerleme görüyorsan "Bulutu Bu Cihaza İndir"
+                bu cihazı bulutun birebir aynası yapar. "Bu Cihazı Buluta Yükle" ise bu cihazdaki veriyi buluta gönderir.
               </p>
             </div>
           </CollapsibleSection>

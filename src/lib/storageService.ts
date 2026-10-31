@@ -18,7 +18,7 @@ const STORE_NAME = 'kv';
 /** localStorage'da tutulacak küçük boot alanları (FOUC + anında kimlik için). */
 export const BOOT_SNAPSHOT_KEYS = [
   'theme', 'agentId', 'recoveryKey', 'nickname',
-  'lastCloudSync', 'level', 'totalXp', 'xp', 'bonusXp', 'dailyStreak',
+  'lastCloudSync', 'level', 'totalXp', 'xp', 'bonusXp', 'xpBaseline', 'dailyStreak',
   // Başarımlar XP'nin tek kaynağıdır. Snapshot'ta yoksa açılışta XP/level sıfıra
   // düşüp (kısa süreli "1. seviye" parlaması) yanlış veri buluta yazılabiliyordu.
   'achievements',
