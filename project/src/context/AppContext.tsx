@@ -638,8 +638,9 @@ function getCleanHashString(stateObj: any, questStateRaw?: any, extrasRaw?: Reco
   delete clean.pendingLevelUpQueue;
   delete clean.pendingXpGain;
   delete clean.pendingCoinGain;
-  // xpBaseline türetilmiş bir alandır; bulut dosyasına/hash'e yazılmaz.
+  // Kaldırılan V2 XP alanları eski kayıtlarda kalmış olabilir; hash'e girmesin.
   delete clean.xpBaseline;
+  delete clean.bonusXp;
   
   if (questStateRaw || extrasRaw) {
      return canonicalJson({ core: clean, quests: questStateRaw || {}, ...(extrasRaw || {}) });
@@ -682,6 +683,7 @@ function getContentHash(stateObj: any, questStateRaw?: any) {
   delete clean.pendingCoinGain;
   delete clean.recoveryKey;
   delete clean.xpBaseline;
+  delete clean.bonusXp;
   return shortHash(canonicalJson({ core: clean, quests: questStateRaw || {} }));
 }
 
