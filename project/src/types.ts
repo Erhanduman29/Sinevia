@@ -323,7 +323,14 @@ export interface AppData {
   pendingLevelUp?: { newLevel: number };
   /** Sıradaki seviye kutlamaları (tetikten sonraki ara seviyeler; PROMOTE_LEVEL_UP ile sırayla açılır). */
   pendingLevelUpQueue?: number[];
-  pendingXpGain?: { gained: number; oldTotal: number; newTotal: number; source?: string; label?: string };
+  pendingXpGain?: {
+    gained: number;
+    oldTotal: number;
+    newTotal: number;
+    /** Defter kaynağı (XpGainOverlay etiketi için). */
+    source?: import('./types/appState').XpEventSource;
+    label?: string;
+  };
   /** Başarım coin animasyonu için geçici kuyruk kaydı (buluta yazılmaz). */
   pendingCoinGain?: { amount: number; label: string; final?: boolean };
 }
