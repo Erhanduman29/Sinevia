@@ -837,10 +837,13 @@ export function toLegacyCoreView(state: AppStateV3): Record<string, unknown> {
     agentId: state.ownerAgentId ?? undefined,
     lastCloudSync: state.lastCloudSync,
     aiChatHistory: state.aiChatHistory,
-    // Türetilmiş XP — yalnız V2 uyumluluğu için.
+    // Türetilmiş XP — yalnız V2 uyumluluğu için. Otorite `xpEvents`'tir ve
+    // aşağıda aynen taşınır; `bonusXp`/`xpBaseline` yalnız eski okuyucular
+    // için 0'dır (yeni kayıtta bu alanlar hiç yazılmaz).
     totalXp,
     level: level.level,
     xp: level.currentLevelXp,
+    xpEvents: state.xpEvents,
     bonusXp: 0,
     xpBaseline: 0,
   };
