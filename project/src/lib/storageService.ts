@@ -11,9 +11,34 @@
  * sessizce localStorage'a düşer — veri kaybı olmaz, sadece 5MB sınırı geri gelir.
  */
 
+import {
+  buildBootSnapshot,
+  isAppStateV3,
+  isBootSnapshotV3,
+  isLegacyAppState,
+  migrateLegacyToV3,
+} from './localStateV3';
+import { BACKUP_EXTRA_KEYS } from './appBackup';
+import type { AppStateV3 } from '../types/appState';
+
 const DB_NAME = 'sinevia-db';
 const DB_VERSION = 1;
 const STORE_NAME = 'kv';
+
+/**
+ * KANONİK YEREL KAYIT ANAHTARI.
+ *
+ * - IndexedDB `kv/sinevia-v1`  → TAM `AppStateV3` (schemaVersion 3).
+ * - localStorage `sinevia-v1`  → YALNIZ küçük boot anlık görüntüsü
+ *   (`buildBootSnapshot`). Tam veri localStorage'a ASLA yazılmaz.
+ *
+ * Aynı anahtar adı iki farklı depoda farklı içerik taşır; bu bilinçlidir
+ * (AppContext geçiş döneminde localStorage'dan lastCloudSync okuyor).
+ */
+export const STATE_STORAGE_KEY = 'sinevia-v1';
+
+/** localStorage'daki tam kayıt için V2 anahtarı (göç girdisi). */
+export const LEGACY_STATE_STORAGE_KEY = STATE_STORAGE_KEY;
 
 /** localStorage'da tutulacak küçük boot alanları (FOUC + anında kimlik için). */
 export const BOOT_SNAPSHOT_KEYS = [
@@ -28,7 +53,7 @@ export const BOOT_SNAPSHOT_KEYS = [
 ] as const;
 
 /** localStorage'a yazarken büyük kütüphaneyi ATLA (quota hatası + 5MB sınırı önlemek için). */
-const LOCAL_SNAPSHOT_KEY = 'sinevia-v1';
+const LOCAL_SNAPSHOT_KEY = STATE_STORAGE_KEY;
 
 /**
  * Ana IDB kaydının yanında tutulan tam yedek. Ana kayıt bozulur/silinirse
@@ -162,7 +187,14 @@ export function writeBootSnapshot(data: Record<string, unknown>): boolean {
     for (const k of BOOT_SNAPSHOT_KEYS) {
       if (data[k] !== undefined) snapshot[k] = data[k];
     }
-    localStorage.setItem(LOCAL_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    let serialized = JSON.stringify(snapshot);
+    // Güvenlik kemeri: beklenmedik büyüme (örn. şişmiş achievements) localStorage'ı
+    // doldurmasın. Özet yeterli — tam veri zaten IndexedDB'de.
+    if (serialized.length > MAX_BOOT_SNAPSHOT_BYTES && 'achievements' in snapshot) {
+      delete snapshot.achievements;
+      serialized = JSON.stringify(snapshot);
+    }
+    localStorage.setItem(LOCAL_SNAPSHOT_KEY, serialized);
     return true;
   } catch {
     // Kota dolu / localStorage kapalı: sessiz kalmak yerine uygulamaya haber ver.
@@ -181,6 +213,170 @@ export function readBootSnapshot(): Record<string, unknown> | null {
     return parsed && typeof parsed === 'object' ? parsed : null;
   } catch {
     return null;
+  }
+}
+
+/* =========================================================================
+   V3 KANONİK KAYIT API'Sİ
+   -------------------------------------------------------------------------
+   loadStateV3 / saveStateV3 / readLegacyState / migrateStoredStateToV3 /
+   clearStateV3. Orion AppContext entegrasyonunda bu API'yi kullanmalıdır.
+   ========================================================================= */
+
+export interface SaveStateV3Options {
+  /** Debounce (varsayılan 600ms — eski yazma kuyruğuyla aynı). */
+  delayMs?: number;
+  /** Tam yedeği ('sinevia-v1-backup') da yaz. */
+  backup?: boolean;
+}
+
+/** localStorage'daki boot anlık görüntüsünün üst sınırı (güvenlik kemeri). */
+export const MAX_BOOT_SNAPSHOT_BYTES = 32 * 1024;
+
+/**
+ * AppStateV3 → küçük boot anlık görüntüsü. Kütüphane ve XP defteri yazılmaz;
+ * yalnız tema/kimlik/seviye/özet alanları (bkz. `buildBootSnapshot`).
+ */
+export function writeBootSnapshotFromState(state: AppStateV3): boolean {
+  try {
+    localStorage.setItem(LOCAL_SNAPSHOT_KEY, JSON.stringify(buildBootSnapshot(state)));
+    return true;
+  } catch {
+    reportStorageError('local');
+    return false;
+  }
+}
+
+/** Boot anlık görüntüsünü V3 biçiminde oku. Eski/tam kayıt → null. */
+export function readBootSnapshotV3(): ReturnType<typeof buildBootSnapshot> | null {
+  const raw = readBootSnapshot();
+  return isBootSnapshotV3(raw) ? raw : null;
+}
+
+/** IDB'deki kanonik kaydı oku. V3 değilse (V2/boot/bozuk) null döner. */
+export async function loadStateV3(key: string = STATE_STORAGE_KEY): Promise<AppStateV3 | null> {
+  const stored = await idbGet(key);
+  return isAppStateV3(stored) ? stored : null;
+}
+
+/**
+ * Kanonik kaydı yaz: IDB ('sinevia-v1') + küçük boot snapshot.
+ * Yazma kuyruğuna girer (debounce + coalesce); tam kayıt localStorage'a GİRMEZ.
+ */
+export function saveStateV3(state: AppStateV3, options: SaveStateV3Options = {}): void {
+  if (!isAppStateV3(state)) {
+    reportStorageError('idb');
+    return;
+  }
+  const delay = options.delayMs ?? 600;
+  writeQueue.set(STATE_STORAGE_KEY, state, delay);
+  writeBootSnapshotFromState(state);
+  if (options.backup) writeQueue.set(BACKUP_STORAGE_KEY, state, delay);
+}
+
+/** Beklemeden yaz (kapanış/hesap değişimi gibi kritik anlar için). */
+export async function saveStateV3Immediate(
+  state: AppStateV3,
+  options: { backup?: boolean } = {},
+): Promise<boolean> {
+  if (!isAppStateV3(state)) return false;
+  try { await writeQueue.flush(); } catch { /* devam */ }
+  writeBootSnapshotFromState(state);
+  const ok = await idbSet(STATE_STORAGE_KEY, state);
+  if (options.backup) await idbSet(BACKUP_STORAGE_KEY, state);
+  return ok;
+}
+
+/** Tam yedeği ('sinevia-v1-backup') yaz. */
+export async function saveStateV3Backup(state: AppStateV3): Promise<boolean> {
+  if (!isAppStateV3(state)) return false;
+  return idbSet(BACKUP_STORAGE_KEY, state);
+}
+
+function readLocalJson(storageKey: string): unknown {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw == null) return undefined;
+    try { return JSON.parse(raw); } catch { return raw; }
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * V2 kalıntısını oku: önce IDB'deki eski tam kayıt, yoksa localStorage'daki
+ * tam kayıt. Boot snapshot'ı (movies/series yok) asla "tam kayıt" sayılmaz.
+ */
+export async function readLegacyState(key: string = STATE_STORAGE_KEY): Promise<Record<string, unknown> | null> {
+  const idbValue = await idbGet(key);
+  if (isLegacyAppState(idbValue)) return idbValue;
+  const localValue = readLocalJson(key);
+  if (isLegacyAppState(localValue)) return localValue;
+  return null;
+}
+
+/** localStorage'daki V2 ek durumları (tutorial/academy/sound/shortcuts). */
+export function readLegacyExtras(): Record<string, unknown> {
+  const extras: Record<string, unknown> = {};
+  for (const [name, storageKey] of Object.entries(BACKUP_EXTRA_KEYS)) {
+    const value = readLocalJson(storageKey);
+    if (value !== undefined) extras[name] = value;
+  }
+  return extras;
+}
+
+export interface MigrateStoredStateResult {
+  state: AppStateV3 | null;
+  /** true → V2 kaydı okunup V3'e çevrildi ve IDB'ye yazıldı. */
+  migrated: boolean;
+}
+
+/**
+ * Cihazdaki V2 kaydını V3'e yükseltir. IDB zaten V3 ise hiçbir şey yapmaz.
+ * Göç tamamlanınca localStorage'daki tam kayıt boot snapshot'a küçültülür.
+ */
+export async function migrateStoredStateToV3(options: {
+  ownerAgentId?: string | null;
+  deviceId?: string;
+  updatedAt?: string;
+  key?: string;
+} = {}): Promise<MigrateStoredStateResult> {
+  const key = options.key ?? STATE_STORAGE_KEY;
+  const existing = await idbGet(key);
+  if (isAppStateV3(existing)) return { state: existing, migrated: false };
+
+  const legacy = isLegacyAppState(existing)
+    ? existing
+    : (await readLegacyState(key));
+  if (!legacy) return { state: null, migrated: false };
+
+  const state = migrateLegacyToV3({
+    core: legacy,
+    quests: readLocalJson('sinevia-quests-v1'),
+    extras: readLegacyExtras(),
+    ownerAgentId: options.ownerAgentId ?? (typeof legacy.agentId === 'string' ? legacy.agentId : null),
+    deviceId: options.deviceId ?? (typeof legacy.deviceId === 'string' ? legacy.deviceId : ''),
+    updatedAt: options.updatedAt,
+  });
+
+  try { await writeQueue.flush(); } catch { /* devam */ }
+  const ok = await idbSet(key, state);
+  if (!ok) return { state, migrated: false };
+  writeBootSnapshotFromState(state);
+  if (key === STATE_STORAGE_KEY) await idbSet(BACKUP_STORAGE_KEY, state);
+  return { state, migrated: true };
+}
+
+/**
+ * Cihazdaki V3 kaydını (ana + yedek) sil. localStorage'daki `sinevia*`
+ * anahtarları ve V2 kalıntıları `clearAllLocalAppData` tarafından temizlenir.
+ */
+export async function clearStateV3(options: { keepBootSnapshot?: boolean } = {}): Promise<void> {
+  try { await writeQueue.flush(); } catch { /* devam */ }
+  await idbDel(STATE_STORAGE_KEY);
+  await idbDel(BACKUP_STORAGE_KEY);
+  if (!options.keepBootSnapshot) {
+    try { localStorage.removeItem(LOCAL_SNAPSHOT_KEY); } catch { /* erişilemez */ }
   }
 }
 
@@ -247,28 +443,20 @@ export async function clearAllLocalAppData(): Promise<void> {
 }
 
 /**
- * Göç (migration): localStorage'da hâlâ TAM kütüphane varsa ve IDB boşsa, IDB'ye taşı.
- * Taşıma başarılıysa localStorage'ı küçült (sadece boot anlık görüntüsü kalsın).
- * Dönen değer: IDB'de artık ana kayıt var mı?
+ * Göç (migration): IDB'de V3 kaydı yoksa localStorage/IDB'deki V2 tam kaydını
+ * `AppStateV3`'e yükseltip IDB'ye yazar. Başarılıysa localStorage yalnız küçük
+ * boot anlık görüntüsüne küçültülür.
+ * Dönen değer: IDB'de artık kanonik V3 kaydı var mı?
  */
 export async function migrateToIdbIfNeeded(fullKey: string): Promise<boolean> {
   const existing = await idbGet(fullKey);
-  // Yalnızca GERÇEK kütüphane kaydı yeterli. Boot snapshot'ı (movies/series yok)
-  // ana kayıt sanılırsa hidrasyon onu yükler ve tüm kütüphane silinir.
-  if (isFullAppRecord(existing)) return true;
+  // Yalnızca GERÇEK V3 kaydı yeterli. Boot snapshot'ı ana kayıt sanılırsa
+  // hidrasyon onu yükler ve tüm kütüphane silinir.
+  if (isAppStateV3(existing)) return true;
 
-  let legacy: Record<string, unknown> | null = null;
-  try {
-    const raw = localStorage.getItem(fullKey);
-    if (raw) legacy = JSON.parse(raw);
-  } catch {
-    legacy = null;
-  }
-  if (!legacy || !isFullAppRecord(legacy)) return false;
-
-  const ok = await idbSet(fullKey, legacy);
-  if (ok) writeBootSnapshot(legacy); // localStorage'ı küçült
-  return ok;
+  const result = await migrateStoredStateToV3({ key: fullKey });
+  if (!result.state) return false;
+  return isAppStateV3(await idbGet(fullKey));
 }
 
 /** IndexedDB kullanılabilir mi? (özel sekme vb. durumlar için UI ipucu) */

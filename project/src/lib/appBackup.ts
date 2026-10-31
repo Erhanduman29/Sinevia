@@ -1,13 +1,17 @@
 /**
  * appBackup — tam yedek / bulut eşitleme yardımcıları.
  *
- * Çekirdek kütüphane AppContext state'inde tutulur; görevler, tutorial,
- * akademi arayüzü ve küçük tercihler ise ayrı localStorage anahtarlarındadır.
- * Bu modül, yedek dosyasına ve Supabase arşivine giden payload'ın bu ek
- * durumların TAMAMINI taşımasını sağlar.
+ * Yedek V3'te KANONİK `AppStateV3` kaydını taşır (`state` alanı). Geriye dönük
+ * uyum için `core` (V2 düz görünüm) ve `quests` alanları da yazılır; V2
+ * yedekleri okunurken `migrateLegacyToV3` ile otomatik yükseltilir.
  */
 
-export const BACKUP_VERSION = 2;
+import { isAppStateV3, migrateLegacyToV3, toLegacyCoreView } from './localStateV3';
+import type { AppStateV3 } from '../types/appState';
+
+export const BACKUP_VERSION = 3;
+/** Yedek gövdesinin şema sürümü (AppStateV3). */
+export const BACKUP_SCHEMA_VERSION = 3;
 
 export const BACKUP_EXTRA_KEYS = {
   tutorial: 'sinevia-tutorial-v1',
@@ -91,27 +95,104 @@ export function writeQuestState(quests: unknown): boolean {
   }
 }
 
-/** Tam yedek dosyası için sürümlü payload üret. */
-export function buildBackupPayload(core: unknown, quests: unknown, extras: BackupExtras) {
+/** Tam yedek dosyası için sürümlü payload üret (V3 kanonik kayıt). */
+export function buildBackupPayload(core: unknown, quests?: unknown, extras: BackupExtras = {}) {
+  const sourceCore = core ?? {};
+  const extrasRecord = extras as Record<string, unknown>;
+  const state = isAppStateV3(sourceCore)
+    ? sourceCore
+    : migrateLegacyToV3({
+        core: sourceCore,
+        quests,
+        extras: extrasRecord,
+        ownerAgentId: readAgentId(sourceCore),
+        deviceId: readDeviceId(sourceCore),
+        updatedAt: new Date().toISOString(),
+      });
+
   return {
-    sineviaBackup: BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
-    core,
-    quests: quests ?? null,
     ...extras,
+    sineviaBackup: BACKUP_VERSION,
+    schemaVersion: BACKUP_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    /** Kanonik kayıt — V3 geri yükleme bunu kullanır. */
+    state,
+    /** V2 uyumluluk görünümü (eski istemciler/AppContext geçiş yolu). */
+    core: isAppStateV3(sourceCore) ? toLegacyCoreView(state) : sourceCore,
+    quests: quests ?? null,
   };
 }
 
+function readAgentId(core: unknown): string | null {
+  if (core && typeof core === 'object' && typeof (core as Record<string, unknown>).agentId === 'string') {
+    return (core as Record<string, string>).agentId;
+  }
+  return null;
+}
+
+function readDeviceId(core: unknown): string {
+  if (core && typeof core === 'object' && typeof (core as Record<string, unknown>).deviceId === 'string') {
+    return (core as Record<string, string>).deviceId;
+  }
+  return '';
+}
+
+export interface ParsedBackupPayload {
+  /** Kanonik V3 kaydı (V2 yedekleri göç ettirilerek üretilir). */
+  state: AppStateV3;
+  /** V2 uyumluluk görünümü; eski yedeklerde orijinal gövde. */
+  core: any;
+  quests: unknown | null;
+  extras: BackupExtras;
+  /** Yedek dosyasının sürümü (0 = eski çekirdek-only). */
+  version: number;
+  /** true → gövde V2'ydi ve V3'e yükseltildi. */
+  migrated: boolean;
+}
+
 /**
- * Yeni sürümlü tam yedeği veya eski çekirdek-only yedeği normalize eder.
- * `core` her iki durumda da kütüphane verisidir.
+ * Yeni sürümlü tam yedeği (V3) veya eski V2/çekirdek-only yedeği normalize eder.
+ * `core` her iki durumda da kütüphane verisidir; kanonik veri `state` alanındadır.
  */
-export function parseBackupPayload(incoming: unknown): { core: any; quests: unknown | null; extras: BackupExtras } {
+export function parseBackupPayload(incoming: unknown): ParsedBackupPayload {
   const source = (incoming && typeof incoming === 'object' ? incoming : {}) as Record<string, any>;
+  const extras = pickBackupExtras(source);
+  const version = typeof source.sineviaBackup === 'number' ? source.sineviaBackup : 0;
+  const exportedAt = typeof source.exportedAt === 'string' ? source.exportedAt : undefined;
+
+  // V3 zarf: `state` kanoniktir.
+  if (isAppStateV3(source.state)) {
+    const quests = Object.prototype.hasOwnProperty.call(source, 'quests')
+      ? (source.quests ?? null)
+      : source.state.quests;
+    return {
+      state: source.state,
+      core: source.core && typeof source.core === 'object' ? source.core : toLegacyCoreView(source.state),
+      quests,
+      extras,
+      version,
+      migrated: false,
+    };
+  }
+
   const hasEnvelope = Boolean(source.core && typeof source.core === 'object');
   const core = hasEnvelope ? source.core : source;
   const quests = hasEnvelope && source.quests != null ? source.quests : null;
-  return { core, quests, extras: pickBackupExtras(source) };
+
+  // Gövde zaten V3 ise (envelope'sız V3 kaydı) doğrudan kullan.
+  if (isAppStateV3(core)) {
+    return { state: core, core, quests: quests ?? core.quests, extras, version, migrated: false };
+  }
+
+  const state = migrateLegacyToV3({
+    core,
+    quests,
+    extras: extras as Record<string, unknown>,
+    ownerAgentId: readAgentId(core),
+    deviceId: readDeviceId(core),
+    updatedAt: exportedAt,
+  });
+  return { state, core, quests, extras, version, migrated: true };
 }
 
 /** Görev verisini localStorage'dan oku (yedeğe koymak için). */
