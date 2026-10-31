@@ -1,7 +1,11 @@
 import { levelFromXp } from './xp';
-import type { AppStateV3, XpEvent, XpEventSource, XpLedgerSummary } from '../types/appState';
+import type { AppStateV3 } from '../types/appState';
 import { SAVE_SCHEMA_VERSION } from '../types/sync';
 import type { SaveEnvelope, SyncSnapshotSummary } from '../types/sync';
+// Defter yardımcıları TEK yerde (src/lib/xpLedger.ts) tanımlıdır; buradan
+// yeniden dışa aktarılır ki sözleşme tüketicileri aynı davranışı görsün.
+import { summarizeXpLedger } from './xpLedger';
+export { XP_EVENT_SOURCES, xpEventKey, hasXpEvent, summarizeXpLedger } from './xpLedger';
 
 /* =========================================================================
    SENKRON SÖZLEŞMESİ — SAF YARDIMCILAR (React YOK)
@@ -21,18 +25,6 @@ import type { SaveEnvelope, SyncSnapshotSummary } from '../types/sync';
       üzerine YAZILMAZ.
    4. `saveHash` aynıysa yükleme atlanır (`up-to-date`).
    ========================================================================= */
-
-/** Defterdeki tüm kaynaklar — özet tablosunu deterministik başlatmak için. */
-export const XP_EVENT_SOURCES: readonly XpEventSource[] = [
-  'achievement',
-  'quest',
-  'contract',
-  'market',
-  'system',
-  'legacy',
-  'legacy-cloud',
-  'adjustment',
-] as const;
 
 /**
  * Anahtar sırasından bağımsız, deterministik JSON üretir.
@@ -124,30 +116,6 @@ export function buildSaveEnvelope(input: BuildSaveEnvelopeInput): SaveEnvelope {
     saveHash: makeSaveHash(payload),
     payload,
   };
-}
-
-/** Defter toplamı ve kaynak dağılımı. Tek XP doğrusu: sum(amount). */
-export function summarizeXpLedger(events: readonly XpEvent[]): XpLedgerSummary {
-  const bySource = {} as Record<XpEventSource, number>;
-  for (const source of XP_EVENT_SOURCES) bySource[source] = 0;
-
-  let totalXp = 0;
-  for (const event of events) {
-    const amount = Number.isFinite(event?.amount) ? Number(event.amount) : 0;
-    totalXp += amount;
-    if (event?.source && event.source in bySource) bySource[event.source] += amount;
-  }
-  return { totalXp, count: events.length, bySource };
-}
-
-/** Defter idempotency anahtarı: `source:sourceId`. */
-export function xpEventKey(event: Pick<XpEvent, 'source' | 'sourceId'>): string {
-  return `${event.source}:${event.sourceId}`;
-}
-
-/** Aynı `(source, sourceId)` zaten defterde mi? (çift ödül yazımını engeller) */
-export function hasXpEvent(events: readonly XpEvent[], source: XpEventSource, sourceId: string): boolean {
-  return events.some((event) => event?.source === source && event?.sourceId === sourceId);
 }
 
 /**

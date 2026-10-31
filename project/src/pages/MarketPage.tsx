@@ -463,7 +463,7 @@ export default function MarketPage() {
       );
       const pick = candidates[Math.floor(Math.random() * Math.max(1, candidates.length))];
       activateItem(item.id, item.effect, item.name);
-      grantXp(200);
+      grantXp(200, 'market', `market:${item.id}:${Date.now()}`, item.name);
       showToast(
         pick
           ? `Keşif önerisi: ${pick.title} · +200 XP`
@@ -475,7 +475,7 @@ export default function MarketPage() {
 
     if (item.effect === 'daily_ink') {
       activateItem(item.id, item.effect, item.name);
-      grantXp(100);
+      grantXp(100, 'market', `market:${item.id}:${Date.now()}`, item.name);
       showToast('Günlük mürekkep kullanıldı · +100 XP', 'success');
       return;
     }

@@ -39,13 +39,13 @@ import type {
 
 /** XP defteri kaydının kaynağı. Yeni kaynak eklemek şema değişikliğidir. */
 export type XpEventSource =
-  /** Başarım kademesi açıldı (sourceId = `${achievementId}:${tier}`). */
+  /** Başarım kademesi açıldı (sourceId = `ach:<achievementId>:<tier>`). */
   | 'achievement'
-  /** Görev tamamlandı (sourceId = questId). */
+  /** Görev tamamlandı (sourceId = `quest:<questId>`). */
   | 'quest'
-  /** Sözleşme (contract) tamamlandı (sourceId = instanceId). */
+  /** Sözleşme (contract) tamamlandı (sourceId = `contract:<instanceId>`). */
   | 'contract'
-  /** Pazar alışverişi / dönüşüm (sourceId = coinTx.refId). */
+  /** Pazar alışverişi / dönüşüm (sourceId = `<itemId>:<refId>` gibi tekil anahtar). */
   | 'market'
   /** Sistem ödülü: karşılama, streak, telafi (sourceId = sistem anahtarı). */
   | 'system'
@@ -69,7 +69,8 @@ export interface XpEvent {
   /**
    * Kaynağa özgü tekil anahtar. İdempotency `(source, sourceId)` çifti ile
    * sağlanır: aynı çiftten ikinci kayıt YAZILMAZ.
-   * Örnek: achievement → 'first_watch:gold', quest → 'daily_watch_3'.
+   * Örnek: achievement → 'ach:first_watch:gold', quest → 'quest:daily_watch_3',
+   * contract → 'contract:<instanceId>', legacy → 'migration-v3'.
    */
   sourceId: string;
   /** İnsan okur etiket (toast / geçmiş listesi için). */

@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import type { AppData, Movie, Series, Episode, Collection, WatchHistoryItem, AchievementProgress, RatingCriterion, WatchProvider, WeeklyPlanItem, ExternalActionTemplate, AbandonedProgress, CoinTx } from '../types';
 import { normalize, uid, todayStr, daysBetween, localDayKey, withRetry, enqueueLogOp, dequeueLogOp, readLogQueue } from '../lib/utils';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
-import { QUEST_DEFS } from '../lib/quests';
 import {
   appendCoinTx,
   addEffectCharge,
@@ -30,6 +29,17 @@ import type { ContractRarity } from '../lib/contracts';
 import { isSoundBusy, getSoundBusyKind, getSoundBusyRemainingMs } from '../lib/sound';
 import { weekKey } from '../lib/contractLogic';
 import { levelFromXp } from '../lib/xp';
+import {
+  appendXpEvent,
+  hasXpEvent,
+  makeXpEvent,
+  mergeXpLedgers,
+  migrateLegacyXp,
+  normalizeXpEvents,
+  sumXpEvents,
+  XP_SOURCE_LABELS,
+} from '../lib/xpLedger';
+import type { XpEvent, XpEventSource } from '../types/appState';
 import { calculateEloDelta } from '../lib/calibrationEngine';
 import { normalizeActionLabel, rewriteLegacyTemplate } from '../lib/actionBridge';
 import {
@@ -192,11 +202,12 @@ export interface ExtendedAppData extends AppData {
   showcase?: ShowcaseItem[];
   lastCloudSync?: number;
   /**
-   * Buluttan gelen toplam XP'nin, başarım/görev/bonus XP'siyle açıklanamayan
-   * kısmı. synchronizeXPAndLevel bu tabanı her hesapta korur; böylece buluttaki
-   * 1850 XP, başarım listesi eksik gelse bile 95'e düşmez.
+   * XP'nin TEK kaynağı (append-only). `totalXp` bu defterden TÜRETİLİR:
+   * `totalXp = sum(xpEvents.amount)`. V2 kayıtlarında yoktur; göç
+   * `migrateLegacyXp` ile tek seferlik `legacy`/`legacy-cloud`/`adjustment`
+   * kayıtları üretir. (bkz. src/lib/xpLedger.ts)
    */
-  xpBaseline?: number;
+  xpEvents?: XpEvent[];
 }
 
 function generateAgentId() {
@@ -402,10 +413,10 @@ function defaultData(): ExtendedAppData {
       { id: 'crit_2', name: 'Oyunculuk', weight: 8, appliesTo: 'both', genres: [] },
       { id: 'crit_3', name: 'Görsel Yönetim', weight: 7, appliesTo: 'both', genres: [] }
     ],
-    xp: 0, level: 1, totalXp: 0, lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
+    xp: 0, level: 1, totalXp: 0, xpEvents: [], lastWatchDate: null, dailyStreak: 0, dailyStreakDate: null,
     showLockedNames: false, showBadgeDetails: false, reducedMotion: false, fastCelebrations: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
-    externalActions: [], bonusXp: 0, xpBaseline: 0, totalDuelsCompleted: 0, giantSlayerWins: 0,
+    externalActions: [], totalDuelsCompleted: 0, giantSlayerWins: 0,
     weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true, sharePastWatchedInFeed: true,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
     coins: 150, coinLedger: [{ id: 'welcome', amount: 150, kind: 'welcome', label: 'Pazar açılış hediyesi', refId: 'welcome', createdAt: new Date().toISOString() }], inventory: [], equipped: {}, activeEffects: [],
@@ -416,37 +427,53 @@ function defaultData(): ExtendedAppData {
   };
 }
 
-/** Bir başarım listesindeki açılmış kademelerin toplam XP'si. */
-function achievementXpFromProgress(list: AchievementProgress[] = []): number {
-  const defs = new Map(ACHIEVEMENT_DEFS.map((def) => [def.id, def]));
-  return (list || []).reduce((sum, prog) => {
-    const def = defs.get(prog?.achievementId);
-    if (!def || !Array.isArray(prog?.unlockedTiers)) return sum;
-    return sum + prog.unlockedTiers.reduce((tierSum, tier) => {
-      const tierDef = def.tiers.find((t) => t.tier === tier);
-      return tierSum + Number(tierDef?.xp || 0);
-    }, 0);
-  }, 0);
+/**
+ * Kayıttaki XP defterini normalize eder ve türetilmiş alanları YENİDEN yazar.
+ * - `xpEvents` varsa aynen korunur (append-only),
+ * - yoksa V2 `totalXp` (ve varsa `bonusXp`/`xpBaseline`) tek seferlik göç eder,
+ * - `totalXp`, `level`, `xp` her zaman defterden türetilir (otorite defterdir).
+ */
+function reconcileXpLedger(state: ExtendedAppData): ExtendedAppData {
+  const raw = state as ExtendedAppData & { bonusXp?: number; xpBaseline?: number };
+  const events = migrateLegacyXp({
+    events: raw.xpEvents,
+    localTotalXp: raw.totalXp,
+    bonusXp: raw.bonusXp,
+    xpBaseline: raw.xpBaseline,
+  });
+  const totalXp = sumXpEvents(events);
+  const levelInfo = levelFromXp(totalXp);
+  const { bonusXp: _legacyBonus, xpBaseline: _legacyBaseline, ...rest } = raw;
+  return {
+    ...rest,
+    xpEvents: events,
+    totalXp,
+    level: levelInfo.level,
+    xp: levelInfo.currentLevelXp,
+  };
 }
 
-/** Görev deposundaki tamamlanmış görevlerin toplam XP'si. */
-function questXpFromState(questStateRaw: any): number {
-  const completed = Array.isArray(questStateRaw?.completedQuests)
-    ? questStateRaw.completedQuests
-    : (Array.isArray(questStateRaw) ? questStateRaw : []);
-  return completed.reduce((sum: number, questId: string) => {
-    const questDef = QUEST_DEFS.find((q) => q.id === questId);
-    return sum + Number(questDef?.xpReward || 0);
-  }, 0);
+/** Yalnız toplamları defterden yeniden hesaplar; göç YAPMAZ. */
+function applyLedgerTotals(state: ExtendedAppData): ExtendedAppData {
+  const events = normalizeXpEvents(state.xpEvents);
+  const totalXp = sumXpEvents(events);
+  const levelInfo = levelFromXp(totalXp);
+  return {
+    ...state,
+    xpEvents: events,
+    totalXp,
+    level: levelInfo.level,
+    xp: levelInfo.currentLevelXp,
+  };
 }
 
 /**
  * Bulut arşivini BİREBİR uygulanacak hale getirir.
  *
- * Kritik fark: `applyAchievements` / `synchronizeXPAndLevel` burada ÇAĞRILMAZ.
- * Buluttaki totalXp/level/xp neyse o kullanılır; aradaki fark `xpBaseline`
- * alanına yazılır. Böylece sonraki başarım hesaplamaları da bulut XP'sini
- * aşağı çekmez, yeni kazanılan XP'nin üzerine ekler.
+ * XP kuralı: kayıtta `xpEvents` varsa aynen kullanılır. Yoksa (V2 kaydı)
+ * `totalXp` → `legacy` göçü yapılır. Başarım/görev listesi XP'yi ASLA
+ * yeniden toplamaz; böylece buluttaki 1850 XP, eksik başarım listesiyle
+ * 95'e düşmez.
  */
 export function buildExactCloudData(coreData: any, questData: any, cloudTime: number): ExtendedAppData {
   const base = defaultData();
@@ -457,9 +484,16 @@ export function buildExactCloudData(coreData: any, questData: any, cloudTime: nu
   const achievements = createInitialAchievements(
     Array.isArray(coreData?.achievements) ? coreData.achievements : [],
   );
+  // Kaldırılan türetilmiş XP alanları yeni kayda taşınmaz.
+  const {
+    bonusXp: _legacyBonus,
+    xpBaseline: _legacyBaseline,
+    xpEvents: incomingEvents,
+    ...coreRest
+  } = (coreData || {}) as Record<string, any>;
   const merged: ExtendedAppData = applyNotificationPrefs({
     ...base,
-    ...(coreData || {}),
+    ...coreRest,
     movies: migrated.movies,
     series: Array.isArray(coreData?.series) ? coreData.series : [],
     collections: migrated.collections,
@@ -468,24 +502,24 @@ export function buildExactCloudData(coreData: any, questData: any, cloudTime: nu
     criteria: Array.isArray(coreData?.criteria) && coreData.criteria.length ? coreData.criteria : base.criteria,
     achievements,
     showcase: Array.isArray(coreData?.showcase) ? coreData.showcase : [],
-    bonusXp: Number(coreData?.bonusXp || 0),
   });
 
-  const totalXp = Math.max(0, Number(coreData?.totalXp ?? merged.totalXp ?? 0) || 0);
+  const xpEvents = migrateLegacyXp({
+    events: incomingEvents,
+    localTotalXp: Number(coreData?.totalXp ?? 0),
+    cloudTotalXp: Number(coreData?.totalXp ?? 0),
+    createdAt: new Date(cloudTime || Date.now()).toISOString(),
+  });
+  const totalXp = sumXpEvents(xpEvents);
   const levelInfo = levelFromXp(totalXp);
-  const cloudLevel = Number(coreData?.level || 0);
-  const cloudXp = Number(coreData?.xp);
-  const xpBaseline = totalXp
-    - achievementXpFromProgress(achievements)
-    - questXpFromState(questData)
-    - Number(merged.bonusXp || 0);
 
   return {
     ...merged,
+    xpEvents,
     totalXp,
-    level: Math.max(levelInfo.level, Number.isFinite(cloudLevel) ? cloudLevel : 0) || levelInfo.level,
-    xp: Number.isFinite(cloudXp) ? cloudXp : levelInfo.currentLevelXp,
-    xpBaseline,
+    // Seviye her zaman defterden türetilir; buluttaki `level` alanı otorite değildir.
+    level: levelInfo.level,
+    xp: levelInfo.currentLevelXp,
     lastCloudSync: cloudTime,
     // Bulut indirmesi birebir ayna olmalı: yerel kutlama/XP kuyrukları taşınmaz.
     pendingToasts: [],
@@ -537,7 +571,10 @@ function summarizeProgress(source: any): DataSummary {
     episodes,
     history: history.length,
     achievements: unlocked,
-    totalXp: Number(source?.totalXp || 0),
+    // V3 kaydında XP defterden türetilir; V2 kaydında düz `totalXp` alanı vardır.
+    totalXp: Array.isArray(source?.xpEvents)
+      ? sumXpEvents(source.xpEvents)
+      : Number(source?.totalXp || 0),
     level: Number(source?.level || 1),
   };
 }
@@ -549,8 +586,7 @@ function hasMeaningfulProgress(source: any): boolean {
     || summary.series > 0
     || summary.history > 0
     || summary.achievements > 0
-    || summary.totalXp > 0
-    || Number(source?.bonusXp || 0) > 0;
+    || summary.totalXp > 0;
 }
 
 /**
@@ -668,57 +704,24 @@ function applyIncomingExtras(incomingJson: unknown) {
   applyBackupExtras(pickBackupExtras(incomingJson));
 }
 
+/**
+ * XP/SEVİYE UZLAŞTIRMASI — otorite XP DEFTERİDİR.
+ *
+ * Eski sürüm başarım + görev listelerini yeniden topluyordu (çift sayım ve
+ * bulut XP'sinin düşmesi). V3'te buradan HİÇBİR liste okunmaz:
+ * `totalXp = sum(xpEvents.amount)`, `level = levelFromXp(totalXp).level`.
+ * Defterde yoksa V2 toplamı tek seferlik `legacy` kaydına dönüşür.
+ */
 function synchronizeXPAndLevel(
   state: ExtendedAppData,
   isSilent = false,
   opts?: { deferLevelUp?: boolean }
 ): ExtendedAppData {
-  let recalculatedXp = 0;
+  const oldLevel = state.level || 1;
+  const reconciled = reconcileXpLedger(state);
+  const correctedLevelInfo = levelFromXp(reconciled.totalXp);
 
-  if (state.achievements && Array.isArray(state.achievements)) {
-    const achievementMap = new Map(ACHIEVEMENT_DEFS.map(def => [def.id, def]));
-    state.achievements.forEach(prog => {
-      const def = achievementMap.get(prog.achievementId);
-      if (def && prog.unlockedTiers && Array.isArray(prog.unlockedTiers)) {
-        prog.unlockedTiers.forEach(unlockedTierName => {
-          const tierDef = def.tiers.find(t => t.tier === unlockedTierName);
-          if (tierDef && tierDef.xp) recalculatedXp += tierDef.xp;
-        });
-      }
-    });
-  }
-
-  try {
-    const qsRaw = localStorage.getItem(QUEST_STORAGE_KEY);
-    if (qsRaw) {
-      const qs = JSON.parse(qsRaw);
-      if (qs.completedQuests && Array.isArray(qs.completedQuests)) {
-        qs.completedQuests.forEach((questId: string) => {
-          const questDef = QUEST_DEFS.find(q => q.id === questId);
-          if (questDef && questDef.xpReward) {
-            recalculatedXp += Number(questDef.xpReward);
-          }
-        });
-      }
-    }
-  } catch {}
-
-  // Kalıcı bonus XP (terk ödülü, düello ödülleri vb.) — recalc'e dahil edilir;
-  // böylece sonraki her applyAchievements totalXp'yi bu değerle eşitler (XP kaybolmaz).
-  recalculatedXp += state.bonusXp || 0;
-  // Buluttan gelen ve başarım/görev/bonus ile açıklanamayan XP tabanı da korunur.
-  // Bu satır olmadan 1850 XP'lik bulut kaydı, eksik başarım listesiyle 95'e düşüyordu.
-  recalculatedXp += Number(state.xpBaseline || 0);
-
-  const correctedLevelInfo = levelFromXp(recalculatedXp);
-  const oldLevel = state.level || 1; 
-  
-  const newState: ExtendedAppData = syncMilestoneItems({
-    ...state,
-    totalXp: recalculatedXp,
-    level: correctedLevelInfo.level,
-    xp: correctedLevelInfo.currentLevelXp
-  }, correctedLevelInfo.level);
+  const newState: ExtendedAppData = syncMilestoneItems(reconciled, correctedLevelInfo.level);
 
   // Seviye atlama tetiği: her ara seviye ayrı kutlamaya girer (deferLevelUp ile
   // başarım batch'inde ertelenir — seviyeler XP reveal'ından sırayla enqueue edilir).
@@ -876,7 +879,19 @@ type Action =
   | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'TOGGLE_BADGE_DETAILS' } | { type: 'TOGGLE_REDUCED_MOTION' } | { type: 'TOGGLE_FAST_CELEBRATIONS' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'PROMOTE_LEVEL_UP' } | { type: 'CLEAR_LEVEL_UP_QUEUE' } | { type: 'SYNC_ACHIEVEMENTS' }
   | { type: 'UPDATE_AI_HISTORY'; messages: AIMessage[] }
   | { type: 'ADD_CRITERION'; criterion: RatingCriterion } | { type: 'EDIT_CRITERION'; id: string; criterion: RatingCriterion } | { type: 'DELETE_CRITERION'; id: string }
-  | { type: 'UPDATE_ALT_TEMPLATE'; template: string } | { type: 'SET_THEME'; theme: string } | { type: 'GRANT_XP'; xp: number }
+  | { type: 'UPDATE_ALT_TEMPLATE'; template: string } | { type: 'SET_THEME'; theme: string }
+  | {
+      type: 'GRANT_XP';
+      xp: number;
+      /** Defter kaynağı; verilmezse 'system'. */
+      source?: XpEventSource;
+      /** İdempotency anahtarı. Verilmezse her çağrı tekil sayılır. */
+      sourceId?: string;
+      label?: string;
+      /** Çarpan öncesi taban; verilmezse `xp`. */
+      base?: number;
+      multiplier?: number;
+    }
   | { type: 'ADD_PLAN_ITEM'; item: WeeklyPlanItem }
   | { type: 'DELETE_PLAN_ITEM'; id: string }
   | { type: 'UPDATE_PLAN_ITEM'; id: string; date: string; time: string }
@@ -897,7 +912,7 @@ type Action =
   | { type: 'APPLY_CALIBRATION_SUGGESTION'; id: string; newRating: number }
   | { type: 'SET_EXTERNAL_ACTIONS'; actions: ExternalActionTemplate[] }
   | { type: 'GRANT_COINS'; amount: number; kind: CoinTx['kind']; label: string; refId: string; itemId?: string }
-  | { type: 'GRANT_CONTRACT_REWARD'; xp: number; coins: number; refId: string; label: string }
+  | { type: 'GRANT_CONTRACT_REWARD'; xp: number; coins: number; refId: string; label: string; base?: number; multiplier?: number; sourceId?: string }
   | { type: 'PURCHASE_ITEM'; itemId: string; name: string; price: number; kind: string; consumable?: boolean; coupon?: boolean }
   | { type: 'EQUIP_ITEM'; slot: 'frameId' | 'titleId' | 'badgeId' | 'badgeId2' | 'backgroundId' | 'nameEffectId'; itemId: string | null }
   | { type: 'USE_ITEM'; itemId: string; effect: string; label: string }
@@ -1362,6 +1377,22 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   }
 
   let stateWithAchievements = { ...state, achievements: newAchievements };
+  // Başarım XP'si XP DEFTERİNE idempotent şekilde yazılır: (achievement, ach:<id>:<tier>).
+  // Liste XP toplamı için ASLA yeniden taranmaz — defter tek doğrudur.
+  let ledger = normalizeXpEvents(stateWithAchievements.xpEvents);
+  const credited = unlocked.filter((entry) => {
+    const appended = appendXpEvent(ledger, makeXpEvent({
+      source: 'achievement',
+      sourceId: `ach:${entry.achievementId}:${entry.tier}`,
+      label: `${entry.name} · ${entry.tier}`,
+      base: entry.xp,
+      multiplier: 1,
+      meta: { achievementId: entry.achievementId, tier: entry.tier },
+    }));
+    ledger = appended.events;
+    return appended.added;
+  });
+  stateWithAchievements = { ...stateWithAchievements, xpEvents: ledger };
   // Başarım batch'inde seviye tetiği ERTELENİR: unlock XP'leri totalXp'ye yazılır ama
   // kutlama tetiklenmez — her toast reveal'ında CONSUME_NEXT_TOAST seviye farkını
   // kuyruğa yazar (causal sıra: başarım XP'si → o XP'nin seviye atlama animasyonu →
@@ -1369,14 +1400,14 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   stateWithAchievements = synchronizeXPAndLevel(
     stateWithAchievements,
     false,
-    unlocked.length > 0 ? { deferLevelUp: true } : undefined
+    credited.length > 0 ? { deferLevelUp: true } : undefined
   );
   // Başarımlardan kazanılan SineCoin'ler ledger'a idempotent şekilde yazılır.
   stateWithAchievements = syncCoinLedger(stateWithAchievements);
 
-  if (unlocked.length > 0) {
+  if (credited.length > 0) {
     const existingQueue = stateWithAchievements.pendingToasts || [];
-    const uniqueUnlocked = unlocked.filter((u) => !existingQueue.some((eq) => eq.achievementId === u.achievementId && eq.tier === u.tier));
+    const uniqueUnlocked = credited.filter((u) => !existingQueue.some((eq) => eq.achievementId === u.achievementId && eq.tier === u.tier));
     return { ...stateWithAchievements, pendingToasts: [...existingQueue, ...uniqueUnlocked] };
   }
   return stateWithAchievements;
@@ -1385,13 +1416,14 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
 export function rootReducer(state: ExtendedAppData, action: Action): ExtendedAppData {
   if (action.type === 'REPLACE_FROM_CLOUD_STORAGE') {
     // "Bulutu bu cihaza indir" yolu: veri birebir buluttaki halidir. Burada
-    // applyAchievements/synchronizeXPAndLevel ÇALIŞMAZ; aksi halde bulutun
-    // 1850 XP'si başarım listesinden yeniden hesaplanıp düşebiliyordu.
+    // applyAchievements/synchronizeXPAndLevel'in XP listesi taraması ÇALIŞMAZ.
+    // Defter kayıttan aynen korunur; yoksa V2 toplamı tek seferlik göç eder;
+    // totalXp/level her hâlükârda defterden yeniden hesaplanır.
     if (localStorage.getItem('sinevia_zero_reset') === '1') return state;
     if (action.questData) {
       localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(action.questData));
     }
-    return action.data;
+    return applyLedgerTotals(reconcileXpLedger({ ...defaultData(), ...action.data }));
   }
 
   if (action.type === 'SYNC_FROM_CLOUD_STORAGE') {
@@ -1402,10 +1434,9 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(action.questData));
     }
     // Bulut uzlaşması seviye kutlaması tetiklememeli (açılışta sahte "Seviye X" animasyonu engeli).
-    const syncedFromCloud = applyAchievements({
-      ...defaultData(),
-      ...(action.data as any)
-    });
+    const syncedFromCloud = applyAchievements(
+      reconcileXpLedger({ ...defaultData(), ...(action.data as any) })
+    );
     // Bulut uzlaşması ne kutlama üretir ne de eski bulut bildirim kuyruğunu içeri alır;
     // bu sadece yerel (genuine) kuyruk korunur.
     return applyNotificationPrefs({ ...syncedFromCloud, pendingLevelUp: undefined, pendingLevelUpQueue: undefined, pendingToasts: state.pendingToasts || [] });
@@ -1422,25 +1453,15 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       recoveryKey: action.data.recoveryKey || state.recoveryKey,
       theme: action.data.theme || state.theme,
     };
+    // Defter korunur: hidrasyondaki kayıt + bu oturumdaki defter birleşir
+    // ((source, sourceId) tekilleştirilir). Kayıtta defter yoksa V2 toplamı göç eder.
+    const hydratedLedger = mergeXpLedgers(
+      reconcileXpLedger(merged).xpEvents,
+      normalizeXpEvents(state.xpEvents),
+    );
     // Hidrasyon uzlaşması da kutlama üretmemeli (gerçek seviye atlama sadece oyun içindedir).
-    const hydrated = applyAchievements(merged);
-    // XP yüksek-su koruması: IDB/başarım kaydı bir şekilde eksikse boot anlık görüntüsündeki
-    // mevcut XP'yi sıfırlama. FORCE_XP_SYNC'in bilinçli yeniden hesaplaması bundan etkilenmez.
-    const hydratedXp = Number(hydrated.totalXp || 0);
-    // Farklı hesabın boot XP'sini bu hesaba taşıma.
-    const sameAccount = !merged.agentId || !state.agentId || merged.agentId === state.agentId;
-    const safeTotalXp = sameAccount ? Math.max(Number(state.totalXp || 0), hydratedXp) : hydratedXp;
-    const safeProgress = safeTotalXp > hydratedXp ? levelFromXp(safeTotalXp) : null;
-    const withSafeXp = safeProgress
-      ? {
-          ...hydrated,
-          totalXp: safeTotalXp,
-          level: Math.max(Number(hydrated.level || 1), safeProgress.level),
-          xp: safeProgress.currentLevelXp,
-          xpBaseline: Number(hydrated.xpBaseline || 0) + Math.max(0, safeTotalXp - hydratedXp),
-        }
-      : hydrated;
-    return applyNotificationPrefs({ ...withSafeXp, pendingLevelUp: undefined, pendingLevelUpQueue: undefined });
+    const hydrated = applyAchievements({ ...merged, xpEvents: hydratedLedger });
+    return applyNotificationPrefs({ ...hydrated, pendingLevelUp: undefined, pendingLevelUpQueue: undefined });
   }
 
   if (action.type === 'RECOVER_IDENTITY') {
@@ -1454,16 +1475,20 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       nickname: state.nickname,
       recoveryKey: state.recoveryKey
     };
-    return applyAchievements({
-      ...defaultData(),
-      ...action.data,
-      ...preservedIdentity,
-      collections: migrated.collections,
-      movies: migrated.movies,
-      achievements: createInitialAchievements(action.data.achievements)
-    });
+    return applyAchievements(
+      reconcileXpLedger({
+        ...defaultData(),
+        ...action.data,
+        ...preservedIdentity,
+        collections: migrated.collections,
+        movies: migrated.movies,
+        achievements: createInitialAchievements(action.data.achievements),
+      })
+    );
   }
   if (action.type === 'FORCE_XP_SYNC') {
+    // Bilinçli yeniden hesaplama: yalnız defterden türetilir. Başarım/görev
+    // listeleri XP kaynağı DEĞİLDİR; defter yoksa V2 toplamı göç eder.
     return synchronizeXPAndLevel(state, false);
   }
   if (action.type === 'CONSUME_NEXT_TOAST') {
@@ -1497,7 +1522,13 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     return {
       ...next,
       pendingToasts: remainingQueue,
-      pendingXpGain: { gained: currentToast.xp || 0, oldTotal: revealedBefore, newTotal: revealedAfter },
+      pendingXpGain: {
+        gained: currentToast.xp || 0,
+        oldTotal: revealedBefore,
+        newTotal: revealedAfter,
+        source: 'achievement',
+        label: currentToast.name,
+      },
       pendingCoinGain,
       ...levelUps
     };
@@ -1547,7 +1578,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   }
   if (action.type === 'GRANT_CONTRACT_REWARD') {
     if (hasCoinTx(state.coinLedger, action.refId)) return state;
-    const oldTotalXp = state.totalXp;
+    const oldTotalXp = sumXpEvents(normalizeXpEvents(state.xpEvents));
     const oldLevel = levelFromXp(oldTotalXp).level;
     let next = appendCoinTx(state, {
       id: action.refId,
@@ -1557,12 +1588,26 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       label: action.label,
       createdAt: new Date().toISOString(),
     });
-    const newTotalXp = next.totalXp + action.xp;
-    const levelData = levelFromXp(newTotalXp);
+    // Kontrat XP'si deftere yazılır: (contract, contract:<instanceId>).
+    // Çarpanlı kazançlarda base ve multiplier AYRI saklanır; amount nihaîdir.
+    const sourceId = action.sourceId || (action.refId.startsWith('contract:') ? action.refId : `contract:${action.refId}`);
+    const base = Number.isFinite(Number(action.base)) ? Number(action.base) : action.xp;
+    const multiplier = Number.isFinite(Number(action.multiplier))
+      ? Number(action.multiplier)
+      : (base !== 0 ? action.xp / base : 1);
+    const appended = appendXpEvent(next.xpEvents, makeXpEvent({
+      source: 'contract',
+      sourceId,
+      label: action.label,
+      base,
+      multiplier,
+      meta: { refId: action.refId },
+    }));
+    next = { ...next, xpEvents: appended.events };
+    const levelData = levelFromXp(sumXpEvents(appended.events));
     next = {
       ...next,
-      bonusXp: (next.bonusXp || 0) + action.xp,
-      totalXp: newTotalXp,
+      totalXp: sumXpEvents(appended.events),
       xp: levelData.currentLevelXp,
       level: levelData.level,
       marketStats: {
@@ -1588,10 +1633,17 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
         )
       : undefined;
     const levelUps = applyLevelUps(withLevels, oldLevel, finalLevel);
+    const gained = appended.added ? Math.round(base * multiplier) : 0;
     return {
       ...withLevels,
       ...levelUps,
-      pendingXpGain: { gained: action.xp, oldTotal: oldTotalXp, newTotal: oldTotalXp + action.xp },
+      pendingXpGain: {
+        gained,
+        oldTotal: oldTotalXp,
+        newTotal: oldTotalXp + gained,
+        source: 'contract',
+        label: action.label,
+      },
       pendingCoinGain,
     };
   }
@@ -1746,15 +1798,47 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   let skipRatingUnlocks = false;
   switch (action.type) {
     case 'GRANT_XP': {
-      const newTotalXp = state.totalXp + action.xp, oldLevel = levelFromXp(state.totalXp).level, levelData = levelFromXp(newTotalXp);
+      // Tek XP yolu: deftere idempotent kayıt. Aynı (source, sourceId) ikinci
+      // kez gelirse toplam ARTMAZ, kutlama da tekrar üretilmez.
+      const events = normalizeXpEvents(state.xpEvents);
+      const source: XpEventSource = action.source || 'system';
+      const sourceId = action.sourceId || `system:${uid()}`;
+      if (hasXpEvent(events, source, sourceId)) return state;
+      const base = Number.isFinite(Number(action.base)) ? Number(action.base) : action.xp;
+      const multiplier = Number.isFinite(Number(action.multiplier))
+        ? Number(action.multiplier)
+        : (base !== 0 ? action.xp / base : 1);
+      const appended = appendXpEvent(events, makeXpEvent({
+        source,
+        sourceId,
+        label: action.label || 'XP kazancı',
+        base,
+        multiplier,
+      }));
+      const oldTotal = sumXpEvents(events);
+      const newTotal = oldTotal + (appended.events[appended.events.length - 1]?.amount || 0);
+      const levelData = levelFromXp(newTotal);
+      const oldLevel = levelFromXp(oldTotal).level;
       // Çoklu seviye atlamasında HER ara seviye ayrı kutlama kuyruğuna girer.
+      const withLedger = { ...state, xpEvents: appended.events, totalXp: newTotal, xp: levelData.currentLevelXp, level: levelData.level };
       const levelUps = applyLevelUps(state, oldLevel, levelData.level);
       const levelCoinTotal = pendingLevelCoinTotal(state, oldLevel, levelData.level);
-      const withLevels = awardLevelCoins(state, oldLevel, levelData.level);
+      const withLevels = awardLevelCoins(withLedger, oldLevel, levelData.level);
       const pendingCoinGain = (levelCoinTotal > 0 || state.pendingCoinGain)
         ? mergePendingCoinGain(state.pendingCoinGain, levelCoinTotal, 'Seviye ödülleri', !(withLevels.pendingToasts?.length))
         : undefined;
-      return { ...withLevels, totalXp: newTotalXp, xp: levelData.currentLevelXp, level: levelData.level, pendingXpGain: { gained: action.xp, oldTotal: state.totalXp, newTotal: newTotalXp }, pendingCoinGain, ...levelUps };
+      return {
+        ...withLevels,
+        pendingXpGain: {
+          gained: newTotal - oldTotal,
+          oldTotal,
+          newTotal,
+          source,
+          label: action.label || XP_SOURCE_LABELS[source],
+        },
+        pendingCoinGain,
+        ...levelUps,
+      };
     }
     case 'ABANDON_MEDIA': {
       const nowIso = action.abandonedAt || new Date().toISOString();
@@ -2173,10 +2257,17 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
   return applyAchievements(nextState, skipRatingUnlocks ? { skipRatingUnlocks: true } : undefined);
 }
 
-export interface ToastItem { id: string; message: string; type: 'success' | 'warning' | 'error' | 'info'; }
-export interface AchievementToastItem { id: string; achievementId?: string; achievementName: string; tier: string; icon: string; description: string; }
+export interface ToastItem { id: string; message: string; type: 'success' | 'warning' | 'error' | 'info'; }export interface AchievementToastItem { id: string; achievementId?: string; achievementName: string; tier: string; icon: string; description: string; }
 interface LevelUpData { newLevel: number; }
 interface SeasonCompleteData { seriesTitle: string; season: number; }
+/** XP barı kartının verisi — kaynak etiketi defter kaydından gelir. */
+export interface XpGainPayload {
+  gained: number;
+  oldTotal: number;
+  newTotal: number;
+  source?: XpEventSource;
+  label?: string;
+}
 
 export interface AppContextValue {
   data: ExtendedAppData;
@@ -2209,7 +2300,7 @@ export interface AppContextValue {
   exportData: () => void; importData: (j: string) => boolean; resetData: () => void; exportShareList: () => void; importShareList: (j: string) => boolean;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void; achievementToasts: AchievementToastItem[];
   levelUpData: LevelUpData | null; seasonCompleteData: SeasonCompleteData | null; dismissLevelUp: () => void; dismissSeasonComplete: () => void;
-  toggleLockedNames: () => void; toggleBadgeDetails: () => void; toggleReducedMotion: () => void; toggleFastCelebrations: () => void; xpGainData: { gained: number; oldTotal: number; newTotal: number } | null;
+  toggleLockedNames: () => void; toggleBadgeDetails: () => void; toggleReducedMotion: () => void; toggleFastCelebrations: () => void; xpGainData: XpGainPayload | null;
   coinGainData: { amount: number; label: string } | null;
   queuedCoinGain: { amount: number; label: string; final?: boolean } | null;
   isContractCelebrating: boolean;
@@ -2221,9 +2312,9 @@ export interface AppContextValue {
   updateAIHistory: (messages: AIMessage[]) => void; addCriterion: (criterion: RatingCriterion) => void; editCriterion: (id: string, criterion: RatingCriterion) => void; deleteCriterion: (id: string) => void;
   updateAltWatchTemplate: (template: string) => void; updateTheme: (theme: string) => void;
   weeklyPlan: WeeklyPlanItem[]; addPlanItem: (movie: Movie, date: string, time: string) => boolean; deletePlanItem: (id: string) => void; updatePlanItem: (id: string, date: string, time: string) => boolean;
-  grantXp: (xp: number) => void;
+  grantXp: (xp: number, source?: XpEventSource, sourceId?: string, label?: string, base?: number, multiplier?: number) => void;
   grantCoins: (amount: number, kind: CoinTx['kind'], label: string, refId: string, itemId?: string) => void;
-  grantContractReward: (xp: number, coins: number, refId: string, label: string) => void;
+  grantContractReward: (xp: number, coins: number, refId: string, label: string, opts?: { base?: number; multiplier?: number; sourceId?: string }) => void;
   purchaseItem: (itemId: string, name: string, price: number, kind: string, consumable?: boolean, coupon?: boolean) => void;
   equipItem: (slot: 'frameId' | 'titleId' | 'badgeId' | 'badgeId2' | 'backgroundId' | 'nameEffectId', itemId: string | null) => void;
   activateItem: (itemId: string, effect: string, label: string) => void;
@@ -2312,27 +2403,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         
         parsedData = applyNotificationPrefs(parsedData);
-        const recalculated = synchronizeXPAndLevel(parsedData, true);
-        // Boot snapshot'ı eksik olabilir (eski sürüm, yarım yazma). Hesaplanan XP
-        // snapshot'taki gerçek XP'den düşükse seviyeyi SIFIRLAMA — kısa süreli
-        // "1. seviye" görüntüsü ve yanlış bulut yüklemesi engellenir.
-        const storedTotalXp = Number(parsed.totalXp || 0);
-        const storedLevel = Number(parsed.level || 1);
-        if (storedTotalXp > recalculated.totalXp || storedLevel > recalculated.level) {
-          const safeTotalXp = Math.max(storedTotalXp, Number(recalculated.totalXp || 0));
-          const restoredLevel = levelFromXp(safeTotalXp);
-          // Yüksek-su korumasını kalıcı hale getir: aradaki farkı XP tabanına yaz.
-          // Aksi halde ilk başarım güncellemesi boot'taki 1850 XP'yi tekrar düşürürdü.
-          const baselineDelta = Math.max(0, safeTotalXp - Number(recalculated.totalXp || 0));
-          return {
-            ...recalculated,
-            totalXp: safeTotalXp,
-            level: Math.max(storedLevel, restoredLevel.level),
-            xp: storedTotalXp > 0 ? restoredLevel.currentLevelXp : Number(parsed.xp || 0),
-            xpBaseline: Number(recalculated.xpBaseline || 0) + baselineDelta,
-          };
-        }
-        return recalculated;
+        // XP: defter varsa aynen korunur, yoksa V2 toplamı tek seferlik göç eder.
+        // Eski `bonusXp`/`xpBaseline` alanları yeni kayda TAŞINMAZ (toplamları
+        // zaten `totalXp` içindeydi) — böylece 1855 XP aynen korunur.
+        return synchronizeXPAndLevel(parsedData, true);
       }
     } catch {} return defaultData();
   });
@@ -2529,38 +2603,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       };
 
-      // Bulut ilerideyse yalnızca yerelde OLUP bulutta OLMAYAN kazanımların
-      // XP'sini ekle. Böylece 1850 + yeni 50 XP = 1900 olur; 95'e düşmez,
-      // aynı başarım iki kez sayılmaz.
-      const localBonus = Number((localData as any).bonusXp || 0);
-      const cloudBonus = Number((coreData as any).bonusXp || 0);
-      let additionalXp = Math.max(0, localBonus - cloudBonus);
-      if (incomingXpValue >= localXpValue) {
-        const cloudAch = new Map<string, Set<string>>();
-        for (const item of coreData.achievements || []) {
-          if (item?.achievementId) cloudAch.set(item.achievementId, new Set(item.unlockedTiers || []));
-        }
-        for (const item of localData.achievements || []) {
-          const def = ACHIEVEMENT_DEFS.find((d) => d.id === item?.achievementId);
-          if (!def) continue;
-          const cloudTiers = cloudAch.get(item.achievementId) || new Set<string>();
-          for (const tier of item.unlockedTiers || []) {
-            if (cloudTiers.has(tier)) continue;
-            const tierDef = def.tiers.find((t) => t.tier === tier);
-            additionalXp += Number(tierDef?.xp || 0);
-          }
-        }
-        const cloudQuests = new Set<string>((questData?.completedQuests as string[]) || []);
-        for (const questId of (localQuestState.completedQuests as string[]) || []) {
-          if (cloudQuests.has(questId)) continue;
-          const questDef = QUEST_DEFS.find((q) => q.id === questId);
-          additionalXp += Number(questDef?.xpReward || 0);
-        }
-      }
-
-      const mergedTotalXp = incomingXpValue >= localXpValue
-        ? incomingXpValue + additionalXp
-        : Math.max(incomingXpValue, localXpValue);
+      // İki defter `(source, sourceId)` ile birleştirilir; bulut kopyası kazanır.
+      // Yerelde olup bulutta olmayan başarım/görev kayıtları defterde zaten
+      // kendi anahtarlarıyla durur → 1850 + yeni 5 XP = 1855; çift sayım yok.
+      const cloudLedger = migrateLegacyXp({
+        events: (coreData as any).xpEvents,
+        localTotalXp: incomingXpValue,
+      });
+      const mergedLedger = mergeXpLedgers(cloudLedger, (localData as any).xpEvents);
+      const mergedTotalXp = sumXpEvents(mergedLedger);
       const mergedLevel = levelFromXp(mergedTotalXp);
       const mergedCore = {
         ...coreData,
@@ -2568,7 +2619,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         series: mergeMediaById(localData.series as any, coreData.series as any),
         history: mergeByIdKeepingBoth(localData.history as any, coreData.history as any),
         achievements: mergedAchievements,
-        bonusXp: Math.max(localBonus, cloudBonus),
+        xpEvents: mergedLedger,
         totalXp: mergedTotalXp,
         level: mergedLevel.level,
         xp: mergedLevel.currentLevelXp,
@@ -2677,7 +2728,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [achievementToasts, setAchievementToasts] = useReducer((state: AchievementToastItem[], a: any) => { achievementToastsRef.current = a.type === 'add' ? [...state, a.toast] : state.filter((t) => t.id !== a.id); return achievementToastsRef.current; }, []);
   const [levelUpData, setLevelUpData] = useReducer((_s: any, a: any) => a, null); const [seasonCompleteData, setSeasonCompleteData] = useReducer((_s: any, a: any) => a, null);
   const bootStartRef = useRef(Date.now()); // boot uzlaşma penceresi başlangıcı
-  const [xpGainData, setXpGainData] = useState<{ gained: number; oldTotal: number; newTotal: number } | null>(null);
+  const [xpGainData, setXpGainData] = useState<XpGainPayload | null>(null);
   const [coinGainData, setCoinGainData] = useState<{ amount: number; label: string } | null>(null);
   const [queuedCoinGain, setQueuedCoinGain] = useState<{ amount: number; label: string; final?: boolean } | null>(null);
   const coinGainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3512,7 +3563,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (inBoot) return;
     if (xpTimerRef.current) clearTimeout(xpTimerRef.current);
     xpGainOpenRef.current = true;
-    setXpGainData(data.pendingXpGain);
+    setXpGainData(data.pendingXpGain as XpGainPayload);
     xpTimerRef.current = setTimeout(() => {
       xpGainOpenRef.current = false;
       setXpGainData(null);
@@ -4081,17 +4132,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     contractCelebratingRef.current = false;
     setIsContractCelebrating(false);
     setContractTick((tick) => tick + 1);
-  }, [setIsContractCelebrating]); const grantXp = useCallback((xp: number) => dispatch({ type: 'GRANT_XP', xp }), []);
+  }, [setIsContractCelebrating]); const grantXp = useCallback((xp: number, source: XpEventSource = 'system', sourceId?: string, label?: string, base?: number, multiplier?: number) => {
+    dispatch({ type: 'GRANT_XP', xp, source, sourceId, label, base, multiplier });
+  }, []);
   const grantCoins = useCallback((amount: number, kind: CoinTx['kind'], label: string, refId: string, itemId?: string) => {
     if (amount <= 0) return;
     // Ses ve bildirim CoinGainOverlay açılınca tetiklenir (sıranın SON halkası).
     // Burada erken ses çalmak pazar görevi/görev kutlamasını 6.2s geciktiriyordu.
     dispatch({ type: 'GRANT_COINS', amount, kind, label, refId, itemId });
   }, []);
-  const grantContractReward = useCallback((xp: number, coins: number, refId: string, label: string) => {
+  const grantContractReward = useCallback((xp: number, coins: number, refId: string, label: string, opts?: { base?: number; multiplier?: number; sourceId?: string }) => {
     // Kutlama sesi ContractCelebrationOverlay açıldığında çalar; coin sesi ise
     // en sonda CoinGainOverlay ile gelir. Burada ses çalmak sırayı bozuyordu.
-    dispatch({ type: 'GRANT_CONTRACT_REWARD', xp, coins, refId, label });
+    dispatch({ type: 'GRANT_CONTRACT_REWARD', xp, coins, refId, label, ...opts });
   }, []);
   const purchaseItem = useCallback((itemId: string, name: string, price: number, kind: string, consumable?: boolean, coupon?: boolean) => {
     dispatch({ type: 'PURCHASE_ITEM', itemId, name, price, kind, consumable, coupon });

@@ -69,9 +69,9 @@ totalXp = Σ xpEvents[i].amount
    değildir.
 4. **`amount = Math.round(base * multiplier)`.** `base` negatif olabilir.
    `multiplier` varsayılan `1`.
-5. Kaynak örnekleri: `achievement` → `sourceId = "<achievementId>:<tier>"`,
-   `quest` → `questId`, `contract` → `instanceId`, `market` → `coinTx.refId`,
-   `system` → sabit sistem anahtarı.
+5. Kaynak örnekleri: `achievement` → `sourceId = "ach:<achievementId>:<tier>"`,
+   `quest` → `"quest:<questId>"`, `contract` → `"contract:<instanceId>"`,
+   `market` → item/ref tabanlı tekil anahtar, `system` → sabit sistem anahtarı.
 6. Göç kayıtları: V2 yerel `totalXp` → `legacy`, bulut `total_xp` → `legacy-cloud`,
    kalan sapma → `adjustment`. Aynı hesapta tek kez yazılır
    (`sourceId = "migration-v3"`).

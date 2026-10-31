@@ -312,8 +312,6 @@ export interface AppData {
   totalDuelsCompleted?: number;
   /** Kör kalibrasyon: "Taht Deviren" gizli başarımı için — orijinal puanı düşük olan kazanan düello sayısı. */
   giantSlayerWins?: number;
-  /** Kalıcı bonus XP (başarı/görev ödülleri; synchronizeXPAndLevel recalc'ine dahildir). */
-  bonusXp?: number;
   pendingToasts?: {
     achievementId: string;
     tier: string;
@@ -325,7 +323,7 @@ export interface AppData {
   pendingLevelUp?: { newLevel: number };
   /** Sıradaki seviye kutlamaları (tetikten sonraki ara seviyeler; PROMOTE_LEVEL_UP ile sırayla açılır). */
   pendingLevelUpQueue?: number[];
-  pendingXpGain?: { gained: number; oldTotal: number; newTotal: number };
+  pendingXpGain?: { gained: number; oldTotal: number; newTotal: number; source?: string; label?: string };
   /** Başarım coin animasyonu için geçici kuyruk kaydı (buluta yazılmaz). */
   pendingCoinGain?: { amount: number; label: string; final?: boolean };
 }

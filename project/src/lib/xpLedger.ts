@@ -111,7 +111,7 @@ export function sumXpEvents(events: readonly XpEvent[] | null | undefined): numb
 
 /** Defterin türetilmiş özeti (asla kalıcı yazılmaz, her zaman yeniden hesaplanır). */
 export function summarizeXpLedger(events: readonly XpEvent[] | null | undefined): XpLedgerSummary {
-  const list = Array.isArray(events) ? events : [];
+  const list: XpEvent[] = Array.isArray(events) ? (events as XpEvent[]) : [];
   const bySource = {} as Record<XpEventSource, number>;
   for (const source of XP_EVENT_SOURCES) bySource[source] = 0;
 

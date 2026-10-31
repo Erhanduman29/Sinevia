@@ -107,16 +107,19 @@ describe('SineCoin ekonomisi', () => {
     expect(coinBalance(state)).toBe(coinsAfterLimit);
   });
 
-  test('görev ödülü bonus XP olarak kalıcıdır', () => {
+  test('görev ödülü XP defterinde kalıcıdır', () => {
     let state = base();
     state = rootReducer(state, {
       type: 'GRANT_CONTRACT_REWARD', xp: 500, coins: 25, refId: 'contract:1', label: 'Test görevi',
     } as any);
-    expect(state.bonusXp).toBe(500);
+    // Tek XP kaynağı defterdir; eski bonusXp alanı yok.
+    const contractEvent = state.xpEvents!.find((event) => event.source === 'contract');
+    expect(contractEvent?.sourceId).toBe('contract:1');
+    expect(contractEvent?.amount).toBe(500);
     expect(state.totalXp).toBe(515); // 500 görev XP + 15 "Taahhüt Ustası" bronz
     expect(coinBalance(state)).toBe(200); // 25 + 150 hoş geldin + 10 başarım + 15 seviye 2 ödülü
     expect(state.pendingLevelUp?.newLevel).toBe(2);
-    expect(state.pendingXpGain).toEqual({ gained: 500, oldTotal: 0, newTotal: 500 });
+    expect(state.pendingXpGain).toEqual({ gained: 500, oldTotal: 0, newTotal: 500, source: 'contract', label: 'Test görevi' });
     expect(state.pendingCoinGain?.amount).toBe(40); // 25 görev coin + 15 seviye 2 ödülü
   });
 

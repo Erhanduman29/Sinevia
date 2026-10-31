@@ -3,6 +3,7 @@ import { Crown, Sparkles, Zap, ArrowUpRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useSettings } from '../context/slices';
 import { levelFromXp } from '../lib/xp';
+import { XP_SOURCE_LABELS } from '../lib/xpLedger';
 import { RANK_TIERS, RankEmblem } from '../lib/rankTiers';
 
 export default function XpGainOverlay() {
@@ -234,8 +235,13 @@ export default function XpGainOverlay() {
                   <div className="text-xs sm:text-[13px] font-black text-[#ffffff] tracking-tight truncate mt-0.5">
                     {leveledUpMidAnimation
                       ? `Seviye ${currentLvlData.level} Kilidi Açıldı!`
-                      : 'Deneyim Puanı İşlendi'}
+                      : (xpGainData.label ? `${xpGainData.label}` : 'Deneyim Puanı İşlendi')}
                   </div>
+                  {!leveledUpMidAnimation && xpGainData.source && (
+                    <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[#71717a] truncate mt-0.5">
+                      {XP_SOURCE_LABELS[xpGainData.source] || xpGainData.source}
+                    </div>
+                  )}
                 </div>
 
                 {/* Kazanılan +XP Mücevher Kapsülü */}

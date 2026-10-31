@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { rootReducer, resolveTMDBGenres, PAST_WATCH_COLLECTION_NAME, buildExactCloudData } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
+import { makeXpEvent, sumXpEvents } from '../lib/xpLedger';
 import { todayStr } from '../lib/utils';
 import type { ExtendedAppData } from '../context/AppContext';
 
@@ -549,7 +550,7 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     // Toplam 300 = 150 taban + kuyruktaki 100+50. İlk toast: 150 → 250
     // (eski beklenti 200→300 idi; 2. toast'ta 250→300 GİDEREK geriye sarkan
     //  hatalı adımlama üretiyordu).
-    expect(next.pendingXpGain).toEqual({ gained: 100, oldTotal: 150, newTotal: 250 });
+    expect(next.pendingXpGain).toEqual({ gained: 100, oldTotal: 150, newTotal: 250, source: 'achievement', label: 'X' });
   });
 
   test('CONSUME_NEXT_TOAST: toplu başarım XP adımlaması 5 → 55 → 70 olmalı', () => {
@@ -562,13 +563,13 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     ];
 
     const s1 = rootReducer(state, { type: 'CONSUME_NEXT_TOAST' } as any);
-    expect(s1.pendingXpGain).toEqual({ gained: 5, oldTotal: 0, newTotal: 5 });
+    expect(s1.pendingXpGain).toEqual({ gained: 5, oldTotal: 0, newTotal: 5, source: 'achievement', label: 'X' });
     expect(s1.pendingCoinGain).toEqual({ amount: 10, label: '3 başarım ödülü', final: false });
     const s2 = rootReducer(s1, { type: 'CONSUME_NEXT_TOAST' } as any);
-    expect(s2.pendingXpGain).toEqual({ gained: 50, oldTotal: 5, newTotal: 55 });
+    expect(s2.pendingXpGain).toEqual({ gained: 50, oldTotal: 5, newTotal: 55, source: 'achievement', label: 'X' });
     expect(s2.pendingCoinGain).toEqual({ amount: 60, label: '3 başarım ödülü', final: false });
     const s3 = rootReducer(s2, { type: 'CONSUME_NEXT_TOAST' } as any);
-    expect(s3.pendingXpGain).toEqual({ gained: 15, oldTotal: 55, newTotal: 70 });
+    expect(s3.pendingXpGain).toEqual({ gained: 15, oldTotal: 55, newTotal: 70, source: 'achievement', label: 'X' });
     expect(s3.pendingCoinGain).toEqual({ amount: 80, label: '3 başarım ödülü', final: true });
     expect(s3.pendingToasts).toHaveLength(0);
   });
@@ -599,7 +600,7 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     expect(small.totalXp).toBe(100);
     expect(small.level).toBe(1);
     expect(small.pendingLevelUp).toBeUndefined();
-    expect(small.pendingXpGain).toEqual({ gained: 100, oldTotal: 0, newTotal: 100 });
+    expect(small.pendingXpGain).toEqual({ gained: 100, oldTotal: 0, newTotal: 100, source: 'system', label: 'Sistem' });
 
     const big = rootReducer(small, { type: 'GRANT_XP', xp: 100000 } as any);
     expect(big.totalXp).toBe(100100);
@@ -617,7 +618,7 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     state.totalXp = 0;
     state.pendingToasts = [{ achievementId: 'a1', tier: 'Bronz', xp: 5000, name: 'n', icon: 'i', description: 'd' } as any];
     const next = rootReducer(state, { type: 'CONSUME_NEXT_TOAST' } as any);
-    expect(next.pendingXpGain).toEqual({ gained: 5000, oldTotal: 0, newTotal: 5000 });
+    expect(next.pendingXpGain).toEqual({ gained: 5000, oldTotal: 0, newTotal: 5000, source: 'achievement', label: 'n' });
     // 5000 XP Level 2'yi açar → tetik 2, kalanları kuyrukta (varsa).
     expect(next.pendingLevelUp?.newLevel).toBe(2);
     const expected: number[] = [];
@@ -656,18 +657,30 @@ describe('REDUCER — TOAST / XP / KİMLİK EYLEMLERİ', () => {
     expect(cleared.pendingLevelUpQueue).toEqual([3]);
   });
 
-  test('FORCE_XP_SYNC: XP yalnızca başarım kademeleri + tamamlanan görevlerden yeniden hesaplanmalı', () => {
+  test('FORCE_XP_SYNC: XP yalnız defterden türetilir; başarım/görev listesi kaynak DEĞİLDİR', () => {
     const state = getInitialState();
-    state.totalXp = 999999; // bozuk/şişirilmiş değer
-
-    // movie_add: bronze (5 XP) + silver (10 XP) = 15 XP
+    state.totalXp = 999999; // defter yok (V2 artığı)
     state.achievements = [
       { achievementId: 'movie_add', current: 0, unlockedTiers: ['bronze', 'silver'], tierDates: {}, lastNotifiedTier: 'silver' } as any,
     ];
-    // Tamamlanan görev: c_short_movie = 50 XP
     storageMap.set(QUEST_STORAGE_KEY, JSON.stringify({ completedQuests: ['c_short_movie'] }));
 
-    const next = rootReducer(state, { type: 'FORCE_XP_SYNC' } as any);
+    // Defter yoksa eski toplam tek seferlik `legacy` kaydı olur; listeler TARANMAZ.
+    const legacyOnly = rootReducer(state, { type: 'FORCE_XP_SYNC' } as any);
+    expect(legacyOnly.totalXp).toBe(999999);
+    expect(legacyOnly.xpEvents).toHaveLength(1);
+    expect(legacyOnly.xpEvents![0].source).toBe('legacy');
+
+    // Defter varsa otorite odur: toplam defterden gelir (5 + 10 + 50).
+    const withLedger = {
+      ...getInitialState(),
+      xpEvents: [
+        makeXpEvent({ source: 'achievement', sourceId: 'ach:movie_add:bronze', base: 5 }),
+        makeXpEvent({ source: 'achievement', sourceId: 'ach:movie_add:silver', base: 10 }),
+        makeXpEvent({ source: 'quest', sourceId: 'quest:c_short_movie', base: 50 }),
+      ],
+    };
+    const next = rootReducer(withLedger, { type: 'FORCE_XP_SYNC' } as any);
     expect(next.totalXp).toBe(15 + 50);
     expect(next.level).toBe(levelFromXp(65).level);
     expect(next.xp).toBe(levelFromXp(65).currentLevelXp);
@@ -782,8 +795,11 @@ describe('BULUTTAN BİREBİR İNDİRME', () => {
     expect(cloud.totalXp).toBe(1850);
     expect(cloud.movies).toHaveLength(1);
     expect(cloud.movies[0].id).toBe('m1');
-    // Cloud XP'sinin başarımlarla açıklanmayan kısmı taban olarak korunur.
-    expect(cloud.xpBaseline).toBe(1850);
+    // Bulut XP'si tek seferlik `legacy` kaydı olarak korunur (xpBaseline yok).
+    expect(cloud.xpEvents).toHaveLength(1);
+    expect(cloud.xpEvents![0].source).toBe('legacy');
+    expect(cloud.xpEvents![0].amount).toBe(1850);
+    expect(cloud.level).toBe(levelFromXp(1850).level);
   });
 
   test('REPLACE_FROM_CLOUD_STORAGE bulut verisini birebir uygular ve bekleyen kuyrukları temizler', () => {
@@ -805,14 +821,14 @@ describe('BULUTTAN BİREBİR İNDİRME', () => {
     const next = rootReducer(local, { type: 'REPLACE_FROM_CLOUD_STORAGE', data: cloud, questData: { completedQuests: [] } } as any);
 
     expect(next.totalXp).toBe(1850);
-    expect(next.level).toBe(20);
+    expect(next.level).toBe(levelFromXp(1850).level);
     expect(next.movies[0].id).toBe('cloud-movie');
     expect(next.pendingToasts).toEqual([]);
     expect(next.pendingLevelUp).toBeUndefined();
     expect(storageMap.get(QUEST_STORAGE_KEY)).toContain('completedQuests');
   });
 
-  test('birebir indirmeden sonra XP yeniden hesaplansa da 1850 korunur, yeni başarım üzerine eklenir', () => {
+  test('birebir indirmeden sonra defter korunur, yeni başarım kaydı üzerine eklenir', () => {
     let state = buildExactCloudData({
       ...getInitialState(),
       totalXp: 1850,
@@ -823,16 +839,11 @@ describe('BULUTTAN BİREBİR İNDİRME', () => {
     state = rootReducer(state, { type: 'FORCE_XP_SYNC' } as any);
     expect(state.totalXp).toBe(1850);
 
-    // Yeni bir başarım katmanı eklendiğinde taban XP korunmalı, üzerine yalnızca fark eklenmeli.
-    state = {
-      ...state,
-      achievements: state.achievements.map((a) =>
-        a.achievementId === 'series_add'
-          ? { ...a, current: 1, unlockedTiers: ['bronze'] }
-          : a
-      ),
-    };
-    state = rootReducer(state, { type: 'FORCE_XP_SYNC' } as any);
+    // Yeni başarım kademesi deftere EKLENİR (liste taranmaz): 1850 + 5 = 1855.
+    state = rootReducer(state, {
+      type: 'GRANT_XP', xp: 5, source: 'achievement', sourceId: 'ach:series_add:bronze', label: 'Dizi Başlangıcı',
+    } as any);
     expect(state.totalXp).toBe(1855);
+    expect(sumXpEvents(state.xpEvents)).toBe(1855);
   });
 });

@@ -391,16 +391,21 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     const coins = activeContract.free
       ? 0
       : Math.round(def.coinReward * (doubled ? 2 : 1));
-    const gainedXp = Math.round(
-      def.xpReward * (boosted ? 1.5 : 1) * (doubled ? 1.1 : 1),
-    );
+    const boostedMultiplier = (boosted ? 1.5 : 1) * (doubled ? 1.1 : 1);
+    const gainedXp = Math.round(def.xpReward * boostedMultiplier);
     if (doubled) consumeEffect('util_double_reward');
     if (boosted) consumeEffect('util_xp_boost');
     // Pazar görevi kutlaması her şeyden önce kuyruğa girer. Ödül dispatch'i
     // XP/başarım effect'lerini tetiklemeden önce ref'i işaretlemek gerekir;
     // aksi halde XP barı görev animasyonunun önüne geçiyor.
     requestContractCelebration({ contractId: activeContract.contractId, xp: gainedXp, coins, rarity: def.rarity });
-    grantContractReward(gainedXp, coins, `contract:${activeContract.instanceId}`, def.title);
+    // XP defterine (contract, contract:<instanceId>) olarak yazılır; base ve
+    // çarpan AYRI saklanır (amount nihaî). Aynı örnek ikinci kez XP yazmaz.
+    grantContractReward(gainedXp, coins, `contract:${activeContract.instanceId}`, def.title, {
+      base: def.xpReward,
+      multiplier: boostedMultiplier,
+      sourceId: `contract:${activeContract.instanceId}`,
+    });
     setQuestState((prev) => ({
       ...prev,
       activeContract: null,
@@ -501,7 +506,17 @@ questQueuedRef.current = true;
         <QuestCelebrationOverlay 
           questId={celebratingQuestId} 
           onClaim={(xp) => {
-            grantXp(xp); 
+            const def = QUEST_DEFS.find((q) => q.id === celebratingQuestId);
+            // Görev XP'si deftere (quest, quest:<id>) olarak yazılır; listeden
+            // yeniden toplanmaz, aynı görev ikinci kez XP yazmaz.
+            grantXp(
+              xp,
+              'quest',
+              `quest:${celebratingQuestId}`,
+              def ? `${def.title}` : 'Görev',
+              def?.xpReward ?? xp,
+              1,
+            );
             setCelebratingQuestId(null);
             setIsQuestCelebrating(false); 
           }} 
