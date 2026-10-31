@@ -16,6 +16,7 @@ import XpLedgerTab, {
   sumXpInLastDays,
 } from '../components/XpLedgerTab';
 import type { XpEvent } from '../types/appState';
+import { createEmptyAppStateV3, toLegacyCoreView } from '../lib/localStateV3';
 
 // ============================================================================
 // XP DEFTERİ SEKMESİ — saf yardımcılar + SSR smoke (React Testing Library yok)
@@ -175,5 +176,55 @@ describe('XP DEFTERİ — SSR görünümü', () => {
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('animate-pulse');
     expect(html).not.toContain('Henüz XP kazanılmadı');
+  });
+});
+
+// ============================================================================
+// GERÇEK VERİ YOLU: AppStateV3 → toLegacyCoreView → sekme
+// ============================================================================
+
+describe('XP DEFTERİ — toLegacyCoreView ile uyum (AppContext veri yolu)', () => {
+  const buildView = () => {
+    const state = {
+      ...createEmptyAppStateV3({ ownerAgentId: 'SNV-TEST-0001' }),
+      xpEvents: SAMPLE,
+    };
+    return toLegacyCoreView(state) as unknown as {
+      xpEvents: XpEvent[];
+      totalXp: number;
+      level: number;
+    };
+  };
+
+  test('legacy görünüm defteri aynen taşır ve totalXp = sum(events) olur', () => {
+    const view = buildView();
+    expect(view.xpEvents).toHaveLength(SAMPLE.length);
+    expect(sumEventAmounts(view.xpEvents)).toBe(SAMPLE_TOTAL);
+    expect(view.totalXp).toBe(SAMPLE_TOTAL);
+    // seviye defterden türetilir (7 → 725 XP ile seviye 3+)
+    expect(view.level).toBeGreaterThanOrEqual(1);
+  });
+
+  test('gerçek veri yoluyla mutabakat kutusu yeşil kalır', () => {
+    const view = buildView();
+    const html = renderToStaticMarkup(
+      <XpLedgerTab events={view.xpEvents} totalXp={view.totalXp} level={view.level} />
+    );
+    expect(html).toContain('Defter tutarlı');
+    expect(html).not.toContain('Mutabakat farkı');
+  });
+
+  test('defter boşsa gerçek veri yolunda boş durum gösterilir', () => {
+    const view = toLegacyCoreView(createEmptyAppStateV3()) as unknown as {
+      xpEvents: XpEvent[];
+      totalXp: number;
+      level: number;
+    };
+    expect(view.xpEvents).toEqual([]);
+    expect(view.totalXp).toBe(0);
+    const html = renderToStaticMarkup(
+      <XpLedgerTab events={view.xpEvents} totalXp={view.totalXp} level={view.level} />
+    );
+    expect(html).toContain('Henüz XP kazanılmadı');
   });
 });

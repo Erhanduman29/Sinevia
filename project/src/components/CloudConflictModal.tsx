@@ -7,9 +7,15 @@ import {
   Layers,
   Loader2,
   ShieldCheck,
+  Sparkles,
   X,
 } from 'lucide-react';
-import type { ConflictChoice, SyncConflict, SyncConflictReason, SyncSnapshotSummary } from '../types/sync';
+import type {
+  ConflictChoice,
+  SyncConflict,
+  SyncConflictReason,
+  SyncSnapshotSummary,
+} from '../types/sync';
 
 /* =========================================================================
    BULUT ÇAKIŞMA MODALI — SADECE SUNUM
@@ -17,8 +23,11 @@ import type { ConflictChoice, SyncConflict, SyncConflictReason, SyncSnapshotSumm
    Karar matrisi ve seçeneklerin etkisi `docs/sync-contract.md` §3'tedir.
    Bu bileşen İŞ MANTIĞI İÇERMEZ: seçimi `onChoose(choice)` ile yukarı iletir.
 
-   KURAL: "Birleştir" varsayılan/önerilen DEĞİLDİR. Tıklanınca açıklayıcı
-   uyarı + ikinci, açık onay adımı ister; tek tıkla birleştirme yapılmaz.
+   GÜVENLİK KURALLARI:
+   - 'merge' ASLA varsayılan/önerilen değildir; açık onay adımı ister.
+   - 'owner-mismatch' durumunda 'local' (bu cihazı kullan) buluttaki BAŞKA
+     hesabın kaydını ezer → kırmızı uyarı + ikinci onay zorunlu.
+   - X / dışarı tıklama / ESC → 'later' (hiçbir veri değişmez).
    ========================================================================= */
 
 export interface CloudConflictModalProps {
@@ -27,16 +36,52 @@ export interface CloudConflictModalProps {
   onChoose: (choice: ConflictChoice) => void;
 }
 
-const REASON_TEXT: Record<SyncConflictReason, string> = {
-  'both-changed': 'Bu cihazda ve bulutta birbirinden bağımsız değişiklikler yapılmış.',
-  'owner-mismatch': 'Bulut kaydı başka bir hesaba ait görünüyor.',
-  'revision-mismatch': 'Bulut kaydı, beklenenden daha yeni bir revizyonda.',
+/** Onay paneli gerektiren seçimler. */
+export type PendingChoice = 'merge' | 'local';
+
+export interface ConflictCopy {
+  /** Modal başlığı — çakışma nedenine göre değişir. */
+  title: string;
+  description: string;
+  /** 'Bulutu kullan' görsel olarak önerilsin mi? */
+  cloudRecommended: boolean;
+  /** 'Bu cihazı kullan' yıkıcı mı (ikinci onay ister)? */
+  localDestructive: boolean;
+}
+
+export const CONFLICT_COPIES: Record<SyncConflictReason, ConflictCopy> = {
+  'both-changed': {
+    title: 'İki tarafta da yeni değişiklik var',
+    description:
+      'Bu cihazda ve bulutta birbirinden bağımsız değişiklikler yapılmış. İki tarafı da korumak istiyorsan birleştirebilirsin.',
+    cloudRecommended: false,
+    localDestructive: false,
+  },
+  'owner-mismatch': {
+    title: 'Bu cihazda başka bir hesabın verisi var',
+    description:
+      'Bu cihazdaki kayıt, buluttaki hesaptan farklı bir hesaba ait. Bulutu kullanırsan buluttaki hesabın verisi bu cihaza uygulanır; bu cihazı kullanırsan buluttaki hesabın kaydı ezilir.',
+    cloudRecommended: false,
+    localDestructive: true,
+  },
+  'revision-mismatch': {
+    title: 'Başka bir cihaz aynı anda kaydetti',
+    description:
+      'Sunucudaki kayıt senden sonra başka bir cihaz tarafından güncellendi. En güncel veri büyük olasılıkla bulutta; birleştirme yalnızca iki tarafı da korumak istiyorsan kullanılmalı.',
+    cloudRecommended: true,
+    localDestructive: false,
+  },
 };
+
+/** Bilinmeyen neden gelirse güvenli varsayılan ('both-changed' metni). */
+export function conflictCopy(reason: SyncConflictReason | string | undefined): ConflictCopy {
+  return (
+    CONFLICT_COPIES[reason as SyncConflictReason] ?? CONFLICT_COPIES['both-changed']
+  );
+}
 
 const PREMIUM_LINE = 'var(--line-2, var(--border-dim, rgba(244, 244, 242, .13)))';
 const PREMIUM_LINE_SOFT = 'var(--line, var(--border-dim, rgba(244, 244, 242, .07)))';
-const PREMIUM_RED_GRAD =
-  'linear-gradient(150deg, var(--red-hi, var(--color-2, #ff6b7a)) 0%, var(--red, var(--color-1, #e8384f)) 45%, var(--red-deep, var(--color-3, #8e1220)) 130%)';
 
 const OVERLAY: React.CSSProperties = {
   background:
@@ -68,6 +113,13 @@ const BTN_GHOST: React.CSSProperties = {
   border: '1px solid transparent',
   borderRadius: 'var(--r-sm, 10px)',
   color: 'var(--muted, #9a9a96)',
+};
+
+const BTN_DESTRUCTIVE: React.CSSProperties = {
+  background: 'linear-gradient(150deg, rgba(232, 56, 79, .22), rgba(142, 18, 32, .16))',
+  border: '1px solid rgba(232, 56, 79, .45)',
+  borderRadius: 'var(--r-sm, 10px)',
+  color: '#ffb3bc',
 };
 
 /** ISO → tr-TR kısa tarih; boş/geçersizse "Bilinmiyor". */
@@ -125,11 +177,16 @@ const SUMMARY_ROWS: SummaryRow[] = [
   { key: 'updatedAt', label: 'Son güncelleme', format: (s) => formatConflictDate(s.updatedAt) },
 ];
 
+/* ------------------------------------------------------------------ */
+/* ANA BİLEŞEN                                                        */
+/* ------------------------------------------------------------------ */
+
 export default function CloudConflictModal({ conflict, busy = false, onChoose }: CloudConflictModalProps) {
-  const [confirmMerge, setConfirmMerge] = useState(false);
+  const [pending, setPending] = useState<PendingChoice | null>(null);
   const titleId = useId();
   const descriptionId = useId();
-  const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const copy = conflictCopy(conflict.reason);
+  const differing = conflictingSummaryKeys(conflict.local, conflict.cloud);
 
   // Escape karar vermeden erteler (veri değişmez).
   useEffect(() => {
@@ -142,15 +199,21 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
     return () => window.removeEventListener('keydown', handleKey);
   }, [busy, onChoose]);
 
-  useEffect(() => {
-    if (confirmMerge) confirmRef.current?.focus();
-  }, [confirmMerge]);
-
-  const differing = conflictingSummaryKeys(conflict.local, conflict.cloud);
-
   const choose = (choice: ConflictChoice) => {
     if (busy) return;
     onChoose(choice);
+  };
+
+  /** 'local' yıkıcıysa (owner-mismatch) önce onay paneline geç. */
+  const requestLocal = () => {
+    if (busy) return;
+    if (copy.localDestructive) setPending('local');
+    else choose('local');
+  };
+
+  const requestMerge = () => {
+    if (busy) return;
+    setPending('merge');
   };
 
   return (
@@ -198,16 +261,30 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
 
         <div className="p-4 sm:p-5 space-y-4">
           <div>
-            <h2 id={titleId} className="text-base sm:text-xl font-extrabold text-white flex items-center gap-2">
-              <ShieldCheck size={19} className="shrink-0" style={{ color: 'var(--red-hi, #ff6b7a)' }} />
-              Hangi veri kullanılsın?
+            <h2 id={titleId} className="text-base sm:text-xl font-extrabold text-white flex items-start gap-2">
+              <ShieldCheck size={19} className="shrink-0 mt-0.5" style={{ color: 'var(--red-hi, #ff6b7a)' }} />
+              <span>{copy.title}</span>
             </h2>
             <p id={descriptionId} className="text-[11px] sm:text-[13px] text-ink-400 mt-1.5 leading-relaxed">
-              {REASON_TEXT[conflict.reason] ?? 'Cihaz ve bulut kayıtları farklı.'} Sen karar verene kadar{' '}
-              <span className="font-bold text-white">hiçbir veri silinmez</span>. Cihaz revizyonu{' '}
-              <span className="font-mono text-ink-200">{conflict.localRevision}</span>, bulut revizyonu{' '}
-              <span className="font-mono text-ink-200">{conflict.cloudRevision}</span>.
+              {copy.description} Sen karar verene kadar{' '}
+              <span className="font-bold text-white">hiçbir veri silinmez</span>.
             </p>
+          </div>
+
+          {/* REVİZYON ŞERİDİ — iki tarafın revizyonu her zaman görünür */}
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 text-[10.5px] sm:text-[11px] font-mono"
+            style={{ background: 'rgba(255, 255, 255, .035)', border: `1px solid ${PREMIUM_LINE_SOFT}`, color: 'var(--muted, #9a9a96)' }}
+          >
+            <span className="flex items-center gap-1.5">
+              <HardDrive size={12} style={{ color: '#8fb8ff' }} />
+              Yerel revizyon <strong className="text-white">{conflict.localRevision}</strong>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="flex items-center gap-1.5">
+              <CloudDownload size={12} style={{ color: '#ffb86b' }} />
+              Bulut revizyonu <strong className="text-white">{conflict.cloudRevision}</strong>
+            </span>
           </div>
 
           {/* YAN YANA ÖZET */}
@@ -218,6 +295,7 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
               summary={conflict.local}
               accent="#8fb8ff"
               differing={differing}
+              revision={conflict.localRevision}
             />
             <SummaryCard
               title="Bulut"
@@ -225,58 +303,20 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
               summary={conflict.cloud}
               accent="#ffb86b"
               differing={differing}
+              revision={conflict.cloudRevision}
+              recommended={copy.cloudRecommended}
             />
           </div>
 
-          {/* BİRLEŞTİR: AÇIK ONAY ADIMI */}
-          {confirmMerge ? (
-            <div
-              role="alertdialog"
-              aria-label="Birleştirmeyi onayla"
-              aria-describedby={`${titleId}-merge`}
-              className="rounded-xl p-3 sm:p-3.5 space-y-3"
-              style={{ background: 'rgba(255, 200, 0, .06)', border: '1px solid rgba(255, 200, 0, .3)' }}
-            >
-              <div className="flex items-start gap-2">
-                <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: '#FFC800' }} />
-                <p id={`${titleId}-merge`} className="text-[11px] sm:text-xs leading-relaxed" style={{ color: 'var(--muted, #9a9a96)' }}>
-                  <span className="font-bold" style={{ color: '#FFE047' }}>Birleştirme geri alınamaz ve yeni bir revizyon oluşturur.</span>{' '}
-                  Kütüphane kayıtları birleştirilir; XP defteri <span className="font-mono text-ink-200">(source, sourceId)</span>{' '}
-                  çiftine göre tekilleştirilir. Aynı anahtar iki tarafta farklı tutardaysa bulut kopyası kazanır ve aradaki
-                  fark bir <span className="font-mono text-ink-200">adjustment</span> kaydıyla kapatılır. Bu işlem
-                  önerilen seçenek değildir; yalnızca iki tarafı da korumak istiyorsan kullan.
-                </p>
-              </div>
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmMerge(false)}
-                  disabled={busy}
-                  aria-label="Birleştirmeyi iptal et"
-                  className={BTN_BASE}
-                  style={BTN_SECONDARY}
-                >
-                  Vazgeç
-                </button>
-                <button
-                  ref={confirmRef}
-                  type="button"
-                  onClick={() => choose('merge')}
-                  disabled={busy}
-                  aria-label="Birleştirmeyi onayla ve uygula"
-                  className={BTN_BASE}
-                  style={{
-                    background: 'linear-gradient(150deg, #FFD026 0%, #EAB308 60%, #A16207 130%)',
-                    border: '1px solid rgba(255, 224, 71, .55)',
-                    borderRadius: 'var(--r-sm, 10px)',
-                    color: '#09090D',
-                  }}
-                >
-                  {busy ? <Loader2 size={13} className="animate-spin" /> : <Layers size={13} />}
-                  Onaylıyorum, Birleştir
-                </button>
-              </div>
-            </div>
+          {/* ONAY PANELİ (varsa) veya güvenli seçim notu */}
+          {pending ? (
+            <ConflictConfirmPanel
+              choice={pending}
+              reason={conflict.reason}
+              busy={busy}
+              onCancel={() => setPending(null)}
+              onConfirm={() => choose(pending)}
+            />
           ) : (
             <div
               className="rounded-lg px-3 py-2.5 text-[10.5px] sm:text-[11px] leading-relaxed"
@@ -294,19 +334,44 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
                 type="button"
                 onClick={() => choose('cloud')}
                 disabled={busy}
-                aria-label="Bulut kaydını kullan"
-                className={BTN_BASE}
-                style={BTN_SECONDARY}
+                aria-label={
+                  copy.cloudRecommended
+                    ? 'Bulut kaydını kullan (önerilen)'
+                    : 'Bulut kaydını kullan'
+                }
+                className={`${BTN_BASE} relative`}
+                style={
+                  copy.cloudRecommended
+                    ? {
+                        background: 'linear-gradient(150deg, rgba(255, 184, 107, .24), rgba(120, 53, 15, .18))',
+                        border: '1px solid rgba(255, 184, 107, .5)',
+                        borderRadius: 'var(--r-sm, 10px)',
+                        color: '#FFD9A8',
+                      }
+                    : BTN_SECONDARY
+                }
               >
                 {busy ? <Loader2 size={13} className="animate-spin" /> : <CloudDownload size={13} />} Bulutu Kullan
+                {copy.cloudRecommended && (
+                  <span
+                    className="ml-1 inline-flex items-center gap-0.5 rounded px-1 py-px text-[8.5px] font-black tracking-wider"
+                    style={{ background: 'rgba(255, 184, 107, .22)', border: '1px solid rgba(255, 184, 107, .45)', color: '#FFE3BD' }}
+                  >
+                    <Sparkles size={8} /> ÖNERİLEN
+                  </span>
+                )}
               </button>
               <button
                 type="button"
-                onClick={() => choose('local')}
+                onClick={requestLocal}
                 disabled={busy}
-                aria-label="Bu cihazdaki kaydı kullan"
+                aria-label={
+                  copy.localDestructive
+                    ? 'Bu cihazdaki kaydı kullan (buluttaki hesap ezilecek, onay gerektirir)'
+                    : 'Bu cihazdaki kaydı kullan'
+                }
                 className={BTN_BASE}
-                style={BTN_SECONDARY}
+                style={copy.localDestructive ? BTN_DESTRUCTIVE : BTN_SECONDARY}
               >
                 <HardDrive size={13} /> Bu Cihazı Kullan
               </button>
@@ -314,9 +379,9 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setConfirmMerge(true)}
-                disabled={busy || confirmMerge}
-                aria-label="Birleştirme seçeneğini incele (onay gerektirir)"
+                onClick={requestMerge}
+                disabled={busy || pending === 'merge'}
+                aria-label="Birleştirme seçeneğini incele (açık onay gerektirir)"
                 className={BTN_BASE}
                 style={{
                   background: 'rgba(255, 200, 0, .1)',
@@ -348,25 +413,145 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* ONAY PANELİ                                                        */
+/* ------------------------------------------------------------------ */
+
+export interface ConflictConfirmPanelProps {
+  choice: PendingChoice;
+  reason: SyncConflictReason;
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+/**
+ * Yıkıcı/geri alınamaz seçimler için ikinci adım.
+ * - 'merge': her zaman açık onay ister (birleştirme önerilen seçenek DEĞİLDİR).
+ * - 'local' + 'owner-mismatch': buluttaki BAŞKA hesabın kaydını ezer.
+ */
+export function ConflictConfirmPanel({
+  choice,
+  reason,
+  busy = false,
+  onCancel,
+  onConfirm,
+}: ConflictConfirmPanelProps) {
+  const confirmRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    confirmRef.current?.focus();
+  }, []);
+
+  const isLocal = choice === 'local';
+
+  const tone = isLocal
+    ? { background: 'rgba(232, 56, 79, .08)', border: '1px solid rgba(232, 56, 79, .38)', icon: '#ff6b7a', heading: '#ffb3bc', text: 'var(--muted, #9a9a96)' }
+    : { background: 'rgba(255, 200, 0, .06)', border: '1px solid rgba(255, 200, 0, .3)', icon: '#FFC800', heading: '#FFE047', text: 'var(--muted, #9a9a96)' };
+
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={isLocal ? 'Bu cihazı kullanmayı onayla' : 'Birleştirmeyi onayla'}
+      aria-describedby="cloud-conflict-confirm-text"
+      className="rounded-xl p-3 sm:p-3.5 space-y-3"
+      style={{ background: tone.background, border: tone.border }}
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: tone.icon }} />
+        <p id="cloud-conflict-confirm-text" className="text-[11px] sm:text-xs leading-relaxed" style={{ color: tone.text }}>
+          {isLocal ? (
+            <>
+              <span className="font-bold" style={{ color: tone.heading }}>
+                Buluttaki hesabın verisi kalıcı olarak ezilecek.
+              </span>{' '}
+              Bu cihazdaki kayıt yeni bir revizyon olarak yüklenir; buluttaki hesabın kütüphanesi, XP defteri
+              ve başarımları bu cihazdaki veriyle değiştirilir. Bu işlem geri alınamaz.
+              {reason === 'owner-mismatch' ? ' Zaten bu cihazda başka bir hesabın verisi var.' : ''}
+            </>
+          ) : (
+            <>
+              <span className="font-bold" style={{ color: tone.heading }}>
+                Birleştirme geri alınamaz ve yeni bir revizyon oluşturur.
+              </span>{' '}
+              Kütüphane kayıtları birleştirilir; XP defteri{' '}
+              <span className="font-mono text-ink-200">(source, sourceId)</span> çiftine göre tekilleştirilir. Aynı
+              anahtar iki tarafta farklı tutardaysa bulut kopyası kazanır ve aradaki fark bir{' '}
+              <span className="font-mono text-ink-200">adjustment</span> kaydıyla kapatılır. Bu işlem önerilen
+              seçenek değildir; yalnızca iki tarafı da korumak istiyorsan kullan.
+            </>
+          )}
+        </p>
+      </div>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          aria-label={isLocal ? 'Bu cihazı kullanmayı iptal et' : 'Birleştirmeyi iptal et'}
+          className={BTN_BASE}
+          style={BTN_SECONDARY}
+        >
+          Vazgeç
+        </button>
+        <button
+          ref={confirmRef}
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          aria-label={isLocal ? 'Onaylıyorum, bu cihazdaki veriyi yükle' : 'Onaylıyorum, birleştir'}
+          className={BTN_BASE}
+          style={
+            isLocal
+              ? {
+                  background: 'linear-gradient(150deg, #ff6b7a 0%, #e8384f 55%, #8e1220 130%)',
+                  border: '1px solid rgba(255, 255, 255, .22)',
+                  borderRadius: 'var(--r-sm, 10px)',
+                  color: '#fff',
+                }
+              : {
+                  background: 'linear-gradient(150deg, #FFD026 0%, #EAB308 60%, #A16207 130%)',
+                  border: '1px solid rgba(255, 224, 71, .55)',
+                  borderRadius: 'var(--r-sm, 10px)',
+                  color: '#09090D',
+                }
+          }
+        >
+          {busy ? <Loader2 size={13} className="animate-spin" /> : isLocal ? <HardDrive size={13} /> : <Layers size={13} />}
+          {isLocal ? 'Onaylıyorum, Bu Cihazı Kullan' : 'Onaylıyorum, Birleştir'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* ÖZET KARTI                                                         */
+/* ------------------------------------------------------------------ */
+
 function SummaryCard({
   title,
   icon,
   summary,
   accent,
   differing,
+  revision,
+  recommended = false,
 }: {
   title: string;
   icon: React.ReactNode;
   summary: SyncSnapshotSummary;
   accent: string;
   differing: Set<keyof SyncSnapshotSummary>;
+  revision: number;
+  recommended?: boolean;
 }) {
   return (
     <div
       className="flex-1 min-w-0 p-3 sm:p-3.5"
       style={{
         background: 'linear-gradient(160deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .018))',
-        border: `1px solid ${PREMIUM_LINE_SOFT}`,
+        border: `1px solid ${recommended ? `${accent}70` : PREMIUM_LINE_SOFT}`,
         borderRadius: 'var(--r, 16px)',
       }}
     >
@@ -377,8 +562,15 @@ function SummaryCard({
         >
           {icon}
         </span>
-        <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-widest truncate" style={{ color: accent }}>
+        <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-widest truncate flex-1" style={{ color: accent }}>
           {title}
+        </span>
+        <span
+          className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold"
+          style={{ background: 'rgba(0,0,0,.35)', border: `1px solid ${accent}35`, color: accent }}
+          aria-label={`${title} revizyonu ${revision}`}
+        >
+          r{revision}
         </span>
       </div>
       <dl className="space-y-1.5">
@@ -404,6 +596,17 @@ function SummaryCard({
           );
         })}
       </dl>
+      <div
+        className="mt-2.5 pt-2 text-[10px] font-mono flex items-center justify-between gap-2"
+        style={{ borderTop: `1px solid ${PREMIUM_LINE_SOFT}`, color: 'var(--muted, #9a9a96)' }}
+      >
+        <span>Revizyon {revision}</span>
+        {recommended && (
+          <span className="font-bold uppercase tracking-wider text-[9px]" style={{ color: accent }}>
+            Önerilen
+          </span>
+        )}
+      </div>
     </div>
   );
 }
