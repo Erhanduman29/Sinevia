@@ -9,6 +9,8 @@ import { SineCoinIcon } from '../components/CoinPill';
 import { RANK_TIERS } from '../lib/rankTiers';
 import QuestBoard from '../components/QuestBoard';
 import TitleGallery from '../components/TitleGallery';
+import XpLedgerTab from '../components/XpLedgerTab';
+import type { XpEvent } from '../types/appState';
 
 // ============================================================
 // CANLI GERÇEK METAL & MÜCEVHER KADEME PALETİ
@@ -501,7 +503,7 @@ const ACHV_SOLID_CSS = `
 
 type SortMode = 'newest' | 'oldest' | 'az' | 'za';
 type FilterMode = 'all' | 'unlocked' | 'locked';
-type ViewTab = 'trophies' | 'quests' | 'titles';
+type ViewTab = 'trophies' | 'quests' | 'titles' | 'xp';
 
 /** Kazanım tarihini tam biçimde gösterir: gün + ay + yıl + saat + dakika */
 function formatDateTime(dateString: string) {
@@ -781,6 +783,7 @@ export default function AchievementsPage() {
         if (action === 'quests') setActiveTab('quests');
         else if (action === 'trophies') setActiveTab('trophies');
         else if (action === 'titles') setActiveTab('titles');
+        else if (action === 'xp') setActiveTab('xp');
       } catch {
         /* sessionStorage kapalıysa normal açılış */
       }
@@ -960,11 +963,11 @@ export default function AchievementsPage() {
 
         <div
           data-tutorial="ach-tabs"
-          className="grid grid-cols-3 sm:flex p-0.5 sm:p-1 rounded-lg sm:rounded-xl w-full sm:w-auto bg-[#0D0D12] border border-[#22222C]"
+          className="grid grid-cols-4 sm:flex p-0.5 sm:p-1 rounded-lg sm:rounded-xl w-full sm:w-auto bg-[#0D0D12] border border-[#22222C]"
         >
           <button
             onClick={() => setActiveTab('trophies')}
-            className={`sm:w-36 flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-[9px] sm:text-xs font-black whitespace-nowrap transition-all ${
+            className={`sm:w-32 flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-[9px] sm:text-xs font-black whitespace-nowrap transition-all ${
               activeTab === 'trophies'
                 ? 'bg-[#FFC800] text-[#09090D]'
                 : 'text-ink-400 hover:text-ink-200'
@@ -974,7 +977,7 @@ export default function AchievementsPage() {
           </button>
           <button
             onClick={() => setActiveTab('quests')}
-            className={`sm:w-36 flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-[9px] sm:text-xs font-black whitespace-nowrap transition-all ${
+            className={`sm:w-32 flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-[9px] sm:text-xs font-black whitespace-nowrap transition-all ${
               activeTab === 'quests'
                 ? 'bg-violet-600 text-white'
                 : 'text-ink-400 hover:text-ink-200'
@@ -984,13 +987,23 @@ export default function AchievementsPage() {
           </button>
           <button
             onClick={() => setActiveTab('titles')}
-            className={`sm:w-36 flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-[9px] sm:text-xs font-black whitespace-nowrap transition-all ${
+            className={`sm:w-32 flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-[9px] sm:text-xs font-black whitespace-nowrap transition-all ${
               activeTab === 'titles'
                 ? 'bg-rose-600 text-white'
                 : 'text-ink-400 hover:text-ink-200'
             }`}
           >
             <Icons.Crown size={14} className="hidden sm:block" /> SOY KÜTÜĞÜ
+          </button>
+          <button
+            onClick={() => setActiveTab('xp')}
+            className={`sm:w-32 flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1.5 sm:py-2.5 rounded-md sm:rounded-lg text-[9px] sm:text-xs font-black whitespace-nowrap transition-all ${
+              activeTab === 'xp'
+                ? 'bg-emerald-600 text-white'
+                : 'text-ink-400 hover:text-ink-200'
+            }`}
+          >
+            <Icons.ScrollText size={14} className="hidden sm:block" /> XP DEFTERİ
           </button>
         </div>
       </div>
@@ -1000,6 +1013,15 @@ export default function AchievementsPage() {
 
       {/* GÖREV PANOSU SEKME İÇERİĞİ */}
       {activeTab === 'quests' && <QuestBoard />}
+
+      {/* XP DEFTERİ SEKME İÇERİĞİ — veri AppContext'ten; bileşen saf/prop tabanlı */}
+      {activeTab === 'xp' && (
+        <XpLedgerTab
+          events={(data as unknown as { xpEvents?: XpEvent[] }).xpEvents ?? []}
+          totalXp={Number(data.totalXp || 0)}
+          level={Number(data.level || 1)}
+        />
+      )}
 
       {/* KUPA KASASI SEKME İÇERİĞİ */}
       {activeTab === 'trophies' && (
