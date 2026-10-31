@@ -3,6 +3,7 @@ import {
   BOOT_SNAPSHOT_VERSION,
   buildBootSnapshot,
   createEmptyAppStateV3,
+  fromLegacyCore,
   isAppStateV3,
   isBootSnapshotV3,
   isLegacyAppState,
@@ -221,6 +222,55 @@ describe('localStateV3 — V2 → V3 göçü', () => {
     expect(view.theme).toBe('midnight');
     expect(view.agentId).toBe('SNV-TEST-1234');
     expect(view.bonusXp).toBe(0);
+  });
+});
+
+describe('localStateV3 — canlı state → V3 (fromLegacyCore)', () => {
+  test('core.xpEvents varsa defter otoritedir, yeniden üretim/çift sayım olmaz', () => {
+    const events = [
+      { id: 'e1', source: 'achievement' as const, sourceId: 'movie_add:bronze', label: 'A', base: 5, multiplier: 1, amount: 5, createdAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'e2', source: 'quest' as const, sourceId: 'c_short_movie', label: 'B', base: 50, multiplier: 1, amount: 50, createdAt: '2026-01-02T00:00:00.000Z' },
+    ];
+    const core = makeV2Core({ xpEvents: events, totalXp: 55, bonusXp: 0, xpBaseline: 0 });
+    const state = fromLegacyCore(core, { updatedAt: '2026-05-01T00:00:00.000Z' });
+
+    expect(state.xpEvents).toHaveLength(2);
+    expect(state.xpEvents.map((event) => event.id)).toEqual(['e1', 'e2']);
+    expect(sumXpEvents(state.xpEvents)).toBe(55);
+    expect(state.xpEvents.some((event) => event.source === 'legacy')).toBe(false);
+  });
+
+  test('önceki V3 zarfı (revision/deviceId/legacy) korunur', () => {
+    const previous = migrateLegacyToV3({
+      core: makeV2Core(),
+      deviceId: 'dev-old',
+      ownerAgentId: 'SNV-AAAA-BBBB',
+      updatedAt: '2026-04-01T00:00:00.000Z',
+    });
+    previous.revision = 7;
+    previous.lastCloudSync = 1234;
+
+    const state = fromLegacyCore(makeV2Core({ totalXp: 2000, movies: [] }), {
+      previous,
+      quests: { completedQuests: ['q-new'] },
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    });
+
+    expect(state.revision).toBe(7);
+    expect(state.deviceId).toBe('dev-old');
+    expect(state.ownerAgentId).toBe('SNV-TEST-1234');
+    expect(state.updatedAt).toBe('2026-05-01T00:00:00.000Z');
+    expect(state.lastCloudSync).toBe(1234);
+    expect(state.movies).toEqual([]);
+    expect(state.quests.completedQuests).toEqual(['q-new']);
+    // Yeni defter: previous olmadığı için totalXp'den göç edilir.
+    expect(sumXpEvents(state.xpEvents)).toBe(2000);
+  });
+
+  test('önceki legacy torbası birleşerek korunur', () => {
+    const previous = migrateLegacyToV3({ core: makeV2Core({ mysteryField: { keep: true } }) });
+    const state = fromLegacyCore(makeV2Core(), { previous });
+    expect((state.legacy?.core as Record<string, unknown>).mysteryField).toEqual({ keep: true });
   });
 });
 

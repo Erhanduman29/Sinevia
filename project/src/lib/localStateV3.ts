@@ -19,7 +19,7 @@
  */
 
 import { levelFromXp } from './xp';
-import { LEGACY_MIGRATION_ID, migrateLegacyXp, sumXpEvents } from './xpLedger';
+import { LEGACY_MIGRATION_ID, migrateLegacyXp, normalizeXpEvents, sumXpEvents } from './xpLedger';
 import type {
   AcademyProgressV3,
   AppSettingsV3,
@@ -331,12 +331,20 @@ export function createEmptyAppStateV3(input: CreateEmptyAppStateInput = {}): App
  *  - bulut toplamı daha büyükse fark → `legacy-cloud`
  *  - hedef toplam hâlâ tutmuyorsa fark → `adjustment`
  * Toplam KORUNUR: `sum(xpEvents.amount) === eski totalXp`.
+ *
+ * `existingEvents` doluysa defter OTORİTEDİR: V3'ten gelen kayıtlar aynen
+ * (normalize edilerek) korunur, V2 alanlarından yeniden üretim YAPILMAZ.
+ * Bu, canlı state → V3 dönüşümünde çift sayımı engeller.
  */
 function buildLegacyXpEvents(
   core: Record<string, unknown>,
   createdAt: string,
   cloudTotalXp?: number,
+  existingEvents?: unknown,
 ): XpEvent[] {
+  const current = normalizeXpEvents(existingEvents);
+  if (current.length > 0) return current;
+
   const hasTotalXp = core.totalXp !== undefined && core.totalXp !== null && Number.isFinite(Number(core.totalXp));
   const totalXp = Math.max(0, Math.round(asNumber(core.totalXp, 0)));
   const cloudTotal = Number.isFinite(Number(cloudTotalXp)) ? Math.max(0, Math.round(Number(cloudTotalXp))) : 0;
@@ -530,7 +538,7 @@ export function migrateLegacyToV3(input: MigrateLegacyToV3Input): AppStateV3 {
     updatedAt: now,
   });
 
-  const xpEvents = buildLegacyXpEvents(core, now, input.cloudTotalXp);
+  const xpEvents = buildLegacyXpEvents(core, now, input.cloudTotalXp, core.xpEvents);
   const { quests, unknown: unknownQuestKeys } = normalizeQuestState(input.quests);
   const settings = normalizeSettings(core, extras);
 
@@ -597,6 +605,61 @@ export function migrateLegacyToV3(input: MigrateLegacyToV3Input): AppStateV3 {
 
   if (Object.keys(legacy).length > 0) state.legacy = legacy;
   return state;
+}
+
+export interface FromLegacyCoreOptions {
+  /** Önceki V3 kaydı: revizyon, legacy torbası ve bilinmeyen alanlar korunur. */
+  previous?: AppStateV3 | null;
+  /** Canlı `sinevia-quests-v1` içeriği (AppContext quests'i localStorage'da tutuyor). */
+  quests?: unknown;
+  /** Yedek ek durumları (tutorial / academyUi / sound / shortcuts). */
+  extras?: Record<string, unknown> | null;
+  deviceId?: string;
+  /** ISO 8601; verilmezse `previous.updatedAt` (o da yoksa epoch). */
+  updatedAt?: string;
+}
+
+/**
+ * CANLI state → V3 dönüşümü (kaydetme yolu).
+ *
+ * `migrateLegacyToV3`'ten farkı: V3 zarf alanlarını (ownerAgentId, revision,
+ * deviceId, legacy torbası) önceki kayıttan devralır ve `core.xpEvents` varsa
+ * defteri OTORİTE kabul eder (V2 alanlarından yeniden üretmez). Böylece her
+ * kayıtta çift XP/göç kaydı oluşmaz.
+ *
+ * Orion: `saveStateV3(fromLegacyCore(data, { previous: lastV3, quests: readQuestState() }))`.
+ */
+export function fromLegacyCore(core: unknown, options: FromLegacyCoreOptions = {}): AppStateV3 {
+  if (isAppStateV3(core) && !options.quests && !options.extras) {
+    return options.updatedAt ? { ...core, updatedAt: options.updatedAt } : core;
+  }
+  const previous = options.previous ?? null;
+  const source = isRecord(core) ? core : {};
+  const updatedAt = options.updatedAt ?? previous?.updatedAt ?? new Date(0).toISOString();
+
+  const next = migrateLegacyToV3({
+    core: source,
+    quests: options.quests ?? previous?.quests,
+    extras: options.extras ?? undefined,
+    ownerAgentId: typeof source.agentId === 'string'
+      ? source.agentId
+      : (previous?.ownerAgentId ?? null),
+    deviceId: options.deviceId ?? previous?.deviceId ?? asString(source.deviceId, ''),
+    revision: previous?.revision ?? asNumber(source.revision, 0),
+    updatedAt,
+  });
+
+  // Önceki kaydın eşlenemeyen alanları kaybolmasın (yeni torbayla birleştir).
+  if (previous?.legacy) {
+    next.legacy = { ...previous.legacy, ...(next.legacy ?? {}) };
+  }
+  if (previous?.lastCloudSync !== undefined && next.lastCloudSync === undefined) {
+    next.lastCloudSync = previous.lastCloudSync;
+  }
+  if (previous?.aiChatHistory && !next.aiChatHistory?.length) {
+    next.aiChatHistory = previous.aiChatHistory;
+  }
+  return next;
 }
 
 /* =========================================================================
