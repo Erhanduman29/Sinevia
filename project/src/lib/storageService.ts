@@ -253,10 +253,39 @@ export function readBootSnapshotV3(): ReturnType<typeof buildBootSnapshot> | nul
   return isBootSnapshotV3(raw) ? raw : null;
 }
 
-/** IDB'deki kanonik kaydı oku. V3 değilse (V2/boot/bozuk) null döner. */
-export async function loadStateV3(key: string = STATE_STORAGE_KEY): Promise<AppStateV3 | null> {
-  const stored = await idbGet(key);
-  return isAppStateV3(stored) ? stored : null;
+/**
+ * Ana kayıt / yedek arasından kullanılabilir V3 kaydını seçer (SAF).
+ * Ana kayıt bozuk/silinmişse (güncelleme, yarım yazma, kota) yedek kurtarır.
+ */
+export function pickStoredStateV3(
+  main: unknown,
+  backup?: unknown,
+): { state: AppStateV3 | null; source: 'main' | 'backup' | null } {
+  if (isAppStateV3(main)) return { state: main, source: 'main' };
+  if (isAppStateV3(backup)) return { state: backup, source: 'backup' };
+  return { state: null, source: null };
+}
+
+/**
+ * IDB'deki kanonik kaydı oku. Ana kayıt V3 değilse (V2/boot/bozuk) yedeğe
+ * ('sinevia-v1-backup') düşer. Hiçbiri yoksa null.
+ */
+export async function loadStateV3(
+  key: string = STATE_STORAGE_KEY,
+  options: { allowBackupFallback?: boolean } = {},
+): Promise<AppStateV3 | null> {
+  return (await loadStateV3WithSource(key, options)).state;
+}
+
+/** `loadStateV3` ile aynı, ancak kaydın hangi depodan geldiğini de bildirir. */
+export async function loadStateV3WithSource(
+  key: string = STATE_STORAGE_KEY,
+  options: { allowBackupFallback?: boolean } = {},
+): Promise<{ state: AppStateV3 | null; source: 'main' | 'backup' | null }> {
+  const main = await idbGet(key);
+  const allowBackup = options.allowBackupFallback !== false && key === STATE_STORAGE_KEY;
+  const backup = allowBackup ? await idbGet(BACKUP_STORAGE_KEY) : null;
+  return pickStoredStateV3(main, backup);
 }
 
 /**

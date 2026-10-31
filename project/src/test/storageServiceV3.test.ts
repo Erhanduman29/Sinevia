@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   BOOT_SNAPSHOT_KEYS,
   loadStateV3,
+  loadStateV3WithSource,
   migrateToIdbIfNeeded,
+  pickStoredStateV3,
   readBootSnapshotV3,
   readLegacyState,
   saveStateV3Immediate,
@@ -86,6 +88,18 @@ describe('storageService V3 — boot snapshot', () => {
 describe('storageService V3 — göç ve okuma', () => {
   test('IndexedDB yoksa loadStateV3 null döner (veri kaybı yok, çağıran düşer)', async () => {
     await expect(loadStateV3()).resolves.toBeNull();
+    await expect(loadStateV3WithSource()).resolves.toEqual({ state: null, source: null });
+  });
+
+  test('pickStoredStateV3: ana kayıt bozuksa yedeğe düşer', () => {
+    const backup = createEmptyAppStateV3({ ownerAgentId: 'SNV-BACKUP-1' });
+    expect(pickStoredStateV3(null, backup)).toEqual({ state: backup, source: 'backup' });
+    expect(pickStoredStateV3({ schemaVersion: 2, movies: [], series: [] }, backup).source).toBe('backup');
+    // Boot snapshot tam kayıt sayılmaz.
+    expect(pickStoredStateV3({ schemaVersion: 3, theme: 'x' }, backup).source).toBe('backup');
+    const main = createEmptyAppStateV3({ ownerAgentId: 'SNV-MAIN-1' });
+    expect(pickStoredStateV3(main, backup)).toEqual({ state: main, source: 'main' });
+    expect(pickStoredStateV3(null, null)).toEqual({ state: null, source: null });
   });
 
   test('readLegacyState localStorage daki V2 tam kaydı bulur, boot snapshot ı yok sayar', async () => {
