@@ -147,6 +147,9 @@ describe('XP DEFTERİ — SSR görünümü', () => {
     // satır detayı: formül + işaretli tutar
     expect(html).toContain('100 × 1,5 = 150');
     expect(html).toContain('İlk Film — Altın');
+    // satır rozeti ham kaynağı gösterir (XP_SOURCE_LABELS tek kaynak)
+    expect(html).toContain('Pazar Görevi');
+    expect(html).toContain('Devralınan XP');
   });
 
   test('mutabakat tutarlıysa yeşil bilgi kutusu gösterir', () => {

@@ -10,7 +10,6 @@ import { RANK_TIERS } from '../lib/rankTiers';
 import QuestBoard from '../components/QuestBoard';
 import TitleGallery from '../components/TitleGallery';
 import XpLedgerTab from '../components/XpLedgerTab';
-import type { XpEvent } from '../types/appState';
 
 // ============================================================
 // CANLI GERÇEK METAL & MÜCEVHER KADEME PALETİ
@@ -1017,7 +1016,7 @@ export default function AchievementsPage() {
       {/* XP DEFTERİ SEKME İÇERİĞİ — veri AppContext'ten; bileşen saf/prop tabanlı */}
       {activeTab === 'xp' && (
         <XpLedgerTab
-          events={(data as unknown as { xpEvents?: XpEvent[] }).xpEvents ?? []}
+          events={data.xpEvents ?? []}
           totalXp={Number(data.totalXp || 0)}
           level={Number(data.level || 1)}
         />

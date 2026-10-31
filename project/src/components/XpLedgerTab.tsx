@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import * as Icons from 'lucide-react';
 import type { XpEvent, XpEventSource } from '../types/appState';
+import { XP_SOURCE_LABELS, sumXpEvents } from '../lib/xpLedger';
 
 /* =========================================================================
    XP DEFTERİ SEKMESİ
@@ -94,11 +95,12 @@ function eventTime(event: XpEvent): number {
   return Number.isFinite(t) ? t : Number.NaN;
 }
 
-/** Defter toplamı — tek XP doğrusu: Σ amount (geçersiz amount 0 sayılır). */
+/**
+ * Defter toplamı — tek XP doğrusu: `sumXpEvents` (src/lib/xpLedger.ts).
+ * Bu sarmalayıcı yalnız UI'ın okunabilirliği için vardır; aritmetik orada.
+ */
 export function sumEventAmounts(events: readonly XpEvent[]): number {
-  let total = 0;
-  for (const event of events) total += safeAmount(event);
-  return total;
+  return sumXpEvents(events);
 }
 
 /** Mutabakat: defter toplamı ile uygulama toplamı eşit mi? */
@@ -654,6 +656,9 @@ function SourceChip({
 function XpLedgerRowView({ event, group }: { event: XpEvent; group: XpSourceGroupDef }) {
   const amount = safeAmount(event);
   const positive = amount >= 0;
+  // Grup başlığı kaba kategoriyi verir; satır rozeti HAM kaynağı gösterir
+  // (Pazar vs Pazar Görevi) — etiketler tek yerden: XP_SOURCE_LABELS.
+  const sourceLabel = XP_SOURCE_LABELS[event.source] ?? group.label;
   return (
     <li className="px-3 sm:px-4 py-2 sm:py-2.5">
       <div className="flex items-center gap-2.5">
@@ -673,8 +678,9 @@ function XpLedgerRowView({ event, group }: { event: XpEvent; group: XpSourceGrou
             <span
               className="hidden xs:inline-flex shrink-0 items-center px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border"
               style={{ background: `${group.accent}16`, borderColor: `${group.accent}45`, color: group.accent }}
+              title={`Kaynak: ${sourceLabel}`}
             >
-              {group.label}
+              {sourceLabel}
             </span>
           </div>
           <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap text-[10px] sm:text-[11px] text-ink-400 font-mono mt-0.5">
