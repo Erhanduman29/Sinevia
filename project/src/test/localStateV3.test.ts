@@ -232,7 +232,7 @@ describe('localStateV3 — canlı state → V3 (fromLegacyCore)', () => {
       { id: 'e2', source: 'quest' as const, sourceId: 'c_short_movie', label: 'B', base: 50, multiplier: 1, amount: 50, createdAt: '2026-01-02T00:00:00.000Z' },
     ];
     const core = makeV2Core({ xpEvents: events, totalXp: 55, bonusXp: 0, xpBaseline: 0 });
-    const state = fromLegacyCore(core, { updatedAt: '2026-05-01T00:00:00.000Z' });
+    const state = fromLegacyCore(core, null, { updatedAt: '2026-05-01T00:00:00.000Z' });
 
     expect(state.xpEvents).toHaveLength(2);
     expect(state.xpEvents.map((event) => event.id)).toEqual(['e1', 'e2']);
@@ -240,9 +240,41 @@ describe('localStateV3 — canlı state → V3 (fromLegacyCore)', () => {
     expect(state.xpEvents.some((event) => event.source === 'legacy')).toBe(false);
   });
 
-  test('önceki V3 zarfı (revision/deviceId/legacy) korunur', () => {
+  test('previous verilmişse xpEvents ASLA sıfırlanmaz/yeniden üretilmez', () => {
+    const previous = migrateLegacyToV3({ core: makeV2Core({ totalXp: 1855, bonusXp: 5, xpBaseline: 0 }) });
+    expect(sumXpEvents(previous.xpEvents)).toBe(1855);
+
+    // core'da defter YOK: previous defteri aynen korunmalı.
+    const state = fromLegacyCore(makeV2Core({ totalXp: 1855 }), previous);
+    expect(state.xpEvents).toEqual(previous.xpEvents);
+    expect(sumXpEvents(state.xpEvents)).toBe(1855);
+  });
+
+  test('1855 XP korunur: yeni film eklenince film listesi büyür, XP değişmez', () => {
+    const previous = migrateLegacyToV3({ core: makeV2Core({ totalXp: 1855, bonusXp: 5, xpBaseline: 0 }) });
+    const before = sumXpEvents(previous.xpEvents);
+
+    const coreWithMore = makeV2Core({
+      totalXp: 1855,
+      movies: [
+        ...(makeV2Core().movies as unknown[]),
+        { id: 'm3', title: 'Yeni Film', rating: 9 },
+      ],
+    });
+    const state = fromLegacyCore(coreWithMore, previous);
+
+    expect(state.movies).toHaveLength(3);
+    expect(state.movies[2]).toMatchObject({ id: 'm3', title: 'Yeni Film' });
+    expect(sumXpEvents(state.xpEvents)).toBe(before);
+    expect(sumXpEvents(state.xpEvents)).toBe(1855);
+    expect(state.xpEvents.filter((event) => event.source === 'legacy')).toHaveLength(1);
+  });
+
+  test('önceki V3 zarfı (revision/deviceId/legacy/quests/settings) korunur', () => {
     const previous = migrateLegacyToV3({
       core: makeV2Core(),
+      quests: { completedQuests: ['q-old'] },
+      extras: { tutorial: { welcomeDone: true }, academyUi: { started: true } },
       deviceId: 'dev-old',
       ownerAgentId: 'SNV-AAAA-BBBB',
       updatedAt: '2026-04-01T00:00:00.000Z',
@@ -250,27 +282,65 @@ describe('localStateV3 — canlı state → V3 (fromLegacyCore)', () => {
     previous.revision = 7;
     previous.lastCloudSync = 1234;
 
-    const state = fromLegacyCore(makeV2Core({ totalXp: 2000, movies: [] }), {
-      previous,
-      quests: { completedQuests: ['q-new'] },
+    const state = fromLegacyCore(makeV2Core({ movies: [] }), previous, {
       updatedAt: '2026-05-01T00:00:00.000Z',
     });
 
     expect(state.revision).toBe(7);
     expect(state.deviceId).toBe('dev-old');
-    expect(state.ownerAgentId).toBe('SNV-TEST-1234');
+    expect(state.ownerAgentId).toBe('SNV-AAAA-BBBB');
     expect(state.updatedAt).toBe('2026-05-01T00:00:00.000Z');
     expect(state.lastCloudSync).toBe(1234);
     expect(state.movies).toEqual([]);
-    expect(state.quests.completedQuests).toEqual(['q-new']);
-    // Yeni defter: previous olmadığı için totalXp'den göç edilir.
-    expect(sumXpEvents(state.xpEvents)).toBe(2000);
+    // core'da quests/tutorial/academy yok → previous korunur.
+    expect(state.quests.completedQuests).toEqual(['q-old']);
+    expect(state.tutorial.welcomeDone).toBe(true);
+    expect(state.academy.started).toBe(true);
+    // core'da tema yok → previous settings korunur.
+    expect(state.settings.theme).toBe(previous.settings.theme);
+  });
+
+  test('core quests/settings verilirse güncellenir, previous ezilmez', () => {
+    const previous = migrateLegacyToV3({
+      core: makeV2Core(),
+      quests: { completedQuests: ['q-old'] },
+      updatedAt: '2026-04-01T00:00:00.000Z',
+    });
+    const state = fromLegacyCore(makeV2Core({ theme: 'light' }), previous, {
+      quests: { completedQuests: ['q-old', 'q-new'] },
+    });
+    expect(state.quests.completedQuests).toEqual(['q-old', 'q-new']);
+    expect(state.settings.theme).toBe('light');
   });
 
   test('önceki legacy torbası birleşerek korunur', () => {
     const previous = migrateLegacyToV3({ core: makeV2Core({ mysteryField: { keep: true } }) });
-    const state = fromLegacyCore(makeV2Core(), { previous });
+    const state = fromLegacyCore(makeV2Core({ anotherField: 1 }), previous);
     expect((state.legacy?.core as Record<string, unknown>).mysteryField).toEqual({ keep: true });
+    expect((state.legacy?.core as Record<string, unknown>).anotherField).toBe(1);
+  });
+
+  test('totalXp/bonusXp/xpBaseline V3 kaydına yazılmaz', () => {
+    const state = fromLegacyCore(makeV2Core({ totalXp: 400, bonusXp: 10, xpBaseline: 5 }));
+    expect('totalXp' in state).toBe(false);
+    expect('bonusXp' in state).toBe(false);
+    expect('xpBaseline' in state).toBe(false);
+    expect(sumXpEvents(state.xpEvents)).toBe(400);
+  });
+
+  test('deterministik: updatedAt verilmezse core.lastModified, o da yoksa epoch', () => {
+    const fromLastModified = fromLegacyCore(makeV2Core({ lastModified: '2026-06-01T00:00:00.000Z' }));
+    expect(fromLastModified.updatedAt).toBe('2026-06-01T00:00:00.000Z');
+    const fromEpoch = fromLegacyCore(makeV2Core());
+    expect(fromEpoch.updatedAt).toBe(new Date(0).toISOString());
+  });
+
+  test('roundtrip: fromLegacyCore → toLegacyCoreView XP ve alanları korur', () => {
+    const state = fromLegacyCore(makeV2Core({ totalXp: 1855 }));
+    const view = toLegacyCoreView(state);
+    expect(view.totalXp).toBe(1855);
+    expect(view.movies).toEqual(makeV2Core().movies);
+    expect(view.theme).toBe('midnight');
   });
 });
 

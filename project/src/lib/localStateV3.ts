@@ -483,26 +483,34 @@ function normalizeQuestState(raw: unknown): { quests: QuestStateV3; unknown: Rec
   return { quests, unknown };
 }
 
-function normalizeSettings(core: Record<string, unknown>, extras: Record<string, unknown>): AppSettingsV3 {
+function normalizeSettings(
+  core: Record<string, unknown>,
+  extras: Record<string, unknown>,
+  fallback: AppSettingsV3,
+): AppSettingsV3 {
   const settingsSource = isRecord(core.settings) ? core.settings : {};
   const pick = (key: string): unknown => (core[key] !== undefined ? core[key] : settingsSource[key]);
   const settings: AppSettingsV3 = {
-    theme: asString(pick('theme'), '') || DEFAULT_THEME_V3,
-    nickname: asOptionalString(pick('nickname')),
-    notificationsEnabled: asBool(pick('notificationsEnabled')),
-    shareWatchedInFeed: asBool(pick('shareWatchedInFeed')),
-    sharePastWatchedInFeed: asBool(pick('sharePastWatchedInFeed')),
-    notifyMessages: asBool(pick('notifyMessages')),
-    notifyFriendRequests: asBool(pick('notifyFriendRequests')),
-    notifyLists: asBool(pick('notifyLists')),
-    showLockedNames: asBool(pick('showLockedNames')),
-    showBadgeDetails: asBool(pick('showBadgeDetails')),
-    reducedMotion: asBool(pick('reducedMotion')),
-    fastCelebrations: asBool(pick('fastCelebrations')),
-    altWatchTemplate: asString(pick('altWatchTemplate'), '') || DEFAULT_ALT_WATCH_TEMPLATE_V3,
-    externalActions: asArray<ExternalActionTemplate>(core.externalActions ?? settingsSource.externalActions),
-    reviewTags: asStringArray(pick('reviewTags')),
-    tagSentiments: asRecord<'positive' | 'negative'>(pick('tagSentiments')),
+    theme: asString(pick('theme'), '') || fallback.theme || DEFAULT_THEME_V3,
+    nickname: asOptionalString(pick('nickname')) ?? fallback.nickname,
+    notificationsEnabled: asBool(pick('notificationsEnabled')) ?? fallback.notificationsEnabled,
+    shareWatchedInFeed: asBool(pick('shareWatchedInFeed')) ?? fallback.shareWatchedInFeed,
+    sharePastWatchedInFeed: asBool(pick('sharePastWatchedInFeed')) ?? fallback.sharePastWatchedInFeed,
+    notifyMessages: asBool(pick('notifyMessages')) ?? fallback.notifyMessages,
+    notifyFriendRequests: asBool(pick('notifyFriendRequests')) ?? fallback.notifyFriendRequests,
+    notifyLists: asBool(pick('notifyLists')) ?? fallback.notifyLists,
+    showLockedNames: asBool(pick('showLockedNames')) ?? fallback.showLockedNames,
+    showBadgeDetails: asBool(pick('showBadgeDetails')) ?? fallback.showBadgeDetails,
+    reducedMotion: asBool(pick('reducedMotion')) ?? fallback.reducedMotion,
+    fastCelebrations: asBool(pick('fastCelebrations')) ?? fallback.fastCelebrations,
+    altWatchTemplate: asString(pick('altWatchTemplate'), '') || fallback.altWatchTemplate || DEFAULT_ALT_WATCH_TEMPLATE_V3,
+    externalActions: Array.isArray(core.externalActions ?? settingsSource.externalActions)
+      ? asArray<ExternalActionTemplate>(core.externalActions ?? settingsSource.externalActions)
+      : fallback.externalActions ?? [],
+    reviewTags: Array.isArray(pick('reviewTags'))
+      ? asStringArray(pick('reviewTags'))
+      : fallback.reviewTags ?? [],
+    tagSentiments: asRecord<'positive' | 'negative'>(pick('tagSentiments')) ?? fallback.tagSentiments,
   };
   // Hiçbir zaman undefined anahtar bırakma (hash kararlılığı).
   for (const key of Object.keys(settings) as (keyof AppSettingsV3)[]) {
@@ -516,6 +524,132 @@ function normalizeSettings(core: Record<string, unknown>, extras: Record<string,
     settings.fastCelebrations = extras.fastCelebrations;
   }
   return settings;
+}
+
+/** `core`'da alan varsa onu, yoksa `fallback` değerini kullan (previous korunur). */
+function pickArray<T>(value: unknown, fallback: T[]): T[] {
+  return Array.isArray(value) ? (value as T[]) : fallback;
+}
+
+function pickNumber(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return value !== undefined && value !== null && Number.isFinite(n) ? n : fallback;
+}
+
+function pickBool(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+/** Eşlenemeyen çekirdek alanlarını `legacy` torbasına koy (veri kaybı yok). */
+function collectLegacyBag(
+  core: Record<string, unknown>,
+  extras: Record<string, unknown>,
+  unknownQuestKeys: Record<string, unknown>,
+  previous?: AppStateV3 | null,
+): Record<string, unknown> | undefined {
+  const legacyCore: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(core)) {
+    if (!MAPPED_CORE_KEYS.has(key)) legacyCore[key] = value;
+  }
+  const legacyExtras: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(extras)) {
+    if (!MAPPED_EXTRA_KEYS.has(key)) legacyExtras[key] = value;
+  }
+
+  const legacy: Record<string, unknown> = { ...(previous?.legacy ?? {}) };
+  if (Object.keys(legacyCore).length > 0) {
+    legacy.core = { ...(isRecord(legacy.core) ? legacy.core : {}), ...legacyCore };
+  }
+  if (Object.keys(unknownQuestKeys).length > 0) {
+    legacy.quests = { ...(isRecord(legacy.quests) ? legacy.quests : {}), ...unknownQuestKeys };
+  }
+  if (Object.keys(legacyExtras).length > 0) {
+    legacy.extras = { ...(isRecord(legacy.extras) ? legacy.extras : {}), ...legacyExtras };
+  }
+  return Object.keys(legacy).length > 0 ? legacy : undefined;
+}
+
+/** `AppStateV3` içerik alanları (zarf ve xpEvents hariç). */
+type ContentFields = Omit<
+  AppStateV3,
+  'schemaVersion' | 'ownerAgentId' | 'revision' | 'updatedAt' | 'deviceId' | 'xpEvents' | 'legacy'
+>;
+
+/**
+ * ORTAK EŞLEME: `core` (+ quests + extras) → V3 içerik alanları.
+ * Hem `migrateLegacyToV3` hem `fromLegacyCore` bunu kullanır (kod tekrarı yok).
+ *
+ * `fallback` = eksik alanlarda kullanılacak kayıt. Göçte boş V3, canlı
+ * kaydetmede önceki V3 verilir → previous alanları bozulmadan korunur,
+ * core'daki yeni veri (yeni film/başarım) üzerine eklenir.
+ */
+function mapContentFromCore(
+  core: Record<string, unknown>,
+  extras: Record<string, unknown>,
+  fallback: AppStateV3,
+  questsSource?: unknown,
+): { content: ContentFields; legacy?: Record<string, unknown> } {
+  const { quests, unknown: unknownQuestKeys } = questsSource !== undefined
+    ? normalizeQuestState(questsSource)
+    : { quests: fallback.quests, unknown: {} as Record<string, unknown> };
+
+  const tutorialSource = extras.tutorial ?? core.tutorial;
+  const academySource = extras.academy ?? extras.academyUi ?? core.academy ?? core.academyUi;
+  const settings = normalizeSettings(core, extras, fallback.settings);
+
+  const content: ContentFields = {
+    movies: pickArray<Movie>(core.movies, fallback.movies),
+    series: pickArray<Series>(core.series, fallback.series),
+    collections: pickArray<Collection>(core.collections, fallback.collections),
+    history: pickArray<WatchHistoryItem>(core.history, fallback.history),
+    genres: asStringArray(core.genres).length > 0 ? asStringArray(core.genres) : fallback.genres,
+    removedSeriesTitles: pickArray<string>(core.removedSeriesTitles, fallback.removedSeriesTitles),
+    criteria: asArray<RatingCriterion>(core.criteria).length > 0
+      ? asArray<RatingCriterion>(core.criteria)
+      : fallback.criteria,
+    showcase: pickArray<AppStateV3['showcase'][number]>(core.showcase, fallback.showcase),
+    achievements: pickArray<AchievementProgress>(core.achievements, fallback.achievements),
+    quests,
+    coins: Math.max(0, Math.round(pickNumber(core.coins, fallback.coins))),
+    coinLedger: pickArray<CoinTx>(core.coinLedger, fallback.coinLedger),
+    inventory: pickArray<InventoryEntry>(core.inventory, fallback.inventory),
+    equipped: isRecord(core.equipped) ? (core.equipped as EquippedItems) : fallback.equipped,
+    activeEffects: pickArray<ActiveEffect>(core.activeEffects, fallback.activeEffects),
+    perks: pickArray<string>(core.perks, fallback.perks),
+    marketStats: isRecord(core.marketStats)
+      ? (core.marketStats as unknown as MarketStats)
+      : fallback.marketStats,
+    pinnedContract: 'pinnedContract' in core
+      ? (isRecord(core.pinnedContract)
+        ? { week: asString(core.pinnedContract.week), contractId: asString(core.pinnedContract.contractId) }
+        : null)
+      : fallback.pinnedContract,
+    marketIntroSeen: pickBool(core.marketIntroSeen, Boolean(fallback.marketIntroSeen)),
+    marketRerollNonce: pickNumber(core.marketRerollNonce, fallback.marketRerollNonce ?? 0),
+    marketDailyNonce: pickNumber(core.marketDailyNonce, fallback.marketDailyNonce ?? 0),
+    marketWeeklyNonce: pickNumber(core.marketWeeklyNonce, fallback.marketWeeklyNonce ?? 0),
+    dailyStreak: Math.max(0, pickNumber(core.dailyStreak, fallback.dailyStreak)),
+    dailyStreakDate: 'dailyStreakDate' in core
+      ? asNullableString(core.dailyStreakDate)
+      : fallback.dailyStreakDate,
+    lastWatchDate: 'lastWatchDate' in core ? asNullableString(core.lastWatchDate) : fallback.lastWatchDate,
+    totalDuelsCompleted: pickNumber(core.totalDuelsCompleted, fallback.totalDuelsCompleted ?? 0),
+    giantSlayerWins: pickNumber(core.giantSlayerWins, fallback.giantSlayerWins ?? 0),
+    weeklyPlan: pickArray<WeeklyPlanItem>(core.weeklyPlan, fallback.weeklyPlan),
+    externalActions: settings.externalActions ?? fallback.externalActions,
+    tutorial: isRecord(tutorialSource) ? normalizeTutorial(tutorialSource) : fallback.tutorial,
+    academy: isRecord(academySource) ? normalizeAcademy(academySource) : fallback.academy,
+    settings,
+    lastCloudSync: Number.isFinite(Number(core.lastCloudSync))
+      ? Number(core.lastCloudSync)
+      : fallback.lastCloudSync,
+    aiChatHistory: pickArray<NonNullable<AppStateV3['aiChatHistory']>[number]>(
+      core.aiChatHistory,
+      fallback.aiChatHistory ?? [],
+    ),
+  };
+
+  return { content, legacy: collectLegacyBag(core, extras, unknownQuestKeys, fallback) };
 }
 
 /**
@@ -539,127 +673,106 @@ export function migrateLegacyToV3(input: MigrateLegacyToV3Input): AppStateV3 {
   });
 
   const xpEvents = buildLegacyXpEvents(core, now, input.cloudTotalXp, core.xpEvents);
-  const { quests, unknown: unknownQuestKeys } = normalizeQuestState(input.quests);
-  const settings = normalizeSettings(core, extras);
-
-  const tutorialSource = extras.tutorial ?? core.tutorial;
-  const academySource = extras.academy ?? extras.academyUi ?? core.academy ?? core.academyUi;
-
-  const legacyCore: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(core)) {
-    if (!MAPPED_CORE_KEYS.has(key)) legacyCore[key] = value;
-  }
-
-  const legacyExtras: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(extras)) {
-    if (!MAPPED_EXTRA_KEYS.has(key)) legacyExtras[key] = value;
-  }
-
-  const legacy: Record<string, unknown> = {};
-  if (Object.keys(legacyCore).length > 0) legacy.core = legacyCore;
-  if (Object.keys(unknownQuestKeys).length > 0) legacy.quests = unknownQuestKeys;
-  if (Object.keys(legacyExtras).length > 0) legacy.extras = legacyExtras;
+  // Göç yolunda previous yoktur: quests yalnız açıkça verilen kaynaktan gelir.
+  const { content, legacy } = mapContentFromCore(core, extras, base, input.quests);
 
   const state: AppStateV3 = {
     ...base,
+    ...content,
     xpEvents,
-    movies: asArray<Movie>(core.movies),
-    series: asArray<Series>(core.series),
-    collections: asArray<Collection>(core.collections),
-    history: asArray<WatchHistoryItem>(core.history),
-    genres: asStringArray(core.genres).length > 0 ? asStringArray(core.genres) : [...DEFAULT_GENRES_V3],
-    removedSeriesTitles: asStringArray(core.removedSeriesTitles),
-    criteria: asArray<RatingCriterion>(core.criteria).length > 0
-      ? asArray<RatingCriterion>(core.criteria)
-      : base.criteria,
-    showcase: asArray<AppStateV3['showcase'][number]>(core.showcase),
-    achievements: asArray<AchievementProgress>(core.achievements),
-    quests,
-    coins: Math.max(0, Math.round(asNumber(core.coins, 0))),
-    coinLedger: asArray<CoinTx>(core.coinLedger),
-    inventory: asArray<InventoryEntry>(core.inventory),
-    equipped: isRecord(core.equipped) ? (core.equipped as EquippedItems) : {},
-    activeEffects: asArray<ActiveEffect>(core.activeEffects),
-    perks: asStringArray(core.perks),
-    marketStats: isRecord(core.marketStats) ? (core.marketStats as unknown as MarketStats) : base.marketStats,
-    pinnedContract: isRecord(core.pinnedContract)
-      ? { week: asString(core.pinnedContract.week), contractId: asString(core.pinnedContract.contractId) }
-      : null,
-    marketIntroSeen: Boolean(core.marketIntroSeen),
-    marketRerollNonce: asNumber(core.marketRerollNonce, 0),
-    marketDailyNonce: asNumber(core.marketDailyNonce, 0),
-    marketWeeklyNonce: asNumber(core.marketWeeklyNonce, 0),
-    dailyStreak: Math.max(0, asNumber(core.dailyStreak, 0)),
-    dailyStreakDate: asNullableString(core.dailyStreakDate),
-    lastWatchDate: asNullableString(core.lastWatchDate),
-    totalDuelsCompleted: asNumber(core.totalDuelsCompleted, 0),
-    giantSlayerWins: asNumber(core.giantSlayerWins, 0),
-    weeklyPlan: asArray<WeeklyPlanItem>(core.weeklyPlan),
-    externalActions: settings.externalActions ?? [],
-    tutorial: normalizeTutorial(tutorialSource),
-    academy: normalizeAcademy(academySource),
-    settings,
-    lastCloudSync: Number.isFinite(Number(core.lastCloudSync)) ? Number(core.lastCloudSync) : undefined,
-    aiChatHistory: asArray<NonNullable<AppStateV3['aiChatHistory']>[number]>(core.aiChatHistory),
   };
-
-  if (Object.keys(legacy).length > 0) state.legacy = legacy;
+  if (legacy) state.legacy = legacy;
   return state;
 }
 
 export interface FromLegacyCoreOptions {
-  /** Önceki V3 kaydı: revizyon, legacy torbası ve bilinmeyen alanlar korunur. */
-  previous?: AppStateV3 | null;
+  /** Kayıt sahibi; verilmezse previous → core.agentId sırasıyla kullanılır. */
+  ownerAgentId?: string | null;
+  revision?: number;
+  deviceId?: string;
+  /** ISO 8601; verilmezse core.lastModified → previous.updatedAt → epoch. */
+  updatedAt?: string;
   /** Canlı `sinevia-quests-v1` içeriği (AppContext quests'i localStorage'da tutuyor). */
   quests?: unknown;
   /** Yedek ek durumları (tutorial / academyUi / sound / shortcuts). */
   extras?: Record<string, unknown> | null;
-  deviceId?: string;
-  /** ISO 8601; verilmezse `previous.updatedAt` (o da yoksa epoch). */
-  updatedAt?: string;
 }
 
 /**
- * CANLI state → V3 dönüşümü (kaydetme yolu).
+ * CANLI `ExtendedAppData` → `AppStateV3` (kaydetme yolu). SAF ve deterministik.
  *
- * `migrateLegacyToV3`'ten farkı: V3 zarf alanlarını (ownerAgentId, revision,
- * deviceId, legacy torbası) önceki kayıttan devralır ve `core.xpEvents` varsa
- * defteri OTORİTE kabul eder (V2 alanlarından yeniden üretmez). Böylece her
- * kayıtta çift XP/göç kaydı oluşmaz.
+ * Kurallar:
+ *  - Eşleme `migrateLegacyToV3` ile AYNI ortak helper'ı kullanır (kod tekrarı yok).
+ *  - `previous` verilmişse ledger/kimlik alanları korunur: `xpEvents` (ASLA
+ *    sıfırlanmaz/yeniden üretilmez — core'da daha yeni bir defter varsa o
+ *    kullanılır), `quests`, `tutorial`, `academy`, `settings`, `revision`,
+ *    `ownerAgentId`, `deviceId`, `legacy` torbası.
+ *  - `previous` yoksa ve core'da `totalXp` varsa `migrateLegacyXp` ile BİR KEZ
+ *    legacy event üretilir (idempotent).
+ *  - `totalXp` / `bonusXp` / `xpBaseline` V3 kaydına YAZILMAZ.
+ *  - core'da olup previous'ta olmayan yeni veri (yeni film/başarım) eklenir.
  *
- * Orion: `saveStateV3(fromLegacyCore(data, { previous: lastV3, quests: readQuestState() }))`.
+ * Orion: `saveStateV3(fromLegacyCore(data, lastV3, { quests: readQuestState() }))`.
  */
-export function fromLegacyCore(core: unknown, options: FromLegacyCoreOptions = {}): AppStateV3 {
-  if (isAppStateV3(core) && !options.quests && !options.extras) {
-    return options.updatedAt ? { ...core, updatedAt: options.updatedAt } : core;
-  }
-  const previous = options.previous ?? null;
+export function fromLegacyCore(
+  core: unknown,
+  previous: AppStateV3 | null = null,
+  options: FromLegacyCoreOptions = {},
+): AppStateV3 {
   const source = isRecord(core) ? core : {};
-  const updatedAt = options.updatedAt ?? previous?.updatedAt ?? new Date(0).toISOString();
+  const extras = isRecord(options.extras) ? options.extras : {};
 
-  const next = migrateLegacyToV3({
-    core: source,
-    quests: options.quests ?? previous?.quests,
-    extras: options.extras ?? undefined,
-    ownerAgentId: typeof source.agentId === 'string'
-      ? source.agentId
-      : (previous?.ownerAgentId ?? null),
-    deviceId: options.deviceId ?? previous?.deviceId ?? asString(source.deviceId, ''),
-    revision: previous?.revision ?? asNumber(source.revision, 0),
-    updatedAt,
+  const composeUpdatedAt = options.updatedAt
+    ?? (typeof source.lastModified === 'string' ? source.lastModified : undefined)
+    ?? previous?.updatedAt
+    ?? new Date(0).toISOString();
+
+  // Zaten V3 ise zarf dışında dokunma.
+  if (isAppStateV3(source)) {
+    return {
+      ...source,
+      ownerAgentId: options.ownerAgentId !== undefined ? options.ownerAgentId : source.ownerAgentId,
+      revision: options.revision !== undefined ? options.revision : source.revision,
+      deviceId: options.deviceId ?? source.deviceId,
+      updatedAt: composeUpdatedAt,
+    };
+  }
+
+  const fallback = previous ?? createEmptyAppStateV3({
+    ownerAgentId: options.ownerAgentId ?? (typeof source.agentId === 'string' ? source.agentId : null),
+    deviceId: options.deviceId ?? asString(source.deviceId, ''),
+    revision: options.revision ?? asNumber(source.revision, 0),
+    updatedAt: composeUpdatedAt,
   });
 
-  // Önceki kaydın eşlenemeyen alanları kaybolmasın (yeni torbayla birleştir).
-  if (previous?.legacy) {
-    next.legacy = { ...previous.legacy, ...(next.legacy ?? {}) };
+  // ---- XP defteri (OTORİTE) -------------------------------------------------
+  // 1) core'da defter varsa (canlı ledger) normalize edilip AYNEN kullanılır,
+  // 2) yoksa previous defteri korunur,
+  // 3) o da yoksa V2 totalXp'den BİR KEZ göç edilir.
+  let xpEvents = normalizeXpEvents(source.xpEvents);
+  if (xpEvents.length === 0) xpEvents = normalizeXpEvents(previous?.xpEvents);
+  if (xpEvents.length === 0) {
+    xpEvents = buildLegacyXpEvents(source, composeUpdatedAt, undefined, undefined);
   }
-  if (previous?.lastCloudSync !== undefined && next.lastCloudSync === undefined) {
-    next.lastCloudSync = previous.lastCloudSync;
-  }
-  if (previous?.aiChatHistory && !next.aiChatHistory?.length) {
-    next.aiChatHistory = previous.aiChatHistory;
-  }
-  return next;
+
+  const questsSource = options.quests !== undefined ? options.quests : previous?.quests;
+  const { content, legacy } = mapContentFromCore(source, extras, fallback, questsSource);
+
+  const state: AppStateV3 = {
+    schemaVersion: 3,
+    ownerAgentId: options.ownerAgentId !== undefined
+      ? options.ownerAgentId
+      : (previous?.ownerAgentId ?? (typeof source.agentId === 'string' ? source.agentId : null)),
+    revision: options.revision !== undefined
+      ? options.revision
+      : (previous?.revision ?? asNumber(source.revision, 0)),
+    updatedAt: composeUpdatedAt,
+    deviceId: options.deviceId ?? previous?.deviceId ?? asString(source.deviceId, ''),
+    xpEvents,
+    ...content,
+  };
+  if (legacy) state.legacy = legacy;
+  return state;
 }
 
 /* =========================================================================
