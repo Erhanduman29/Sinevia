@@ -57,7 +57,7 @@ import { ensurePushSubscription, saveNotificationPrefs, showAppNotification } fr
 import {
   idbGet,
   idbDel,
-  loadStateV3,
+  loadStateV3WithSource,
   saveStateV3,
   saveStateV3Immediate,
   readBootSnapshotV3,
@@ -2116,6 +2116,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const cloudConflictRef = useRef<SyncConflict | null>(null);
   // "Sonra karar ver" seçildiyse bu oturumda otomatik senkron yapılmaz.
   const syncDeferredRef = useRef(false);
+  // Ana yerel kayıt bozuk olduğu için yedekten kurtarıldıysa: kullanıcı
+  // "bu cihaz / bulut" seçimini yapana kadar OTOMATİK yükleme yapılmaz.
+  const syncApprovalPendingRef = useRef(false);
   const syncInFlightRef = useRef(false);
   // Buluttan uygulanan kayıtta updatedAt bump edilmez (yankı yüklemesi olmasın).
   const skipUpdatedAtBumpRef = useRef(false);
@@ -2173,16 +2176,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         // 1) V2 kalıntısı varsa tek kez V3'e yükselt.
         await migrateToIdbIfNeeded(STORAGE_KEY);
-        // 2) Kanonik V3 kaydını oku (ana kayıt bozuksa tam yedekten).
-        const state = await loadStateV3();
+        // 2) Kanonik V3 kaydını oku. Ana kayıt bozuksa API otomatik olarak
+        //    'sinevia-v1-backup'a düşer ve `source` ile bunu bildirir.
+        const { state, source } = await loadStateV3WithSource();
         if (state) {
           lastV3Ref.current = state;
-          trusted = true;
           skipUpdatedAtBumpRef.current = true;
           dispatch({
             type: 'HYDRATE_FROM_IDB',
             data: toLegacyCoreView(state) as unknown as ExtendedAppData,
           });
+          if (source === 'backup') {
+            // Yedekten kurtarılan kayıt sahada güvenilmez sayılır: yerel olarak
+            // korunur ama kullanıcı seçim yapana kadar buluta YÜKLENMEZ.
+            trusted = true;
+            syncApprovalPendingRef.current = true;
+            showToast('Ana yerel kayıt okunamadı; veriler tam yedekten kurtarıldı. Bulut eşitlemesi seçim yapana kadar durduruldu.', 'warning');
+          } else {
+            trusted = true;
+          }
         } else {
           // Tam V3 yok: boot anlık görüntüsü yalnız tema/kimlik/özet için
           // init'te uygulandı. Kütüphane içermediği için YAZMA yapılmaz.
@@ -2824,6 +2836,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const agentId = dataRef.current.agentId;
     if (!hydrated || !agentId) return;
     if (cloudConflictRef.current || syncDeferredRef.current) return;
+    if (!manual && syncApprovalPendingRef.current) return;
     if (!manual && !hydrationTrustedRef.current) return;
     if (syncInFlightRef.current) return;
     try {
@@ -2859,6 +2872,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!agentId) return;
     cloudConflictRef.current = null;
     setCloudConflict(null);
+    syncApprovalPendingRef.current = false;
 
     if (choice === 'later') {
       syncDeferredRef.current = true;
@@ -2977,6 +2991,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       applySyncedState(state);
       syncMetaStore.setLastSyncedHash(agentId, makeSaveHash(state));
       syncDeferredRef.current = false;
+      syncApprovalPendingRef.current = false;
+      cloudConflictRef.current = null;
       showToast('Kimlik ve tüm kütüphane buluttan yüklendi!', 'success');
       return true;
     } catch {
@@ -3357,6 +3373,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     hydrationTrustedRef.current = true;
     syncDeferredRef.current = false;
+    syncApprovalPendingRef.current = false;
     setSyncStatus('syncing');
     void (async () => {
       try {
@@ -3380,6 +3397,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     syncDeferredRef.current = false;
+    syncApprovalPendingRef.current = false;
     setSyncStatus('syncing');
     try {
       const result = await syncEngine.pullRemote(agentId);
