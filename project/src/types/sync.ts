@@ -118,6 +118,12 @@ export interface CloudSaveRecord {
   deviceId: string;
   saveHash: string;
   payload: AppStateV3;
+  /**
+   * Kaydın kaynağı. `legacy-archive`: app_saves boşken Storage'daki eski
+   * `sinevia_saves/<agentId>.json` arşivinden tek seferlik içe aktarıldı.
+   * Karar matrisi aynı çalışır; motor bu kaydı commit ederek app_saves'e taşır.
+   */
+  source?: 'app_saves' | 'legacy-archive';
 }
 
 /** `sync_commit` RPC isteği. Sunucu `baseRevision` eşleşmezse conflict döner. */

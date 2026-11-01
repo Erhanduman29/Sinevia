@@ -37,6 +37,7 @@ import {
   sameSaveHash,
 } from './syncContract';
 import { mergeXpLedgers, normalizeXpEvents, sumXpEvents } from './xpLedger';
+import { parseBackupPayload } from './appBackup';
 
 /* =========================================================================
    SABİTLER — SQL ile BİREBİR aynı (isimler değiştirilemez).
@@ -663,15 +664,33 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     try {
       switch (decision.kind) {
         case 'none': {
-          if (cloud) writeHash(agentId, cloud.saveHash || makeSaveHash(cloud.payload));
+          if (cloud) {
+            writeHash(agentId, cloud.saveHash || makeSaveHash(cloud.payload));
+            // app_saves boşken arşivle birebir aynı yerel kayıt: kaybı önlemek
+            // için arşivi normal commit(0) ile app_saves'e taşı.
+            if (cloud.source === 'legacy-archive') {
+              return await commitState(agentId, { ...local, ownerAgentId: agentId }, 0);
+            }
+          }
           return {
             status: 'up-to-date',
             revision: Math.max(0, Number(local.revision) || 0),
             ...(cloud ? { envelope: buildLocalEnvelope(agentId, cloud.payload, cloud.revision) } : {}),
           };
         }
-        case 'download':
-          return applyDownload(agentId, cloud as CloudSaveRecord);
+        case 'download': {
+          const downloaded = applyDownload(agentId, cloud as CloudSaveRecord);
+          if ((cloud as CloudSaveRecord | null)?.source === 'legacy-archive') {
+            // Arşiv yerel kayda uygulandı; aynı oturumda app_saves'e de yaz
+            // (baseRevision = 0, çünkü sunucu kaydı yok).
+            const committed = await commitState(agentId, current(), 0);
+            if (committed.status === 'local-uploaded') {
+              return { ...downloaded, revision: committed.revision };
+            }
+            return committed;
+          }
+          return downloaded;
+        }
         case 'upload':
           return await commitState(agentId, { ...local, ownerAgentId: agentId }, decision.baseRevision);
         case 'conflict':
@@ -814,35 +833,142 @@ interface RawCloudRecord {
   updated_at?: unknown;
 }
 
+/** Eski Storage arşivi için geçici seçenekler (Supabase + test enjeksiyonu). */
+export interface SupabaseSyncClientOptions {
+  /** Örn. `https://<proje>.supabase.co`; verilmezse `VITE_SUPABASE_URL` kullanılır. */
+  supabaseUrl?: string;
+  /** Zarfın `deviceId`'si (mevcut cihaz). */
+  deviceId?: string;
+  /** Testlerde `fetch` enjeksiyonu. */
+  fetchImpl?: typeof fetch;
+}
+
+/** `sinevia_saves` Storage bucket'ındaki eski arşivin public URL'i. */
+export function legacyArchiveUrl(supabaseUrl: string, agentId: string): string {
+  return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/sinevia_saves/${encodeURIComponent(agentId)}.json`;
+}
+
 /**
  * Supabase RPC'lerini `SyncClient` arayüzüne bağlar.
  *
  * - `sync_get_state(p_agent_id)` → `{ revision, save_hash, payload, updated_at }` | null
  * - `sync_commit(p_agent_id, p_base_revision, p_device_id, p_save_hash, p_payload)`
  *   → `{ status: 'ok' | 'conflict', revision, ... }`
+ *
+ * TEK SEFERLİK ESKİ ARŞİV KÖPRÜSÜ: `app_saves` boşsa (RPC null) eski
+ * `sinevia_saves/<agentId>.json` public arşivi `cache: 'no-store'` ile denenir.
+ * Arşiv varsa V2/V3 yedeği `parseBackupPayload` ile çözülüp revision=0 sahte
+ * bulut kaydı (`source: 'legacy-archive'`) olarak döner; motor normal karar
+ * matrisini uygular ve commit ile app_saves'e taşır.
+ * 404 → arşiv yok (normal ilk sync). 404 dışı ağ hatası → YAZMA YOK, retryable
+ * hata. Aynı oturumda bir kez görülen arşiv yeniden çekilmez.
  */
-export function createSupabaseSyncClient(client: SyncRpcClient): SyncClient {
+export function createSupabaseSyncClient(
+  client: SyncRpcClient,
+  options: SupabaseSyncClientOptions = {},
+): SyncClient {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const archiveTried = new Set<string>();
+  const importedAgents = new Set<string>();
+
+  function normalizeCloudRecord(data: unknown): CloudSaveRecord | null {
+    if (!data) return null;
+    const record = (Array.isArray(data) ? data[0] : data) as RawCloudRecord | null;
+    if (!record || typeof record !== 'object' || Object.keys(record).length === 0) return null;
+    const payload = record.payload;
+    if (!isSyncPayload(payload)) {
+      throw new SyncEngineError('invalid-envelope', 'Bulut kaydı geçersiz V3 gövdesi taşıyor.');
+    }
+    const revision = Math.max(0, Number(record.revision) || 0);
+    return {
+      revision,
+      updatedAt: typeof record.updated_at === 'string' ? record.updated_at : payload.updatedAt ?? '',
+      deviceId: payload.deviceId ?? '',
+      saveHash: typeof record.save_hash === 'string' && record.save_hash.length > 0
+        ? record.save_hash
+        : makeSaveHash(payload),
+      payload,
+      source: 'app_saves',
+    };
+  }
+
+  async function fetchLegacyArchive(agentId: string): Promise<CloudSaveRecord | null> {
+    const baseUrl = options.supabaseUrl
+      || (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_SUPABASE_URL : '')
+      || '';
+    if (!baseUrl) {
+      throw new SyncEngineError('network', 'Eski bulut arşivi için Supabase URL bulunamadı.', true);
+    }
+
+    let response: Response;
+    try {
+      response = await fetchImpl(legacyArchiveUrl(baseUrl, agentId), { cache: 'no-store' });
+    } catch (error) {
+      throw new SyncEngineError(
+        'network',
+        `Eski bulut arşivi alınamadı (ağ): ${messageOf(error) || 'fetch failed'}`,
+        true,
+      );
+    }
+
+    const body = await response.text();
+    if (!response.ok) {
+      // Supabase Storage eksik nesnede 404 veya 400 + not_found dönebilir.
+      if (response.status === 404 || /not[_\s-]?found/i.test(body)) return null;
+      throw new SyncEngineError(
+        'network',
+        `Eski bulut arşivi alınamadı (HTTP ${response.status}).`,
+        true,
+      );
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      throw new SyncEngineError('invalid-envelope', 'Eski bulut arşivi geçersiz JSON taşıyor.', false);
+    }
+
+    let payload: AppStateV3;
+    try {
+      payload = parseBackupPayload(parsed).state;
+    } catch {
+      throw new SyncEngineError('invalid-envelope', 'Eski bulut arşivi V3 gövdesine çevrilemedi.', false);
+    }
+    if (!isSyncPayload(payload)) {
+      throw new SyncEngineError('invalid-envelope', 'Eski bulut arşivi geçerli V3 gövdesi taşımıyor.', false);
+    }
+
+    const state: AppStateV3 = {
+      ...payload,
+      schemaVersion: SAVE_SCHEMA_VERSION,
+      ownerAgentId: agentId,
+      revision: 0,
+      deviceId: options.deviceId || payload.deviceId || '',
+      updatedAt: payload.updatedAt || new Date().toISOString(),
+    };
+    return {
+      revision: 0,
+      updatedAt: state.updatedAt,
+      deviceId: state.deviceId,
+      saveHash: makeSaveHash(state),
+      payload: state,
+      source: 'legacy-archive',
+    };
+  }
+
   return {
     async getRemote(agentId) {
       const { data, error } = await client.rpc(SYNC_RPC.getState, { p_agent_id: agentId });
       if (error) throw error;
-      if (!data) return null;
-      const record = (Array.isArray(data) ? data[0] : data) as RawCloudRecord | null;
-      if (!record || typeof record !== 'object') return null;
-      const payload = record.payload;
-      if (!isSyncPayload(payload)) {
-        throw new SyncEngineError('invalid-envelope', 'Bulut kaydı geçersiz V3 gövdesi taşıyor.');
-      }
-      const revision = Math.max(0, Number(record.revision) || 0);
-      return {
-        revision,
-        updatedAt: typeof record.updated_at === 'string' ? record.updated_at : payload.updatedAt ?? '',
-        deviceId: payload.deviceId ?? '',
-        saveHash: typeof record.save_hash === 'string' && record.save_hash.length > 0
-          ? record.save_hash
-          : makeSaveHash(payload),
-        payload,
-      };
+      const record = normalizeCloudRecord(data);
+      if (record) return record;
+
+      // app_saves boş: aynı oturumda arşiv zaten denenmiş/içe aktarılmışsa tekrar yok.
+      if (archiveTried.has(agentId) || importedAgents.has(agentId)) return null;
+      const archive = await fetchLegacyArchive(agentId);
+      archiveTried.add(agentId);
+      return archive;
     },
 
     async commit(agentId, request) {
@@ -860,6 +986,8 @@ export function createSupabaseSyncClient(client: SyncRpcClient): SyncClient {
       }
       const revision = Math.max(0, Number(record.revision) || 0);
       if (record.status === 'ok') {
+        // Arşivden gelen kayıt app_saves'e yazıldı: oturum boyunca arşiv tekrar okunmaz.
+        if (archiveTried.has(agentId)) importedAgents.add(agentId);
         return {
           status: 'ok',
           revision,

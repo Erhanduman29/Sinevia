@@ -51,7 +51,7 @@ import {
   writeQuestState,
 } from '../lib/appBackup';
 import { pruneExpiredPlanItems } from '../lib/planPrune';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL } from '../lib/supabase';
 import { networkGetMe } from '../lib/networkAuth';
 import { ensurePushSubscription, saveNotificationPrefs, showAppNotification } from '../lib/notifications';
 import {
@@ -2782,7 +2782,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const syncEngine = useMemo<SyncEngine>(() => {
     const engine = createSyncEngine({
-      client: createSupabaseSyncClient(supabase as unknown as SyncRpcClient),
+      client: createSupabaseSyncClient(supabase as unknown as SyncRpcClient, {
+        supabaseUrl: SUPABASE_URL,
+        deviceId: readDeviceId(),
+      }),
       deviceId: readDeviceId(),
       getState: () => lastV3Ref.current ?? fromLegacyCore(dataRef.current, null, {
         quests: readQuestState(),
@@ -2961,7 +2964,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     opts?: { keepExistingRecoveryKey?: boolean }
   ): Promise<boolean> => {
     try {
-      const client = createSupabaseSyncClient(supabase as unknown as SyncRpcClient);
+      const client = createSupabaseSyncClient(supabase as unknown as SyncRpcClient, {
+        supabaseUrl: SUPABASE_URL,
+        deviceId: readDeviceId(),
+      });
       const remote = await client.getRemote(agentId);
       if (!remote) {
         showToast('Bulut yedeği bulunamadı; kimlik değiştirilmedi.', 'error');

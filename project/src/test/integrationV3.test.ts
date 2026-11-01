@@ -366,7 +366,11 @@ describe('SQL istemci sözleşmesi', () => {
         });
       },
     };
-    const client = createSupabaseSyncClient(rpc);
+    const client = createSupabaseSyncClient(rpc, {
+      supabaseUrl: 'https://test.supabase.co',
+      deviceId: 'dev-test',
+      fetchImpl: (async () => new Response('not found', { status: 404 })) as typeof fetch,
+    });
 
     await client.getRemote('SNV-AAAA-0001');
     await client.commit('SNV-AAAA-0001', {
