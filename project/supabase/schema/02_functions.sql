@@ -1431,7 +1431,7 @@ begin
   if jsonb_typeof(p_payload->'series') = 'array' then
     with s as (
       select s2.value as item, s2.ordinality as idx
-      from jsonb_array_elements(p_payload->'series') as s2
+      from jsonb_array_elements(p_payload->'series') with ordinality as s2(value, ordinality)
     ),
     e as (
       select s.idx,
