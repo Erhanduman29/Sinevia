@@ -61,6 +61,24 @@ const LOCAL_SNAPSHOT_KEY = STATE_STORAGE_KEY;
  */
 export const BACKUP_STORAGE_KEY = 'sinevia-v1-backup';
 
+/** Tam yedek en fazla günde bir yazılır (ana kayıt zaten her değişimde yazılıyor). */
+export const DAILY_BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const BACKUP_LAST_WRITE_KEY = 'sinevia_v1_backup_at';
+
+function shouldWriteDailyBackup(now = Date.now()): boolean {
+  try {
+    const last = Number(localStorage.getItem(BACKUP_LAST_WRITE_KEY) || 0);
+    if (!Number.isFinite(last) || last <= 0) return true;
+    return now - last >= DAILY_BACKUP_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+function markDailyBackupWritten(now = Date.now()): void {
+  try { localStorage.setItem(BACKUP_LAST_WRITE_KEY, String(now)); } catch { /* gizli mod */ }
+}
+
 /** Bir kaydın gerçek kütüphane verisi taşıyıp taşımadığını anlar (boot snapshot değil). */
 export function isFullAppRecord(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
@@ -300,7 +318,10 @@ export function saveStateV3(state: AppStateV3, options: SaveStateV3Options = {})
   const delay = options.delayMs ?? 600;
   writeQueue.set(STATE_STORAGE_KEY, state, delay);
   writeBootSnapshotFromState(state);
-  if (options.backup) writeQueue.set(BACKUP_STORAGE_KEY, state, delay);
+  if (options.backup && shouldWriteDailyBackup()) {
+    // Zaman damgası ancak yedek GERÇEKTEN yazılınca işaretlenir.
+    writeQueue.set(BACKUP_STORAGE_KEY, state, delay, () => markDailyBackupWritten());
+  }
 }
 
 /** Beklemeden yaz (kapanış/hesap değişimi gibi kritik anlar için). */
@@ -312,14 +333,19 @@ export async function saveStateV3Immediate(
   try { await writeQueue.flush(); } catch { /* devam */ }
   writeBootSnapshotFromState(state);
   const ok = await idbSet(STATE_STORAGE_KEY, state);
-  if (options.backup) await idbSet(BACKUP_STORAGE_KEY, state);
+  if (options.backup && shouldWriteDailyBackup()) {
+    const backupOk = await idbSet(BACKUP_STORAGE_KEY, state);
+    if (backupOk) markDailyBackupWritten();
+  }
   return ok;
 }
 
 /** Tam yedeği ('sinevia-v1-backup') yaz. */
 export async function saveStateV3Backup(state: AppStateV3): Promise<boolean> {
   if (!isAppStateV3(state)) return false;
-  return idbSet(BACKUP_STORAGE_KEY, state);
+  const ok = await idbSet(BACKUP_STORAGE_KEY, state);
+  if (ok) markDailyBackupWritten();
+  return ok;
 }
 
 function readLocalJson(storageKey: string): unknown {
@@ -392,7 +418,10 @@ export async function migrateStoredStateToV3(options: {
   const ok = await idbSet(key, state);
   if (!ok) return { state, migrated: false };
   writeBootSnapshotFromState(state);
-  if (key === STATE_STORAGE_KEY) await idbSet(BACKUP_STORAGE_KEY, state);
+  if (key === STATE_STORAGE_KEY) {
+    const backupOk = await idbSet(BACKUP_STORAGE_KEY, state);
+    if (backupOk) markDailyBackupWritten();
+  }
   return { state, migrated: true };
 }
 
@@ -415,11 +444,13 @@ export async function clearStateV3(options: { keepBootSnapshot?: boolean } = {})
  */
 class WriteQueue {
   private pending: Map<string, unknown> = new Map();
+  private callbacks: Map<string, () => void> = new Map();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private flushing = false;
 
-  set(key: string, value: unknown, delayMs = 250): void {
+  set(key: string, value: unknown, delayMs = 250, onWritten?: () => void): void {
     this.pending.set(key, value);
+    if (onWritten) this.callbacks.set(key, onWritten);
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), delayMs);
   }
@@ -430,9 +461,12 @@ class WriteQueue {
     this.flushing = true;
     try {
       const entries = Array.from(this.pending.entries());
+      const callbacks = new Map(this.callbacks);
       this.pending.clear();
+      this.callbacks.clear();
       for (const [k, v] of entries) {
-        await idbSet(k, v);
+        const ok = await idbSet(k, v);
+        if (ok) callbacks.get(k)?.();
       }
     } finally {
       this.flushing = false;

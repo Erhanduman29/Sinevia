@@ -127,10 +127,11 @@ export function evaluateQuestCompletion(
 
   const watchedEpisodes = historySince.filter(h => h.kind === 'series' && !h.bulkRating);
 
-  // Görev kabulünden SONRA yapılan puan revizyonları (previousRating yalnız değişimde yazılır)
-  const revisedMovies = historySince.filter(h =>
+  // Görev kabulünden SONRA yapılan puan revizyonları. Burada `historySince`
+  // KULLANILMAZ: kullanıcı filmi görevden önce izlemiş olabilir, puanı ise görev
+  // aktifken değiştirmiş olabilir. Ölçüt izleme zamanı değil, değişiklik zamanıdır.
+  const revisedMovies = history.filter(h =>
     h.kind === 'movie' &&
-    !h.isPastWatch &&
     h.previousRating != null &&
     Boolean(h.ratingChangedAt) &&
     new Date(h.ratingChangedAt as string).getTime() >= questAcceptedAt

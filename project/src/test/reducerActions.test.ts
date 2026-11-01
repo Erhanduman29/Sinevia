@@ -414,6 +414,46 @@ describe('REDUCER — DİZİ TOPLU PUANLAMA', () => {
     expect(state.series[0].overallDetailedRating).toEqual({ Hikaye: 10 });
     expect(state.series[0].overallReviewTags).toEqual(['Efsane']);
   });
+
+  test('ilk kez puanlama ve not değişimi zaman damgası yazar', () => {
+    let state = getInitialState();
+    state.history = [{
+      id: 'h1', itemId: 'm1', kind: 'movie', title: 'Film', rating: null,
+      note: '', watchedAt: '2026-10-01T20:00:00', genres: [],
+    } as any];
+
+    state = rootReducer(state, {
+      type: 'UPDATE_HISTORY_RATING',
+      historyId: 'h1',
+      rating: 8,
+      note: '',
+    } as any);
+
+    const first = state.history[0];
+    expect(first.rating).toBe(8);
+    expect(first.ratingChangedAt).toBeTruthy();
+    expect(first.editedAt).toBeTruthy();
+    const firstRatingStamp = first.ratingChangedAt;
+
+    // Aynı puan + aynı not: yeni değişiklik damgası yazılmamalı.
+    state = rootReducer(state, {
+      type: 'UPDATE_HISTORY_RATING',
+      historyId: 'h1',
+      rating: 8,
+      note: '',
+    } as any);
+    expect(state.history[0].ratingChangedAt).toBe(firstRatingStamp);
+
+    // Not değişimi ayrı damgalanmalı.
+    state = rootReducer(state, {
+      type: 'UPDATE_HISTORY_RATING',
+      historyId: 'h1',
+      rating: 8,
+      note: 'Yeni not',
+    } as any);
+    expect(state.history[0].noteChangedAt).toBeTruthy();
+    expect(state.history[0].note).toBe('Yeni not');
+  });
 });
 
 describe('REDUCER — KOLEKSİYON EYLEMLERİ', () => {

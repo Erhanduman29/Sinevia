@@ -169,6 +169,10 @@ export interface WatchHistoryItem {
   previousRating?: number;
   /** Puan değişiminin yapıldığı an — sıralama/tarih önceliğinde kullanılır. */
   ratingChangedAt?: string;
+  /** Notun son değiştirildiği an (görev ilerlemesi için). */
+  noteChangedAt?: string;
+  /** Kayıtta herhangi bir düzenlemenin yapıldığı son an. */
+  editedAt?: string;
   /** Toptan puan kaydı: bölüm / sezon / tüm dizi. */
   ratingScope?: 'episode' | 'season' | 'series';
   /** Toptan puanlama kaydı mı? (bölüm sayısı/süre hesaplarına girmez) */

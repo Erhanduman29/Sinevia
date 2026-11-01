@@ -74,11 +74,11 @@ function stateWith(agentId: string, overrides: Partial<AppStateV3> = {}): AppSta
   };
 }
 
-function harness(initial: AppStateV3, client: SyncClient) {
+function harness(initial: AppStateV3, client: SyncClient, deviceId = 'dev-test') {
   let local = initial;
   const engine = createSyncEngine({
     client,
-    deviceId: 'dev-test',
+    deviceId,
     getState: () => local,
     setState: (next) => { local = next; },
     meta: memoryMeta(),
@@ -108,7 +108,8 @@ describe('iki cihaz — revizyon çakışması', () => {
       },
       commit: (id, request) => cloud.client.commit(id, request),
     };
-    const b = harness(bState, racingClient);
+    // Gerçek iki cihaz: aynı-cihaz otomatik çözümü devreye girmemeli.
+    const b = harness(bState, racingClient, 'dev-b');
 
     const result = await b.engine.pushLocal(agentId);
 

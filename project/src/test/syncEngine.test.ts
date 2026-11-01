@@ -21,6 +21,7 @@ import {
 class FakeCloud {
   record: CloudSaveRecord | null = null;
   commits: CommitSaveRequest[] = [];
+  discarded: string[] = [];
   getCalls = 0;
   failWith: unknown = null;
 
@@ -46,6 +47,9 @@ class FakeCloud {
         payload: request.payload,
       };
       return { status: 'ok', revision, updatedAt: '2026-01-01T00:00:02.000Z' };
+    },
+    discardLegacyArchive: async (agentId: string): Promise<void> => {
+      this.discarded.push(agentId);
     },
   };
 }
@@ -152,14 +156,56 @@ describe('decideSyncAction — karar matrisi', () => {
     ).toEqual({ kind: 'upload', baseRevision: 4, reason: 'local-ahead' });
   });
 
-  test('iki taraf da değişmiş → çakışma (both-changed)', () => {
+  test('iki taraf da değişmiş, farklı cihaz → çakışma (both-changed)', () => {
     expect(
       decideSyncAction({
         ...base,
+        localDeviceId: 'dev-1',
         localHash: 'dirty-local',
-        cloud: { revision: 5, saveHash: 'cloud-dirty', ownerAgentId: 'SNV-AAAA-0001' },
+        cloud: {
+          revision: 5,
+          saveHash: 'cloud-dirty',
+          ownerAgentId: 'SNV-AAAA-0001',
+          deviceId: 'dev-2',
+        },
       }),
     ).toEqual({ kind: 'conflict', reason: 'both-changed' });
+  });
+
+  test('iki taraf da değişmiş ama aynı cihaz + bulut daha yeni → indir', () => {
+    expect(
+      decideSyncAction({
+        ...base,
+        localDeviceId: 'dev-1',
+        localUpdatedAt: '2026-01-01T00:00:01.000Z',
+        localHash: 'dirty-local',
+        cloud: {
+          revision: 5,
+          saveHash: 'cloud-dirty',
+          ownerAgentId: 'SNV-AAAA-0001',
+          deviceId: 'dev-1',
+          updatedAt: '2026-01-01T00:00:03.000Z',
+        },
+      }),
+    ).toEqual({ kind: 'download', reason: 'same-device-cloud-newer' });
+  });
+
+  test('iki taraf da değişmiş ama aynı cihaz + yerel daha yeni → yükle', () => {
+    expect(
+      decideSyncAction({
+        ...base,
+        localDeviceId: 'dev-1',
+        localUpdatedAt: '2026-01-01T00:00:09.000Z',
+        localHash: 'dirty-local',
+        cloud: {
+          revision: 5,
+          saveHash: 'cloud-dirty',
+          ownerAgentId: 'SNV-AAAA-0001',
+          deviceId: 'dev-1',
+          updatedAt: '2026-01-01T00:00:03.000Z',
+        },
+      }),
+    ).toEqual({ kind: 'upload', baseRevision: 5, reason: 'same-device-local-newer' });
   });
 
   test('sahip uyuşmazlığı → çakışma (owner-mismatch)', () => {
@@ -208,6 +254,21 @@ describe('syncEngine.sync', () => {
     expect(cloud.commits[0].baseRevision).toBe(0);
     expect(harness.getLocal().revision).toBe(1);
     expect(harness.meta.getLastSyncedHash('SNV-AAAA-0001')).toBe(makeSaveHash(harness.getLocal()));
+  });
+
+  test('eski Storage arşivi app_saves’e taşınınca temizleme çağrılır', async () => {
+    const cloud = new FakeCloud();
+    const cloudState = stateWith({
+      movies: [{ id: 'old-movie', title: 'Eski Film' }] as AppStateV3['movies'],
+    });
+    cloud.record = { ...cloudOf(cloudState, 0), source: 'legacy-archive' };
+    const harness = createHarness(stateWith(), cloud);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('cloud-loaded');
+    expect(cloud.commits).toHaveLength(1);
+    expect(cloud.discarded).toEqual(['SNV-AAAA-0001']);
   });
 
   test('aynı kayıt → up-to-date, commit YOK', async () => {
@@ -262,7 +323,8 @@ describe('syncEngine.sync', () => {
   test('iki taraf da değişti → conflict both-changed, hiçbir yazma yok', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { revision: 2 });
-    const remote = xpState('ach:cloud', 40, { revision: 3 });
+    // Farklı cihaz: çakışma korunur.
+    const remote = xpState('ach:cloud', 40, { revision: 3, deviceId: 'dev-2' });
     const meta = memoryMeta();
     meta.setLastSyncedHash('SNV-AAAA-0001', 'fnv1a-00000000-1');
     cloud.record = cloudOf(remote, 3);
@@ -280,6 +342,53 @@ describe('syncEngine.sync', () => {
     expect(harness.engine.hasPendingConflict()).toBe(true);
   });
 
+  test('aynı cihazda bulut daha yeni → soru sorulmadan indirilir', async () => {
+    const cloud = new FakeCloud();
+    const local = xpState('ach:local', 10, {
+      revision: 2,
+      updatedAt: '2026-01-01T00:00:01.000Z',
+    });
+    const remote = xpState('ach:cloud', 40, {
+      revision: 3,
+      deviceId: 'dev-1',
+      updatedAt: '2026-01-01T00:00:03.000Z',
+    });
+    const meta = memoryMeta();
+    meta.setLastSyncedHash('SNV-AAAA-0001', 'fnv1a-00000000-1');
+    cloud.record = cloudOf(remote, 3);
+    const harness = createHarness(local, cloud, meta);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('cloud-loaded');
+    expect(harness.engine.hasPendingConflict()).toBe(false);
+    expect(harness.getLocal().xpEvents.some((event) => event.sourceId === 'ach:cloud')).toBe(true);
+  });
+
+  test('aynı cihazda yerel daha yeni → soru sorulmadan yüklenir', async () => {
+    const cloud = new FakeCloud();
+    const local = xpState('ach:local', 10, {
+      revision: 2,
+      updatedAt: '2026-01-01T00:00:09.000Z',
+    });
+    const remote = xpState('ach:cloud', 40, {
+      revision: 3,
+      deviceId: 'dev-1',
+      updatedAt: '2026-01-01T00:00:03.000Z',
+    });
+    const meta = memoryMeta();
+    meta.setLastSyncedHash('SNV-AAAA-0001', 'fnv1a-00000000-1');
+    cloud.record = cloudOf(remote, 3);
+    const harness = createHarness(local, cloud, meta);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('local-uploaded');
+    expect(harness.engine.hasPendingConflict()).toBe(false);
+    expect(cloud.commits).toHaveLength(1);
+    expect(cloud.commits[0].baseRevision).toBe(3);
+  });
+
   test('sunucu commit sırasında reddederse → conflict revision-mismatch', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { revision: 2 });
@@ -291,7 +400,7 @@ describe('syncEngine.sync', () => {
     // Araya başka bir cihaz girdi: sunucu artık revizyon 4'te.
     const race = { ...cloud, client: cloud.client };
     const racingClient: SyncClient = {
-      getRemote: async () => cloudOf(remote, 4),
+      getRemote: async () => cloudOf({ ...remote, deviceId: 'dev-2' }, 4),
       commit: async () => ({ status: 'conflict', revision: 4 }),
     };
     const harness = createHarness(local, { ...race, client: racingClient } as FakeCloud, meta);
@@ -381,7 +490,7 @@ describe('syncEngine.sync', () => {
   test('"later" seçimi hiçbir yazma yapmaz', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { revision: 2 });
-    const remote = xpState('ach:cloud', 40, { revision: 3 });
+    const remote = xpState('ach:cloud', 40, { revision: 3, deviceId: 'dev-2' });
     const meta = memoryMeta();
     meta.setLastSyncedHash('SNV-AAAA-0001', 'x');
     cloud.record = cloudOf(remote, 3);
@@ -443,7 +552,7 @@ describe('mergeForks / resolveConflict(merge)', () => {
   test('resolveConflict(merge) yeni revizyonla commit eder, XP birleşir', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { revision: 2 });
-    const remote = xpState('ach:cloud', 40, { revision: 3 });
+    const remote = xpState('ach:cloud', 40, { revision: 3, deviceId: 'dev-2' });
     const meta = memoryMeta();
     meta.setLastSyncedHash('SNV-AAAA-0001', 'stale-hash');
     cloud.record = cloudOf(remote, 3);

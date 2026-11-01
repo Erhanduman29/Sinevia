@@ -283,7 +283,8 @@ describe('eski Storage arşivi — getRemote köprüsü', () => {
     expect(record?.source).toBe('legacy-archive');
     expect(record?.revision).toBe(0);
     expect(record?.payload.ownerAgentId).toBe(AGENT);
-    expect(record?.deviceId).toBe('dev-a');
+    // Eski arşiv bu cihazın kaydı sayılmaz: aynı-cihaz otomatik çözümüne girmez.
+    expect(record?.deviceId).toBe('');
     expect(record?.saveHash).toBe(makeSaveHash(record!.payload));
   });
 

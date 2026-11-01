@@ -1653,8 +1653,11 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       skipRatingUnlocks = true; // puan düzenleme → puan-bağılı yeni kilit açılamaz
       const hItem = state.history.find((h) => h.id === action.historyId); if (!hItem) break;
       const updatedIsPast = action.isPastWatch !== undefined ? action.isPastWatch : hItem.isPastWatch;
-      const ratingChanged = hItem.rating !== null && hItem.rating !== action.rating;
-      nextState.history = state.history.map((h) => (h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: (h.kind === 'movie' || h.type === 'movie') ? Boolean(updatedIsPast) : h.isPastWatch, ...(ratingChanged ? { previousRating: hItem.rating ?? undefined, ratingChangedAt: new Date().toISOString() } : {}) } : h));
+      // İlk kez puanlama (null → sayı) de bir değişimdir; timestamp yazılmalı.
+      const ratingChanged = hItem.rating !== action.rating;
+      const noteChanged = (hItem.note ?? '') !== (action.note ?? '');
+      const changedAt = new Date().toISOString();
+      nextState.history = state.history.map((h) => (h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: (h.kind === 'movie' || h.type === 'movie') ? Boolean(updatedIsPast) : h.isPastWatch, ...(ratingChanged ? { previousRating: hItem.rating ?? undefined, ratingChangedAt: changedAt } : {}), ...(noteChanged ? { noteChangedAt: changedAt } : {}), ...(ratingChanged || noteChanged ? { editedAt: changedAt } : {}) } : h));
       const targetId = hItem.itemId || hItem.id;
       if (hItem.kind === 'movie' || hItem.type === 'movie') {
         nextState.movies = state.movies.map((m) => (m.id === targetId ? { ...m, rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: Boolean(updatedIsPast) } : m));

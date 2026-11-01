@@ -2081,6 +2081,39 @@ comment on function public.sync_commit(text, bigint, text, text, jsonb) is
   'Atomik V3 commit: FOR UPDATE kilidi, base_revision eşleşme şartı, conflict yanıtı ve profiles özet güncellemesi.';
 
 
+-- Eski Storage arşivini temizleme (yalnızca app_saves'e taşındıktan sonra).
+-- İstemci bu RPC'yi arşiv başarıyla commit edildiğinde çağırır; başka bir
+-- kullanıcının henüz taşınmamış arşivi asla silinmez.
+-- Eski arşivi Storage API'siyle silme izni.
+--
+-- ÖNEMLİ: `storage.objects` üzerinde doğrudan SQL DELETE KULLANILMAZ. Supabase,
+-- SQL ile silinen nesnelerin fiziksel dosyasını S3'te bırakır (orphan) ve yeni
+-- sürümlerde doğrudan SQL DELETE'i trigger ile reddeder. Silme işlemi istemcide
+-- `supabase.storage.from('sinevia_saves').remove(...)` ile yapılır; bu politika
+-- yalnız kendi `<agentId>.json` arşivini silmesine izin verir.
+--
+-- Not: Storage API özel başlıkları her sürümde RLS'e taşımayabilir. Bu yüzden
+-- otomatik silme başarısız olursa sync bozulmaz; kalan arşivler Dashboard'dan
+-- veya `cleanup_legacy_archives.sql` içindeki yönergelerle tek seferde temizlenir.
+drop policy if exists "sinevia_legacy_archive_delete_own" on storage.objects;
+create policy "sinevia_legacy_archive_delete_own"
+on storage.objects
+for delete
+to anon, authenticated
+using (
+  bucket_id = 'sinevia_saves'
+  and name = public.current_agent_id() || '.json'
+  and exists (
+    select 1
+    from public.app_saves s
+    where s.agent_id = public.current_agent_id()
+  )
+);
+
+-- Daha önce oluşturulmuş SQL-tabanlı silme fonksiyonu varsa kaldır.
+drop function if exists public.sync_discard_legacy_archive(text, text);
+
+
 -- ============================================================================
 -- SINEVIA V3 — KANONİK ŞEMA / 03 GÜVENLİK (YETKİLER + RLS + POLICY + TRIGGER)
 -- ============================================================================

@@ -59,6 +59,12 @@ export interface SyncClient {
   getRemote(agentId: string): Promise<CloudSaveRecord | null>;
   /** `sync_commit(...)` — sunucu `baseRevision` uyuşmazsa `conflict` döner. */
   commit(agentId: string, request: CommitSaveRequest): Promise<SyncCommitResponse>;
+  /**
+   * Eski Storage arşivini (`sinevia_saves/<agentId>.json`) siler. Yalnızca
+   * arşiv başarıyla `app_saves`e taşındıktan sonra çağrılır. İsteğe bağlıdır;
+   * desteklemeyen taşıyıcılar arşivi olduğu gibi bırakır.
+   */
+  discardLegacyArchive?(agentId: string): Promise<void>;
 }
 
 /** Cihaz başına sync meta (gövdeye girmez, hash'i kirletmez). */
@@ -167,21 +173,59 @@ export interface SyncDecisionSnapshot {
   localOwnerAgentId: string | null;
   /** Yerel kayıt kütüphane/XP açısından boş mu? (cloud-only tespiti) */
   localEmpty: boolean;
+  /** Yerel kaydı yazan cihaz (aynı-cihaz çakışmasını ayırmak için). */
+  localDeviceId?: string | null;
+  /** Yerel kaydın son içerik değişikliği zamanı. */
+  localUpdatedAt?: string;
   /** Bulut kaydı; yoksa `null`. */
   cloud: {
     revision: number;
     saveHash: string;
     ownerAgentId: string | null;
+    /** Bulutu son yazan cihaz. */
+    deviceId?: string | null;
+    /** Sunucudaki son commit zamanı. */
+    updatedAt?: string;
   } | null;
   /** Cihazın son başarılı eşitlemede gördüğü bulut hash'i. */
   lastSyncedHash: string | null;
 }
 
 export type SyncDecision =
-  | { kind: 'upload'; baseRevision: number; reason: 'cloud-empty' | 'local-ahead' }
-  | { kind: 'download'; reason: 'cloud-ahead' | 'cloud-only' }
+  | { kind: 'upload'; baseRevision: number; reason: 'cloud-empty' | 'local-ahead' | 'same-device-local-newer' }
+  | { kind: 'download'; reason: 'cloud-ahead' | 'cloud-only' | 'same-device-cloud-newer' }
   | { kind: 'none'; reason: 'same' }
   | { kind: 'conflict'; reason: SyncConflictReason };
+
+/** İki cihaz kimliği de biliniyor ve aynıysa true. `unknown-device` güvenilmez. */
+export function sameKnownDevice(
+  localDeviceId?: string | null,
+  cloudDeviceId?: string | null,
+): boolean {
+  const local = (localDeviceId ?? '').trim();
+  const cloud = (cloudDeviceId ?? '').trim();
+  if (!local || !cloud || local === 'unknown-device' || cloud === 'unknown-device') return false;
+  return local === cloud;
+}
+
+/**
+ * Aynı cihazdaki iki kayıttan hangisi daha yeni? Önce içerik zamanı, saatler
+ * eşit/geçersizse revizyon numarası kullanılır. Karar verilemezse `null`.
+ */
+export function fresherSide(
+  localUpdatedAt: string | undefined,
+  cloudUpdatedAt: string | undefined,
+  localRevision: number,
+  cloudRevision: number,
+): 'local' | 'cloud' | null {
+  const localTime = localUpdatedAt ? new Date(localUpdatedAt).getTime() : NaN;
+  const cloudTime = cloudUpdatedAt ? new Date(cloudUpdatedAt).getTime() : NaN;
+  if (Number.isFinite(localTime) && Number.isFinite(cloudTime) && localTime !== cloudTime) {
+    return localTime > cloudTime ? 'local' : 'cloud';
+  }
+  if (localRevision !== cloudRevision) return localRevision > cloudRevision ? 'local' : 'cloud';
+  return null;
+}
 
 /**
  * `docs/sync-contract.md` §3 karar matrisinin birebir uygulaması.
@@ -242,7 +286,25 @@ export function decideSyncAction(snapshot: SyncDecisionSnapshot): SyncDecision {
     return { kind: 'upload', baseRevision: cloud.revision, reason: 'local-ahead' };
   }
 
-  // 8) İkisi de değişmiş → kullanıcı kararı (otomatik birleştirme YOK).
+  // 8) İKİ TARAF DA KİRLİ ama ikisi de AYNI cihazdan: tek girişte kullanıcıya
+  //    sorma. Aynı cihazın iki sekmesi / yarıda kalan commit / meta yazımı
+  //    hatası bu duruma düşebilir. En yeni içerik kazanır.
+  if (cloud && sameKnownDevice(snapshot.localDeviceId, cloud.deviceId)) {
+    const side = fresherSide(
+      snapshot.localUpdatedAt,
+      cloud.updatedAt,
+      localRevision,
+      cloud.revision,
+    );
+    if (side === 'local') {
+      return { kind: 'upload', baseRevision: cloud.revision, reason: 'same-device-local-newer' };
+    }
+    if (side === 'cloud') {
+      return { kind: 'download', reason: 'same-device-cloud-newer' };
+    }
+  }
+
+  // 9) Farklı cihazlar (veya cihaz bilgisi yok) → kullanıcı kararı.
   return { kind: 'conflict', reason: 'both-changed' };
 }
 
@@ -556,7 +618,12 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
    * commit sonrası yerel gövdeyle AYNI kalır ve gereksiz çakışma üretilmez.
    * Nihai revizyon daima sunucu yanıtından okunur.
    */
-  async function commitState(agentId: string, state: AppStateV3, baseRevision: number): Promise<SyncResult> {
+  async function commitState(
+    agentId: string,
+    state: AppStateV3,
+    baseRevision: number,
+    allowSameDeviceRetry = true,
+  ): Promise<SyncResult> {
     const predictedRevision = Math.max(1, Math.floor(baseRevision) + 1);
     const payload: AppStateV3 = {
       ...state,
@@ -578,6 +645,28 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
 
     if (response.status === 'conflict') {
       const cloud = await fetchRemote(agentId).catch(() => null);
+
+      // Aynı cihazın kendi commit yarışı (iki sekme / ağ tekrarı): kullanıcıya
+      // sorma. Bulut daha yeniyse indir; yerel daha yeniyse güncel revizyonla
+      // bir kez daha dene. Farklı cihazda eski davranış (modal) korunur.
+      if (cloud && sameKnownDevice(deps.deviceId, cloud.deviceId)) {
+        const side = fresherSide(
+          state.updatedAt,
+          cloud.updatedAt || cloud.payload?.updatedAt || '',
+          Math.max(0, Number(state.revision) || 0),
+          Math.max(0, Number(cloud.revision) || 0),
+        );
+        if (side === 'cloud') return applyDownload(agentId, cloud);
+        if (side === 'local' && allowSameDeviceRetry) {
+          return commitState(
+            agentId,
+            state,
+            Math.max(0, Number(cloud.revision) || 0),
+            false,
+          );
+        }
+      }
+
       const conflictReason: SyncConflictReason = 'revision-mismatch';
       const conflict = cloud
         ? buildConflict(conflictReason, state, cloud)
@@ -626,6 +715,19 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     };
   }
 
+  /**
+   * Eski Storage arşivini temizler. Yalnızca arşiv app_saves'e başarıyla
+   * taşındıktan sonra çağrılır; hata senkron sonucunu bozmaz (bir sonraki
+   * başarılı sync'te yeniden denenir).
+   */
+  async function discardLegacyArchive(agentId: string): Promise<void> {
+    try {
+      await deps.client.discardLegacyArchive?.(agentId);
+    } catch {
+      /* temizlik en iyi çaba; veri kaybı riski yok */
+    }
+  }
+
   async function decideAndAct(agentId: string, localOverride?: AppStateV3): Promise<SyncResult> {
     const local = localOverride ?? current();
     const fallbackRevision = Math.max(0, Number(local?.revision) || 0);
@@ -651,11 +753,15 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       localRevision: Math.max(0, Number(local.revision) || 0),
       localOwnerAgentId: local.ownerAgentId ?? null,
       localEmpty: isEmptyState(local),
+      localDeviceId: deps.deviceId,
+      localUpdatedAt: local.updatedAt,
       cloud: cloud
         ? {
             revision: Math.max(0, Number(cloud.revision) || 0),
             saveHash: cloud.saveHash || makeSaveHash(cloud.payload),
             ownerAgentId: cloud.payload?.ownerAgentId ?? null,
+            deviceId: cloud.deviceId,
+            updatedAt: cloud.updatedAt || cloud.payload?.updatedAt || '',
           }
         : null,
       lastSyncedHash: readHash(agentId),
@@ -669,7 +775,9 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
             // app_saves boşken arşivle birebir aynı yerel kayıt: kaybı önlemek
             // için arşivi normal commit(0) ile app_saves'e taşı.
             if (cloud.source === 'legacy-archive') {
-              return await commitState(agentId, { ...local, ownerAgentId: agentId }, 0);
+              const uploaded = await commitState(agentId, { ...local, ownerAgentId: agentId }, 0);
+              if (uploaded.status === 'local-uploaded') await discardLegacyArchive(agentId);
+              return uploaded;
             }
           }
           return {
@@ -685,6 +793,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
             // (baseRevision = 0, çünkü sunucu kaydı yok).
             const committed = await commitState(agentId, current(), 0);
             if (committed.status === 'local-uploaded') {
+              await discardLegacyArchive(agentId);
               return { ...downloaded, revision: committed.revision };
             }
             return committed;
@@ -821,9 +930,17 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
    SUPABASE İSTEMCİSİ (RPC adları/parametreleri SQL ile birebir)
    ========================================================================= */
 
-/** supabase-js `rpc` yüzeyinin motorun ihtiyaç duyduğu kadar. */
+/** supabase-js `storage.from(bucket).remove()` yüzeyinin motorun ihtiyaç duyduğu kadar. */
+export interface SyncStorageBucket {
+  remove(paths: string[]): PromiseLike<{ data?: unknown; error: unknown }>;
+}
+
+/** supabase-js istemcisinin motorun ihtiyaç duyduğu kadar. */
 export interface SyncRpcClient {
   rpc(name: string, params: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }>;
+  storage?: {
+    from(bucket: string): SyncStorageBucket;
+  };
 }
 
 interface RawCloudRecord {
@@ -944,7 +1061,9 @@ export function createSupabaseSyncClient(
       schemaVersion: SAVE_SCHEMA_VERSION,
       ownerAgentId: agentId,
       revision: 0,
-      deviceId: options.deviceId || payload.deviceId || '',
+      // Eski arşiv bu cihaz tarafından yazılmış sayılmaz; aksi halde aynı-cihaz
+      // otomatik çözümü gerçek bir çakışmayı sessizce ezebilir.
+      deviceId: payload.deviceId || '',
       updatedAt: payload.updatedAt || new Date().toISOString(),
     };
     return {
@@ -1003,6 +1122,16 @@ export function createSupabaseSyncClient(
         };
       }
       throw new SyncEngineError('server', `sync_commit bilinmeyen durum: ${String(record.status)}`, true);
+    },
+
+    async discardLegacyArchive(agentId) {
+      // Storage nesnesi SQL'den DEĞİL, Storage API'sinden silinmeli; aksi halde
+      // fiziksel dosya S3'te kalır (orphan) ve kota şişer. RLS politikası
+      // `sinevia_saves/<agentId>.json` silmesine yalnız o ajanın token'ıyla izin verir.
+      const bucket = client.storage?.from('sinevia_saves');
+      if (!bucket) return;
+      const { error } = await bucket.remove([`${agentId}.json`]);
+      if (error) throw error;
     },
   };
 }

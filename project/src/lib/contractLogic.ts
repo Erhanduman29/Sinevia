@@ -144,14 +144,32 @@ export function evaluateContractProgress(
     return Number.isFinite(timestamp) && timestamp >= startedAt;
   });
 
+  // Puan/not, görevden ÖNCE izlenmiş bir içerikte görev sırasında da
+  // değiştirilebilir. Bu yüzden bu iki metrikte izleme zamanı yerine işlem
+  // zamanını (ratingChangedAt / noteChangedAt) esas alıyoruz. İkisi de yoksa
+  // eski davranış korunur: watchedAt >= startedAt.
+  const changedSinceStart = (entry: WatchHistoryItem, changedAt?: string): boolean => {
+    const watchedTime = new Date(entry.watchedAt).getTime();
+    const editTime = changedAt ? new Date(changedAt).getTime() : NaN;
+    const effective = Math.max(
+      Number.isFinite(watchedTime) ? watchedTime : 0,
+      Number.isFinite(editTime) ? editTime : 0,
+    );
+    return effective >= startedAt;
+  };
+
   const values: Record<ContractMetric, number> = {
     movies: entries.filter((entry) => entry.kind === 'movie').length,
     episodes: entries.filter((entry) => entry.kind === 'series' && !entry.bulkRating).length,
     items: entries.length,
     minutes: entries.reduce((sum, entry) => sum + entryMinutes(entry, data), 0),
     genres: new Set(entries.flatMap((entry) => entry.genres || []).filter(Boolean)).size,
-    ratings: entries.filter((entry) => entry.rating != null).length,
-    notes: entries.filter((entry) => (entry.note || '').trim().length > 0).length,
+    ratings: (data.history || []).filter(
+      (entry) => !entry.isPastWatch && entry.rating != null && changedSinceStart(entry, entry.ratingChangedAt),
+    ).length,
+    notes: (data.history || []).filter(
+      (entry) => !entry.isPastWatch && (entry.note || '').trim().length > 0 && changedSinceStart(entry, entry.noteChangedAt),
+    ).length,
     adds:
       (data.movies || []).filter((movie) => new Date(movie.addedAt).getTime() >= startedAt).length +
       (data.series || []).filter((series) => new Date(series.addedAt).getTime() >= startedAt).length,

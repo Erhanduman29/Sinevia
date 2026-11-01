@@ -201,6 +201,24 @@ describe('🎯 GÖREV SİSTEMİ (QUEST ENGINE) %100 KAPSAMLI TEST', () => {
       const notLow = mockH({ previousRating: 6, rating: 9, ratingChangedAt: '2026-10-04T16:00:00' });
       expect(checkQuest('r_second_chance', notLow, mockM({ rating: 9 }))).toBe(false);
     });
+
+    test('r_indecisive & r_second_chance: görevden ÖNCE izlenen film sonradan revize edilince sayılır', () => {
+      // Film görev kabulünden (12:00) önce izlenmiş, puanı görev sırasında değişmiş.
+      const oldWatch = {
+        itemId: 'm1', kind: 'movie',
+        watchedAt: '2026-10-04T10:00:00',
+        previousRating: 3, rating: 8,
+        ratingChangedAt: '2026-10-04T16:00:00',
+      };
+      const movie = mockM({ watchedAt: '2026-10-04T10:00:00', rating: 8 });
+      expect(checkQuest('r_indecisive', [oldWatch], movie)).toBe(true);
+      expect(checkQuest('r_second_chance', [oldWatch], movie)).toBe(true);
+
+      // Değişiklik görevden önceyse sayılmamalı.
+      const beforeAccept = { ...oldWatch, ratingChangedAt: '2026-10-04T09:00:00' };
+      expect(checkQuest('r_indecisive', [beforeAccept], movie)).toBe(false);
+      expect(checkQuest('r_second_chance', [beforeAccept], movie)).toBe(false);
+    });
   });
 
   // ==========================================

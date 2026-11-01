@@ -92,9 +92,10 @@ Girdiler:
 | 2 | `sameSaveHash(localHash, cloud.hash)` | Hiçbir şey (meta güncellenir) | `up-to-date` |
 | 3 | `localHash === lastSyncedHash` (yerel temiz) ve `canFastForward(local.revision, cloud.revision)` | Bulutu uygula | `cloud-loaded` |
 | 4 | `cloud.hash === lastSyncedHash` (bulut temiz) ve yerel kirli | Commit `baseRevision = cloud.revision` | `local-uploaded` |
-| 5 | Yerel kirli ve `cloud.hash !== lastSyncedHash` | Yazma yok | `conflict` reason `both-changed` |
+| 5 | Yerel kirli, `cloud.hash !== lastSyncedHash` ve **farklı/bilinmeyen cihaz** | Yazma yok | `conflict` reason `both-changed` |
+| 5a | İki taraf da kirli ama `cloud.deviceId === local.deviceId` | En yeni taraf otomatik kazanır: yerel yeni → commit, bulut yeni → indir | `local-uploaded` / `cloud-loaded` (soru yok) |
 | 6 | `cloud.ownerAgentId !== local.ownerAgentId` | Yazma yok | `conflict` reason `owner-mismatch` |
-| 7 | Commit `baseRevision !== server.revision` (sunucu reddetti) | Yazma yok | `conflict` reason `revision-mismatch` |
+| 7 | Commit `baseRevision !== server.revision` (sunucu reddetti) | Aynı cihazsa: bulut yeni → indir, yerel yeni → bir kez güncel revizyonla tekrar dene; farklı cihazsa yazma yok | `cloud-loaded` / `local-uploaded` / `conflict` reason `revision-mismatch` |
 | 8 | Ağ/kimlik doğrulama hatası | Yerel korunur | `error` (`retryable`) |
 
 Revizyon kuralları:
@@ -128,13 +129,23 @@ tekrarlandığında ikinci kayıt yazılmaz (idempotent).
 
 ## 4. SQL sözleşmesi (isimler sabit)
 
-Bu fazda SQL **değiştirilmez**; aşağıdaki isimler uygulama fazında beklenecek:
+SQL nesneleri `supabase/schema.sql` içinde tanımlıdır; istemci aşağıdaki isimleri bekler:
 
 | Nesne | Beklenen sözleşme |
 | --- | --- |
 | `app_saves` (tablo) | `agent_id text PK`, `revision bigint`, `updated_at timestamptz`, `device_id text`, `save_hash text`, `payload jsonb` |
 | `sync_get_state(p_agent_id text)` | Kaydı döner: `revision`, `updated_at`, `device_id`, `save_hash`, `payload`. Kayıt yoksa `NULL`. |
 | `sync_commit(p_agent_id text, p_base_revision bigint, p_device_id text, p_save_hash text, p_payload jsonb)` | Atomik: `p_base_revision` mevcut revizyona eşitse `revision + 1` yazıp yeni revizyonu döner; değilse `{ status: 'conflict', revision }`. `p_base_revision = 0` yalnız kayıt yokken kabul edilir. |
+| `storage.objects` policy `sinevia_legacy_archive_delete_own` | Yalnız `sinevia_saves/<agentId>.json` dosyasının Storage API'siyle silinmesine izin verir; ilgili `app_saves` satırı yoksa izin vermez. |
+
+Eski Storage arşivi (`sinevia_saves/<agentId>.json`) yalnız `app_saves` boşken
+okunur. Arşiv `app_saves`e taşındıktan sonra istemci
+`supabase.storage.from('sinevia_saves').remove([...])` ile nesneyi siler;
+böylece aynı hesap için iki bulut kopyası kalmaz. **Doğrudan SQL DELETE
+kullanılmaz:** fiziksel dosyayı S3'te bırakır (orphan) ve yeni Supabase
+sürümlerinde trigger tarafından reddedilir. Taşıma veya silme başarısızsa arşiv
+korunur; kalanlar Dashboard'dan tek seferde temizlenir. Hesap başına `app_saves`
+tek satırdır ve `sync_commit` üzerine yazar; sürüm geçmişi tutulmaz.
 
 `payload` içindeki `schemaVersion` `SAVE_SCHEMA_VERSION` (3) değilse istemci
 kaydı uygulamaz. `saveHash` sunucuda `payload`'dan yeniden hesaplanmaz

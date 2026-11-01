@@ -243,6 +243,40 @@ describe('Pazar görevleri', () => {
     expect(progress.completed).toBe(true);
     expect(progress.percent).toBe(100);
   });
+
+  test('görevden önce izlenen içeriğe sonradan puan eklenmesi sayılır', () => {
+    const def: ContractDef = {
+      id: 'test_rate', type: 'daily', title: 'Puanla', description: 'Test',
+      icon: '⭐', rarity: 'common', requirements: [{ metric: 'ratings', target: 1 }],
+      xpReward: 100, coinReward: 5, price: 50, durationHours: 24,
+    };
+    const startedAt = Date.now() - 60_000;
+    const data = base();
+    data.history = [{
+      id: '1', kind: 'movie', title: 'Eski Film', rating: 8, note: '',
+      watchedAt: new Date(Date.now() - 3600_000).toISOString(),
+      ratingChangedAt: new Date().toISOString(),
+      genres: ['Dram'],
+    }];
+    expect(evaluateContractProgress(def, startedAt, data).completed).toBe(true);
+  });
+
+  test('görevden önce izlenen içeriğe sonradan not yazılması sayılır', () => {
+    const def: ContractDef = {
+      id: 'test_note', type: 'daily', title: 'Not yaz', description: 'Test',
+      icon: '📝', rarity: 'common', requirements: [{ metric: 'notes', target: 1 }],
+      xpReward: 100, coinReward: 5, price: 50, durationHours: 24,
+    };
+    const startedAt = Date.now() - 60_000;
+    const data = base();
+    data.history = [{
+      id: '1', kind: 'movie', title: 'Eski Film', rating: null, note: 'Yeni not',
+      watchedAt: new Date(Date.now() - 3600_000).toISOString(),
+      noteChangedAt: new Date().toISOString(),
+      genres: ['Dram'],
+    }];
+    expect(evaluateContractProgress(def, startedAt, data).completed).toBe(true);
+  });
 });
 
 describe('Dizi süresi başarımları', () => {
