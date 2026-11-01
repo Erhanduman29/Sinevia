@@ -118,7 +118,11 @@ Revizyon kuralları:
 
 Birleştirme (merge) defter kuralı: iki defterin birleşimi `source+sourceId`
 ile tekilleştirilir; aynı anahtar iki tarafta da varsa **aynı `amount`**
-beklenir (yoksa sunucu kopyası kazanır ve `adjustment` ile fark kapatılır).
+beklenir. `amount` farklıysa sunucu (primary) satırı korunur ve fark
+`adjustment` kaynağıyla `sourceId = "merge-adjust:<source>:<sourceId>"`
+anahtarlı TEK bir kayıt olarak eklenir. Böylece hiçbir tarafın farkı sessizce
+kaybolmaz (`sum = primary + Σ(secondary − primary)`) ve aynı birleştirme
+tekrarlandığında ikinci kayıt yazılmaz (idempotent).
 
 ---
 
@@ -128,9 +132,9 @@ Bu fazda SQL **değiştirilmez**; aşağıdaki isimler uygulama fazında beklene
 
 | Nesne | Beklenen sözleşme |
 | --- | --- |
-| `app_saves` (tablo) | `owner_agent_id text PK`, `revision int`, `updated_at timestamptz`, `device_id text`, `save_hash text`, `payload jsonb`, `schema_version int` |
-| `sync_get_state(owner_agent_id text)` | Kaydı döner: `revision`, `updated_at`, `device_id`, `save_hash`, `payload`. Kayıt yoksa boş küme. |
-| `sync_commit(owner_agent_id text, base_revision int, device_id text, save_hash text, payload jsonb)` | Atomik: `base_revision` mevcut revizyona eşitse `revision + 1` yazıp yeni revizyonu döner; değilse `{ status: 'conflict', revision }`. `base_revision = 0` yalnız kayıt yokken kabul edilir. |
+| `app_saves` (tablo) | `agent_id text PK`, `revision bigint`, `updated_at timestamptz`, `device_id text`, `save_hash text`, `payload jsonb` |
+| `sync_get_state(p_agent_id text)` | Kaydı döner: `revision`, `updated_at`, `device_id`, `save_hash`, `payload`. Kayıt yoksa `NULL`. |
+| `sync_commit(p_agent_id text, p_base_revision bigint, p_device_id text, p_save_hash text, p_payload jsonb)` | Atomik: `p_base_revision` mevcut revizyona eşitse `revision + 1` yazıp yeni revizyonu döner; değilse `{ status: 'conflict', revision }`. `p_base_revision = 0` yalnız kayıt yokken kabul edilir. |
 
 `payload` içindeki `schemaVersion` `SAVE_SCHEMA_VERSION` (3) değilse istemci
 kaydı uygulamaz. `saveHash` sunucuda `payload`'dan yeniden hesaplanmaz

@@ -246,6 +246,53 @@ export function decideSyncAction(snapshot: SyncDecisionSnapshot): SyncDecision {
 }
 
 /* =========================================================================
+   ÇALIŞMA KAPISI (SAF) — AppContext otomatik/manüel senkron kararı
+   ========================================================================= */
+
+/**
+ * Senkronun çalışıp çalışamayacağı. `manual` kullanıcı düğmesidir: güven
+ * bekleyen onayları atlar, ancak açık çakışma/erteleme/sıfırlama yine durdurur.
+ */
+export interface SyncRunGate {
+  hydrated: boolean;
+  agentId: string | null | undefined;
+  /** Yerel kayıt güvenilir mi? (yedekten kurtarma / bozuk IDB'de false) */
+  trusted: boolean;
+  /** Yedekten kurtarılan kayıt için kullanıcı seçimi bekleniyor mu? */
+  approvalPending: boolean;
+  /** Kullanıcı "sonra" dedi mi? */
+  deferred: boolean;
+  /** Çözülmemiş çakışma var mı? */
+  conflictPending: boolean;
+  /** Hesap sıfırlama bayrağı açık mı? */
+  zeroReset?: boolean;
+}
+
+/** Otomatik (veya manüel) senkronun çalışmasına izin var mı? */
+export function shouldRunSync(gate: SyncRunGate, manual = false): boolean {
+  if (!gate.hydrated || !gate.agentId) return false;
+  if (gate.conflictPending || gate.deferred || gate.zeroReset) return false;
+  if (!manual && (gate.approvalPending || !gate.trusted)) return false;
+  return true;
+}
+
+/**
+ * "Bu cihazı buluta yükle" için sahip onayı gerekli mi?
+ * Yerel kaydın sahibi ile oturumdaki ajan farklıysa (hesap değişimi) yanlış
+ * hesabın bulutunu ezmemek için kullanıcıya AÇIKÇA sorulmalıdır.
+ */
+export function needsOwnerUploadConfirmation(
+  localOwnerAgentId: string | null | undefined,
+  sessionAgentId: string | null | undefined,
+): boolean {
+  return typeof localOwnerAgentId === 'string'
+    && typeof sessionAgentId === 'string'
+    && localOwnerAgentId.length > 0
+    && sessionAgentId.length > 0
+    && localOwnerAgentId !== sessionAgentId;
+}
+
+/* =========================================================================
    YARDIMCILAR
    ========================================================================= */
 

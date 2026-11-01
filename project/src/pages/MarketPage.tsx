@@ -46,6 +46,7 @@ import {
   getMarketItem,
   isCosmetic,
   isPermanentItem,
+  marketXpSourceId,
   type MarketItemDef,
   type MarketItemKind,
 } from '../lib/marketItems';
@@ -434,6 +435,24 @@ export default function MarketPage() {
     equipItem(slot, current);
   };
 
+  /**
+   * Pazar kullanımının XP anahtarı: ürünün satın alma `refId`'si varsa o
+   * kullanılır (deterministik + idempotent). Birden fazla alım varsa her
+   * kullanım sıradaki alım refId'siyle eşleşir; alım yoksa Date.now() korunur.
+   */
+  const marketUseSourceId = (itemId: string): string => {
+    const purchaseRefs = ledger
+      .filter((tx) => tx.kind === 'purchase' && tx.itemId === itemId)
+      .map((tx) => tx.refId)
+      .reverse(); // appendCoinTx başa yazar → en eski alım önce.
+    const usedCount = (data.xpEvents || []).filter(
+      (event) => event.source === 'market'
+        && typeof event.sourceId === 'string'
+        && event.sourceId.startsWith(`market:${itemId}:`),
+    ).length;
+    return marketXpSourceId(itemId, purchaseRefs[usedCount] ?? null);
+  };
+
   const handleUse = (item: MarketItemDef) => {
     if (!item.effect) return;
 
@@ -463,7 +482,7 @@ export default function MarketPage() {
       );
       const pick = candidates[Math.floor(Math.random() * Math.max(1, candidates.length))];
       activateItem(item.id, item.effect, item.name);
-      grantXp(200, 'market', `market:${item.id}:${Date.now()}`, item.name);
+      grantXp(200, 'market', marketUseSourceId(item.id), item.name);
       showToast(
         pick
           ? `Keşif önerisi: ${pick.title} · +200 XP`
@@ -475,7 +494,7 @@ export default function MarketPage() {
 
     if (item.effect === 'daily_ink') {
       activateItem(item.id, item.effect, item.name);
-      grantXp(100, 'market', `market:${item.id}:${Date.now()}`, item.name);
+      grantXp(100, 'market', marketUseSourceId(item.id), item.name);
       showToast('Günlük mürekkep kullanıldı · +100 XP', 'success');
       return;
     }

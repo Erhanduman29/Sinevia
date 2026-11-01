@@ -585,3 +585,17 @@ export function showcaseLimit(perks?: string[] | null): number {
     (perks?.includes('showcase_slot_1') ? 1 : 0) + (perks?.includes('showcase_slot_2') ? 1 : 0);
   return 4 + extra;
 }
+
+/**
+ * Pazar kullanımının XP idempotency anahtarı (`market` kaynağı `sourceId`).
+ * Satın alma coin hareketinin `refId`'si varsa deterministik olarak o kullanılır;
+ * yoksa (ör. eski/envanterden gelen ürün) zaman tabanlı anahtar korunur.
+ */
+export function marketXpSourceId(
+  itemId: string,
+  purchaseRefId?: string | null,
+  now: number = Date.now(),
+): string {
+  const ref = typeof purchaseRefId === 'string' ? purchaseRefId.trim() : '';
+  return ref ? `market:${itemId}:${ref}` : `market:${itemId}:${now}`;
+}

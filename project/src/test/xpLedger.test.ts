@@ -131,6 +131,41 @@ describe('xpLedger — saf fonksiyonlar', () => {
     expect(merged).toHaveLength(3);
     expect(sumXpEvents(merged)).toBe(1885);
   });
+
+  test('mergeXpLedgers: aynı anahtar farklı amount → bulut satırı + tek adjustment', () => {
+    const cloud = [
+      makeXpEvent({ source: 'achievement', sourceId: 'ach:shared', base: 100, createdAt: '2026-01-01T00:00:00.000Z' }),
+    ];
+    const local = [
+      makeXpEvent({ source: 'achievement', sourceId: 'ach:shared', base: 120, createdAt: '2026-01-01T00:00:01.000Z' }),
+    ];
+
+    const merged = mergeXpLedgers(cloud, local);
+
+    expect(merged).toHaveLength(2);
+    expect(merged[0].amount).toBe(100); // primary (bulut) korunur
+    const adjustment = merged[1];
+    expect(adjustment.source).toBe('adjustment');
+    expect(adjustment.sourceId).toBe('merge-adjust:achievement:ach:shared');
+    expect(adjustment.amount).toBe(20);
+    // İki tarafın farkı kaybolmaz: toplam, secondary'nin toplamına eşit açıklanır.
+    expect(sumXpEvents(merged)).toBe(120);
+  });
+
+  test('mergeXpLedgers: adjustment idempotent — ikinci birleştirme çift kayıt üretmez', () => {
+    const cloud = [makeXpEvent({ source: 'quest', sourceId: 'q1', base: 100 })];
+    const local = [makeXpEvent({ source: 'quest', sourceId: 'q1', base: 80 })];
+
+    const once = mergeXpLedgers(cloud, local);
+    const twice = mergeXpLedgers(once, local);
+    const thrice = mergeXpLedgers(twice, local);
+
+    expect(once).toHaveLength(2);
+    expect(sumXpEvents(once)).toBe(80);
+    expect(twice).toEqual(once);
+    expect(thrice).toEqual(once);
+    expect(thrice.filter((event) => event.source === 'adjustment')).toHaveLength(1);
+  });
 });
 
 describe('xpLedger — V2 göç (migrateLegacyXp)', () => {

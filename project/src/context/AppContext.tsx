@@ -77,6 +77,8 @@ import {
 import {
   createSupabaseSyncClient,
   createSyncEngine,
+  needsOwnerUploadConfirmation,
+  shouldRunSync,
   type SyncEngine,
   type SyncMetaStore,
   type SyncRpcClient,
@@ -2834,14 +2836,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Karar matrisini çalıştırır (getRemote → karar → gerekirse commit). */
   const runSync = useCallback(async (manual = false) => {
     const agentId = dataRef.current.agentId;
-    if (!hydrated || !agentId) return;
-    if (cloudConflictRef.current || syncDeferredRef.current) return;
-    if (!manual && syncApprovalPendingRef.current) return;
-    if (!manual && !hydrationTrustedRef.current) return;
+    let zeroReset = false;
+    try { zeroReset = localStorage.getItem('sinevia_zero_reset') === '1'; } catch { /* gizli mod */ }
+    const gate = shouldRunSync({
+      hydrated,
+      agentId,
+      trusted: hydrationTrustedRef.current,
+      approvalPending: syncApprovalPendingRef.current,
+      deferred: syncDeferredRef.current,
+      conflictPending: Boolean(cloudConflictRef.current),
+      zeroReset,
+    }, manual);
+    if (!gate || !agentId) return;
     if (syncInFlightRef.current) return;
-    try {
-      if (localStorage.getItem('sinevia_zero_reset') === '1') return;
-    } catch { /* gizli mod */ }
 
     if (!lastV3Ref.current) {
       lastV3Ref.current = fromLegacyCore(dataRef.current, null, {
@@ -3370,6 +3377,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!agentId) {
       showToast('Bulut hesabı bulunamadı; yükleme yapılamadı.', 'error');
       return;
+    }
+    // Yanlış hesabın bulut kaydını ezmemek için sahip uyuşmazlığında AÇIK onay şart.
+    const localOwner = lastV3Ref.current?.ownerAgentId ?? null;
+    if (needsOwnerUploadConfirmation(localOwner, agentId)) {
+      const confirmed = window.confirm(
+        `Bu cihazdaki kayıt "${localOwner}" hesabına ait, oturum açık hesap ise "${agentId}". `
+        + 'Yüklerseniz bu cihazdaki veriler oturumdaki hesabın bulut kaydının üzerine yazılacak. '
+        + 'Devam edilsin mi?',
+      );
+      if (!confirmed) {
+        showToast('Yükleme iptal edildi; hiçbir bulut kaydı değiştirilmedi.', 'info');
+        return;
+      }
     }
     hydrationTrustedRef.current = true;
     syncDeferredRef.current = false;

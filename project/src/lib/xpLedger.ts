@@ -187,6 +187,12 @@ export function appendXpEvent(
  * İki defteri `(source, sourceId)` ile birleştirir.
  * Çakışan anahtarda `primary` kopyası korunur (senkron sözleşmesinde bulut
  * kopyası kazanır; çağıran bulutu primary verir).
+ *
+ * `amount` iki tarafta FARKLIysa fark sessizce kaybolmaz: primary satırı
+ * korunur ve `(adjustment, merge-adjust:<source>:<sourceId>)` anahtarlı TEK bir
+ * fark kaydı eklenir. Böylece `sum(merged) = sum(primary) + Σ(secondary - primary)`
+ * olur ve mutabakat açıklanabilir kalır. Aynı anahtar için fark kaydı zaten
+ * varsa ikinci kez yazılmaz (idempotent).
  */
 export function mergeXpLedgers(
   primary: readonly XpEvent[] | null | undefined,
@@ -194,7 +200,26 @@ export function mergeXpLedgers(
 ): XpEvent[] {
   const merged = normalizeXpEvents(primary);
   for (const event of normalizeXpEvents(secondary)) {
-    if (!hasXpEvent(merged, event.source, event.sourceId)) merged.push(event);
+    const existing = merged.find(
+      (candidate) => candidate.source === event.source && candidate.sourceId === event.sourceId,
+    );
+    if (!existing) {
+      merged.push(event);
+      continue;
+    }
+
+    const diff = Math.round(finiteNumber(event.amount) - finiteNumber(existing.amount));
+    if (diff === 0) continue;
+    const adjustmentId = `merge-adjust:${xpEventKey(existing)}`;
+    if (hasXpEvent(merged, 'adjustment', adjustmentId)) continue;
+    merged.push(makeXpEvent({
+      source: 'adjustment',
+      sourceId: adjustmentId,
+      label: `Birleştirme düzeltmesi (${xpEventKey(existing)})`,
+      base: diff,
+      multiplier: 1,
+      createdAt: event.createdAt || existing.createdAt || new Date().toISOString(),
+    }));
   }
   return merged;
 }

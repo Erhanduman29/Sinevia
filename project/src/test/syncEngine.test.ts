@@ -418,9 +418,16 @@ describe('mergeForks / resolveConflict(merge)', () => {
 
     const merged = mergeForks(local, cloud, '2026-01-01T00:00:05.000Z');
 
-    expect(merged.xpEvents).toHaveLength(3);
-    expect(sumXpEvents(merged.xpEvents)).toBe(10 + 40 + 6);
+    expect(merged.xpEvents).toHaveLength(4);
+    // Bulut satırı (6) korunur + fark (5-6=-1) `adjustment` kaydına yazılır:
+    // hiçbir tarafın değeri sessizce atılmaz, toplam satırlarla açıklanır.
+    expect(sumXpEvents(merged.xpEvents)).toBe(10 + 40 + 6 - 1);
     expect(merged.xpEvents.filter((event) => event.sourceId === 'ach:shared')).toHaveLength(1);
+    const adjustment = merged.xpEvents.find(
+      (event) => event.source === 'adjustment'
+        && event.sourceId === 'merge-adjust:achievement:ach:shared',
+    );
+    expect(adjustment?.amount).toBe(-1);
     // `mergeForks` revizyonu KENDİ BAŞINA artırmaz.
     expect(merged.revision).toBe(cloud.revision);
   });
