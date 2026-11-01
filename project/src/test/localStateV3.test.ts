@@ -7,7 +7,9 @@ import {
   isAppStateV3,
   isBootSnapshotV3,
   isLegacyAppState,
+  mergeQuestStates,
   migrateLegacyToV3,
+  sameQuestState,
   toLegacyCoreView,
   LEGACY_XP_SOURCE_ID,
 } from '../lib/localStateV3';
@@ -367,5 +369,80 @@ describe('localStateV3 — boot snapshot', () => {
     expect(isBootSnapshotV3(snapshot)).toBe(true);
     // Boot snapshot'ı asla tam kayıt sanılmamalı.
     expect(isAppStateV3(snapshot)).toBe(false);
+  });
+});
+
+describe('localStateV3 — quests mutabakatı', () => {
+  const activeContract = {
+    instanceId: 'ci_active',
+    contractId: 'd_watch_2',
+    startedAt: 1000,
+    expiresAt: 2000,
+    free: true,
+    freeSource: 'daily' as const,
+  };
+
+  test('null quests önceki görev state\'ini SİLMEZ', () => {
+    const previous = migrateLegacyToV3({
+      core: makeV2Core(),
+      quests: { completedQuests: ['q-old'], activeQuestId: 'q-active' },
+    });
+
+    const state = fromLegacyCore(makeV2Core(), previous, { quests: null });
+
+    expect(state.quests.activeQuestId).toBe('q-active');
+    expect(state.quests.completedQuests).toEqual(['q-old']);
+  });
+
+  test('birleşim tamamlananları korur, yerel aktif sözleşmeyi ve ücretsiz hakkı kaybetmez', () => {
+    const merged = mergeQuestStates(
+      {
+        completedQuests: ['q-local'],
+        activeQuestId: 'q-active',
+        questAcceptedAt: 500,
+        activeContract,
+        freeDailyUsage: { date: '2026-06-01', count: 1 },
+        contractHistory: [
+          { instanceId: 'ci_old', contractId: 'd_old', startedAt: 1, completedAt: 10, xp: 10, coins: 1 },
+        ],
+      },
+      {
+        completedQuests: ['q-cloud', 'q-local'],
+        activeQuestId: null,
+        questAcceptedAt: null,
+        activeContract: null,
+        freeDailyUsage: { date: '2026-06-01', count: 0 },
+        contractHistory: [
+          { instanceId: 'ci_cloud', contractId: 'd_cloud', startedAt: 2, completedAt: 20, xp: 20, coins: 2 },
+        ],
+      },
+    );
+
+    expect(merged.completedQuests.sort()).toEqual(['q-cloud', 'q-local']);
+    expect(merged.activeQuestId).toBe('q-active');
+    expect(merged.activeContract?.instanceId).toBe('ci_active');
+    expect(merged.freeDailyUsage).toEqual({ date: '2026-06-01', count: 1 });
+    expect(merged.contractHistory?.map((entry) => entry.instanceId).sort()).toEqual(['ci_cloud', 'ci_old']);
+  });
+
+  test('tamamlanmış sözleşme aktif olarak geri gelmez', () => {
+    const merged = mergeQuestStates(
+      {
+        activeContract,
+        contractHistory: [
+          { instanceId: 'ci_active', contractId: 'd_watch_2', startedAt: 1000, completedAt: 1500, xp: 20, coins: 2 },
+        ],
+      },
+      { activeContract: null, contractHistory: [] },
+    );
+
+    expect(merged.activeContract).toBeNull();
+  });
+
+  test('sameQuestState anahtar sırasından bağımsızdır', () => {
+    expect(sameQuestState(
+      { activeQuestId: 'q1', completedQuests: [], questRejects: 0 },
+      { completedQuests: [], questRejects: 0, activeQuestId: 'q1' },
+    )).toBe(true);
   });
 });

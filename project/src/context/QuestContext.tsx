@@ -101,15 +101,31 @@ export function QuestProvider({ children }: { children: ReactNode }) {
 
   const [celebratingQuestId, setCelebratingQuestId] = useState<string | null>(null);
 
+  // Görev değişiklikleri AppContext'in (parent) kalıcılık efektinden ÖNCE
+  // senkron yazılmalı. Aksi halde ödül/activateItem dispatch'i eski görev
+  // state'ini V3'e kaydedip senkronla geri yazabiliyordu.
+  const questStateRef = useRef<QuestState>(questState);
+
+  const commitQuestState = (update: QuestState | ((prev: QuestState) => QuestState)) => {
+    const prev = questStateRef.current;
+    const next = typeof update === 'function' ? update(prev) : update;
+    if (next === prev) return;
+    questStateRef.current = next;
+    if (localStorage.getItem('sinevia_zero_reset') !== '1') {
+      try {
+        localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(next));
+        // AppContext kanonik V3 kopyasını anında tazeler (senkron için).
+        window.dispatchEvent(new CustomEvent('sinevia-quests-changed'));
+      } catch {
+        /* kota dolu / gizli mod */
+      }
+    }
+    setQuestState(next);
+  };
+
   // SIRA: görev tamamlanınca tam ekran kutlama (seviye/sezon) veya XP kartı
   // AÇIKSA kutlama ertelenir; hepsi bitince sırayla başlatılır.
   const queuedCelebrationRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    // Tam sıfırlama sürerken görev verisini geri YAZMA (silinen hesap dirilmesin).
-    if (localStorage.getItem('sinevia_zero_reset') === '1') return;
-    localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(questState));
-  }, [questState]);
 
   // Yedek geri yükleme / bulut eşitleme görevleri localStorage'a yazdığında
   // QuestContext'i anında tazele (yeniden yükleme beklemeden).
@@ -117,13 +133,13 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     const restoreQuests = () => {
       try {
         const stored = localStorage.getItem(QUEST_STORAGE_KEY);
-        if (!stored) {
-          setQuestState(defaultQuestState);
-          return;
-        }
-        const parsed = JSON.parse(stored);
-        setQuestState({ ...defaultQuestState, ...parsed });
+        const next = stored
+          ? { ...defaultQuestState, ...JSON.parse(stored) }
+          : defaultQuestState;
+        questStateRef.current = next;
+        setQuestState(next);
       } catch {
+        questStateRef.current = defaultQuestState;
         setQuestState(defaultQuestState);
       }
     };
@@ -132,7 +148,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const togglePenalty = () => {
-    setQuestState(prev => ({
+    commitQuestState(prev => ({
       ...prev,
       isPenaltyEnabled: !prev.isPenaltyEnabled,
       questRejects: 0,
@@ -141,7 +157,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
   };
 
   const acceptQuest = (questId: string) => {
-    setQuestState((prev) => ({
+    commitQuestState((prev) => ({
       ...prev,
       activeQuestId: questId,
       questAcceptedAt: Date.now(), 
@@ -149,7 +165,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
   };
 
   const rejectActiveQuest = () => {
-    setQuestState((prev) => {
+    commitQuestState((prev) => {
       if (!prev.isPenaltyEnabled) {
         return { ...prev, activeQuestId: null, questAcceptedAt: null };
       }
@@ -172,7 +188,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
   };
 
   const completeActiveQuest = (questId: string) => {
-    setQuestState((prev) => {
+    commitQuestState((prev) => {
       const newCompleted = Array.from(new Set([...prev.completedQuests, questId]));
       return {
         ...prev,
@@ -185,11 +201,11 @@ export function QuestProvider({ children }: { children: ReactNode }) {
   };
 
   const equipBadge = (questId: string | null) => {
-    setQuestState((prev) => ({ ...prev, activeBadgeId: questId }));
+    commitQuestState((prev) => ({ ...prev, activeBadgeId: questId }));
   };
 
   const resetQuestData = () => {
-    setQuestState(defaultQuestState);
+    commitQuestState(defaultQuestState);
   };
 
 
@@ -261,7 +277,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
 
     const startedAt = Date.now();
     const expiresAt = startedAt + def.durationHours * 60 * 60 * 1000;
-    setQuestState((prev) => ({
+    commitQuestState((prev) => ({
       ...prev,
       activeContract: {
         instanceId: `ci_${startedAt}_${Math.random().toString(36).slice(2, 8)}`,
@@ -293,7 +309,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       `Görev iptali: ${def?.title || 'Pazar görevi'}`,
       `contract-cancel:${questState.activeContract.instanceId}`,
     );
-    setQuestState((prev) => ({ ...prev, activeContract: null }));
+    commitQuestState((prev) => ({ ...prev, activeContract: null }));
     showToast(
       questState.activeContract.free
         ? 'Ücretsiz pazar görevi iptal edildi.'
@@ -311,7 +327,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
     if (!def) return false;
     const hours = def.type === 'daily' ? 24 : 72;
     activateItem(itemId, 'contract_extension', `Görev süresi +${hours} saat uzatıldı`);
-    setQuestState((prev) =>
+    commitQuestState((prev) =>
       prev.activeContract
         ? {
             ...prev,
@@ -328,7 +344,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
   const applyContractFailure = (instanceId: string, contractId: string) => {
     const def = CONTRACT_MAP.get(contractId);
     if (!def) {
-      setQuestState((prev) => ({ ...prev, activeContract: null }));
+      commitQuestState((prev) => ({ ...prev, activeContract: null }));
       return;
     }
     const wasFree =
@@ -358,7 +374,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       `Görev cezası: ${def.title}`,
       `contract-fail:${instanceId}`,
     );
-    setQuestState((prev) => ({ ...prev, activeContract: null }));
+    commitQuestState((prev) => ({ ...prev, activeContract: null }));
     if (wasFree) {
       showToast(`"${def.title}" ücretsiz görevi sona erdi. Ceza yok.`, 'info');
     } else if (penalty > 0) {
@@ -406,7 +422,7 @@ export function QuestProvider({ children }: { children: ReactNode }) {
       multiplier: boostedMultiplier,
       sourceId: `contract:${activeContract.instanceId}`,
     });
-    setQuestState((prev) => ({
+    commitQuestState((prev) => ({
       ...prev,
       activeContract: null,
       contractHistory: [

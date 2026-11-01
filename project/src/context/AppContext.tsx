@@ -72,6 +72,9 @@ import {
   fromLegacyCore,
   isAppStateV3,
   migrateLegacyToV3,
+  mergeQuestStates,
+  normalizeQuestStateValue,
+  sameQuestState,
   toLegacyCoreView,
 } from '../lib/localStateV3';
 import {
@@ -132,6 +135,12 @@ function rememberNotificationPrefs(prefs: NotificationPrefs) {
 function applyNotificationPrefs<T extends Record<string, any>>(input: T): T {
   const prefs = readNotificationPrefs();
   return Object.keys(prefs).length > 0 ? { ...input, ...prefs } : input;
+}
+
+/** localStorage'daki görev kaydını yalnız geçerli bir nesne ise döndür. */
+function readValidQuestState(): unknown | null {
+  const raw = readQuestState();
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
 }
 
 export const PAST_WATCH_COLLECTION_NAME = 'Eskiden İzlenenler';
@@ -2185,11 +2194,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         //    'sinevia-v1-backup'a düşer ve `source` ile bunu bildirir.
         const { state, source } = await loadStateV3WithSource();
         if (state) {
-          lastV3Ref.current = state;
+          // Açılış mutabakatı: localStorage'daki canlı görev seçimi ile V3
+          // kopyası çakışırsa alan bazında birleştir. Eski IDB kaydı, az önce
+          // başlatılmış görevi/sözleşmeyi veya ücretsiz kullanım hakkını ezmesin.
+          const liveQuests = readValidQuestState();
+          const mergedQuests = liveQuests != null
+            ? mergeQuestStates(liveQuests, state.quests)
+            : state.quests;
+          const hydratedState: AppStateV3 = { ...state, quests: mergedQuests };
+          lastV3Ref.current = hydratedState;
           skipUpdatedAtBumpRef.current = true;
+          if (liveQuests == null || !sameQuestState(mergedQuests, liveQuests)) {
+            writeQuestState(mergedQuests);
+          }
           dispatch({
             type: 'HYDRATE_FROM_IDB',
-            data: toLegacyCoreView(state) as unknown as ExtendedAppData,
+            data: toLegacyCoreView(hydratedState) as unknown as ExtendedAppData,
           });
           if (source === 'backup') {
             // Yedekten kurtarılan kayıt sahada güvenilmez sayılır: yerel olarak
@@ -2225,7 +2245,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const previous = lastV3Ref.current;
     const bumpUpdatedAt = !skipUpdatedAtBumpRef.current;
     skipUpdatedAtBumpRef.current = false;
-    const quests = readQuestState();
+    const quests = readValidQuestState() ?? undefined;
     const extras = readLegacyExtras();
 
     // İçerik değişmediyse (yalnız geçici UI state'i değişti) updatedAt bump etme
@@ -2773,14 +2793,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }), []);
 
   /** Motorun indirdiği/commit ettiği kanonik kaydı yerel state'e uygular. */
-  function applySyncedState(state: AppStateV3) {
-    lastV3Ref.current = state;
+  function applySyncedState(state: AppStateV3, source: 'download' | 'upload') {
+    // Yükleme yolu yalnızca commit onayıdır: buluttan gelen eski quest kopyası
+    // canlı seçimi EZMEMELİ. İndirmede ise bulut kaydı bilinçli olarak uygulanır.
+    let canonical = state;
+    if (source === 'upload') {
+      const liveQuests = readValidQuestState();
+      if (liveQuests != null) {
+        canonical = { ...state, quests: normalizeQuestStateValue(liveQuests) };
+      }
+    }
+    lastV3Ref.current = canonical;
     skipUpdatedAtBumpRef.current = true;
-    writeQuestState(state.quests);
-    const view = toLegacyCoreView(state) as unknown as ExtendedAppData;
+    if (source === 'download') {
+      writeQuestState(canonical.quests);
+    }
+    const view = toLegacyCoreView(canonical) as unknown as ExtendedAppData;
     dataRef.current = view;
-    dispatch({ type: 'REPLACE_FROM_CLOUD_STORAGE', data: view, questData: state.quests });
-    void saveStateV3Immediate(state, { backup: true });
+    dispatch({
+      type: 'REPLACE_FROM_CLOUD_STORAGE',
+      data: view,
+      questData: source === 'download' ? canonical.quests : undefined,
+    });
+    void saveStateV3Immediate(canonical, { backup: true });
+  }
+
+  /** Kanonik kopyaya canlı localStorage görev state'ini bindir. */
+  function withLiveQuests(state: AppStateV3): AppStateV3 {
+    const liveQuests = readValidQuestState();
+    if (liveQuests == null) return state;
+    const quests = normalizeQuestStateValue(liveQuests);
+    if (sameQuestState(state.quests, quests)) return state;
+    return { ...state, quests, updatedAt: new Date().toISOString() };
   }
 
   const syncEngine = useMemo<SyncEngine>(() => {
@@ -2790,17 +2834,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deviceId: readDeviceId(),
       }),
       deviceId: readDeviceId(),
-      getState: () => lastV3Ref.current ?? fromLegacyCore(dataRef.current, null, {
-        quests: readQuestState(),
-        extras: readLegacyExtras(),
-        updatedAt: new Date().toISOString(),
-      }),
+      getState: () => {
+        const base = lastV3Ref.current;
+        if (base) return withLiveQuests(base);
+        return fromLegacyCore(dataRef.current, null, {
+          quests: readValidQuestState(),
+          extras: readLegacyExtras(),
+          updatedAt: new Date().toISOString(),
+        });
+      },
       setState: applySyncedState,
       meta: syncMetaStore,
     });
     return engine;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- applySyncedState yalnız ref/dispatch kullanır
   }, [syncMetaStore]);
+
+  // Görev değişikliklerini kanonik V3 kopyasına ANINDA yansıt. Bu event
+  // QuestContext tarafından localStorage yazımından hemen sonra gönderilir.
+  useEffect(() => {
+    const onQuestsChanged = () => {
+      if (localStorage.getItem('sinevia_zero_reset') === '1') return;
+      const previous = lastV3Ref.current;
+      if (!previous) return;
+      const liveQuests = readValidQuestState();
+      if (liveQuests == null) return;
+      const quests = normalizeQuestStateValue(liveQuests);
+      if (sameQuestState(previous.quests, quests)) return;
+      const next: AppStateV3 = { ...previous, quests, updatedAt: new Date().toISOString() };
+      lastV3Ref.current = next;
+      skipUpdatedAtBumpRef.current = true;
+      saveStateV3(next);
+    };
+    window.addEventListener('sinevia-quests-changed', onQuestsChanged);
+    return () => window.removeEventListener('sinevia-quests-changed', onQuestsChanged);
+  }, []);
 
   function handleSyncResult(result: SyncResult, manual = false) {
     switch (result.status) {
@@ -2858,7 +2925,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (!lastV3Ref.current) {
       lastV3Ref.current = fromLegacyCore(dataRef.current, null, {
-        quests: readQuestState(),
+        quests: readValidQuestState(),
         extras: readLegacyExtras(),
         updatedAt: new Date().toISOString(),
       });
@@ -3004,7 +3071,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
 
       dispatch({ type: 'RECOVER_IDENTITY', agentId, recoveryKey: keyToStore, nickname });
-      applySyncedState(state);
+      applySyncedState(state, 'download');
       syncMetaStore.setLastSyncedHash(agentId, makeSaveHash(state));
       syncDeferredRef.current = false;
       syncApprovalPendingRef.current = false;
@@ -3249,7 +3316,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateAltWatchTemplate = useCallback((template: string) => { dispatch({ type: 'UPDATE_ALT_TEMPLATE', template }); showToast('Alternatif izleme şablonu güncellendi', 'success'); }, [showToast]);
   const updateTheme = useCallback((theme: string) => { dispatch({ type: 'SET_THEME', theme }); showToast('Tema değiştirildi', 'success'); }, [showToast]);
   const exportData = useCallback(() => {
-    const payload = buildBackupPayload(data, readQuestState(), readBackupExtras());
+    const payload = buildBackupPayload(data, readValidQuestState(), readBackupExtras());
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a');
     a.href = url;

@@ -15,6 +15,7 @@ import CoinPill, { SineCoinIcon } from '../components/CoinPill';
 import { levelFromXp } from '../lib/xp';
 import { ACHIEVEMENT_DEFS, AchievementIcon } from '../lib/achievements';
 import { getNextUnwatchedEpisode, formatDateShort, todayStr, normalize, ratingBgClass } from '../lib/utils';
+import { APP_VERSION, APP_VERSION_LABEL } from '../lib/appVersion';
 import {
   supabase,
   PROFILE_PUBLIC_COLUMNS, FRIENDSHIP_COLUMNS, NETWORK_LOG_COLUMNS,
@@ -1514,6 +1515,16 @@ export default function HomePage() {
 
   return (
     <div className="space-y-3.5 sm:space-y-8 animate-fade-in pb-6 sm:pb-10 max-w-[1400px] mx-auto">
+      {/* SÜRÜM — ana sayfanın en üstünde her zaman görünür. */}
+      <div className="flex items-center justify-end">
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[9.5px] font-black uppercase tracking-[0.18em] text-emerald-300/90"
+          title={`Sinevia uygulama sürümü: ${APP_VERSION}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+          Sürüm {APP_VERSION_LABEL}
+        </span>
+      </div>
       {!networkUser && (
         <div className="rounded-[18px] border border-amber-500/30 bg-amber-950/20 p-4 sm:p-6 animate-fade-in" style={{ backgroundColor: 'rgba(245, 158, 11, .12)' }}>
           <div className="flex items-center gap-3 mb-2">

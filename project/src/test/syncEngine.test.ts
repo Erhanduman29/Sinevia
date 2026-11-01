@@ -7,6 +7,7 @@ import { makeXpEvent, sumXpEvents } from '../lib/xpLedger';
 import {
   createSyncEngine,
   decideSyncAction,
+  isEmptyState,
   mergeForks,
   SyncEngineError,
   type SyncClient,
@@ -102,15 +103,23 @@ function envelopeOf(state: AppStateV3, revision = 0): SaveEnvelope {
 function createHarness(initial: AppStateV3, cloud: FakeCloud, meta = memoryMeta()) {
   let local = initial;
   const applied: AppStateV3[] = [];
+  const appliedSources: Array<'download' | 'upload'> = [];
   const engine = createSyncEngine({
     client: cloud.client,
     deviceId: 'dev-1',
     getState: () => local,
-    setState: (next) => { local = next; applied.push(next); },
+    setState: (next, source) => { local = next; applied.push(next); appliedSources.push(source); },
     meta,
     now: () => '2026-01-01T00:00:05.000Z',
   });
-  return { engine, meta, applied, getLocal: () => local, setLocal: (next: AppStateV3) => { local = next; } };
+  return {
+    engine,
+    meta,
+    applied,
+    appliedSources,
+    getLocal: () => local,
+    setLocal: (next: AppStateV3) => { local = next; },
+  };
 }
 
 /* -------------------------------------------------------------------------
@@ -601,5 +610,51 @@ describe('classifySyncError / geçersiz gövde', () => {
     expect(result.status).toBe('error');
     if (result.status !== 'error') throw new Error('expected error');
     expect(result.error.code).toBe('invalid-envelope');
+  });
+});
+
+describe('quest state — senkron kaynağı ve boş kayıt', () => {
+  test('yalnız görev aktivitesi olan kayıt "boş" sayılmaz (cloud-only indirme yok)', () => {
+    expect(isEmptyState(stateWith())).toBe(true);
+    expect(isEmptyState(stateWith({
+      quests: { ...createEmptyAppStateV3().quests, activeQuestId: 'q-active' },
+    }))).toBe(false);
+    expect(isEmptyState(stateWith({
+      quests: {
+        ...createEmptyAppStateV3().quests,
+        activeContract: {
+          instanceId: 'ci_1',
+          contractId: 'd_watch_2',
+          startedAt: 1,
+          expiresAt: 2,
+          free: true,
+        },
+      },
+    }))).toBe(false);
+  });
+
+  test('yükleme onayı setState\'e "upload" olarak bildirilir', async () => {
+    const cloud = new FakeCloud();
+    const harness = createHarness(stateWith(), cloud);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('local-uploaded');
+    expect(harness.appliedSources).toEqual(['upload']);
+  });
+
+  test('bulut indirme setState\'e "download" olarak bildirilir', async () => {
+    const cloud = new FakeCloud();
+    const local = stateWith({ revision: 1 });
+    const remote = xpState('ach:cloud', 40, { revision: 5, deviceId: 'dev-2' });
+    const meta = memoryMeta();
+    meta.setLastSyncedHash('SNV-AAAA-0001', makeSaveHash(local));
+    cloud.record = cloudOf(remote, 5);
+    const harness = createHarness(local, cloud, meta);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('cloud-loaded');
+    expect(harness.appliedSources).toEqual(['download']);
   });
 });

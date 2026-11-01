@@ -19,6 +19,7 @@
  */
 
 import { levelFromXp } from './xp';
+import { stableStringify } from './syncContract';
 import { LEGACY_MIGRATION_ID, migrateLegacyXp, normalizeXpEvents, sumXpEvents } from './xpLedger';
 import type {
   AcademyProgressV3,
@@ -483,6 +484,94 @@ function normalizeQuestState(raw: unknown): { quests: QuestStateV3; unknown: Rec
   return { quests, unknown };
 }
 
+/** Bir quest kaydını (localStorage / V3 / yedek) güvenli V3 şekline çevirir. */
+export function normalizeQuestStateValue(raw: unknown): QuestStateV3 {
+  return normalizeQuestState(raw).quests;
+}
+
+/** İki quest kaydı içerik olarak aynı mı? (anahtar sırası önemsiz) */
+export function sameQuestState(
+  a: unknown,
+  b: unknown,
+): boolean {
+  return stableStringify(normalizeQuestStateValue(a)) === stableStringify(normalizeQuestStateValue(b));
+}
+
+/**
+ * İki quest kaydını alan bazında birleştirir (çakışma çözümü / açılış mutabakatı).
+ *
+ * - `completedQuests` her iki tarafta da korunur.
+ * - `contractHistory` `instanceId` bazında tekilleşir (en yeni kayıt kazanır).
+ * - Aktif görev/sözleşme yalnızca tamamlanmamışsa ve daha yeni başlatılmışsa korunur.
+ * - Ücretsiz kullanım sayaçları geriye gitmez (tarih/hafta + maksimum adet).
+ */
+export function mergeQuestStates(localRaw: unknown, cloudRaw: unknown): QuestStateV3 {
+  const local = normalizeQuestStateValue(localRaw);
+  const cloud = normalizeQuestStateValue(cloudRaw);
+
+  const completedQuests = Array.from(
+    new Set([...(cloud.completedQuests ?? []), ...(local.completedQuests ?? [])]),
+  );
+
+  const historyByInstance = new Map<string, NonNullable<QuestStateV3['contractHistory']>[number]>();
+  for (const entry of [...(cloud.contractHistory ?? []), ...(local.contractHistory ?? [])]) {
+    if (!entry || typeof entry.instanceId !== 'string') continue;
+    const existing = historyByInstance.get(entry.instanceId);
+    if (!existing || Number(entry.completedAt ?? 0) >= Number(existing.completedAt ?? 0)) {
+      historyByInstance.set(entry.instanceId, entry);
+    }
+  }
+  const contractHistory = Array.from(historyByInstance.values())
+    .sort((a, b) => Number(b.completedAt ?? 0) - Number(a.completedAt ?? 0))
+    .slice(0, 100);
+  const completedContractIds = new Set(contractHistory.map((entry) => entry.instanceId));
+
+  const activeQuest = [local, cloud]
+    .filter((side) => side.activeQuestId && !completedQuests.includes(side.activeQuestId))
+    .sort((a, b) => Number(b.questAcceptedAt ?? 0) - Number(a.questAcceptedAt ?? 0))[0] ?? null;
+
+  const activeContract = [local, cloud]
+    .filter((side) => side.activeContract && !completedContractIds.has(side.activeContract.instanceId))
+    .sort((a, b) => Number(b.activeContract?.startedAt ?? 0) - Number(a.activeContract?.startedAt ?? 0))[0]
+    ?.activeContract ?? null;
+
+  let freeDailyUsage = local.freeDailyUsage ?? cloud.freeDailyUsage;
+  if (local.freeDailyUsage && cloud.freeDailyUsage) {
+    if (local.freeDailyUsage.date > cloud.freeDailyUsage.date) {
+      freeDailyUsage = local.freeDailyUsage;
+    } else if (local.freeDailyUsage.date < cloud.freeDailyUsage.date) {
+      freeDailyUsage = cloud.freeDailyUsage;
+    } else {
+      freeDailyUsage = {
+        date: local.freeDailyUsage.date,
+        count: Math.max(local.freeDailyUsage.count, cloud.freeDailyUsage.count),
+      };
+    }
+  }
+
+  let freePinnedUsage = cloud.freePinnedUsage ?? local.freePinnedUsage;
+  if (local.freePinnedUsage && cloud.freePinnedUsage) {
+    freePinnedUsage = local.freePinnedUsage.week >= cloud.freePinnedUsage.week
+      ? local.freePinnedUsage
+      : cloud.freePinnedUsage;
+  }
+
+  const merged: QuestStateV3 = {
+    activeQuestId: activeQuest?.activeQuestId ?? null,
+    questAcceptedAt: activeQuest?.questAcceptedAt ?? null,
+    questRejects: local.questRejects,
+    questCooldownUntil: local.questCooldownUntil ?? cloud.questCooldownUntil,
+    completedQuests,
+    activeBadgeId: local.activeBadgeId ?? cloud.activeBadgeId,
+    isPenaltyEnabled: local.isPenaltyEnabled,
+    activeContract,
+    contractHistory,
+  };
+  if (freeDailyUsage) merged.freeDailyUsage = freeDailyUsage;
+  if (freePinnedUsage) merged.freePinnedUsage = freePinnedUsage;
+  return merged;
+}
+
 function normalizeSettings(
   core: Record<string, unknown>,
   extras: Record<string, unknown>,
@@ -755,7 +844,7 @@ export function fromLegacyCore(
     xpEvents = buildLegacyXpEvents(source, composeUpdatedAt, undefined, undefined);
   }
 
-  const questsSource = options.quests !== undefined ? options.quests : previous?.quests;
+  const questsSource = options.quests != null ? options.quests : previous?.quests;
   const { content, legacy } = mapContentFromCore(source, extras, fallback, questsSource);
 
   const state: AppStateV3 = {

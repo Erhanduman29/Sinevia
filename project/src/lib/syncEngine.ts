@@ -38,6 +38,7 @@ import {
 } from './syncContract';
 import { mergeXpLedgers, normalizeXpEvents, sumXpEvents } from './xpLedger';
 import { parseBackupPayload } from './appBackup';
+import { mergeQuestStates } from './localStateV3';
 
 /* =========================================================================
    SABİTLER — SQL ile BİREBİR aynı (isimler değiştirilemez).
@@ -79,8 +80,12 @@ export interface SyncEngineDeps {
   deviceId: string;
   /** Yerel kanonik kayıt okuyucu. */
   getState: () => AppStateV3;
-  /** Yerel kanonik kayıt yazıcı (senkron sonucu uygulanır). */
-  setState: (state: AppStateV3) => void | Promise<void>;
+  /**
+   * Yerel kanonik kayıt yazıcı (senkron sonucu uygulanır).
+   * `source='download'` bulut kaydının aynen uygulandığı, `'upload'` ise
+   * yalnız yerel commit'in onaylandığı anlamına gelir.
+   */
+  setState: (state: AppStateV3, source: 'download' | 'upload') => void | Promise<void>;
   /** Cihaz başına "son eşitlenen bulut hash'i". */
   meta?: SyncMetaStore;
   /** ISO 8601 üretici (testlerde sabitlenebilir). */
@@ -368,8 +373,20 @@ export function isSyncPayload(value: unknown): value is AppStateV3 {
 }
 
 /** Yerel kayıt "boş" mu? (yalnız cloud-only tespiti için) */
-export function isEmptyState(state: Pick<AppStateV3, 'movies' | 'series' | 'history' | 'xpEvents'>): boolean {
-  return (state.movies?.length ?? 0) === 0
+export function isEmptyState(
+  state: Pick<AppStateV3, 'movies' | 'series' | 'history' | 'xpEvents' | 'quests'>,
+): boolean {
+  const quests = state.quests;
+  const hasQuestActivity = Boolean(
+    quests?.activeQuestId
+    || quests?.activeContract
+    || (quests?.completedQuests?.length ?? 0) > 0
+    || (quests?.contractHistory?.length ?? 0) > 0
+    || (quests?.freeDailyUsage?.count ?? 0) > 0
+    || quests?.freePinnedUsage,
+  );
+  return !hasQuestActivity
+    && (state.movies?.length ?? 0) === 0
     && (state.series?.length ?? 0) === 0
     && (state.history?.length ?? 0) === 0
     && sumXpEvents(state.xpEvents) <= 0;
@@ -509,10 +526,7 @@ export function mergeForks(local: AppStateV3, cloud: AppStateV3, updatedAt: stri
     genres: unionStrings(cloud.genres, local.genres),
     removedSeriesTitles: unionStrings(cloud.removedSeriesTitles, local.removedSeriesTitles),
     achievements: mergeAchievements(cloud.achievements, local.achievements),
-    quests: {
-      ...cloud.quests,
-      completedQuests: unionStrings(cloud.quests?.completedQuests, local.quests?.completedQuests),
-    },
+    quests: mergeQuestStates(local.quests, cloud.quests),
     coinLedger: mergeByIdKeepingBoth(cloud.coinLedger, local.coinLedger),
     inventory: mergeInventory(cloud.inventory, local.inventory),
     perks: unionStrings(cloud.perks, local.perks),
@@ -596,7 +610,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       deviceId: cloud.payload.deviceId || cloud.deviceId || deps.deviceId,
       updatedAt: cloud.payload.updatedAt || cloud.updatedAt || now(),
     };
-    void deps.setState(applied);
+    void deps.setState(applied, 'download');
     const envelope = buildLocalEnvelope(agentId, applied, revision);
     // Sunucunun sakladığı hash ile bizim normalize gövdemizin hash'i farklı
     // olabilir (yabancı istemci). Yerel temiz sayılması için yerel hash yazılır.
@@ -700,7 +714,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       revision,
       updatedAt: payload.updatedAt,
     };
-    void deps.setState(committed);
+    void deps.setState(committed, 'upload');
     writeHash(agentId, makeSaveHash(committed));
     return {
       status: 'local-uploaded',
