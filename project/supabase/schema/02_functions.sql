@@ -1404,9 +1404,12 @@ begin
   v_total_xp := greatest(0, round(v_total_xp));
 
   -- level: payload.level (sayı ise). Yoksa mevcut level korunur.
-  if jsonb_typeof(p_payload->'level') = 'number' then
-    v_level := greatest(1, round((p_payload->>'level')::numeric)::integer);
-  end if;
+  -- AppStateV3 has NO level field: level is DERIVED from total XP with the
+  -- same arithmetic as src/lib/xp.ts (L2 = 250, each next level +25).
+  -- cumulative(L) = 12.5*L^2 + 212.5*L - 225  =>  closed form below.
+  v_level := greatest(1, floor(
+    (-212.5 + sqrt(45156.25 + 50 * (225 + v_total_xp))) / 25
+  )::integer);
 
   -- movies: watched = true; isPastWatch = true olanlar "önceki film".
   if jsonb_typeof(p_payload->'movies') = 'array' then
@@ -1524,8 +1527,8 @@ begin
   -- 5) profiles özeti (YALNIZCA var olan satır güncellenir; yeni satır
   --    OLUŞTURULMAZ). Sayaçlar asla aşağı yazılmaz: en büyük değer korunur.
   update public.profiles p
-  set total_xp = greatest(p.total_xp, v_total_xp::integer),
-      level = greatest(p.level, coalesce(v_level, 1)),
+  set total_xp = v_total_xp::integer,
+      level = coalesce(v_level, 1),
       movies_watched = greatest(p.movies_watched, v_movies),
       past_movies_watched = greatest(p.past_movies_watched, v_past_movies),
       series_watched = greatest(p.series_watched, v_series),
