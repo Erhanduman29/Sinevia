@@ -723,4 +723,113 @@ describe('quest state — senkron kaynağı ve boş kayıt', () => {
     expect(makeSaveHash(metadataOnly)).not.toBe(makeSaveHash(base));
     expect(makeContentHash(contentChanged)).not.toBe(makeContentHash(base));
   });
+
+  test('cihaza özel/ayar alanları ve dizi sırası çakışma hash’ini değiştirmez', () => {
+    const base = stateWith({
+      movies: [
+        { id: 'm2', title: 'İkinci' },
+        { id: 'm1', title: 'Birinci' },
+      ] as AppStateV3['movies'],
+    });
+    const sameContentDifferentUi: AppStateV3 = {
+      ...base,
+      settings: { ...base.settings, theme: 'light', nickname: 'Başka İsim' },
+      tutorial: { ...base.tutorial, welcomeDone: true, completed: ['welcome'] },
+      academy: { ...base.academy, started: true, step: 3 },
+      equipped: { ...base.equipped, badgeId: 'badge-x' },
+      activeEffects: [{ itemId: 'util_xp_boost', charges: 1 }],
+      pinnedContract: { week: '2026-W20', contractId: 'd_watch_2' },
+      marketIntroSeen: true,
+      marketRerollNonce: 4,
+      marketDailyNonce: 7,
+      marketWeeklyNonce: 2,
+      coins: 999,
+      dailyStreakDate: '2026-05-20',
+      lastWatchDate: '2026-05-20',
+      externalActions: [{ id: 'x' } as NonNullable<AppStateV3['externalActions']>[number]],
+      movies: [
+        { id: 'm1', title: 'Birinci' },
+        { id: 'm2', title: 'İkinci' },
+      ] as AppStateV3['movies'],
+    };
+
+    expect(makeContentHash(sameContentDifferentUi)).toBe(makeContentHash(base));
+    // Film puanı gibi işlenmiş gerçek veri değişirse hash DEĞİŞİR.
+    const ratingChanged: AppStateV3 = {
+      ...sameContentDifferentUi,
+      movies: sameContentDifferentUi.movies.map((movie) => (
+        movie.id === 'm1' ? { ...movie, rating: 8 } : movie
+      )),
+    };
+    expect(makeContentHash(ratingChanged)).not.toBe(makeContentHash(base));
+  });
+
+  test('iki taraf kirli ama yalnızca ayar/cihaz alanları farklıysa çakışma yok', async () => {
+    const cloud = new FakeCloud();
+    const local = stateWith({
+      settings: { ...stateWith().settings, theme: 'dark' },
+      movies: [{ id: 'm1', title: 'Aynı Film' }] as AppStateV3['movies'],
+    });
+    const cloudPayload: AppStateV3 = {
+      ...local,
+      settings: { ...local.settings, theme: 'light' },
+      revision: 5,
+      updatedAt: '2026-01-01T00:00:04.000Z',
+      deviceId: 'dev-2',
+    };
+    const meta = memoryMeta();
+    meta.setLastSyncedHash('SNV-AAAA-0001', 'stale-hash');
+    cloud.record = cloudOf(cloudPayload, 5);
+    const harness = createHarness(local, cloud, meta);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('up-to-date');
+    expect(harness.applied).toHaveLength(0);
+  });
+
+  test('yalnızca yerel ayar değiştiyse çakışma değil, normal yükleme yapılır', async () => {
+    const cloud = new FakeCloud();
+    const local = stateWith({
+      settings: { ...stateWith().settings, theme: 'dark' },
+      movies: [{ id: 'm1', title: 'Aynı Film' }] as AppStateV3['movies'],
+    });
+    const cloudPayload: AppStateV3 = {
+      ...local,
+      settings: { ...local.settings, theme: 'light' },
+      revision: 4,
+      updatedAt: '2026-01-01T00:00:04.000Z',
+      deviceId: 'dev-2',
+    };
+    const meta = memoryMeta();
+    cloud.record = cloudOf(cloudPayload, 4);
+    meta.setLastSyncedHash('SNV-AAAA-0001', makeSaveHash(cloudPayload));
+    const harness = createHarness(local, cloud, meta);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('local-uploaded');
+    expect(harness.appliedSources).toEqual(['upload']);
+  });
+
+  test('yalnızca bulut ayarı değiştiyse çakışma değil, normal indirme yapılır', async () => {
+    const cloud = new FakeCloud();
+    const local = stateWith({ settings: { ...stateWith().settings, theme: 'dark' } });
+    const cloudPayload: AppStateV3 = {
+      ...local,
+      settings: { ...local.settings, theme: 'light' },
+      revision: 8,
+      updatedAt: '2026-01-01T00:00:04.000Z',
+      deviceId: 'dev-2',
+    };
+    const meta = memoryMeta();
+    cloud.record = cloudOf(cloudPayload, 8);
+    meta.setLastSyncedHash('SNV-AAAA-0001', makeSaveHash(local));
+    const harness = createHarness(local, cloud, meta);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('cloud-loaded');
+    expect(harness.appliedSources).toEqual(['download']);
+  });
 });

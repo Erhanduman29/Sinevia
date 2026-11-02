@@ -258,17 +258,39 @@ export function decideSyncAction(snapshot: SyncDecisionSnapshot): SyncDecision {
     return { kind: 'upload', baseRevision: 0, reason: 'cloud-empty' };
   }
 
-  // 2) İçerik birebir aynıysa çakışma YOKTUR. `updatedAt`, `revision` veya
-  //    `deviceId` farkı yalnızca zarftır; kullanıcı verisi değişmemiştir.
-  if (
+  const localClean = sameSaveHash(localHash, lastSyncedHash);
+  const cloudClean = sameSaveHash(cloud.saveHash, lastSyncedHash);
+  const sameContent = Boolean(
     snapshot.localContentHash
     && cloud.contentHash
-    && snapshot.localContentHash === cloud.contentHash
-  ) {
+    && snapshot.localContentHash === cloud.contentHash,
+  );
+
+  // 2) İÇERİK aynıysa çakışma YOKTUR. Saat, revizyon, cihaz kimliği, tema,
+  //    eğitim ilerlemesi, market sayaçları gibi alanlar bu hash'e girmez.
+  //    Yine de tek tarafta kalan gerçek bir değişiklik varsa normal yönlü
+  //    senkron yapılır; burada yalnızca "çakışma" engellenir.
+  if (sameContent) {
+    // Yerel tamamen boşsa buluttaki (içerik dışı) tercihleri korumak için indir.
+    if (snapshot.localEmpty && !localClean) {
+      return { kind: 'download', reason: 'cloud-only' };
+    }
+    // Bulut temiz, yerel kirli → yereli yükle (ör. yalnızca tema değişti).
+    if (!localClean && cloudClean) {
+      return { kind: 'upload', baseRevision: cloud.revision, reason: 'local-ahead' };
+    }
+    // Yerel temiz, bulut kirli → bulutu indir (ör. yalnızca ayar değişti).
+    if (localClean && !cloudClean) {
+      if (canFastForward(localRevision, cloud.revision)) {
+        return { kind: 'download', reason: 'cloud-ahead' };
+      }
+      return { kind: 'none', reason: 'same' };
+    }
+    // İki taraf da "kirli" görünse bile gerçek içerik aynı: uyarı gösterme.
     return { kind: 'none', reason: 'same' };
   }
 
-  // 3) Sahip uyuşmazlığı: iki kimlik de biliniyorsa ve farklıysa yazma yok.
+  // 3) Sahip uyuşmazlığı: içerik farklıysa ve iki kimlik de biliniyorsa yazma yok.
   if (
     typeof localOwnerAgentId === 'string'
     && typeof cloud.ownerAgentId === 'string'
@@ -278,9 +300,6 @@ export function decideSyncAction(snapshot: SyncDecisionSnapshot): SyncDecision {
   ) {
     return { kind: 'conflict', reason: 'owner-mismatch' };
   }
-
-  const localClean = sameSaveHash(localHash, lastSyncedHash);
-  const cloudClean = sameSaveHash(cloud.saveHash, lastSyncedHash);
 
   // 4) Aynı gövde → yazacak bir şey yok.
   if (sameSaveHash(localHash, cloud.saveHash)) {

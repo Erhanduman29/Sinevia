@@ -68,33 +68,140 @@ export function makeSaveHash(payload: unknown): string {
   return fnv1aHash(stableStringify(payload));
 }
 
-/** İçerik hash'inde sayılmayan, cihaz/oturum bazlı veya türetilmiş alanlar. */
-const CONTENT_HASH_EXCLUDED_KEYS = new Set([
-  'schemaVersion',
-  'ownerAgentId',
-  'revision',
-  'updatedAt',
-  'deviceId',
-  'lastCloudSync',
-  'aiChatHistory',
-  'legacy',
-]);
+/**
+ * Çakışma parmak izine GİREN üst düzey alanlar.
+ *
+ * Bu liste bilinçli bir "beyaz liste"dir: yeni bir alan eklenirse otomatik
+ * olarak çakışmaya dahil olmaz. Yalnızca kullanıcının işlediği gerçek veri
+ * (kütüphane, XP, görev, envanter vb.) burada yer alır.
+ */
+const CONFLICT_CONTENT_KEYS = [
+  'movies',
+  'series',
+  'collections',
+  'history',
+  'genres',
+  'removedSeriesTitles',
+  'criteria',
+  'showcase',
+  'achievements',
+  'xpEvents',
+  'coinLedger',
+  'inventory',
+  'perks',
+  'marketStats',
+  'dailyStreak',
+  'totalDuelsCompleted',
+  'giantSlayerWins',
+  'weeklyPlan',
+] as const;
+
+/** Görevlerde çakışmaya giren çekirdek alanlar (sayaç/rozet/ceza hariç). */
+const CONFLICT_QUEST_KEYS = [
+  'activeQuestId',
+  'questAcceptedAt',
+  'completedQuests',
+  'activeContract',
+  'contractHistory',
+] as const;
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function sortByKey<T>(value: unknown, key: (item: T) => string): T[] {
+  if (!Array.isArray(value)) return [];
+  return [...(value as T[])].sort((a, b) => compareText(key(a), key(b)));
+}
+
+function sortStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).sort(compareText) : [];
+}
 
 /**
- * Yalnızca GERÇEK içeriğin parmak izi.
+ * Yalnızca GERÇEK kullanıcı içeriğinin parmak izi.
  *
- * `makeSaveHash` tüm gövdeyi (updatedAt/revision/deviceId dahil) hash'ler.
- * İki cihaz aynı kütüphaneye sahip olsa bile bu alanlar farklı olduğu için
- * gereksiz "çakışma" üretilebiliyordu. Bu hash yalnız kullanıcı verisini
- * (filmler, geçmiş, XP, görevler, ayarlar vb.) karşılaştırır.
+ * Amaç: "işlenmiş bir veri kaybolmasın" güvenliğini korurken, saat/revizyon/
+ * cihaz kimliği, tema, eğitim ilerlemesi, market sayaçları gibi cihaza özel
+ * veya türetilmiş alanların gereksiz çakışma üretmesini engellemek.
+ *
+ * Dizi sırası da önemsizdir: aynı filmler farklı sırada diye çakışma olmaz.
  */
+export function makeConflictHash(state: AppStateV3): string {
+  const source = asRecord(state);
+  const content: Record<string, unknown> = {};
+  for (const key of CONFLICT_CONTENT_KEYS) content[key] = source[key];
+
+  const quests = asRecord(source.quests);
+  content.quests = {
+    activeQuestId: quests.activeQuestId ?? null,
+    questAcceptedAt: quests.questAcceptedAt ?? null,
+    completedQuests: sortStrings(quests.completedQuests),
+    activeContract: quests.activeContract ?? null,
+    contractHistory: sortByKey<{ instanceId?: string }>(
+      quests.contractHistory,
+      (item) => String(item?.instanceId ?? ''),
+    ),
+  };
+
+  content.dailyStreak = Number(source.dailyStreak ?? 0);
+  content.totalDuelsCompleted = Number(source.totalDuelsCompleted ?? 0);
+  content.giantSlayerWins = Number(source.giantSlayerWins ?? 0);
+
+  content.movies = sortByKey<{ id?: string }>(source.movies, (item) => String(item?.id ?? ''));
+  content.series = sortByKey<{ id?: string }>(source.series, (item) => String(item?.id ?? ''));
+  content.collections = sortByKey<{ id?: string }>(source.collections, (item) => String(item?.id ?? ''));
+  content.history = sortByKey<{ watchedAt?: string; id?: string }>(
+    source.history,
+    (item) => `${item?.watchedAt ?? ''}|${item?.id ?? ''}`,
+  );
+  content.genres = sortStrings(source.genres);
+  content.removedSeriesTitles = sortStrings(source.removedSeriesTitles);
+  content.criteria = sortByKey<{ id?: string; name?: string }>(
+    source.criteria,
+    (item) => String(item?.id ?? item?.name ?? ''),
+  );
+  content.showcase = sortByKey<{ id?: string; type?: string }>(
+    source.showcase,
+    (item) => `${item?.type ?? ''}|${item?.id ?? ''}`,
+  );
+  content.achievements = sortByKey<{ achievementId?: string }>(
+    source.achievements,
+    (item) => String(item?.achievementId ?? ''),
+  );
+  content.xpEvents = sortByKey<{ createdAt?: string; id?: string }>(
+    source.xpEvents,
+    (item) => `${item?.createdAt ?? ''}|${item?.id ?? ''}`,
+  );
+  content.coinLedger = sortByKey<{ createdAt?: string; id?: string }>(
+    source.coinLedger,
+    (item) => `${item?.createdAt ?? ''}|${item?.id ?? ''}`,
+  );
+  content.inventory = sortByKey<{ itemId?: string }>(
+    source.inventory,
+    (item) => String(item?.itemId ?? ''),
+  );
+  content.perks = sortStrings(source.perks);
+  content.weeklyPlan = sortByKey<{ id?: string; date?: string; time?: string }>(
+    source.weeklyPlan,
+    (item) => `${item?.date ?? ''}|${item?.time ?? ''}|${item?.id ?? ''}`,
+  );
+
+  return makeSaveHash(content);
+}
+
+/** Geriye dönük uyum: çağrıldığı yerlerde "içerik" adı kullanılıyor. */
 export function makeContentHash(payload: unknown): string {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return makeSaveHash(payload);
   }
-  const content: Record<string, unknown> = { ...(payload as Record<string, unknown>) };
-  for (const key of CONTENT_HASH_EXCLUDED_KEYS) delete content[key];
-  return makeSaveHash(content);
+  return makeConflictHash(payload as AppStateV3);
 }
 
 /** İki hash aynı kaydı mı temsil ediyor? Boş/eksik hash "aynı" SAYILMAZ. */
