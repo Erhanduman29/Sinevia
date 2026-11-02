@@ -3,8 +3,10 @@ import type { ComponentProps } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import CloudConflictModal, {
   CONFLICT_COPIES,
+  CONFLICT_REASON_LABELS,
   ConflictConfirmPanel,
   conflictCopy,
+  conflictReasonLabel,
   conflictingSummaryKeys,
   formatConflictDate,
 } from '../components/CloudConflictModal';
@@ -55,6 +57,19 @@ describe('CLOUD CONFLICT MODAL', () => {
     expect(html).toContain('725 XP');
     expect(html).toContain('800 XP');
     expect(html).toContain('Son güncelleme');
+  });
+
+  test('çakışmanın nedeni ve farklı görünen veriler açıkça yazılır', () => {
+    const html = render();
+    expect(html).toContain('Çakışma nedeni');
+    expect(html).toContain(CONFLICT_REASON_LABELS['both-changed']);
+    expect(html).toContain('Farklı görünen veriler:');
+    expect(html).toContain('XP');
+    expect(html).toContain('Film');
+    expect(html).toContain('Başarım');
+    // Yalnızca değişen satırlar nedene girer; aynı olanlar girmez.
+    expect(html).toContain('725 XP');
+    expect(html).toContain('800 XP');
   });
 
   test('dört seçenek butonu ve erişilebilir etiketleri var', () => {
@@ -163,6 +178,27 @@ describe('CLOUD CONFLICT MODAL — çakışma nedeni bazlı davranış', () => {
     expect(html).toContain('aria-label="Bulut revizyonu 9"');
     expect(html).toContain('Revizyon 7');
     expect(html).toContain('Revizyon 9');
+  });
+
+  test('yalnızca güncelleme zamanı farklıysa "özetler aynı" açıklaması gösterilir', () => {
+    const sameContent: SyncConflict = {
+      ...conflict,
+      local,
+      cloud: { ...local, updatedAt: '2026-11-01T11:00:00.000Z' },
+    };
+    const html = renderToStaticMarkup(
+      <CloudConflictModal conflict={sameContent} onChoose={() => {}} />
+    );
+    expect(html).toContain('Çakışma nedeni');
+    expect(html).toContain('Sayısal özetler aynı');
+    expect(html).not.toContain('Farklı görünen veriler:');
+  });
+
+  test('neden etiketleri her varyantta dolu ve bilinmeyen neden güvenli', () => {
+    expect(conflictReasonLabel('both-changed')).toBe(CONFLICT_REASON_LABELS['both-changed']);
+    expect(conflictReasonLabel('owner-mismatch')).toContain('farklı hesaplara');
+    expect(conflictReasonLabel('revision-mismatch')).toContain('başka bir cihaz');
+    expect(conflictReasonLabel('bilinmeyen')).toBe(CONFLICT_REASON_LABELS['both-changed']);
   });
 });
 

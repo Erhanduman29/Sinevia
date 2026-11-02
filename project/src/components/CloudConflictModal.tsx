@@ -80,6 +80,20 @@ export function conflictCopy(reason: SyncConflictReason | string | undefined): C
   );
 }
 
+/**
+ * Modalda gösterilen kısa neden etiketi.
+ * "Neden çakıştı?" sorusunun teknik olmayan cevabı.
+ */
+export const CONFLICT_REASON_LABELS: Record<SyncConflictReason, string> = {
+  'both-changed': 'İki tarafta da son eşitlemeden sonra değişiklik yapılmış',
+  'owner-mismatch': 'Cihazdaki kayıt ile buluttaki kayıt farklı hesaplara ait',
+  'revision-mismatch': 'Sunucu revizyonu beklenenin ötesinde; başka bir cihaz/oturum aynı anda yazmış',
+};
+
+export function conflictReasonLabel(reason: SyncConflictReason | string | undefined): string {
+  return CONFLICT_REASON_LABELS[reason as SyncConflictReason] ?? CONFLICT_REASON_LABELS['both-changed'];
+}
+
 const PREMIUM_LINE = 'var(--line-2, var(--border-dim, rgba(244, 244, 242, .13)))';
 const PREMIUM_LINE_SOFT = 'var(--line, var(--border-dim, rgba(244, 244, 242, .07)))';
 
@@ -187,6 +201,9 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
   const descriptionId = useId();
   const copy = conflictCopy(conflict.reason);
   const differing = conflictingSummaryKeys(conflict.local, conflict.cloud);
+  const causeRows = SUMMARY_ROWS.filter(
+    (row) => row.key !== 'updatedAt' && differing.has(row.key),
+  );
 
   // Escape karar vermeden erteler (veri değişmez).
   useEffect(() => {
@@ -285,6 +302,45 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
               <CloudDownload size={12} style={{ color: '#ffb86b' }} />
               Bulut revizyonu <strong className="text-white">{conflict.cloudRevision}</strong>
             </span>
+          </div>
+
+          {/* ÇAKIŞMA NEDENİ — başlıktan bağımsız, açık ve veri bazlı açıklama */}
+          <div
+            className="rounded-lg px-3 py-2.5 space-y-1.5"
+            style={{
+              background: 'rgba(232, 56, 79, .07)',
+              border: '1px solid rgba(232, 56, 79, .22)',
+            }}
+          >
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-widest" style={{ color: 'var(--red-hi, #ff6b7a)' }}>
+              <AlertTriangle size={12} />
+              Çakışma nedeni
+            </div>
+            <p className="text-[11px] sm:text-xs leading-relaxed text-ink-200">
+              {conflictReasonLabel(conflict.reason)}
+            </p>
+            {causeRows.length > 0 ? (
+              <div className="space-y-1 pt-0.5">
+                <p className="text-[10px] sm:text-[11px] font-bold text-ink-400">Farklı görünen veriler:</p>
+                <ul className="space-y-0.5">
+                  {causeRows.map((row) => (
+                    <li key={row.key} className="flex items-baseline justify-between gap-2 text-[10.5px] sm:text-[11px]">
+                      <span className="text-ink-400">{row.label}</span>
+                      <span className="font-mono font-bold text-ink-200 text-right">
+                        {row.format(conflict.local)}
+                        <span className="mx-1 text-ink-500" aria-hidden="true">↔</span>
+                        {row.format(conflict.cloud)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-[10.5px] sm:text-[11px] leading-relaxed text-ink-400">
+                Sayısal özetler aynı. Fark, özetlenmeyen bir alanda (görev detayı, envanter,
+                ayarlar veya cihaz bilgisi) ya da yalnızca güncelleme zamanında olabilir.
+              </p>
+            )}
           </div>
 
           {/* YAN YANA ÖZET */}
