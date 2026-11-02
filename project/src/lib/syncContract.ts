@@ -124,6 +124,13 @@ function sortStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).sort(compareText) : [];
 }
 
+/** Nesnenin kopyasında yalnızca cihaz/saat kaynaklı alanları çıkarır. */
+function omitKeys<T extends Record<string, unknown>>(value: T, keys: readonly string[]): Record<string, unknown> {
+  const copy: Record<string, unknown> = { ...value };
+  for (const key of keys) delete copy[key];
+  return copy;
+}
+
 /**
  * Yalnızca GERÇEK kullanıcı içeriğinin parmak izi.
  *
@@ -154,13 +161,15 @@ export function makeConflictHash(state: AppStateV3): string {
   content.totalDuelsCompleted = Number(source.totalDuelsCompleted ?? 0);
   content.giantSlayerWins = Number(source.giantSlayerWins ?? 0);
 
-  content.movies = sortByKey<{ id?: string }>(source.movies, (item) => String(item?.id ?? ''));
-  content.series = sortByKey<{ id?: string }>(source.series, (item) => String(item?.id ?? ''));
+  content.movies = sortByKey<Record<string, unknown>>(source.movies, (item) => String(item?.id ?? ''))
+    .map((movie) => omitKeys(movie, ['startedAt', 'addedAt']));
+  content.series = sortByKey<Record<string, unknown>>(source.series, (item) => String(item?.id ?? ''))
+    .map((series) => omitKeys(series, ['addedAt']));
   content.collections = sortByKey<{ id?: string }>(source.collections, (item) => String(item?.id ?? ''));
-  content.history = sortByKey<{ watchedAt?: string; id?: string }>(
+  content.history = sortByKey<Record<string, unknown>>(
     source.history,
-    (item) => `${item?.watchedAt ?? ''}|${item?.id ?? ''}`,
-  );
+    (item) => `${String(item?.watchedAt ?? '')}|${String(item?.id ?? '')}`,
+  ).map((entry) => omitKeys(entry, ['startedAt']));
   content.genres = sortStrings(source.genres);
   content.removedSeriesTitles = sortStrings(source.removedSeriesTitles);
   content.criteria = sortByKey<{ id?: string; name?: string }>(
@@ -171,10 +180,16 @@ export function makeConflictHash(state: AppStateV3): string {
     source.showcase,
     (item) => `${item?.type ?? ''}|${item?.id ?? ''}`,
   );
-  content.achievements = sortByKey<{ achievementId?: string }>(
+  content.achievements = sortByKey<Record<string, unknown>>(
     source.achievements,
     (item) => String(item?.achievementId ?? ''),
-  );
+  ).map((item) => ({
+    achievementId: item.achievementId,
+    current: item.current,
+    unlockedTiers: sortStrings(item.unlockedTiers),
+    unlockedAt: item.unlockedAt ?? null,
+    tierDates: item.tierDates ?? {},
+  }));
   content.xpEvents = sortByKey<{ createdAt?: string; id?: string }>(
     source.xpEvents,
     (item) => `${item?.createdAt ?? ''}|${item?.id ?? ''}`,
@@ -183,15 +198,15 @@ export function makeConflictHash(state: AppStateV3): string {
     source.coinLedger,
     (item) => `${item?.createdAt ?? ''}|${item?.id ?? ''}`,
   );
-  content.inventory = sortByKey<{ itemId?: string }>(
+  content.inventory = sortByKey<Record<string, unknown>>(
     source.inventory,
     (item) => String(item?.itemId ?? ''),
-  );
+  ).map((entry) => omitKeys(entry, ['acquiredAt']));
   content.perks = sortStrings(source.perks);
-  content.weeklyPlan = sortByKey<{ id?: string; date?: string; time?: string }>(
+  content.weeklyPlan = sortByKey<Record<string, unknown>>(
     source.weeklyPlan,
-    (item) => `${item?.date ?? ''}|${item?.time ?? ''}|${item?.id ?? ''}`,
-  );
+    (item) => `${String(item?.date ?? '')}|${String(item?.time ?? '')}|${String(item?.id ?? '')}`,
+  ).map((item) => omitKeys(item, ['createdAt']));
 
   return makeSaveHash(content);
 }

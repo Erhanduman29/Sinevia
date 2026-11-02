@@ -25,6 +25,8 @@ class FakeCloud {
   discarded: string[] = [];
   getCalls = 0;
   failWith: unknown = null;
+  /** Test: bir sonraki commit'i, aynı içerikli başka bir cihaz yarışı gibi reddet. */
+  conflictNextCommit = false;
 
   client: SyncClient = {
     getRemote: async (): Promise<CloudSaveRecord | null> => {
@@ -36,6 +38,24 @@ class FakeCloud {
       if (this.failWith) throw this.failWith;
       this.commits.push(request);
       const current = this.record ? this.record.revision : 0;
+      if (this.conflictNextCommit) {
+        this.conflictNextCommit = false;
+        const revision = current + 1;
+        const payload = {
+          ...request.payload,
+          revision,
+          updatedAt: '2026-01-01T00:00:03.000Z',
+          deviceId: 'dev-2',
+        };
+        this.record = {
+          revision,
+          updatedAt: payload.updatedAt,
+          deviceId: payload.deviceId,
+          saveHash: makeSaveHash(payload),
+          payload,
+        };
+        return { status: 'conflict', revision };
+      }
       if (request.baseRevision !== current) {
         return { status: 'conflict', revision: current };
       }
@@ -764,6 +784,37 @@ describe('quest state — senkron kaynağı ve boş kayıt', () => {
     expect(makeContentHash(ratingChanged)).not.toBe(makeContentHash(base));
   });
 
+  test('film/başarım içindeki saat ve bildirim alanları çakışma hash’ine girmez', () => {
+    const achievement = {
+      achievementId: 'first_watch',
+      current: 1,
+      unlockedTiers: ['bronze'],
+      lastNotifiedTier: null,
+      tierDates: { bronze: '2026-01-01T00:00:00.000Z' },
+    };
+    const base = stateWith({
+      movies: [
+        { id: 'm1', title: 'Film', addedAt: '2026-01-01T00:00:00.000Z' },
+      ] as AppStateV3['movies'],
+      achievements: [achievement] as AppStateV3['achievements'],
+    });
+    const clockAndNotificationChanged: AppStateV3 = {
+      ...base,
+      movies: [
+        {
+          ...base.movies[0],
+          startedAt: '2026-01-02T00:00:00.000Z',
+          addedAt: '2026-01-02T00:00:00.000Z',
+        },
+      ] as AppStateV3['movies'],
+      achievements: [
+        { ...achievement, lastNotifiedTier: 'bronze' },
+      ] as AppStateV3['achievements'],
+    };
+
+    expect(makeContentHash(clockAndNotificationChanged)).toBe(makeContentHash(base));
+  });
+
   test('iki taraf kirli ama yalnızca ayar/cihaz alanları farklıysa çakışma yok', async () => {
     const cloud = new FakeCloud();
     const local = stateWith({
@@ -831,5 +882,19 @@ describe('quest state — senkron kaynağı ve boş kayıt', () => {
 
     expect(result.status).toBe('cloud-loaded');
     expect(harness.appliedSources).toEqual(['download']);
+  });
+
+  test('commit yarışında içerik aynıysa çakışma yerine up-to-date döner', async () => {
+    const cloud = new FakeCloud();
+    const local = stateWith({
+      movies: [{ id: 'm1', title: 'Aynı Film' }] as AppStateV3['movies'],
+    });
+    cloud.conflictNextCommit = true;
+    const harness = createHarness(local, cloud);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('up-to-date');
+    expect(harness.appliedSources).toEqual([]);
   });
 });

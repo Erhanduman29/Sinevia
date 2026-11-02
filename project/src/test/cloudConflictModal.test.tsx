@@ -105,6 +105,11 @@ describe('CLOUD CONFLICT MODAL', () => {
     expect(keys.has('series')).toBe(false);
   });
 
+  test('yalnızca güncelleme zamanı farkı çakışma göstergesi sayılmaz', () => {
+    const keys = conflictingSummaryKeys(local, { ...local, updatedAt: '2026-11-02T00:00:00.000Z' });
+    expect(keys.size).toBe(0);
+  });
+
   test('tarih biçimi geçersiz değerde güvenli', () => {
     expect(formatConflictDate('')).toBe('Bilinmiyor');
     expect(formatConflictDate('bozuk')).toBe('Bilinmiyor');

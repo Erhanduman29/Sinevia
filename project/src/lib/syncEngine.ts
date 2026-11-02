@@ -631,6 +631,25 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     };
   }
 
+  /**
+   * Yerel ve bulut GERÇEK içerik olarak aynıysa çakışma üretme.
+   * Yalnızca saat/revizyon/cihaz gibi zarflar farklıysa "güncel" say.
+   */
+  function settleSameContent(
+    agentId: string,
+    local: AppStateV3,
+    cloud: CloudSaveRecord,
+  ): SyncResult | null {
+    if (makeContentHash(local) !== makeContentHash(cloud.payload)) return null;
+    const revision = Math.max(0, Number(cloud.revision) || 0);
+    writeHash(agentId, cloud.saveHash || makeSaveHash(cloud.payload));
+    return {
+      status: 'up-to-date',
+      revision,
+      envelope: buildLocalEnvelope(agentId, cloud.payload, revision),
+    };
+  }
+
   function applyDownload(agentId: string, cloud: CloudSaveRecord): SyncResult {
     if (!isSyncPayload(cloud.payload)) {
       throw new SyncEngineError('invalid-envelope', 'Bulut kaydı geçersiz şema sürümünde (V3 değil).');
@@ -694,6 +713,13 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     if (response.status === 'conflict') {
       const cloud = await fetchRemote(agentId).catch(() => null);
 
+      // Commit yarışı sırasında bulut içeriği yerelle AYNI kaldıysa (yalnızca
+      // saat/revizyon/cihaz değiştiyse) kullanıcıya çakışma sorma.
+      if (cloud) {
+        const settled = settleSameContent(agentId, state, cloud);
+        if (settled) return settled;
+      }
+
       // Aynı cihazın kendi commit yarışı (iki sekme / ağ tekrarı): kullanıcıya
       // sorma. Bulut daha yeniyse indir; yerel daha yeniyse güncel revizyonla
       // bir kez daha dene. Farklı cihazda eski davranış (modal) korunur.
@@ -734,6 +760,8 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       // Beklenmedik revizyon: sunucunun sakladığı hash'i doğrula.
       const cloud = await fetchRemote(agentId).catch(() => null);
       if (cloud && !sameSaveHash(cloud.saveHash, saveHash)) {
+        const settled = settleSameContent(agentId, state, cloud);
+        if (settled) return settled;
         pending = { agentId, cloud };
         return {
           status: 'conflict',

@@ -166,7 +166,6 @@ export function conflictingSummaryKeys(
     'series',
     'achievements',
     'quests',
-    'updatedAt',
   ];
   const out = new Set<keyof SyncSnapshotSummary>();
   for (const key of keys) {
@@ -337,8 +336,9 @@ export default function CloudConflictModal({ conflict, busy = false, onChoose }:
               </div>
             ) : (
               <p className="text-[10.5px] sm:text-[11px] leading-relaxed text-ink-400">
-                Sayısal özetler aynı. Fark, özetlenmeyen bir alanda (görev detayı, envanter,
-                ayarlar veya cihaz bilgisi) ya da yalnızca güncelleme zamanında olabilir.
+                Sayısal özetler aynı. Fark, özetlenmeyen gerçek içerik alanlarında
+                (görev detayı, başarım ilerlemesi, envanter vb.) olabilir.
+                Güncelleme zamanı çakışma nedeni sayılmaz.
               </p>
             )}
           </div>
