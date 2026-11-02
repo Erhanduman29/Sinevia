@@ -33,6 +33,7 @@ import {
   buildSaveEnvelope,
   buildSyncSummary,
   canFastForward,
+  makeContentHash,
   makeSaveHash,
   sameSaveHash,
 } from './syncContract';
@@ -174,6 +175,8 @@ export function classifySyncError(error: unknown): SyncError {
 export interface SyncDecisionSnapshot {
   /** Yerel zarfın gövde hash'i (`makeSaveHash(payload)`). */
   localHash: string;
+  /** Yerel kaydın yalnız içerik hash'i (`makeContentHash`). */
+  localContentHash?: string;
   localRevision: number;
   localOwnerAgentId: string | null;
   /** Yerel kayıt kütüphane/XP açısından boş mu? (cloud-only tespiti) */
@@ -186,6 +189,8 @@ export interface SyncDecisionSnapshot {
   cloud: {
     revision: number;
     saveHash: string;
+    /** Bulut kaydının yalnız içerik hash'i (`makeContentHash`). */
+    contentHash?: string;
     ownerAgentId: string | null;
     /** Bulutu son yazan cihaz. */
     deviceId?: string | null;
@@ -253,7 +258,17 @@ export function decideSyncAction(snapshot: SyncDecisionSnapshot): SyncDecision {
     return { kind: 'upload', baseRevision: 0, reason: 'cloud-empty' };
   }
 
-  // 2) Sahip uyuşmazlığı: iki kimlik de biliniyorsa ve farklıysa yazma yok.
+  // 2) İçerik birebir aynıysa çakışma YOKTUR. `updatedAt`, `revision` veya
+  //    `deviceId` farkı yalnızca zarftır; kullanıcı verisi değişmemiştir.
+  if (
+    snapshot.localContentHash
+    && cloud.contentHash
+    && snapshot.localContentHash === cloud.contentHash
+  ) {
+    return { kind: 'none', reason: 'same' };
+  }
+
+  // 3) Sahip uyuşmazlığı: iki kimlik de biliniyorsa ve farklıysa yazma yok.
   if (
     typeof localOwnerAgentId === 'string'
     && typeof cloud.ownerAgentId === 'string'
@@ -267,17 +282,17 @@ export function decideSyncAction(snapshot: SyncDecisionSnapshot): SyncDecision {
   const localClean = sameSaveHash(localHash, lastSyncedHash);
   const cloudClean = sameSaveHash(cloud.saveHash, lastSyncedHash);
 
-  // 3) Aynı gövde → yazacak bir şey yok.
+  // 4) Aynı gövde → yazacak bir şey yok.
   if (sameSaveHash(localHash, cloud.saveHash)) {
     return { kind: 'none', reason: 'same' };
   }
 
-  // 4) Yerel boş, bulut dolu → güvenle indir (cloud-only).
+  // 5) Yerel boş, bulut dolu → güvenle indir (cloud-only).
   if (snapshot.localEmpty) {
     return { kind: 'download', reason: 'cloud-only' };
   }
 
-  // 5) Yerel temiz + bulut ileride → indir.
+  // 6) Yerel temiz + bulut ileride → indir.
   if (localClean) {
     if (canFastForward(localRevision, cloud.revision)) {
       return { kind: 'download', reason: 'cloud-ahead' };
@@ -764,6 +779,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     const localHash = makeSaveHash(local);
     const decision = decideSyncAction({
       localHash,
+      localContentHash: makeContentHash(local),
       localRevision: Math.max(0, Number(local.revision) || 0),
       localOwnerAgentId: local.ownerAgentId ?? null,
       localEmpty: isEmptyState(local),
@@ -773,6 +789,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
         ? {
             revision: Math.max(0, Number(cloud.revision) || 0),
             saveHash: cloud.saveHash || makeSaveHash(cloud.payload),
+            contentHash: makeContentHash(cloud.payload),
             ownerAgentId: cloud.payload?.ownerAgentId ?? null,
             deviceId: cloud.deviceId,
             updatedAt: cloud.updatedAt || cloud.payload?.updatedAt || '',

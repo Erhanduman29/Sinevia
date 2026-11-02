@@ -68,6 +68,35 @@ export function makeSaveHash(payload: unknown): string {
   return fnv1aHash(stableStringify(payload));
 }
 
+/** İçerik hash'inde sayılmayan, cihaz/oturum bazlı veya türetilmiş alanlar. */
+const CONTENT_HASH_EXCLUDED_KEYS = new Set([
+  'schemaVersion',
+  'ownerAgentId',
+  'revision',
+  'updatedAt',
+  'deviceId',
+  'lastCloudSync',
+  'aiChatHistory',
+  'legacy',
+]);
+
+/**
+ * Yalnızca GERÇEK içeriğin parmak izi.
+ *
+ * `makeSaveHash` tüm gövdeyi (updatedAt/revision/deviceId dahil) hash'ler.
+ * İki cihaz aynı kütüphaneye sahip olsa bile bu alanlar farklı olduğu için
+ * gereksiz "çakışma" üretilebiliyordu. Bu hash yalnız kullanıcı verisini
+ * (filmler, geçmiş, XP, görevler, ayarlar vb.) karşılaştırır.
+ */
+export function makeContentHash(payload: unknown): string {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return makeSaveHash(payload);
+  }
+  const content: Record<string, unknown> = { ...(payload as Record<string, unknown>) };
+  for (const key of CONTENT_HASH_EXCLUDED_KEYS) delete content[key];
+  return makeSaveHash(content);
+}
+
 /** İki hash aynı kaydı mı temsil ediyor? Boş/eksik hash "aynı" SAYILMAZ. */
 export function sameSaveHash(a: string | null | undefined, b: string | null | undefined): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false;

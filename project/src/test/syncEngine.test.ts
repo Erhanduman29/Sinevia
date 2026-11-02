@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { AppStateV3 } from '../types/appState';
 import type { CloudSaveRecord, CommitSaveRequest, SaveEnvelope, SyncResult } from '../types/sync';
 import { createEmptyAppStateV3 } from '../lib/localStateV3';
-import { makeSaveHash } from '../lib/syncContract';
+import { makeContentHash, makeSaveHash } from '../lib/syncContract';
 import { makeXpEvent, sumXpEvents } from '../lib/xpLedger';
 import {
   createSyncEngine,
@@ -221,6 +221,23 @@ describe('decideSyncAction — karar matrisi', () => {
     expect(
       decideSyncAction({ ...base, cloud: { revision: 4, saveHash: 'local-hash', ownerAgentId: 'SNV-BBBB-0002' } }),
     ).toEqual({ kind: 'conflict', reason: 'owner-mismatch' });
+  });
+
+  test('içerik birebir aynıysa metadata farkı çakışma üretmez', () => {
+    expect(
+      decideSyncAction({
+        ...base,
+        localHash: 'local-zarf-hash',
+        localContentHash: 'ayni-icerik',
+        lastSyncedHash: 'eski-hash',
+        cloud: {
+          revision: 9,
+          saveHash: 'bulut-zarf-hash',
+          contentHash: 'ayni-icerik',
+          ownerAgentId: 'SNV-BBBB-0002',
+        },
+      }),
+    ).toEqual({ kind: 'none', reason: 'same' });
   });
 
   test('yerel boş + bulut dolu → indir (cloud-only)', () => {
@@ -656,5 +673,54 @@ describe('quest state — senkron kaynağı ve boş kayıt', () => {
 
     expect(result.status).toBe('cloud-loaded');
     expect(harness.appliedSources).toEqual(['download']);
+  });
+
+  test('içerik aynı, yalnız updatedAt/revision/deviceId farklı → çakışma yok', async () => {
+    const cloud = new FakeCloud();
+    const local = stateWith({
+      revision: 2,
+      updatedAt: '2026-01-01T00:00:05.000Z',
+      deviceId: 'dev-1',
+      movies: [{ id: 'm1', title: 'Aynı Film' }] as AppStateV3['movies'],
+    });
+    const cloudPayload: AppStateV3 = {
+      ...local,
+      revision: 7,
+      updatedAt: '2026-01-01T00:00:04.000Z',
+      deviceId: 'dev-2',
+    };
+    const meta = memoryMeta();
+    meta.setLastSyncedHash('SNV-AAAA-0001', 'stale-hash');
+    cloud.record = {
+      revision: 7,
+      updatedAt: cloudPayload.updatedAt,
+      deviceId: 'dev-2',
+      saveHash: makeSaveHash(cloudPayload),
+      payload: cloudPayload,
+    };
+    const harness = createHarness(local, cloud, meta);
+
+    const result = await harness.engine.sync('SNV-AAAA-0001');
+
+    expect(result.status).toBe('up-to-date');
+    expect(harness.applied).toHaveLength(0);
+  });
+
+  test('makeContentHash metadata değişimini yok sayar, içerik değişimini yakalar', () => {
+    const base = stateWith({
+      revision: 2,
+      updatedAt: '2026-01-01T00:00:05.000Z',
+      deviceId: 'dev-1',
+      movies: [{ id: 'm1', title: 'Film' }] as AppStateV3['movies'],
+    });
+    const metadataOnly = { ...base, revision: 9, updatedAt: '2026-01-01T00:00:09.000Z', deviceId: 'dev-9' };
+    const contentChanged = {
+      ...base,
+      movies: [{ id: 'm1', title: 'Film' }, { id: 'm2', title: 'Yeni' }] as AppStateV3['movies'],
+    };
+
+    expect(makeContentHash(metadataOnly)).toBe(makeContentHash(base));
+    expect(makeSaveHash(metadataOnly)).not.toBe(makeSaveHash(base));
+    expect(makeContentHash(contentChanged)).not.toBe(makeContentHash(base));
   });
 });
