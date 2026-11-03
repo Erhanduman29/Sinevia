@@ -89,10 +89,6 @@ const CONFLICT_CONTENT_KEYS = [
   'coinLedger',
   'inventory',
   'perks',
-  'marketStats',
-  'dailyStreak',
-  'totalDuelsCompleted',
-  'giantSlayerWins',
   'weeklyPlan',
 ] as const;
 
@@ -157,9 +153,9 @@ export function makeConflictHash(state: AppStateV3): string {
     ),
   };
 
-  content.dailyStreak = Number(source.dailyStreak ?? 0);
-  content.totalDuelsCompleted = Number(source.totalDuelsCompleted ?? 0);
-  content.giantSlayerWins = Number(source.giantSlayerWins ?? 0);
+  // Otomatik sayaçlar (dailyStreak, duello sayıları, market istatistikleri)
+  // çakışma hesabına GİRMEZ: kullanıcı hiçbir şey yapmadan kendiliğinden
+  // değişirler ve kalıcı kayıtları geçmiş/XP defterlerinde tutulur.
 
   content.movies = sortByKey<Record<string, unknown>>(source.movies, (item) => String(item?.id ?? ''))
     .map((movie) => omitKeys(movie, ['startedAt', 'addedAt']));
@@ -185,9 +181,9 @@ export function makeConflictHash(state: AppStateV3): string {
     (item) => String(item?.achievementId ?? ''),
   ).map((item) => ({
     achievementId: item.achievementId,
-    current: item.current,
+    // `current` ve `unlockedAt` türetilmiş sayılardır; açılmış KADEMELER
+    // gerçek işlenmiş veridir ve o korunur.
     unlockedTiers: sortStrings(item.unlockedTiers),
-    unlockedAt: item.unlockedAt ?? null,
     tierDates: item.tierDates ?? {},
   }));
   content.xpEvents = sortByKey<{ createdAt?: string; id?: string }>(

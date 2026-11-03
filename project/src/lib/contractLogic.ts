@@ -93,6 +93,8 @@ function findSeriesForEntry(entry: WatchHistoryItem, series: Series[]): Series |
 }
 
 function entryMinutes(entry: WatchHistoryItem, data: AppData): number {
+  // TOPLU PUAN SÖZLEŞMEDE GEÇERLİ DEĞİLDİR: "sezonu puanla"/"genel puanla"
+  // satırları dakika saymaz.
   if (entry.bulkRating) return 0;
   if (entry.kind === 'movie') {
     const direct = entry.originalRuntime || entry.actualRuntime;
@@ -160,6 +162,7 @@ export function evaluateContractProgress(
 
   const values: Record<ContractMetric, number> = {
     movies: entries.filter((entry) => entry.kind === 'movie').length,
+    // Toplu puan satırları bölüm/bölüm-günü metriklerine girmez.
     episodes: entries.filter((entry) => entry.kind === 'series' && !entry.bulkRating).length,
     items: entries.length,
     minutes: entries.reduce((sum, entry) => sum + entryMinutes(entry, data), 0),
@@ -183,6 +186,8 @@ export function evaluateContractProgress(
     max_day_items: (() => {
       const groups = new Map<string, number>();
       for (const entry of entries) {
+        // Toplu puan pazarı doldurma yolu değildir; günde "en çok izleme"
+        // metrikine bu satırlar girmez.
         if (entry.bulkRating) continue;
         const key = localDayKey(entry.watchedAt);
         groups.set(key, (groups.get(key) || 0) + 1);

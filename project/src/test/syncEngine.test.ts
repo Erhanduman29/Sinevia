@@ -5,17 +5,19 @@ import { createEmptyAppStateV3 } from '../lib/localStateV3';
 import { makeContentHash, makeSaveHash } from '../lib/syncContract';
 import { makeXpEvent, sumXpEvents } from '../lib/xpLedger';
 import {
+  compressCloudPayload,
   createSyncEngine,
+  createSupabaseSyncClient,
   decideSyncAction,
+  decompressCloudPayload,
   isEmptyState,
   mergeForks,
   SyncEngineError,
+  SyncRpcClient,
   type SyncClient,
   type SyncCommitResponse,
   type SyncMetaStore,
-} from '../lib/syncEngine';
-
-/* -------------------------------------------------------------------------
+} from '../lib/syncEngine';/* -------------------------------------------------------------------------
    FAKE BULUT — SQL davranışının birebir taklidi (base_revision eşleşmesi).
    ------------------------------------------------------------------------- */
 
@@ -366,10 +368,10 @@ describe('syncEngine.sync', () => {
     expect(cloud.commits).toHaveLength(0);
   });
 
-  test('iki taraf da değişti → conflict both-changed, hiçbir yazma yok', async () => {
+  test('iki taraf da değişti → kullanıcıya sorulmadan GÜVENLİ BİRLEŞİR', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { revision: 2 });
-    // Farklı cihaz: çakışma korunur.
+    // Farklı cihaz da olsa modal ÇIKMAZ: iki dal otomatik birleşir.
     const remote = xpState('ach:cloud', 40, { revision: 3, deviceId: 'dev-2' });
     const meta = memoryMeta();
     meta.setLastSyncedHash('SNV-AAAA-0001', 'fnv1a-00000000-1');
@@ -378,14 +380,15 @@ describe('syncEngine.sync', () => {
 
     const result = await harness.engine.sync('SNV-AAAA-0001');
 
-    expect(result.status).toBe('conflict');
-    if (result.status !== 'conflict') throw new Error('expected conflict');
-    expect(result.conflict.reason).toBe('both-changed');
-    expect(result.conflict.localRevision).toBe(2);
-    expect(result.conflict.cloudRevision).toBe(3);
-    expect(cloud.commits).toHaveLength(0);
-    expect(harness.applied).toHaveLength(0);
-    expect(harness.engine.hasPendingConflict()).toBe(true);
+    expect(result.status).toBe('local-uploaded');
+    expect(result.revision).toBe(4);
+    expect(cloud.commits).toHaveLength(1);
+    expect(cloud.commits[0].baseRevision).toBe(3);
+    // İki tarafın XP kayıtları da korunur (hiçbir veri kaybolmaz).
+    const committedXp = sumXpEvents(cloud.record?.payload.xpEvents ?? []);
+    expect(committedXp).toBe(50);
+    expect(harness.engine.hasPendingConflict()).toBe(false);
+    expect(harness.getLocal().revision).toBe(4);
   });
 
   test('aynı cihazda bulut daha yeni → soru sorulmadan indirilir', async () => {
@@ -435,7 +438,7 @@ describe('syncEngine.sync', () => {
     expect(cloud.commits[0].baseRevision).toBe(3);
   });
 
-  test('sunucu commit sırasında reddederse → conflict revision-mismatch', async () => {
+  test('commit yarışı çözülemezse → yazma ertelenir (hata), modal olmadan', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { revision: 2 });
     const remote = xpState('ach:cloud', 40, { revision: 3 });
@@ -443,20 +446,27 @@ describe('syncEngine.sync', () => {
     // Bulut temiz görünüyor (lastSynced = cloud hash) → yerel yükleme denenir.
     meta.setLastSyncedHash('SNV-AAAA-0001', makeSaveHash(remote));
     cloud.record = cloudOf(remote, 3);
-    // Araya başka bir cihaz girdi: sunucu artık revizyon 4'te.
-    const race = { ...cloud, client: cloud.client };
+    // Araya başka bir cihaz girdi: sunucu her commit'i reddediyor.
+    let commitAttempts = 0;
     const racingClient: SyncClient = {
       getRemote: async () => cloudOf({ ...remote, deviceId: 'dev-2' }, 4),
-      commit: async () => ({ status: 'conflict', revision: 4 }),
+      commit: async () => {
+        commitAttempts += 1;
+        return { status: 'conflict', revision: 4 };
+      },
     };
-    const harness = createHarness(local, { ...race, client: racingClient } as FakeCloud, meta);
+    const harness = createHarness(local, { ...cloud, client: racingClient } as FakeCloud, meta);
 
     const result = await harness.engine.sync('SNV-AAAA-0001');
 
-    // İlk getRemote revizyon 4 görür → cloud temiz değil, yerel kirli → both-changed.
-    expect(result.status).toBe('conflict');
-    if (result.status !== 'conflict') throw new Error('expected conflict');
-    expect(['both-changed', 'revision-mismatch']).toContain(result.conflict.reason);
+    // Modal DÜŞMEZ: denemeler tükendiğinde yazma ertelenir, yerel korunur.
+    expect(result.status).toBe('error');
+    if (result.status !== 'error') throw new Error('expected error');
+    expect(result.error.retryable).toBe(true);
+    expect((result as { conflict?: unknown }).conflict).toBeUndefined();
+    expect(harness.getLocal()).toBe(local);
+    // Her denemede birleştirilmiş gövde commit edilmeye çalışılır (+iç deneme).
+    expect(commitAttempts).toBeGreaterThanOrEqual(3);
   });
 
   test('commit yanıtı conflict ise → revision-mismatch ve yazma yok', async () => {
@@ -496,7 +506,7 @@ describe('syncEngine.sync', () => {
     expect(cloud.commits).toHaveLength(0);
   });
 
-  test('hesap değişimi (owner mismatched) → çakışma, otomatik upload YOK', async () => {
+  test('hesap değişimi (owner mismatched) → soru sorulmadan birleşir, sahiplik geçer', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { ownerAgentId: 'SNV-OLD0-0001', revision: 1 });
     const remote = xpState('ach:cloud', 40, { ownerAgentId: 'SNV-NEW0-0002', revision: 4 });
@@ -505,49 +515,31 @@ describe('syncEngine.sync', () => {
 
     const result = await harness.engine.sync('SNV-NEW0-0002');
 
-    expect(result.status).toBe('conflict');
-    if (result.status !== 'conflict') throw new Error('expected conflict');
-    expect(result.conflict.reason).toBe('owner-mismatch');
-    expect(cloud.commits).toHaveLength(0);
-
-    // Kullanıcı "bulutu kullan" derse bulut uygulanır.
-    const chosen = await harness.engine.resolveConflict('SNV-NEW0-0002', 'cloud');
-    expect(chosen.status).toBe('cloud-loaded');
-    expect(harness.getLocal().ownerAgentId).toBe('SNV-NEW0-0002');
+    // Modal YOK: iki hesabın verisi birleşir, kayıt hedef hesaba commit edilir.
+    expect(result.status).toBe('local-uploaded');
+    expect(result.revision).toBe(5);
+    expect(cloud.commits).toHaveLength(1);
+    expect(cloud.commits[0].baseRevision).toBe(4);
+    expect(cloud.commits[0].payload.ownerAgentId).toBe('SNV-NEW0-0002');
+    const committedXp = sumXpEvents(cloud.record?.payload.xpEvents ?? []);
+    expect(committedXp).toBe(50);
+    expect(harness.engine.hasPendingConflict()).toBe(false);
   });
 
-  test('hesap değişimi: kullanıcı "bu cihaz" derse bulut hesabına commit edilir', async () => {
+  test('hesap değişimi: yerel veri "bu cihaz" yoluyla bulut hesabına yazılır', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { ownerAgentId: 'SNV-OLD0-0001', revision: 1 });
     const remote = xpState('ach:cloud', 40, { ownerAgentId: 'SNV-NEW0-0002', revision: 4 });
     cloud.record = cloudOf(remote, 4);
     const harness = createHarness(local, cloud);
 
-    await harness.engine.sync('SNV-NEW0-0002');
-    const chosen = await harness.engine.resolveConflict('SNV-NEW0-0002', 'local');
+    const chosen = await harness.engine.pushLocal('SNV-NEW0-0002');
 
     expect(chosen.status).toBe('local-uploaded');
     expect(cloud.commits).toHaveLength(1);
     expect(cloud.commits[0].baseRevision).toBe(4);
     expect(cloud.commits[0].payload.ownerAgentId).toBe('SNV-NEW0-0002');
     expect(harness.getLocal().revision).toBe(5);
-  });
-
-  test('"later" seçimi hiçbir yazma yapmaz', async () => {
-    const cloud = new FakeCloud();
-    const local = xpState('ach:local', 10, { revision: 2 });
-    const remote = xpState('ach:cloud', 40, { revision: 3, deviceId: 'dev-2' });
-    const meta = memoryMeta();
-    meta.setLastSyncedHash('SNV-AAAA-0001', 'x');
-    cloud.record = cloudOf(remote, 3);
-    const harness = createHarness(local, cloud, meta);
-
-    await harness.engine.sync('SNV-AAAA-0001');
-    const result = await harness.engine.resolveConflict('SNV-AAAA-0001', 'later');
-
-    expect(result.status).toBe('up-to-date');
-    expect(cloud.commits).toHaveLength(0);
-    expect(harness.getLocal()).toBe(local);
   });
 });
 
@@ -595,7 +587,7 @@ describe('mergeForks / resolveConflict(merge)', () => {
     expect(merged.movies.map((movie) => movie.id).sort()).toEqual(['cloud-movie', 'local-movie']);
   });
 
-  test('resolveConflict(merge) yeni revizyonla commit eder, XP birleşir', async () => {
+  test('otomatik birleştirme yeni revizyonla commit eder, XP birleşir', async () => {
     const cloud = new FakeCloud();
     const local = xpState('ach:local', 10, { revision: 2 });
     const remote = xpState('ach:cloud', 40, { revision: 3, deviceId: 'dev-2' });
@@ -604,18 +596,14 @@ describe('mergeForks / resolveConflict(merge)', () => {
     cloud.record = cloudOf(remote, 3);
     const harness = createHarness(local, cloud, meta);
 
-    const conflict = await harness.engine.sync('SNV-AAAA-0001');
-    expect(conflict.status).toBe('conflict');
-
-    const mergedResult = await harness.engine.resolveConflict('SNV-AAAA-0001', 'merge');
+    const mergedResult = await harness.engine.sync('SNV-AAAA-0001');
 
     expect(mergedResult.status).toBe('local-uploaded');
-    expect(mergedResult.revision).toBe(4);
     expect(cloud.commits).toHaveLength(1);
     expect(cloud.commits[0].baseRevision).toBe(3);
     const committedXp = sumXpEvents(cloud.record?.payload.xpEvents ?? []);
     expect(committedXp).toBe(50);
-    expect(harness.getLocal().revision).toBe(4);
+    expect(harness.getLocal().revision).toBe(cloud.commits[0].payload.revision);
   });
 
   test('bekleyen çakışma yokken merge → error (sessiz birleştirme yok)', async () => {
@@ -624,6 +612,24 @@ describe('mergeForks / resolveConflict(merge)', () => {
     const result = await harness.engine.resolveConflict('SNV-AAAA-0001', 'merge');
     expect(result.status).toBe('error');
     expect(cloud.commits).toHaveLength(0);
+  });
+
+  test('bekleyen çakışma yokken later/cloud/local → error (modal akışı fiilen kullanılmaz)', async () => {
+    const cloud = new FakeCloud();
+    const local = xpState('ach:local', 10, { revision: 2 });
+    const remote = xpState('ach:cloud', 40, { revision: 3, deviceId: 'dev-2' });
+    const meta = memoryMeta();
+    meta.setLastSyncedHash('SNV-AAAA-0001', 'x');
+    cloud.record = cloudOf(remote, 3);
+    const harness = createHarness(local, cloud, meta);
+
+    // sync() çakışmayı OTOMATİK çözdüğü için bekleyen çakışma kalmaz.
+    const first = await harness.engine.sync('SNV-AAAA-0001');
+    expect(first.status).toBe('local-uploaded');
+    expect(harness.engine.hasPendingConflict()).toBe(false);
+    const result = await harness.engine.resolveConflict('SNV-AAAA-0001', 'later');
+    expect(result.status).toBe('error');
+    expect(cloud.commits).toHaveLength(1);
   });
 });
 
@@ -784,6 +790,35 @@ describe('quest state — senkron kaynağı ve boş kayıt', () => {
     expect(makeContentHash(ratingChanged)).not.toBe(makeContentHash(base));
   });
 
+  test('otomatik sayaçlar ve başarım ilerleme sayısı çakışma hash’ine girmez', () => {
+    const base = stateWith({
+      achievements: [
+        { achievementId: 'watch_count', current: 5, unlockedTiers: ['bronze'], lastNotifiedTier: null, tierDates: {} },
+      ] as AppStateV3['achievements'],
+    });
+    const autoCountersChanged: AppStateV3 = {
+      ...base,
+      dailyStreak: 44,
+      marketStats: { ...stateWith().marketStats, rerollCount: 99 } as AppStateV3['marketStats'],
+      totalDuelsCompleted: 33,
+      giantSlayerWins: 12,
+      achievements: base.achievements.map((item) => (
+        item.achievementId === 'watch_count' ? { ...item, current: 8, lastNotifiedTier: 'bronze', unlockedAt: '2026-06-01T00:00:00.000Z' } : item
+      )),
+    } as AppStateV3;
+
+    // Kullanıcı hiçbir şey yapmadan değişen alanlar çakışma üretmez.
+    expect(makeContentHash(autoCountersChanged)).toBe(makeContentHash(base));
+    // Ama gerçek işlenmiş veri (açılmış kademeler) hâlâ hash'te korunur.
+    const tierOpened: AppStateV3 = {
+      ...base,
+      achievements: base.achievements.map((item) => (
+        item.achievementId === 'watch_count' ? { ...item, unlockedTiers: ['bronze', 'silver'] } : item
+      )),
+    };
+    expect(makeContentHash(tierOpened)).not.toBe(makeContentHash(base));
+  });
+
   test('film/başarım içindeki saat ve bildirim alanları çakışma hash’ine girmez', () => {
     const achievement = {
       achievementId: 'first_watch',
@@ -897,4 +932,159 @@ describe('quest state — senkron kaynağı ve boş kayıt', () => {
     expect(result.status).toBe('up-to-date');
     expect(harness.appliedSources).toEqual([]);
   });
+
+  /* -------------------------------------------------------------------------
+     TAŞIMA KATMANI SIKIŞTIRMA (gzip + base64)
+     ------------------------------------------------------------------------- */
+
+  describe('compressCloudPayload / decompressCloudPayload', () => {
+    test('tekrarlanan büyük içerik gzip zarfına sarılır', async () => {
+      const repetitive: AppStateV3 = stateWith({
+        movies: Array.from({ length: 200 }, (_, i) => ({
+          id: `m${i}`,
+          title: 'Tekrarlanan Film',
+          year: '2026',
+          genres: ['drama'],
+          collectionId: null,
+          watched: true,
+          rating: 5,
+          note: 'Aynı not buraya kadar',
+          watchedAt: '2026-01-01T00:00:00.000Z',
+        })) as AppStateV3['movies'],
+      });
+
+      const result = await compressCloudPayload(repetitive);
+
+      // Gzip + base64 sarmalanmış olmalı
+      expect(result).not.toBeNull();
+      expect(result?.['__sinevia_gz']).toBe(true);
+      expect(typeof result?.d).toBe('string');
+      expect(result!.d.length).toBeGreaterThan(0);
+    });
+
+    test('küçük içerik sıkıştırılmaz (kazanç yok)', async () => {
+      const small = { a: 1, b: 2 };
+      const result = await compressCloudPayload(small);
+      expect(result).toBeNull();
+    });
+
+    test('sıkıştır → açar döndürür aynı içeriği', async () => {
+      const state = stateWith({
+        movies: [{ id: 'm1', title: 'Film' }] as AppStateV3['movies'],
+        achievements: [
+          { achievementId: 'a1', current: 1, unlockedTiers: ['bronze'], tierDates: {} },
+        ] as AppStateV3['achievements'],
+      });
+
+      const compressed = await compressCloudPayload(state);
+      // Küçük olabilir null döner; büyükse zarf açılır.
+      const decompressed = compressed ? await decompressCloudPayload(compressed) : state;
+      expect(JSON.stringify(decompressed)).toBe(JSON.stringify(state));
+    });
+
+    test('düz payload (zarf olmayan) olduğu gibi geçer', async () => {
+      const plain = { foo: 'bar' };
+      expect(await decompressCloudPayload(plain)).toBe(plain);
+      expect(await decompressCloudPayload(null)).toBeNull();
+    });
+  });
+
+  describe('normalizeCloudRecord gzip açma (createSupabaseSyncClient)', () => {
+    test('zarflı kayıt düz payload olarak döner', async () => {
+      const state = stateWith({
+        movies: [{ id: 'm1', title: 'Film' }] as AppStateV3['movies'],
+      });
+      const wrapper = await compressCloudPayload(state);
+      expect(wrapper).not.toBeNull();
+
+      const cloudRecord = {
+        revision: 3,
+        save_hash: makeSaveHash(state),
+        payload: wrapper!,
+        updated_at: '2026-01-01T00:00:02.000Z',
+      };
+      const fakeRpc: SyncRpcClient = {
+        rpc: (_name: string, params: Record<string, unknown>) => {
+          // `sync_get_state` → cloud record döndür
+          return Promise.resolve({ data: [cloudRecord], error: null });
+        },
+      };
+      const client = createSupabaseSyncClient(fakeRpc);
+
+      const normalized = await (client as any).getRemote('SNV-AAAA-0001');
+      expect(normalized?.payload).toEqual(state);
+      expect(normalized?.saveHash).toBe(makeSaveHash(state));
+    });
+
+    test('sıfır kaydı null döner', async () => {
+      const fakeRpc: SyncRpcClient = {
+        rpc: () => Promise.resolve({ data: null, error: null }),
+      };
+      const client = createSupabaseSyncClient(fakeRpc);
+      const normalized = await (client as any).getRemote('SNV-AAAA-0001');
+      expect(normalized).toBeNull();
+    });
+  });
+
+  describe('commit transport paketlemesi (p_payload)', () => {
+    test('commit büyük içeriği gzip zarfıyla gönderir, saveHash düz gövde üzerinden', async () => {
+      const repetitive: AppStateV3 = stateWith({
+        movies: Array.from({ length: 300 }, (_, i) => ({
+          id: `m${i}`,
+          title: 'Tekrarlanan Film',
+          year: '2026',
+          genres: ['drama'],
+          collectionId: null,
+          watched: true,
+          rating: 5,
+          note: 'Aynı not buraya kadar',
+          watchedAt: '2026-01-01T00:00:00.000Z',
+        })) as AppStateV3['movies'],
+      });
+
+      const captured: Record<string, unknown>[] = [];
+      const fakeRpc: SyncRpcClient = {
+        rpc: (_name: string, params: Record<string, unknown>) => {
+          captured.push(params);
+          // sync_get_state → kayıt yok (ilk upload)
+          if ((_name as string).includes('getState')) {
+            return Promise.resolve({ data: null, error: null });
+          }
+          // sync_commit → başarılı yanıt
+          return Promise.resolve({ data: { status: 'ok', revision: 1, save_hash: makeSaveHash(repetitive) }, error: null });
+        },
+      };
+      const client = createSupabaseSyncClient(fakeRpc);
+      const engine = createSyncEngine({
+        client,
+        deviceId: 'dev-1',
+        getState: () => repetitive,
+        setState: () => {},
+        meta: memoryMeta(),
+        now: () => '2026-01-01T00:00:05.000Z',
+      });
+
+      const result = await engine.pushLocal('SNV-AAAA-0001');
+
+      expect(result.status).toBe('local-uploaded');
+      const commitParams = captured.find((p) => p.p_payload !== undefined);
+      expect(commitParams).toBeDefined();
+      // p_payload büyükse gzip zarfıyla
+      const pPayload = commitParams!.p_payload;
+      expect(isGzipWrapper(pPayload)).toBe(true);
+      // saveHash düz gövde üzerinden hesaplanmalı (sıkıştırılmış gövde üzerinden DEĞİL)
+      expect(typeof commitParams!.p_save_hash).toBe('string');
+      expect(commitParams!.p_save_hash).toMatch(/^fnv1a-/);
+    });
+  });
+
+  /* yardımcı: GzipWrapper tipi doğrudan erişim için */
+  function isGzipWrapper(value: unknown): value is { __sinevia_gz: true; d: string } {
+    return Boolean(
+      value
+      && typeof value === 'object'
+      && (value as Record<string, unknown>)['__sinevia_gz'] === true
+      && typeof (value as Record<string, unknown>).d === 'string',
+    );
+  }
 });

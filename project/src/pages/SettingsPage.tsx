@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Settings, Plus, Trash2, Tag, Boxes, Download, Upload, Edit2, Check, X,
   AlertTriangle, Wrench, SlidersHorizontal, PlayCircle, Palette,
@@ -30,7 +30,7 @@ import {
   showAppNotification,
   resolveVapidPublicKey,
 } from '../lib/notifications';
-import { networkChangePassword, networkDeleteAccount } from '../lib/networkAuth';
+import { networkChangePassword, networkDeleteAccount, networkListDevices, networkRevokeDevice, describeCurrentDevice, type NetworkDevice } from '../lib/networkAuth';
 import {
   isSoundEnabled, setSoundEnabled,
   // GEÇİCİ-SES-OYNATICI importları (kaldırılacak):
@@ -707,6 +707,21 @@ function TempSoundPlayer() {
 }
 // ── GEÇİCİ-SES-OYNATICI ── BİTİŞ ───────────────────────────────────────────
 
+/** Cihaz listesindeki "son görülme" için kısa göreli zaman. */
+function formatDeviceSeen(iso: string | null | undefined): string {
+  if (!iso) return 'Hiç';
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return 'Hiç';
+  const minutes = Math.round((Date.now() - ts) / 60000);
+  if (minutes < 1) return 'şimdi';
+  if (minutes < 60) return `${minutes} dk önce`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} sa önce`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days} gün önce`;
+  return new Date(ts).toLocaleDateString('tr-TR');
+}
+
 export default function SettingsPage() {
   const {
     data, addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
@@ -766,6 +781,53 @@ export default function SettingsPage() {
   const [showDeviceResetConfirm, setShowDeviceResetConfirm] = useState(false);
   const [showDeleteWarn1, setShowDeleteWarn1] = useState(false);
   const [showDeleteWarnFinal, setShowDeleteWarnFinal] = useState(false);
+
+  // Bu Hesabın Cihazları: ağda hangi tarayıcı/cihazlar açık, uzaktan çıkış.
+  const [networkDevices, setNetworkDevices] = useState<NetworkDevice[]>([]);
+  const [deviceListLoading, setDeviceListLoading] = useState(false);
+  const [deviceListError, setDeviceListError] = useState<string | null>(null);
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
+  const [deviceRevokeTarget, setDeviceRevokeTarget] = useState<NetworkDevice | null>(null);
+
+  const refreshNetworkDevices = useCallback(async (silent = false) => {
+    if (!networkUser) {
+      setNetworkDevices([]);
+      return;
+    }
+    if (!silent) setDeviceListLoading(true);
+    try {
+      const list = await networkListDevices();
+      setNetworkDevices(list);
+      setDeviceListError(null);
+    } catch (error) {
+      setDeviceListError(error instanceof Error ? error.message : 'Cihazlar listelenemedi.');
+    } finally {
+      setDeviceListLoading(false);
+    }
+  }, [networkUser]);
+
+  useEffect(() => {
+    refreshNetworkDevices();
+  }, [refreshNetworkDevices]);
+
+  /** Cihazı uzaktan kaldır. Kendi cihazımızsa bu tarayıcıda da çıkış yapar. */
+  const handleRevokeDevice = useCallback(async (device: NetworkDevice) => {
+    setRevokingDeviceId(device.device_id);
+    try {
+      await networkRevokeDevice(device.device_id);
+      if (device.is_current) {
+        // Kendisi: tarayıcıdan çık + sayfayı tazele (oturumlar sunucuda kapandı).
+        await networkLogout();
+        window.location.reload();
+        return;
+      }
+      await refreshNetworkDevices(true);
+    } catch (error) {
+      setDeviceListError(error instanceof Error ? error.message : 'Cihaz kaldırılamadı.');
+    } finally {
+      setRevokingDeviceId(null);
+    }
+  }, [networkLogout, refreshNetworkDevices]);
 
   const [editingGenre, setEditingGenre] = useState<string | null>(null);
   const [editGenreName, setEditGenreName] = useState('');
@@ -1504,6 +1566,68 @@ export default function SettingsPage() {
             desc="Bu cihazdaki bağlantıyı kesebilir veya hesabını buluttan tamamen silebilirsin."
           >
             <div className="space-y-4">
+              {/* Bu Hesabın Cihazları (yalnızca ağ oturumu) */}
+              {networkUser && (
+                <div className="bg-ink-950/50 border border-ink-800 hover:border-sky-500/50 transition-colors rounded-2xl p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3 mb-1.5">
+                    <h3 className="text-sm sm:text-base font-bold text-sky-400 flex items-center gap-2">
+                      <MonitorPlay size={18} /> Bu Hesabın Cihazları
+                    </h3>
+                    <button
+                      onClick={() => refreshNetworkDevices()}
+                      className={`${BTN_S} px-3 py-1.5 text-[11px]`}
+                      style={BTN_S_STYLE}
+                      title="Listeyi yenile"
+                    >
+                      Yenile
+                    </button>
+                  </div>
+                  <p className="text-xs sm:text-sm text-ink-400 mb-4 leading-relaxed">
+                    Bu hesabın açık olduğu tarayıcı ve cihazlar. Bir cihazı listeden kaldırırsan
+                    o tarayıcı uzaktan çıkış yapmış olur; veri silinmez, sonraki açılışta
+                    "Hesabını Bağla" ile tekrar girebilir.
+                  </p>
+                  {deviceListLoading && (
+                    <p className="text-[11px] text-ink-500">Cihazlar yükleniyor…</p>
+                  )}
+                  {deviceListError && (
+                    <p className="text-[11px] text-red-400 mb-2">{deviceListError}</p>
+                  )}
+                  {!deviceListLoading && networkDevices.length === 0 && !deviceListError && (
+                    <p className="text-[11px] text-ink-500">Kayıtlı cihaz yok.</p>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    {networkDevices.map((device) => (
+                      <div
+                        key={device.device_id}
+                        className="flex flex-wrap items-center justify-between gap-2 bg-ink-900/60 border border-ink-800 rounded-xl px-3.5 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm font-semibold text-ink-200 flex items-center gap-2 flex-wrap">
+                            <span className="truncate">{device.label || 'Bilinmeyen cihaz'}</span>
+                            {device.is_current && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/40">
+                                Bu cihaz
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-ink-500 mt-0.5">
+                            Son görülme: {formatDeviceSeen(device.last_seen_at)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setDeviceRevokeTarget(device)}
+                          disabled={revokingDeviceId === device.device_id}
+                          className={`${BTN_S} px-3 py-1.5 text-[11px]`}
+                          style={{ ...BTN_S_STYLE, color: '#fbbf24', border: '1px solid rgba(251, 191, 36, .45)' }}
+                        >
+                          {revokingDeviceId === device.device_id ? 'Çıkış yapılıyor…' : 'Bu tarayıcıdan çıkış'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {/* Çıkış Yap (Sadece Yerel Silme) */}
               {/* Ağdan Çıkış (yalnızca ağ oturumu) */}
               <div className="bg-ink-950/50 border border-ink-800 hover:border-gold-500/50 transition-colors rounded-2xl p-4 sm:p-5">
@@ -2362,6 +2486,17 @@ export default function SettingsPage() {
           message="Bu kriteri silmek istediğine emin misin? Önceki yapıtlara verdiğin detaylı puanlar geçmişte kalır ancak yeni puanlamalarda bu kriteri kullanamazsın."
           onConfirm={() => { deleteCriterion(deleteCritTarget); setDeleteCritTarget(null); }}
           onCancel={() => setDeleteCritTarget(null)}
+        />
+      )}
+
+      {deviceRevokeTarget && (
+        <ConfirmDialog
+          title="Bu Tarayıcıdan Çıkış"
+          message={`"${deviceRevokeTarget.label || 'Bilinmeyen cihaz'}" tarayıcısındaki Sinevia Ağı oturumu kapatılacak. Tarayıcıdaki yedekler ve yerel veriler silinmez; tekrar giriş yapabilir.${
+            deviceRevokeTarget.is_current ? ' Bu liste bildirdiğin kendi cihazın; çıkış yaptıktan sonra sayfa yenilenecek.' : ''
+          } Devam edilsin mi?`}
+          onConfirm={() => { const target = deviceRevokeTarget; setDeviceRevokeTarget(null); handleRevokeDevice(target); }}
+          onCancel={() => setDeviceRevokeTarget(null)}
         />
       )}
 

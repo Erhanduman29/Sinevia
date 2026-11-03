@@ -87,8 +87,8 @@ function harness(initial: AppStateV3, client: SyncClient, deviceId = 'dev-test')
   return { engine, getLocal: () => local };
 }
 
-describe('iki cihaz — revizyon çakışması', () => {
-  test('A commit ederken B aynı base ile commit ederse revision-mismatch; sessiz ezme yok', async () => {
+describe('iki cihaz — revizyon yarışı', () => {
+  test('A commit ederken B yarışa girerse → sessiz EZME YOK, iki film de korunur', async () => {
     const cloud = new FakeCloud();
     const agentId = 'SNV-AAAA-0001';
     const aState = stateWith(agentId, { movies: [{ id: 'a-movie', title: 'A Filmi' }] as AppStateV3['movies'] });
@@ -113,18 +113,19 @@ describe('iki cihaz — revizyon çakışması', () => {
 
     const result = await b.engine.pushLocal(agentId);
 
-    expect(result.status).toBe('conflict');
-    if (result.status !== 'conflict') return;
-    expect(result.conflict.reason).toBe('revision-mismatch');
-    // B'nin base 0 denemesi sunucuda reddedildi; buluttaki kayıt A'nın verisi.
-    expect(cloud.commits.map((entry) => entry.request.baseRevision)).toEqual([0, 0]);
-    expect(cloud.records.get(agentId)?.payload.movies.map((movie) => movie.id)).toEqual(['a-movie']);
-    expect(b.getLocal().movies.map((movie) => movie.id)).toEqual(['b-movie']);
+    // Yarış reddedilir, kullanıcıya sorulmaz: iki dal güvenli BİRLEŞİR.
+    expect(result.status).toBe('local-uploaded');
+    // B'nin base 0 denemesi reddedildi; birleşik gövde taze revizyonla yazıldı.
+    expect(cloud.commits.map((entry) => entry.request.baseRevision)).toEqual([0, 0, 1]);
+    expect(cloud.records.get(agentId)?.payload.movies.map((movie) => movie.id).sort())
+      .toEqual(['a-movie', 'b-movie']);
+    expect(b.getLocal().movies.map((movie) => movie.id).sort())
+      .toEqual(['a-movie', 'b-movie']);
   });
 });
 
 describe('hesap (owner) değişimi', () => {
-  test('farklı agentId ile girişte otomatik upload yok, owner-mismatch çakışması üretilir', async () => {
+  test('farklı agentId ile girişte owner uyuşmazlığı → soru sorulmadan birleşir', async () => {
     const cloud = new FakeCloud();
     const sessionAgent = 'SNV-BBBB-0002';
     const local = stateWith('SNV-AAAA-0001', {
@@ -144,16 +145,18 @@ describe('hesap (owner) değişimi', () => {
 
     const result = await h.engine.sync(sessionAgent);
 
-    expect(result.status).toBe('conflict');
-    if (result.status !== 'conflict') return;
-    expect(result.conflict.reason).toBe('owner-mismatch');
-    expect(cloud.commits).toHaveLength(0); // otomatik yükleme YOK
-    expect(cloud.records.get(sessionAgent)?.payload.movies.map((movie) => movie.id)).toEqual(['cloud-account']);
-    expect(h.getLocal().ownerAgentId).toBe('SNV-AAAA-0001');
+    // Modal DÜŞMEZ: iki hesabın içeriği birleşip hedef hesap adına yazılır.
+    expect(result.status).toBe('local-uploaded');
+    expect(result.revision).toBe(5);
+    expect(cloud.commits).toHaveLength(1);
+    expect(cloud.records.get(sessionAgent)?.payload.movies.map((movie) => movie.id).sort())
+      .toEqual(['cloud-account', 'old-account']);
+    expect(h.getLocal().ownerAgentId).toBe('SNV-BBBB-0002');
 
-    // "Bu cihazı buluta yükle" için sahip onayı gerekir.
-    expect(needsOwnerUploadConfirmation(h.getLocal().ownerAgentId, sessionAgent)).toBe(true);
-    expect(needsOwnerUploadConfirmation(sessionAgent, sessionAgent)).toBe(false);
+    // Manuel "bu cihazı buluta yükle" için sahip onayı yine gerekir.
+    expect(needsOwnerUploadConfirmation(h.getLocal().ownerAgentId, sessionAgent)).toBe(false);
+    const foreignLocal = stateWith('SNV-CCCC-0003');
+    expect(needsOwnerUploadConfirmation(foreignLocal.ownerAgentId, sessionAgent)).toBe(true);
     expect(needsOwnerUploadConfirmation(null, sessionAgent)).toBe(false);
   });
 });

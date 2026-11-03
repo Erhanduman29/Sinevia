@@ -432,6 +432,16 @@ create table if not exists public.network_devices (
 create index if not exists idx_network_devices_agent_id
   on public.network_devices (agent_id);
 
+-- Cihaz listesi/revoke uçlarında kullanılabilen public kimlik.
+-- (device_secret hiçbir koşulda public edilmez; yalnız device_id paylaşılır.)
+alter table public.network_devices add column if not exists device_id text;
+-- Yeni cihazlar otomatik kimlik alır; eski satırlar için tek seferlik doldurma.
+update public.network_devices
+  set device_id = gen_random_uuid()::text
+  where device_id is null;
+create unique index if not exists uniq_network_devices_device_id
+  on public.network_devices (device_id);
+
 comment on table public.network_accounts is
   'Kullanıcı adı + şifre ile ağ girişi. username_lower ile büyük/küçük harf duyarsız benzersizlik.';
 comment on table public.network_sessions is
@@ -440,6 +450,11 @@ comment on table public.login_attempts is
   'Giriş denemeleri kaydı (rate limiting için).';
 comment on table public.network_devices is
   'Hesaba bağlı cihazlar. Her cihazın kendi gizli anahtarı; aynı hesap sınırsız cihazda açılabilir.';
+
+-- Oturumun cihaz anahtarıyla eşleşmesi (cihaz listesi + uzaktan çıkış için).
+alter table public.network_sessions add column if not exists device_secret text;
+create index if not exists idx_network_sessions_device_secret
+  on public.network_sessions (device_secret);
 
 
 -- ----------------------------------------------------------------------------
@@ -1333,9 +1348,11 @@ grant execute on function public.network_claim_device(text, text, text) to anon,
 
 
 -- Sessiz cihaz kaydı (uygulama açılışında; şifre sormaz, oturum ister).
+-- p_label: "Chrome · Windows 11" gibi okunur etiket (cihaz listesinde görünür).
 create or replace function public.network_touch_device(
   p_session_token text,
-  p_secret text
+  p_secret text,
+  p_label text default null
 )
 returns boolean
 language plpgsql
@@ -1345,6 +1362,7 @@ as $$
 declare
   v_agent text;
   v_exists boolean;
+  v_device_id text;
 begin
   if p_secret is null or length(btrim(p_secret)) < 8 then
     return false;
@@ -1359,18 +1377,32 @@ begin
     return false;
   end if;
 
+  -- Oturumu cihaz anahtarına bağla: hangi oturumun gözü hangi cihazdan
+  -- girilmişse, cihaz listesinde ve uzaktan çıkışta buna bakılır.
+  update public.network_sessions
+  set device_secret = p_secret
+  where session_token = p_session_token;
+
   select exists (
     select 1 from public.network_devices d
     where d.device_secret = p_secret
       and d.agent_id = v_agent
   ) into v_exists;
 
-  insert into public.network_devices (device_secret, agent_id)
-  values (p_secret, v_agent)
+  select coalesce(
+    (select d.device_id from public.network_devices d
+     where d.device_secret = p_secret and d.agent_id = v_agent
+     order by d.created_at limit 1),
+    gen_random_uuid()::text
+  ) into v_device_id;
+
+  insert into public.network_devices (device_secret, agent_id, device_id, label)
+  values (p_secret, v_agent, v_device_id, coalesce(btrim(p_label), 'Bilinmeyen cihaz'))
   on conflict (device_secret, agent_id) do nothing;
 
   update public.network_devices
-  set last_seen_at = now()
+  set last_seen_at = now(),
+      label = coalesce(nullif(btrim(p_label), ''), label)
   where device_secret = p_secret
     and agent_id = v_agent;
 
@@ -1378,8 +1410,99 @@ begin
 end;
 $$;
 
-revoke all on function public.network_touch_device(text, text) from public;
-grant execute on function public.network_touch_device(text, text) to anon, authenticated;
+revoke all on function public.network_touch_device(text, text, text) from public;
+grant execute on function public.network_touch_device(text, text, text) to anon, authenticated;
+
+
+-- Hesaba bağlı cihazların listesi (Ayarlar > Bu Hesabın Cihazları kartı).
+-- is_current: satır, çağrıyı yapan oturumun cihazına mı ait?
+create or replace function public.network_list_devices(p_session_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_agent text;
+  v_session_secret text;
+begin
+  select s.agent_id, s.device_secret into v_agent, v_session_secret
+  from public.network_sessions s
+  where s.session_token = p_session_token
+    and s.expires_at > now();
+
+  if v_agent is null then
+    raise exception 'Oturum süresi dolmuş veya geçersiz.';
+  end if;
+
+  return coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'device_id', d.device_id,
+        'label', coalesce(d.label, 'Bilinmeyen cihaz'),
+        'created_at', d.created_at,
+        'last_seen_at', d.last_seen_at,
+        'is_current', (d.device_secret = v_session_secret)
+      ) order by d.last_seen_at desc
+    ),
+    '[]'::jsonb
+  )
+  from public.network_devices d
+  where d.agent_id = v_agent;
+end;
+$$;
+
+revoke all on function public.network_list_devices(text) from public;
+grant execute on function public.network_list_devices(text) to anon, authenticated;
+
+
+-- Bir cihazı uzaktan kaldır: cihaz kaydını ve O tarayıcıdaki TÜM oturumları
+-- siler. Böylece o tarayıcı bir sonraki istekte "oturum geçersiz" görür.
+create or replace function public.network_revoke_device(
+  p_session_token text,
+  p_device_id text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_agent text;
+  v_device_secret text;
+begin
+  select agent_id into v_agent
+  from public.network_sessions
+  where session_token = p_session_token
+    and expires_at > now();
+
+  if v_agent is null then
+    raise exception 'Oturum süresi dolmuş veya geçersiz.';
+  end if;
+
+  select device_secret into v_device_secret
+  from public.network_devices
+  where device_id = p_device_id
+    and agent_id = v_agent;
+
+  if v_device_secret is null then
+    return false;
+  end if;
+
+  delete from public.network_devices
+  where device_id = p_device_id
+    and agent_id = v_agent;
+
+  -- O cihazın yaptığı tüm oturumları kapat (uzaktan tarayıcı çıkışı).
+  delete from public.network_sessions
+  where device_secret = v_device_secret;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.network_revoke_device(text, text) from public;
+grant execute on function public.network_revoke_device(text, text) to anon, authenticated;
 
 
 -- ----------------------------------------------------------------------------

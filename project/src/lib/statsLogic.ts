@@ -248,9 +248,23 @@ export function calculateStats(data: ExtendedAppData, statsMode: StatsScopeMode)
     ? scopedSeries.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0)
     : 0;
   const seriesRuntimeMinutes = watchedEpisodesCount * 42;
+  // Toplu puan satırları TEK satırdır (bölüm başına değil). Kapsamındaki tüm
+  // bölümler watched işaretliyse bu dakikalar zaten seriesRuntimeMinutes
+  // içindedir; çift saymayalım. Yalnızca bölümleri çözümlenemeyen/izlenmemiş
+  // ESKİ kayıtlar eklenir.
   const bulkRuntimeMinutes = scopedHistory
-    .filter((h) => h.bulkRating)
-    .reduce((sum, h) => sum + (h.bulkRuntimeMinutes || 0), 0);
+    .filter((h) => h.bulkRating && h.bulkRuntimeMinutes)
+    .reduce((sum, h) => {
+      const s = scopedSeries.find(
+        (item) => item.id === (h.seriesId || h.itemId),
+      );
+      if (!s || s.episodes.length === 0) return sum + (h.bulkRuntimeMinutes || 0);
+      const target = h.season != null
+        ? s.episodes.filter((item) => item.season === h.season)
+        : s.episodes;
+      const fullyWatched = target.length > 0 && target.every((item) => item.watched);
+      return sum + (fullyWatched ? 0 : h.bulkRuntimeMinutes || 0);
+    }, 0);
 
   const totalActualMinutes = actualMovieRuntimeMinutes + seriesRuntimeMinutes + bulkRuntimeMinutes;
   const totalCatalogMinutes = catalogMovieRuntimeMinutes + seriesRuntimeMinutes + bulkRuntimeMinutes;

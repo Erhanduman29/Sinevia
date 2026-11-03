@@ -86,7 +86,7 @@ import {
   type SyncMetaStore,
   type SyncRpcClient,
 } from '../lib/syncEngine';
-import { makeSaveHash } from '../lib/syncContract';
+import { makeContentHash, makeSaveHash } from '../lib/syncContract';
 import type { AppStateV3 } from '../types/appState';
 import type { ConflictChoice, SyncConflict, SyncResult } from '../types/sync';
 import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
@@ -901,13 +901,19 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   }
 
   // Dizi sezonları: toplam izleme süresi, biten dizi süresi ve günlük binge rekoru.
+  // Kural: TOPLU PUANLANAN sezon/diziler burada SAYILMAZ — izleme süresi
+  // başarımları yalnızca teker teker izlenen bölümlerden kazanılır.
   {
     const bingeDayMinutes: Record<string, number> = {};
     for (const s of state.series.filter((x) => !x.isPastWatch)) {
       const eps = s.episodes || [];
+      const ratedSeasons = new Set(Object.keys(s.seasonRatings || {}).map(Number));
       let total = 0;
+      let completedAll = eps.length > 0;
       for (const ep of eps) {
-        if (!ep.watched) continue;
+        if (!ep.watched) { completedAll = false; continue; }
+        // Toplu puanla işaretlenmiş bölüm: süre başarımına katkı VERMEZ.
+        if (s.overallRating != null || ratedSeasons.has(ep.season)) continue;
         const mins = ep.runtime || s.episodeRuntime || 0;
         total += mins;
         if (mins > 0 && ep.watchedAt) {
@@ -915,8 +921,10 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
           bingeDayMinutes[key] = (bingeDayMinutes[key] || 0) + mins;
         }
       }
+      // Dizinin kendisi toplu puanlandıysa "bitmiş dizi süresi" de sayılmaz.
+      if (s.overallRating != null) completedAll = false;
       M.seriesTime += total;
-      if (eps.length > 0 && eps.every((ep) => ep.watched)) M.seriesCompleteTime += total;
+      if (completedAll) M.seriesCompleteTime += total;
     }
     M.seriesBingeTime = Math.max(0, ...Object.values(bingeDayMinutes));
   }
@@ -960,8 +968,14 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   const detailMaster = state.movies.filter((m) => m.detailedRating && Object.keys(m.detailedRating).length > 0).length;
   const reviewTagger = state.movies.filter((m) => (m.reviewTags || []).length > 0).length;
   const spiderSense = state.movies.filter((m) => !m.watched && m.year && parseInt(m.year) > new Date().getFullYear()).length;
-  const patienceStone = state.series.filter((s) => !s.isPastWatch && s.episodes && s.episodes.length > 0 && Math.max(...s.episodes.map((e) => e.season)) >= 8 && s.episodes.every((e) => e.watched)).length;
-  const halfCenturySeries = state.series.filter((s) => !s.isPastWatch && s.episodes && s.episodes.length > 100 && s.episodes.every((e) => e.watched)).length;
+  // "8+ sezon dizisini bitir" ve "100+ bölümlük diziyi bitir": TOPLU PUANLANAN
+  // sezon/diziler bu tamamlama başarımlarını tetiklemez.
+  const watchCompletionSeries = state.series.filter((s) => !s.isPastWatch
+    && s.overallRating == null
+    && Object.keys(s.seasonRatings || {}).length === 0
+    && s.episodes && s.episodes.length > 0 && s.episodes.every((e) => e.watched));
+  const patienceStone = watchCompletionSeries.filter((s) => Math.max(...s.episodes.map((e) => e.season)) >= 8).length;
+  const halfCenturySeries = watchCompletionSeries.filter((s) => s.episodes.length > 100).length;
   const seasonComplete = (() => {
     let c = 0;
     state.series.filter((s) => !s.isPastWatch).forEach((s) => {
@@ -1776,9 +1790,22 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
 
       nextState.series = state.series.map((s) => {
         if (s.id !== action.seriesId) return s;
+        // Toplu puan = "bu bölümler karşılık olarak izlendi/puanlandı" kabulü.
+        // Hedef bölümler izlenmiş işaretlenir; böylece:
+        // - bölüm hücreleri tek tek puanlamadaki gibi RENKLE dolar,
+        // - sezon puanlanınca diğer sezonun 1. bölümünün kilidi açılır,
+        // - tüm dizi genel puandan puanlandığında dizi "izlenecek"
+        //   listesinden otomatik çıkar.
+        // Zaten izlenmiş bölümler korunur (tarih ve puanlar dokunulmaz).
+        const episodes = s.episodes.map((e) => {
+          const inScope = action.scope === 'series' || e.season === targetSeason;
+          if (!inScope || e.watched) return e;
+          return { ...e, watched: true, watchedAt: e.watchedAt || action.watchedAt };
+        });
         if (action.scope === 'season' && action.season !== undefined) {
           return {
             ...s,
+            episodes,
             ...(action.isPastWatch ? { isPastWatch: true, inPastQueue: false } : {}),
             seasonRatings: {
               ...(s.seasonRatings || {}),
@@ -1794,6 +1821,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
         }
         return {
           ...s,
+          episodes,
           ...(action.isPastWatch ? { isPastWatch: true, inPastQueue: false } : {}),
           overallRating: action.rating,
           overallNote: action.note,
@@ -2971,20 +2999,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [showToast, syncEngine]);
 
-  // Otomatik senkron: veri değişiminde 15 sn debounce; sekme görünür/odaklanınca hemen.
+  // Otomatik senkron: GERÇEK İÇERİK değiştiğinde 30 saniyelik "sessizlik"
+  // sayacı başlar. Sayaç dolmadan yeni bir değişiklik olursa sayaç SIFIRLANIR
+  // ve yeniden 30 sn sayar; 30 boyunca hiç değişiklik olmazsa buluta kayıt
+  // gider. İçerik hash'i DEĞİŞMEMİŞSE zamanlayıcı hiç kurulmaz — saat/tema
+  // gibi zarf farkları ve render gâyaliğinin hiçbiri senkron tetiklemez.
+  // Zamana bağlı periyodik senkron ve sekme görünür/odak tetikleyicileri YOK.
+  const runSyncRef = useRef(runSync);
+  runSyncRef.current = runSync;
+  const lastAutoSyncHashRef = useRef<string | null>(null);
   useEffect(() => {
     if (!hydrated || !data.agentId || !hydrationTrustedRef.current) return;
-    const timer = window.setTimeout(() => { void runSync(); }, 15000);
-    const onVisible = () => { if (document.visibilityState === 'visible') void runSync(); };
-    const onFocus = () => { void runSync(); };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onFocus);
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [data, hydrated, runSync]);
+    const hash = makeContentHash(lastV3Ref.current ?? data);
+    if (!hash || hash === lastAutoSyncHashRef.current) return;
+    const timer = window.setTimeout(() => {
+      void runSyncRef.current();
+      lastAutoSyncHashRef.current = hash;
+    }, 30000);
+    return () => window.clearTimeout(timer);
+  }, [data, hydrated]);
 
   // İlk hidrasyondan hemen sonra bir kez dene (açılış kontrolü).
   useEffect(() => {
@@ -3268,7 +3301,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? targetEpisodes.reduce((sum, ep) => sum + (ep.runtime && ep.runtime > 0 ? ep.runtime : fallbackRuntime), 0)
       : fallbackRuntime;
     const bulkRuntimeMinutes = Math.max(1, Math.round(totalRuntime * 0.25));
-    const historyItem: WatchHistoryItem = {
+    // BAŞARIM/SÖZLEŞME SAYGINLIĞI KURALI: toplu puan TEK geçmiş satırı yazar
+    // (genel → 1 satır; sezon → o sezon için 1 satır). Bölümler `watched`
+    // işaretlenir (hücre dolması, kilit açılması, "izlenen"e geçiş) ama
+    // başarımlar için her puanlama YALNIZCA 1 "izleme" sayar; dk/süre
+    // kredisi yazılmaz.
+    const historyItems: WatchHistoryItem[] = [{
       id: uid(),
       itemId: series.id,
       seriesId: series.id,
@@ -3287,7 +3325,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ratingScope: scope,
       bulkRating: true,
       bulkRuntimeMinutes,
-    };
+    } as WatchHistoryItem];
     dispatch({
       type: 'RATE_SERIES_BULK',
       seriesId,
@@ -3299,7 +3337,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       note,
       watchedAt: now,
       isPastWatch: finalIsPastWatch,
-      historyItems: [historyItem],
+      historyItems,
       bulkRuntimeMinutes,
     });
   }, [data.series]);

@@ -173,6 +173,63 @@ export async function networkDeleteAccount(password: string): Promise<void> {
   setStoredSessionToken(null);
 }
 
+/** Ayarlar > Cihazlar listesindeki bir satır. */
+export interface NetworkDevice {
+  device_id: string;
+  label: string;
+  created_at: string;
+  last_seen_at: string;
+  is_current: boolean;
+}
+
+/** Bu tarayıcıya okunur bir cihaz etiketi üretir: "Chrome · Windows 11". */
+export function describeCurrentDevice(): string {
+  if (typeof navigator === 'undefined') return 'Bilinmeyen cihaz';
+  const ua = navigator.userAgent || '';
+  const browser = ua.includes('Edg/') ? 'Edge'
+    : ua.includes('OPR/') || ua.includes('Opera') ? 'Opera'
+    : ua.includes('Firefox') ? 'Firefox'
+    : ua.includes('Chrome') ? 'Chrome'
+    : ua.includes('Safari') ? 'Safari'
+    : 'Tarayıcı';
+  const os = /Windows NT 10/.test(ua) ? 'Windows'
+    : /Windows/.test(ua) ? 'Windows'
+    : /Android/.test(ua) ? 'Android'
+    : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+    : /Mac OS X/.test(ua) ? 'macOS'
+    : /Linux/.test(ua) ? 'Linux'
+    : 'Cihaz';
+  return `${browser} · ${os}`;
+}
+
+/** Hesaba bağlı tüm cihazları listeler (sunucu tarafı is_current ile). */
+export async function networkListDevices(): Promise<NetworkDevice[]> {
+  const token = getStoredSessionToken();
+  if (!token) return [];
+  const { data, error } = await supabase.rpc('network_list_devices', {
+    p_session_token: token,
+  });
+  if (error) throw new Error(error.message || 'Cihazlar listelenemedi.');
+  return Array.isArray(data) ? (data as NetworkDevice[]) : [];
+}
+
+/**
+ * Bir cihazı hesaptan kaldırır: o tarayıcıdaki oturumlar da kapatılır
+ * (uzaktan çıkış). `true` → cihaz silindi.
+ */
+export async function networkRevokeDevice(deviceId: string): Promise<boolean> {
+  const token = getStoredSessionToken();
+  if (!token) throw new Error('Oturum bulunamadı.');
+  const { data, error } = await supabase.rpc('network_revoke_device', {
+    p_session_token: token,
+    p_device_id: deviceId,
+  });
+  if (error) throw new Error(error.message || 'Cihaz kaldırılamadı.');
+  // Bu tarayıcı başka bir cihazın oturumunu kapattıysa önbelleği boz.
+  clearReadCache();
+  return Boolean(data);
+}
+
 /** Mevcut oturumu geçerli kılar (sunucuya istek atmadan, sadece local kontrol). */
 export function hasNetworkSession(): boolean {
   return getStoredSessionToken() !== null;
@@ -191,6 +248,7 @@ export async function networkTouchDevice(): Promise<boolean> {
     const { data, error } = await supabase.rpc('network_touch_device', {
       p_session_token: token,
       p_secret: secret,
+      p_label: describeCurrentDevice(),
     });
     if (error) return false;
     return Boolean(data);

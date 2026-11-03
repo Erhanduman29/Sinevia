@@ -125,7 +125,9 @@ export function evaluateQuestCompletion(
     m.rating !== null && historySince.some(h => h.kind === 'movie' && h.itemId === m.id)
   );
 
-  const watchedEpisodes = historySince.filter(h => h.kind === 'series' && !h.bulkRating);
+  // Toplu puan satırları (bulkRating) BÖLÜM İZLE görevlerinde puanlama
+  // başına 1 izleme sayılır (genel → 1; 3 sezonluk puanlama → 3).
+  const watchedEpisodes = historySince.filter(h => h.kind === 'series');
 
   // Görev kabulünden SONRA yapılan puan revizyonları. Burada `historySince`
   // KULLANILMAZ: kullanıcı filmi görevden önce izlemiş olabilir, puanı ise görev
@@ -138,6 +140,7 @@ export function evaluateQuestCompletion(
   );
 
   const episodeRuntimeOf = (e: WatchHistoryItem): number => {
+    // Toplu puan satırları İZLEME SÜRESİ görevlerine katkı vermez.
     if (e.bulkRating) return 0;
     const s = series.find(x => x.id === (e.seriesId || e.itemId));
     const ep = s?.episodes.find(x => x.season === e.season && x.episode === e.episode);

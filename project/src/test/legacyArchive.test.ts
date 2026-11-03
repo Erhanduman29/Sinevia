@@ -6,6 +6,7 @@ import { makeSaveHash } from '../lib/syncContract';
 import {
   createSupabaseSyncClient,
   createSyncEngine,
+  decompressCloudPayload,
   legacyArchiveUrl,
   type SyncMetaStore,
   type SyncRpcClient,
@@ -27,10 +28,10 @@ class FakeAppSavesRpc implements SyncRpcClient {
   /** true → commit her zaman başarılı ama kayıt yazılmaz (arşiv Set testi). */
   commitWithoutStoring = false;
 
-  rpc(name: string, params: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }> {
+  async rpc(name: string, params: Record<string, unknown>): Promise<{ data: unknown; error: unknown }> {
     if (name === 'sync_get_state') {
-      if (!this.record) return Promise.resolve({ data: null, error: null });
-      return Promise.resolve({
+      if (!this.record) return { data: null, error: null };
+      return {
         data: {
           revision: this.record.revision,
           save_hash: this.record.saveHash,
@@ -38,32 +39,35 @@ class FakeAppSavesRpc implements SyncRpcClient {
           updated_at: this.record.updatedAt,
         },
         error: null,
-      });
+      };
     }
     if (name === 'sync_commit') {
       this.commits.push(params);
       const current = this.record?.revision ?? 0;
       const base = Number(params.p_base_revision);
       if (base !== current) {
-        return Promise.resolve({
+        return {
           data: { status: 'conflict', revision: current, reason: 'revision-mismatch' },
           error: null,
-        });
+        };
       }
       if (!this.commitWithoutStoring) {
+        // Sunucu gövdeyi jsonb'de saklar; istemci taşıma sıkıştırmasını
+        // açtığı için burada da düz gövde saklanır (assertion'lar okur).
+        const plain = await decompressCloudPayload(params.p_payload) as AppStateV3;
         this.record = {
           revision: current + 1,
           saveHash: String(params.p_save_hash),
-          payload: params.p_payload as AppStateV3,
+          payload: plain,
           updatedAt: '2026-01-01T00:00:02.000Z',
         };
       }
-      return Promise.resolve({
+      return {
         data: { status: 'ok', revision: current + 1, save_hash: params.p_save_hash, updated_at: '2026-01-01T00:00:02.000Z' },
         error: null,
-      });
+      };
     }
-    return Promise.resolve({ data: null, error: new Error(`bilinmeyen rpc: ${name}`) });
+    return { data: null, error: new Error(`bilinmeyen rpc: ${name}`) };
   }
 }
 
@@ -178,7 +182,7 @@ describe('eski Storage arşivi — getRemote köprüsü', () => {
     expect(fetch.calls[0].init?.cache).toBe('no-store');
   });
 
-  test('arşiv var + yerel dolu ve farklı → both-changed çakışması; otomatik yazma yok', async () => {
+  test('arşiv var + yerel dolu ve farklı → kullanıcıya sorulmadan BİRLEŞİR', async () => {
     const rpc = new FakeAppSavesRpc();
     const fetch = fakeFetch(() => okResponse(archiveJson()));
     const client = makeClient(rpc, fetch.impl);
@@ -189,12 +193,12 @@ describe('eski Storage arşivi — getRemote köprüsü', () => {
 
     const result = await h.engine.sync(AGENT);
 
-    expect(result.status).toBe('conflict');
-    if (result.status !== 'conflict') return;
-    expect(result.conflict.reason).toBe('both-changed');
-    expect(rpc.commits).toHaveLength(0);
-    expect(rpc.record).toBeNull();
-    expect(h.getLocal().movies.map((movie) => movie.id)).toEqual(['local-movie']);
+    // Modal DÜŞMEZ: yerel film + arşiv filmi birlikte buluta yazılır.
+    expect(result.status).toBe('local-uploaded');
+    expect(rpc.record?.payload.movies.map((movie) => movie.id).sort())
+      .toEqual(['local-movie', 'old-movie']);
+    expect(h.getLocal().movies.map((movie) => movie.id).sort())
+      .toEqual(['local-movie', 'old-movie']);
   });
 
   test('arşiv yok (404) → normal ilk sync, commit base 0', async () => {

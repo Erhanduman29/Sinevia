@@ -208,6 +208,55 @@ describe('REDUCER — DİZİ TOPLU PUANLAMA', () => {
     expect(state.history[0].bulkRating).toBe(true);
   });
 
+  test('sezon toptan puanlanınca o sezonun bölümleri izlenmiş işaretlenir ve diğer sezonun 1. bölümü açılır', () => {
+    let state = getInitialState();
+    state.series = [baseSeries()];
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'season',
+      season: 1,
+      rating: 9,
+      note: '',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ rating: 9 })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+
+    // 1. sezonun bölümleri artık izlenmiş: hücreler renkli görünür.
+    expect(state.series[0].episodes.find((e) => e.id === 'e1')?.watched).toBe(true);
+    expect(state.series[0].episodes.find((e) => e.id === 'e2')?.watched).toBe(true);
+    // Diğer sezon dokunulmadan kalır; ama sıradaki izlenecek bölüm artık
+    // 2. sezonun 1. bölümüdür (zincirleme kilit açılır).
+    const e3 = state.series[0].episodes.find((e) => e.id === 'e3');
+    expect(e3?.watched).toBe(false);
+    const firstUnwatched = [...state.series[0].episodes]
+      .sort((a, b) => a.season - b.season || a.episode - b.episode)
+      .find((e) => !e.watched);
+    expect(firstUnwatched?.id).toBe('e3');
+  });
+
+  test('tüm dizi genel puandan puanlanınca tüm bölümler izlenmiş olur (izlenecek listesinden çıkar)', () => {
+    let state = getInitialState();
+    state.series = [baseSeries()];
+
+    state = rootReducer(state, {
+      type: 'RATE_SERIES_BULK',
+      seriesId: 's1',
+      scope: 'series',
+      rating: 8,
+      note: '',
+      watchedAt: '2026-10-04T21:00:00',
+      historyItems: [bulkHistory({ ratingScope: 'series', season: undefined })],
+      bulkRuntimeMinutes: 42,
+    } as any);
+
+    // Tüm bölümler izlenmiş işaretlenir → "izlenecek" filtresi bunu
+    // tamamlanmış kabul edip izlenen listesine koyar.
+    expect(state.series[0].episodes.every((e) => e.watched)).toBe(true);
+  });
+
   test('sezon varken genel puan verilemez; sezon kaldırılınca genel puan verilebilir', () => {
     let state = getInitialState();
     state.series = [baseSeries()];

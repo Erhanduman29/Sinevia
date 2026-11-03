@@ -178,17 +178,47 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 /**
- * `navigator.serviceWorker.ready` hiç kayıtlı SW yoksa sonsuza kadar bekler
- * (ör. geliştirme modu). Bu yüzden her kullanımda zaman aşımıyla sarılır.
+ * Service worker'ın yok/başlamamış durumunu diğer hatalardan ayıran tür.
+ * Bu hata "kullanıcının düzeltebileceği bir arıza" değildir; konsolu
+ * kirletmeden sessizce sonuç döndürmek için kullanılır.
  */
-function waitForServiceWorker(timeoutMs: number): Promise<ServiceWorkerRegistration> {
+export class ServiceWorkerUnavailableError extends Error {
+  constructor() {
+    super('Service worker hazır değil. Sayfayı yenileyip tekrar dene.');
+    this.name = 'ServiceWorkerUnavailableError';
+  }
+}
+
+/**
+ * Kayıt kontrolü: `navigator.serviceWorker.ready` hiç kayıt yoksa SONSUZA
+ * kadar bekler (dev modunda durum budur). Bu yüzden önce gelmeyen kayıt
+ * için kısa yoklama yapılır, olmayınca tanımlı hata fırlatılır.
+ */
+async function waitForExistingRegistration(deadlineMs: number): Promise<ServiceWorkerRegistration | undefined> {
+  const start = Date.now();
+  // İlk yoklamada mevcut kayda hemen dön (çevrimdışı/geç ilk yükleme senaryosu).
+  for (;;) {
+    const registration = await navigator.serviceWorker.getRegistration().catch(() => undefined);
+    if (registration) return registration;
+    if (Date.now() - start >= deadlineMs) return undefined;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+async function waitForServiceWorker(timeoutMs: number): Promise<ServiceWorkerRegistration> {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    throw new ServiceWorkerUnavailableError();
+  }
+  // DEV modunda service worker bilinçli olarak kapalıdır (bkz. main.tsx /
+  // vite.config.ts); `ready` asla gelmez. Uzun beklemek yerine anında
+  // tanımlı hata döndür ki çağıran taraf sessizce sonuç döndürsün.
+  if (import.meta.env.DEV) throw new ServiceWorkerUnavailableError();
+  const registration = await waitForExistingRegistration(Math.min(timeoutMs, 10000));
+  if (!registration) throw new ServiceWorkerUnavailableError();
   return Promise.race([
     navigator.serviceWorker.ready,
     new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error('Service worker hazır değil. Sayfayı yenileyip tekrar dene.')),
-        timeoutMs,
-      ),
+      setTimeout(() => reject(new ServiceWorkerUnavailableError()), timeoutMs),
     ),
   ]);
 }
@@ -212,6 +242,17 @@ function sameApplicationServerKey(subscription: PushSubscription, expected: Uint
 export async function ensurePushSubscription(agentId: string): Promise<PushSetupResult> {
   if (!agentId) {
     return { ok: false, reason: 'error', message: 'Bildirimler için önce Sinevia Ağı hesabına giriş yapmalısın.' };
+  }
+
+  // DEV modunda service worker bilinçli olarak kapalıdır (main.tsx kaydı siler);
+  // aboneliği denemek hem boşa gider hem konsolu gereksiz hata ile doldurur.
+  if (import.meta.env.DEV) {
+    return {
+      ok: false,
+      reason: 'unsupported',
+      message:
+        'Geliştirme modunda service worker kapalıdır. Push aboneliği yalnızca prod derlemesinde (npm run build) veya yayındaki sitede kurulabilir.',
+    };
   }
 
   const keyString = await resolveVapidPublicKey();
@@ -293,6 +334,16 @@ export async function ensurePushSubscription(agentId: string): Promise<PushSetup
 
     return { ok: true, endpoint: subscription.endpoint };
   } catch (err) {
+    // Kayıt yok / SW aktif değil: bu beklenen bir durumdur (dev modu, ilk
+    // yükleme, engellenmiş tarayıcı) — konsolu kirletmeyen sessiz sonuç.
+    if (err instanceof ServiceWorkerUnavailableError) {
+      return {
+        ok: false,
+        reason: 'unsupported',
+        message:
+          'Bildirim servisi bu oturumda hazır değil. Uygulamayı yükleyip bir kez açtıktan sonra tekrar dene.',
+      };
+    }
     const message =
       err instanceof Error ? err.message : 'Bildirim aboneliği kurulamadı. Lütfen tekrar dene.';
     console.warn('[bildirim] abonelik kurulamadı:', err);
@@ -303,6 +354,7 @@ export async function ensurePushSubscription(agentId: string): Promise<PushSetup
 /** Bu cihazın push aboneliğini iptal et ve sunucudaki kaydı sil. */
 export async function removePushSubscription(agentId: string): Promise<void> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  if (import.meta.env.DEV) return; // DEV'de SW yok; sessizce çık.
   try {
     const registration = await waitForServiceWorker(3000);
     const subscription = await registration.pushManager.getSubscription();
@@ -313,6 +365,7 @@ export async function removePushSubscription(agentId: string): Promise<void> {
       await supabase.from('push_subscriptions').delete().eq('agent_id', agentId).eq('endpoint', endpoint);
     }
   } catch (err) {
+    if (err instanceof ServiceWorkerUnavailableError) return;
     console.warn('[bildirim] abonelik kaldırılamadı:', err);
   }
 }

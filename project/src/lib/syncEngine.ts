@@ -741,6 +741,15 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
         }
       }
 
+      // FARKLI/unknown cihaz yarışı: kullanıcıya sorma — iki dalı güvenli
+      // birleştirip taze bulut revizyonuyla bir kez daha dene.
+      // (allowSameDeviceRetry özyineleme korumasıdır: yalnız ilk çağrıda
+      // birleştirme denemesi yapılır.)
+      if (cloud && allowSameDeviceRetry) {
+        const merged = mergeForks(state, cloud.payload, now());
+        return commitState(agentId, merged, Math.max(0, Number(cloud.revision) || 0), false);
+      }
+
       const conflictReason: SyncConflictReason = 'revision-mismatch';
       const conflict = cloud
         ? buildConflict(conflictReason, state, cloud)
@@ -762,6 +771,11 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       if (cloud && !sameSaveHash(cloud.saveHash, saveHash)) {
         const settled = settleSameContent(agentId, state, cloud);
         if (settled) return settled;
+        // Yarışta başka cihaz yazmış: kullanıcıya sorma, güvenli birleştir.
+        if (allowSameDeviceRetry) {
+          const merged = mergeForks(state, cloud.payload, now());
+          return commitState(agentId, merged, Math.max(0, Number(cloud.revision) || 0), false);
+        }
         pending = { agentId, cloud };
         return {
           status: 'conflict',
@@ -802,6 +816,59 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     } catch {
       /* temizlik en iyi çaba; veri kaybı riski yok */
     }
+  }
+
+  /**
+   * Yarım bırakılmış birleştirme denemesi sayacı: autoMergeAndCommit'i
+   * özyinelemeye karşı sınırlar.
+   */
+  const AUTO_MERGE_ATTEMPTS = 3;
+
+  /**
+   * İki taraf da değişmişse kullanıcıya SORMA: güvenli birleştirme ile çöz.
+   *
+   * - Eklemeli veriler (geçmiş, XP/coin defteri, tamamlanan görevler,
+   *   başarım kademeleri) BİRLEŞİR; hiçbir tarafın kaydı silinmez.
+   * - Filmler/diziler gibi tekil kayıtlarda daha zengin kayıt kazanır.
+   * - Commit yarışı tekrarlarsa taze bulutla yeniden birleştirilir ve en fazla
+   *   AUTO_MERGE_ATTEMPTS kez denenir. Denemeler tükendiğinde yazma ERTELLENİR:
+   *   status 'error' döner, yerel veri korunur, bir sonraki otomatik senkron
+   *   yeniden dener. Kullanıcıya asla modal düşmez.
+   */
+  async function autoMergeAndCommit(agentId: string, cloudRecord: CloudSaveRecord): Promise<SyncResult> {
+    let record = cloudRecord;
+    for (let attempt = 1; attempt <= AUTO_MERGE_ATTEMPTS; attempt++) {
+      const local = current();
+      const localRevision = Math.max(0, Number((local as { revision?: number } | null)?.revision) || 0);
+      if (!isSyncPayload(local)) {
+        return {
+          status: 'error',
+          revision: localRevision,
+          error: { code: 'invalid-envelope', message: 'Yerel kayıt V3 değil.', retryable: false },
+        };
+      }
+      const baseRevision = Math.max(0, Number(record.revision) || 0);
+      const merged = mergeForks(local, record.payload, now());
+      const result = await commitState(agentId, merged, baseRevision);
+      if (result.status !== 'conflict') return result;
+
+      // Commit yarışı tekrarladı: taze bulutu çek, gerekiyorsa yeniden birleştir.
+      pending = null;
+      const next = await fetchRemote(agentId).catch(() => null);
+      if (!next) break;
+      const settled = settleSameContent(agentId, current(), next);
+      if (settled) return settled;
+      record = next;
+    }
+    return {
+      status: 'error',
+      revision: Math.max(0, Number(current().revision) || 0),
+      error: {
+        code: 'server',
+        message: 'Senkron yarışı: birleştirme bir sonraki denemede tekrarlanacak.',
+        retryable: true,
+      },
+    };
   }
 
   async function decideAndAct(agentId: string, localOverride?: AppStateV3): Promise<SyncResult> {
@@ -889,12 +956,10 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
               error: { code: 'server', message: 'Çakışma için bulut kaydı yok.', retryable: true },
             };
           }
-          pending = { agentId, cloud };
-          return {
-            status: 'conflict',
-            revision: Math.max(0, Number(local.revision) || 0),
-            conflict: buildConflict(decision.reason, local, cloud),
-          };
+          // OTOMATİK BİRLEŞTİRME: both-changed / owner-mismatch durumunda
+          // kullanıcıya modal gösterilmez; iki dal güvenli biçimde birleşip
+          // buluta yazılır. Hiçbir tarafın işlenmiş verisi kaybolmaz.
+          return await autoMergeAndCommit(agentId, cloud);
         }
       }
     } catch (error) {
@@ -1043,6 +1108,84 @@ export function legacyArchiveUrl(supabaseUrl: string, agentId: string): string {
   return `${supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/sinevia_saves/${encodeURIComponent(agentId)}.json`;
 }
 
+/* -----------------------------------------------------------------------
+   TAŞIMA KATMANI SIKIŞTIRMA (gzip + base64)
+
+   Hedef: buluta giden/geri gelen JSON gövdesi zamanla büyüdüğü için
+   aktarımı düşürmek. PROTOKOL DEĞİŞMEZ: saveHash DÜZ gövde üzerindendir,
+   sıkıştırma yalnızca `p_payload` taşımacılığında yapılır. Sıkıştırılmış
+   gövde `{ [GZIP_WRAPPER_KEY]: true, d: <base64 gzip> }` zarfıyla jsonb
+   sütununa yazılır; her istemci okurken kendisi açar.
+   ----------------------------------------------------------------------- */
+
+const GZIP_WRAPPER_KEY = '__sinevia_gz';
+
+interface GzipWrapper {
+  __sinevia_gz: true;
+  d: string;
+}
+
+function isGzipWrapper(value: unknown): value is GzipWrapper {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && (value as Record<string, unknown>)[GZIP_WRAPPER_KEY] === true
+    && typeof (value as Record<string, unknown>).d === 'string',
+  );
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(encoded: string): Uint8Array {
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Gövdeyi gzip'e çevirir; base64 zarfı düz JSON'dan UZUNSA (kazanç yok)
+ * `null` döner → düz gövde gönderilir. Ortam (eski tarayıcı/SSR) desteklemiyorsa
+ * da `null` döner.
+ */
+export async function compressCloudPayload(payload: unknown): Promise<GzipWrapper | null> {
+  try {
+    if (typeof CompressionStream === 'undefined' || typeof Blob === 'undefined') return null;
+    const json = JSON.stringify(payload);
+    const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    const encoded = bytesToBase64(bytes);
+    // base64 ≈ %33 şişkinlik + zarf alanı: gerçek kazanç yoksa sıkıştırma.
+    if (encoded.length + 32 >= json.length) return null;
+    return { [GZIP_WRAPPER_KEY]: true, d: encoded };
+  } catch {
+    return null;
+  }
+}
+
+/** Sıkıştırılmış zarfı açar; düz gövdeyi olduğu gibi döndürür. */
+export async function decompressCloudPayload(value: unknown): Promise<unknown> {
+  if (!isGzipWrapper(value)) return value;
+  if (typeof DecompressionStream === 'undefined' || typeof Blob === 'undefined') {
+    throw new SyncEngineError('invalid-envelope', 'Ortam sıkıştırma çözümünü desteklemiyor.');
+  }
+  try {
+    const stream = new Blob([base64ToBytes(value.d)]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const text = await new Response(stream).text();
+    return JSON.parse(text);
+  } catch (error) {
+    if (error instanceof SyncEngineError) throw error;
+    throw new SyncEngineError('invalid-envelope', 'Sıkıştırılmış bulut gövdesi çözülemedi.');
+  }
+}
+
 /**
  * Supabase RPC'lerini `SyncClient` arayüzüne bağlar.
  *
@@ -1066,11 +1209,13 @@ export function createSupabaseSyncClient(
   const archiveTried = new Set<string>();
   const importedAgents = new Set<string>();
 
-  function normalizeCloudRecord(data: unknown): CloudSaveRecord | null {
+  async function normalizeCloudRecord(data: unknown): Promise<CloudSaveRecord | null> {
     if (!data) return null;
     const record = (Array.isArray(data) ? data[0] : data) as RawCloudRecord | null;
     if (!record || typeof record !== 'object' || Object.keys(record).length === 0) return null;
-    const payload = record.payload;
+    // Taşıma sıkıştırması: gövde gzip zarfındaysa AÇILIR; saveHash yine düz
+    // gövde üzerindendir (protokol değişmez).
+    const payload = await decompressCloudPayload(record.payload);
     if (!isSyncPayload(payload)) {
       throw new SyncEngineError('invalid-envelope', 'Bulut kaydı geçersiz V3 gövdesi taşıyor.');
     }
@@ -1158,7 +1303,7 @@ export function createSupabaseSyncClient(
     async getRemote(agentId) {
       const { data, error } = await client.rpc(SYNC_RPC.getState, { p_agent_id: agentId });
       if (error) throw error;
-      const record = normalizeCloudRecord(data);
+      const record = await normalizeCloudRecord(data);
       if (record) return record;
 
       // app_saves boş: aynı oturumda arşiv zaten denenmiş/içe aktarılmışsa tekrar yok.
@@ -1169,12 +1314,15 @@ export function createSupabaseSyncClient(
     },
 
     async commit(agentId, request) {
+      // Taşıma sıkıştırması: büyük gövde gzip zarfıyla gönderilir. Zarfın
+      // `saveHash`'i DÜZ gövde üzerindendir — protokol bozulmaz.
+      const transportPayload = await compressCloudPayload(request.payload);
       const { data, error } = await client.rpc(SYNC_RPC.commit, {
         p_agent_id: agentId,
         p_base_revision: request.baseRevision,
         p_device_id: request.deviceId,
         p_save_hash: request.saveHash,
-        p_payload: request.payload,
+        p_payload: transportPayload ?? request.payload,
       });
       if (error) throw error;
       const record = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
