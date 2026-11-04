@@ -51,6 +51,7 @@ import {
   writeQuestState,
 } from '../lib/appBackup';
 import { pruneExpiredPlanItems } from '../lib/planPrune';
+import { applyLegacyImport, type LegacyImportPayload } from '../lib/reducerActions';
 import { supabase, SUPABASE_URL } from '../lib/supabase';
 import { networkGetMe } from '../lib/networkAuth';
 import { ensurePushSubscription, saveNotificationPrefs, showAppNotification } from '../lib/notifications';
@@ -206,6 +207,11 @@ export interface ExtendedAppData extends AppData {
    * kayıtları üretir. (bkz. src/lib/xpLedger.ts)
    */
   xpEvents?: XpEvent[];
+  /** Wrapped/Pazar özetlerinde kullanılan isteğ bağlı ek ekonomi verileri. */
+  stats?: {
+    totalCoinsSpent?: number;
+    completedEpicContracts?: number;
+  };
 }
 
 function generateAgentId() {
@@ -601,7 +607,7 @@ type Action =
   | { type: 'ADD_COLLECTION'; collection: Collection } | { type: 'DELETE_COLLECTION'; id: string } | { type: 'RENAME_COLLECTION'; id: string; name: string }
   | { type: 'SET_MOVIE_COLLECTION'; id: string; collectionId: string | null }
   | { type: 'SET_MOVIE_PAST_QUEUE'; id: string; inPastQueue: boolean }
-  | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'MERGE_SHARED_LIST'; movies: Movie[]; series: Series[]; collections: Collection[]; genres: string[] }
+  | { type: 'IMPORT_DATA'; data: ExtendedAppData } | { type: 'IMPORT_LEGACY_DATA'; payload: LegacyImportPayload } | { type: 'MERGE_SHARED_LIST'; movies: Movie[]; series: Series[]; collections: Collection[]; genres: string[] }
   | { type: 'HYDRATE_FROM_IDB'; data: ExtendedAppData }
   | { type: 'SET_ACHIEVEMENT_PROGRESS'; progress: AchievementProgress[] }
   | { type: 'TOGGLE_LOCKED_NAMES' } | { type: 'TOGGLE_BADGE_DETAILS' } | { type: 'TOGGLE_REDUCED_MOTION' } | { type: 'TOGGLE_FAST_CELEBRATIONS' } | { type: 'CONSUME_NEXT_TOAST' } | { type: 'CLEAR_LEVELUP' } | { type: 'CLEAR_XP_GAIN' } | { type: 'PROMOTE_LEVEL_UP' } | { type: 'CLEAR_LEVEL_UP_QUEUE' } | { type: 'SYNC_ACHIEVEMENTS' }
@@ -710,7 +716,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
   const watchedMovies = state.movies.filter((m) => m.watched && !m.isPastWatch);
   const watchedMoviesWithRuntime = watchedMovies.filter((m) => m.runtime);
   const pastWatchedMovies = state.movies.filter((m) => m.watched && m.isPastWatch);
-  const pastWatchedSeries = state.series.filter((s) => s.isPastWatch && s.overallRating !== null);
+  const pastWatchedSeries = state.series.filter((s) => s.isPastWatch);
   const movieById = new Map(state.movies.map((m) => [m.id, m]));
   const seriesById = new Map(state.series.map((s) => [s.id, s]));
 
@@ -998,8 +1004,8 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
     let currentVal = 0;
 
     switch (def.id) {
-      case 'movie_add': currentVal = state.movies.length; break;
-      case 'series_add': currentVal = state.series.length; break;
+      case 'movie_add': currentVal = state.movies.filter((m) => !(m.isPastWatch && m.importedAt)).length; break;
+      case 'series_add': currentVal = state.series.filter((s) => !(s.isPastWatch && s.importedAt)).length; break;
       case 'daily_movie': currentVal = maxMovieDayStreak; break;
       case 'daily_series': currentVal = maxSeriesDayStreak; break;
       case 'movie_genre_action': currentVal = movieGenreCounts.action; break;
@@ -1080,6 +1086,7 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'detail_master': currentVal = detailMaster; break;
       case 'review_tagger': currentVal = reviewTagger; break;
       case 'tutorial_explorer': currentVal = tutorialUnits; break;
+      case 'big_migration': currentVal = (state.movies.some((m) => m.importedAt) || state.series.some((s) => s.importedAt)) ? 1 : 0; break;
     }
 
     prog.current = currentVal;
@@ -1191,6 +1198,19 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
 
   if (action.type === 'RECOVER_IDENTITY') {
     return { ...state, agentId: action.agentId, recoveryKey: action.recoveryKey, nickname: action.nickname };
+  }
+
+  if (action.type === 'IMPORT_LEGACY_DATA') {
+    const importedCount =
+      action.payload.movies.length
+      + action.payload.series.length
+      + (action.payload.watchlistMovies?.length || 0)
+      + (action.payload.watchlistSeries?.length || 0)
+      + action.payload.history.length;
+    if (importedCount === 0) return state;
+    // Geçmiş izlemeler "önceden izlenen", izleme listesi kayıtları katalog ekleme
+    // başarımlarını kazanabilir; günlük/haftalık görevler ise isPastWatch nedeniyle etkilenmez.
+    return applyAchievements(applyLegacyImport(state, action.payload));
   }
 
   if (action.type === 'IMPORT_DATA') {
@@ -2039,7 +2059,7 @@ export interface AppContextValue {
   rateSeriesBulk: (seriesId: string, scope: 'series' | 'season', rating: number, note: string, season?: number, isPastWatch?: boolean, detailedRating?: Record<string, number>, reviewTags?: string[]) => void;
   clearSeriesRatings: (seriesId: string, scope: 'all' | 'series' | 'season', season?: number) => void;
   clearSeriesEpisodeRatings: (seriesId: string, seasons?: number[]) => void;
-  exportData: () => void; importData: (j: string) => boolean; resetData: () => void; exportShareList: () => void; importShareList: (j: string) => boolean;
+  exportData: () => void; importData: (j: string) => boolean; importLegacyData: (payload: LegacyImportPayload) => number; resetData: () => void; exportShareList: () => void; importShareList: (j: string) => boolean;
   toasts: ToastItem[]; showToast: (m: string, t?: ToastItem['type']) => void; achievementToasts: AchievementToastItem[];
   levelUpData: LevelUpData | null; seasonCompleteData: SeasonCompleteData | null; dismissLevelUp: () => void; dismissSeasonComplete: () => void;
   toggleLockedNames: () => void; toggleBadgeDetails: () => void; toggleReducedMotion: () => void; toggleFastCelebrations: () => void; xpGainData: XpGainPayload | null;
@@ -3388,6 +3408,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, [showToast]);
+  const importLegacyData = useCallback((payload: LegacyImportPayload): number => {
+    const watchlistMovies = payload.watchlistMovies?.length || 0;
+    const watchlistSeries = payload.watchlistSeries?.length || 0;
+    const count = payload.movies.length + payload.series.length + watchlistMovies + watchlistSeries + payload.history.length;
+    if (count === 0) {
+      showToast('Aktarılacak kayıt seçilmedi.', 'warning');
+      return 0;
+    }
+    dispatch({ type: 'IMPORT_LEGACY_DATA', payload });
+    showToast(
+      `${payload.movies.length} film, ${payload.series.length} dizi, ${watchlistMovies + watchlistSeries} izleme listesi kaydı ve ${payload.history.length} izleme geçmişi aktarıldı. Uygun başarımlar işlendi.`,
+      'success',
+    );
+    // Önce yerel V3 kaydı (600 ms debounce) yazılsın, ardından Supabase eşitlemesi
+    // çalışsın. Otomatik eşitleme de ayrıca devrededir; bu çağrı beklemez.
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => { void runSyncRef.current(); }, 1500);
+    }
+    return count;
+  }, [showToast]);
   const resetData = useCallback(() => { dispatch({ type: 'IMPORT_DATA', data: defaultData() }); showToast('Sıfırlandı'); }, [showToast]);
   const exportShareList = useCallback(() => {
     const sharePayload = { isShareList: true, exportedAt: new Date().toISOString(), collections: data.collections.map((c) => ({ id: c.id, name: c.name })), movies: data.movies.map((m) => ({ title: m.title, year: m.year, genres: m.genres, collectionId: m.collectionId, runtime: m.runtime, posterUrl: m.posterUrl, overview: m.overview, tmdbId: m.tmdbId, imdbId: m.imdbId, watchProviders: m.watchProviders, directors: m.directors, cast: m.cast, studios: m.studios, keywords: m.keywords, originalLanguage: m.originalLanguage, customUrl: m.customUrl })), series: data.series.map((s) => ({ title: s.title, year: s.year, genres: s.genres, posterUrl: s.posterUrl, overview: s.overview, tmdbId: s.tmdbId, imdbId: s.imdbId, watchProviders: s.watchProviders, creators: s.creators, cast: s.cast, studios: s.studios, keywords: s.keywords, originalLanguage: s.originalLanguage, customUrl: s.customUrl, episodes: (s.episodes || []).map((e) => ({ season: e.season, episode: e.episode })) })) };
@@ -3573,7 +3613,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
@@ -3585,7 +3625,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue,
     setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings,
-    exportData, importData, resetData, exportShareList, importShareList,
+    exportData, importData, importLegacyData, resetData, exportShareList, importShareList,
     showToast, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, updateAIHistory,
     addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme,
     addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem,

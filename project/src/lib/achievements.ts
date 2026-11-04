@@ -484,6 +484,11 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     { threshold: 100, xp: 1100, tier: 'diamond', name: 'Efsanevi Yüklenici' }
   ]},
 
+  // --- HARİCİ KAYNAK AKTARIMI ---
+  { id: 'big_migration', name: 'Büyük Göç', description: 'Harici bir kaynaktan koleksiyon aktardın.', icon: 'Archive', hidden: false, secret: false, category: 'Özel', tiers: [
+    { threshold: 1, xp: 100, tier: 'bronze', name: 'Büyük Göç' }
+  ]},
+
   // --- GİZLİ PAZAR BAŞARIMLARI ---
   { id: 'weekly_contract_fail', name: 'Kırık Taahhüt', description: 'Bir haftalık pazar görevini süresi içinde tamamlayamadın.', icon: 'Unlink', hidden: true, secret: true, category: 'Gizli', tiers: [
     { threshold: 1, xp: 15, tier: 'bronze', name: 'Kırık Taahhüt' }
@@ -978,6 +983,12 @@ export const ACHIEVEMENT_ILLUSTRATIONS: Record<string, AchievementArtLayers> = {
     base: 'M12 2.5L20.5 7.2V16.8L12 21.5L3.5 16.8V7.2L12 2.5Z',
     line: 'M12 2.5L20.5 7.2V16.8L12 21.5L3.5 16.8V7.2L12 2.5Z M16.5 7.5L14 14L7.5 16.5L10 10L16.5 7.5Z',
     core: 'M12 10.2A1.8 1.8 0 1 0 12 13.8A1.8 1.8 0 1 0 12 10.2Z',
+  },
+  // 76. Büyük Göç: Taşınan sandık ve yön oku
+  big_migration: {
+    base: 'M3.5 8.5H20.5V20.5H3.5V8.5Z M5.5 8.5L8 4H16L18.5 8.5',
+    line: 'M3.5 8.5H20.5V20.5H3.5V8.5Z M5.5 8.5L8 4H16L18.5 8.5 M8.5 4V8.5 M15.5 4V8.5 M3.5 13.5H20.5',
+    core: 'M9.5 17.5H14.5 M12 11.5V17.5 M10 13.5L12 11.5L14 13.5',
   },
 };
 

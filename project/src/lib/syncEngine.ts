@@ -1314,15 +1314,16 @@ export function createSupabaseSyncClient(
     },
 
     async commit(agentId, request) {
-      // Taşıma sıkıştırması: büyük gövde gzip zarfıyla gönderilir. Zarfın
-      // `saveHash`'i DÜZ gövde üzerindendir — protokol bozulmaz.
-      const transportPayload = await compressCloudPayload(request.payload);
+      // sync_commit SQL işlevi p_payload içinden doğrudan xpEvents,
+      // movies, series gibi alanları okur. Gzip zarfı SQL tarafından
+      // çözülemediği için total_xp her zaman 0 olarak kaydediliyordu.
+      // Bu yüzden DÜZ (sıkıştırılmamış) payload gönderilir.
       const { data, error } = await client.rpc(SYNC_RPC.commit, {
         p_agent_id: agentId,
         p_base_revision: request.baseRevision,
         p_device_id: request.deviceId,
         p_save_hash: request.saveHash,
-        p_payload: transportPayload ?? request.payload,
+        p_payload: request.payload,
       });
       if (error) throw error;
       const record = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;

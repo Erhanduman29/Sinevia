@@ -15,6 +15,7 @@ import { useTutorial } from '../context/TutorialContext';
 import type { RatingCriterion, ExternalActionTemplate } from '../types';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ShareImportModal from '../components/ShareImportModal';
+import MigrationWizardModal from '../components/MigrationWizardModal';
 import ShortcutsPanel from '../components/ShortcutsPanel';
 import InstallAppCard from '../components/InstallAppCard';
 import { useInstallSignal } from '../hooks/useInstallSignal';
@@ -843,6 +844,7 @@ export default function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const shareFileRef = useRef<HTMLInputElement>(null);
   const [shareImportJson, setShareImportJson] = useState<string | null>(null);
+  const [showMigration, setShowMigration] = useState(false);
 
   const [critName, setCritName] = useState('');
   const [critWeight, setCritWeight] = useState(5);
@@ -1461,6 +1463,30 @@ export default function SettingsPage() {
                 showToast('Hızlı aksiyon köprüsü şablonları kaydedildi.');
               }}
             />
+          </CollapsibleSection>
+
+          {/* --- DIŞ KAYNAK AKTARIMI (Letterboxd / Trakt / IMDb CSV) --- */}
+          <CollapsibleSection
+            title="Dış Kaynak Aktarımı"
+            icon={<FileText size={18} className="text-sky-400 flex-shrink-0" />}
+            defaultOpen={false}
+            desc="Letterboxd, Trakt veya IMDb CSV dosyalarını tarayıcında okuyup koleksiyonuna aktar. Tüm işlem cihazında yapılır; dosyalar sunucuya gönderilmez."
+          >
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={() => setShowMigration(true)}
+                className={`${BTN_P} px-4 py-2.5 text-xs sm:text-sm self-start`}
+                style={BTN_P_STYLE}
+              >
+                <Upload size={16} /> CSV Aktarımını Başlat
+              </button>
+              <div className="rounded-xl px-3.5 py-3 text-[11px] text-ink-400 leading-relaxed" style={{ background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.16)' }}>
+                <b className="text-sky-200">İzlenen / izlenecek ayrımı:</b> Puanı olan izlenmiş kayıtlar <b>Eskiden İzlenenler</b>’e, puanı olmayanlar ve izleme listesi kayıtları ise <b>Filmler / Diziler</b> listesine izlenecek olarak eklenir. Kütüphanede zaten olanlar çoğaltılmaz; izlenenler listeden çıkarılıp geçmişe taşınır. Uygun geçmiş izleme ve ekleme başarımları kazanılır; günlük/haftalık görevler ve sözleşmeler etkilenmez. <b className="text-amber-200">Büyük Göç</b> başarımı da açılır.
+              </div>
+              <p className="text-[10px] text-ink-500">
+                Desteklenen dosyalar: Letterboxd <b>diary.csv / ratings.csv / watched.csv / watchlist.csv</b> · Trakt <b>history.csv / ratings.csv / watchlist.csv</b> · IMDb <b>ratings.csv / watchlist.csv</b>
+              </p>
+            </div>
           </CollapsibleSection>
 
           {/* --- MANUEL LİSTE PAYLAŞIMI (JSON indir / yükle) --- */}
@@ -2551,6 +2577,10 @@ export default function SettingsPage() {
           onConfirm={handleConfirmDeleteAccount}
           onCancel={() => setShowDeleteWarnFinal(false)}
         />
+      )}
+
+      {showMigration && (
+        <MigrationWizardModal onClose={() => setShowMigration(false)} />
       )}
 
       {shareImportJson && (

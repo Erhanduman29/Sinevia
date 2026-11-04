@@ -64,6 +64,8 @@ export interface Movie {
   originalLanguage?: string;
   watched: boolean;
   isPastWatch?: boolean;
+  /** Harici CSV aktarımıyla oluşturulduysa aktarım zamanı (ISO). */
+  importedAt?: string;
   rating: number | null;
   detailedRating?: Record<string, number>;
   reviewTags?: string[];
@@ -122,6 +124,8 @@ export interface Series {
   inPastQueue?: boolean;
   /** Önceden izlenen dizi: istatistiklerde yalnız "Önceden" kapsamında sayılır. */
   isPastWatch?: boolean;
+  /** Harici CSV aktarımıyla oluşturulduysa aktarım zamanı (ISO). */
+  importedAt?: string;
   /** Dizinin genel (toptan) puanı. */
   overallRating?: number | null;
   overallNote?: string;
@@ -156,6 +160,8 @@ export interface WatchHistoryItem {
   note: string;
   watchedAt: string;
   isPastWatch?: boolean;
+  /** Harici CSV aktarımıyla oluşturulduysa aktarım zamanı (ISO). */
+  importedAt?: string;
   startedAt?: string | null;
   actualRuntime?: number | null;
   originalRuntime?: number | null;
