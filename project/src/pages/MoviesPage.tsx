@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react';
 import {
-  Plus, Projector, Trash2, Boxes, ChevronDown, ChevronRight, Star, Calendar, Filter,
+  Plus, Projector, Trash2, Boxes, ChevronDown, ChevronLeft, ChevronRight, Star, Calendar, Filter,
   ArrowDownAZ, CalendarDays, Star as StarIcon, Check, Search, Edit2, Shuffle, Clock,
   CalendarPlus, Image as ImageIcon, RefreshCw, Dna, PlayCircle, ExternalLink, Eye,
   FolderPlus, X, Play, Pause, Timer, Zap, Lock, EyeOff, ChevronsUpDown, History,
@@ -60,6 +60,201 @@ function sortCalibratedMovies(list: Movie[]): Movie[] {
 const BRIDGE_ICONS: Record<string, LucideIcon> = {
   ExternalLink, Play, Search, Info, Film, MessageSquare, MonitorPlay, PlayCircle,
 };
+
+/** Koleksiyon afiş şeridi: taşarsa ok butonları, mobilde uzun basıp sürükleyerek kaydırma. */
+function CollectionPosterStrip({
+  movies,
+  onToggle,
+  onImgError,
+}: {
+  movies: Movie[];
+  onToggle: () => void;
+  onImgError: (e: React.SyntheticEvent<HTMLImageElement>) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(true);
+  const longPressReady = useRef(false);
+  const drag = useRef({ active: false, startX: 0, startScroll: 0, moved: false });
+
+  const update = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setOverflow(el.scrollWidth > el.clientWidth + 4);
+    setAtStart(el.scrollLeft <= 4);
+    setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    update();
+    const el = scrollRef.current;
+    window.addEventListener('resize', update);
+    const ro = el && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    if (el && ro) ro.observe(el);
+    const t = window.setTimeout(update, 300);
+    return () => {
+      window.removeEventListener('resize', update);
+      ro?.disconnect();
+      window.clearTimeout(t);
+    };
+  }, [movies.length]);
+
+  const scrollByDir = (dir: -1 | 1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.max(160, el.clientWidth * 0.8), behavior: 'smooth' });
+  };
+
+  // Mobil: 280 ms uzun basınca sürükleme moduna geç; kısa kaydırmalarda
+  // tarayıcının doğal yatay kaydırması çalışmaya devam etsin.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let startX = 0;
+    let startScroll = 0;
+    let timer: number | null = null;
+    let active = false;
+    let moved = false;
+
+    const clearTimer = () => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startScroll = el.scrollLeft;
+      active = false;
+      moved = false;
+      clearTimer();
+      timer = window.setTimeout(() => {
+        active = true;
+        drag.current.active = true;
+        longPressReady.current = true;
+      }, 280);
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - startX;
+      if (!active) {
+        // Parmak kalkmadan belirgin kaydırdıysa uzun basma iptal.
+        if (Math.abs(dx) > 10) clearTimer();
+        return;
+      }
+      e.preventDefault();
+      moved = true;
+      drag.current.moved = true;
+      el.scrollLeft = startScroll - dx;
+    };
+
+    const onEnd = () => {
+      clearTimer();
+      if (active) {
+        drag.current.active = false;
+        drag.current.moved = moved;
+        // Tıklama olayı touchend'den hemen sonra gelir; onu yut.
+        window.setTimeout(() => {
+          longPressReady.current = false;
+          drag.current.moved = false;
+        }, 0);
+      }
+      active = false;
+    };
+
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      clearTimer();
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
+
+  return (
+    <div className="relative group/strip">
+      <div
+        ref={scrollRef}
+        onClick={() => {
+          // Uzun basıp sürüklediyse tıklama koleksiyonu açmasın.
+          if (longPressReady.current || drag.current.moved) {
+            longPressReady.current = false;
+            drag.current.moved = false;
+            return;
+          }
+          onToggle();
+        }}
+        onScroll={update}
+        onContextMenu={(e) => {
+          if (drag.current.active || longPressReady.current) e.preventDefault();
+        }}
+        className="px-3 sm:px-4 pb-3 sm:pb-4 flex items-center gap-1.5 sm:gap-2 overflow-x-auto hide-scrollbar cursor-pointer select-none"
+      >
+        {movies.map((m) => (
+          <div
+            key={m.id}
+            className="mpx-poster w-9 sm:w-11 aspect-[2/3] flex-shrink-0"
+            title={m.title}
+          >
+            {m.posterUrl ? (
+              <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover pointer-events-none" onError={onImgError} />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <ImageIcon size={12} className="text-ink-600" />
+              </div>
+            )}
+            {m.watched && !m.abandoned && (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-[1px]">
+                <Check size={16} strokeWidth={3} className="text-green-400 drop-shadow-lg" />
+              </div>
+            )}
+            {m.abandoned && (
+              <div className="absolute inset-0 bg-black/65 flex items-center justify-center backdrop-blur-[1px]">
+                <div className="flex flex-col items-center gap-0.5">
+                  <Skull size={13} strokeWidth={2.5} className="text-amber-400 drop-shadow-lg" />
+                  <span className="text-[6.5px] font-black uppercase tracking-wider text-amber-300">Mezarlık</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {overflow && (
+        <>
+          {!atStart && (
+            <button
+              type="button"
+              aria-label="Sola kaydır"
+              onClick={(e) => { e.stopPropagation(); scrollByDir(-1); }}
+              className="absolute left-1 top-1/2 -translate-y-1/2 z-10 h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-black/70 border border-white/20 text-white backdrop-blur-md flex items-center justify-center shadow-lg transition-transform active:scale-95"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
+          {!atEnd && (
+            <button
+              type="button"
+              aria-label="Sağa kaydır"
+              onClick={(e) => { e.stopPropagation(); scrollByDir(1); }}
+              className="absolute right-1 top-1/2 -translate-y-1/2 z-10 h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-black/70 border border-white/20 text-white backdrop-blur-md flex items-center justify-center shadow-lg transition-transform active:scale-95"
+            >
+              <ChevronRight size={16} />
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function MoviesPage() {
   const {
@@ -1075,39 +1270,11 @@ export default function MoviesPage() {
                     </div>
 
                     {!isExpanded && visibleMovies.length > 0 && (
-                      <div
-                        onClick={() => toggleCollection(coll.id)}
-                        className="px-3 sm:px-4 pb-3 sm:pb-4 flex items-center gap-1.5 sm:gap-2 overflow-x-auto hide-scrollbar cursor-pointer"
-                      >
-                        {visibleMovies.map((m) => (
-                          <div
-                            key={m.id}
-                            className="mpx-poster w-9 sm:w-11 aspect-[2/3] flex-shrink-0"
-                            title={m.title}
-                          >
-                            {m.posterUrl ? (
-                              <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover"  onError={handleImgFallback}/>
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <ImageIcon size={12} className="text-ink-600" />
-                              </div>
-                            )}
-                            {m.watched && !m.abandoned && (
-                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-[1px]">
-                                <Check size={16} strokeWidth={3} className="text-green-400 drop-shadow-lg" />
-                              </div>
-                            )}
-                            {m.abandoned && (
-                              <div className="absolute inset-0 bg-black/65 flex items-center justify-center backdrop-blur-[1px]">
-                                <div className="flex flex-col items-center gap-0.5">
-                                  <Skull size={13} strokeWidth={2.5} className="text-amber-400 drop-shadow-lg" />
-                                  <span className="text-[6.5px] font-black uppercase tracking-wider text-amber-300">Mezarlık</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                      <CollectionPosterStrip
+                        movies={visibleMovies}
+                        onToggle={() => toggleCollection(coll.id)}
+                        onImgError={handleImgFallback}
+                      />
                     )}
 
                     {isExpanded && (

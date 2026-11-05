@@ -30,7 +30,7 @@ export interface TutorialDef {
 }
 
 /* =========================================================================
-   1. KARŞILAMA TURU — 7 adım (sıralı, ilk açılışta otomatik)
+   1. KARŞILAMA TURU — 7 adım (ilk açılışta izin verilirse otomatik)
    ========================================================================= */
 export const WELCOME_TUTORIAL: TutorialDef = {
   id: 'welcome',
@@ -468,7 +468,7 @@ export const TUTORIAL_CENTER = {
     academy: 'Sinevia Akademisi',
   },
   groupDescs: {
-    welcome: 'İlk açılışta otomatik başlar; buradan istediğin an baştan izleyebilirsin.',
+    welcome: 'İlk açılışta izin verirsen otomatik başlar; buradan istediğin an baştan izleyebilirsin.',
     page: 'Her sayfanın kendi turları var. Bir sayfaya ilk girdiğinde otomatik de başlarlar.',
     modal: 'Pencerelerdeki (puanlama vb.) akışları tanıtır.',
     academy: 'On üç gerçek görevle uygulamayı yaparak öğren — XP yok, sadece deneyim. Her dersi buradan ayrı ayrı başlatabilir, bitmiş bir dersi yeniden yapabilirsin.',

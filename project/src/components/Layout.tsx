@@ -735,6 +735,9 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showWrapped, setShowWrapped] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
   const [searchDetail, setSearchDetail] = useState<DetailModalTarget | null>(null);
   const [showBulkAdd, setShowBulkAdd] = useState<'movie' | 'tv' | false>(false);
   const [showPick, setShowPick] = useState(false);
@@ -865,6 +868,60 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
       setIsNavVisible(true); 
     }
   }, [activeTab]);
+
+  // MOBİL: yukarıdan aşağıya çekince sayfayı yenile (pull-to-refresh).
+  useEffect(() => {
+    const el = mainScrollRef.current;
+    if (!el) return;
+    let startY = 0;
+    let distance = 0;
+    let active = false;
+
+    const onStart = (e: TouchEvent) => {
+      if (isRefreshing || isModalOpen || activeTutorial || e.touches.length !== 1) return;
+      if (el.scrollTop <= 0) {
+        startY = e.touches[0].clientY;
+        distance = 0;
+        active = true;
+      }
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!active) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0 || el.scrollTop > 0) {
+        active = false;
+        distance = 0;
+        setPullDistance(0);
+        return;
+      }
+      e.preventDefault();
+      distance = Math.min(110, dy * 0.5);
+      setPullDistance(distance);
+    };
+    const onEnd = () => {
+      if (!active) return;
+      active = false;
+      if (distance >= 72) {
+        setIsRefreshing(true);
+        setPullDistance(56);
+        window.setTimeout(() => window.location.reload(), 260);
+      } else {
+        setPullDistance(0);
+      }
+      distance = 0;
+    };
+
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [isRefreshing, isModalOpen, activeTutorial]);
 
   const handleMobileMenuClick = (id: TabId) => {
     onTabChange(id);
@@ -1263,7 +1320,17 @@ export default function Layout({ children, activeTab, onTabChange }: LayoutProps
           <span aria-hidden className="absolute left-0 right-0 bottom-[-1px] h-px pointer-events-none" style={{ background: TOPBAR_HAIRLINE }} />
         </header>
 
-        <div id="main-scroll" onScroll={handleScroll} className="flex-1 overflow-y-auto p-3.5 sm:p-4 md:p-8 relative custom-scrollbar pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
+        <div ref={mainScrollRef} id="main-scroll" onScroll={handleScroll} className="flex-1 overflow-y-auto p-3.5 sm:p-4 md:p-8 relative custom-scrollbar pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
+          {(pullDistance > 0 || isRefreshing) && (
+            <div className="pointer-events-none fixed left-1/2 top-16 z-[60] flex flex-col items-center gap-1" style={{ transform: `translate(-50%, ${isRefreshing ? 8 : Math.min(30, pullDistance * 0.4)}px)` }}>
+              <div className="h-9 w-9 rounded-full bg-ink-900/90 border border-gold-500/40 text-gold-400 backdrop-blur-md flex items-center justify-center shadow-lg">
+                <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} style={{ transform: isRefreshing ? undefined : `rotate(${pullDistance * 3}deg)` }} />
+              </div>
+              <span className="text-[9.5px] font-black uppercase tracking-[0.14em] text-gold-400/90">
+                {isRefreshing ? 'Yenileniyor' : pullDistance >= 72 ? 'Bırak yenile' : 'Yenilemek için çek'}
+              </span>
+            </div>
+          )}
           <div className={activeTab === 'achievements' ? 'w-full max-w-[100rem] mx-auto' : 'max-w-7xl mx-auto'}>{children}</div>
         </div>
       </main>

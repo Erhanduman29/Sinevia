@@ -506,7 +506,17 @@ const SERIES_PREMIUM_CSS = `
   box-shadow: 0 0 14px -6px rgba(78, 203, 142, .7);
 }
 
-/* Sinematik Otopsi (DNF) — tema motoru kırmızı zinciri, sabit renk yok */
+/* Önceden izlenip puanlanan dizi — "Bitenler"de yeni bitenlerden ayrılır. */
+.svp-past-tag {
+  display: inline-flex; align-items: center; gap: .25rem;
+  font-family: var(--svp-mono);
+  font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: #a5b4fc;
+  background: rgba(129, 140, 248, .12);
+  border: 1px solid rgba(129, 140, 248, .45);
+  padding: .2rem .5rem; border-radius: 99px; white-space: nowrap;
+}
+
 .svp-dnf-tag {
   display: inline-flex; align-items: center; gap: .3rem; width: fit-content;
   font-family: var(--svp-mono);
@@ -1025,16 +1035,17 @@ export default function SeriesPage() {
     setShowSendModal(true);
   };
 
-  const totalCompleted = data.series.filter((s) => !s.isPastWatch && !s.inPastQueue && s.episodes.length > 0 && s.episodes.every((e) => e.watched)).length;
+  const totalCompleted = data.series.filter(
+    (s) => s.pastCompleted || (!s.isPastWatch && !s.inPastQueue && s.episodes.length > 0 && s.episodes.every((e) => e.watched))
+  ).length;
   // İzlenecek: yarım bırakılanlar (abandoned) bu sayıya girmez.
   const totalAbandoned = data.series.filter((s) => Boolean(s.abandoned)).length;
   const totalOngoing = data.series.filter(
-    (s) => !s.isPastWatch && !s.inPastQueue && !s.abandoned && !(s.episodes.length > 0 && s.episodes.every((e) => e.watched))
+    (s) => !s.isPastWatch && !s.inPastQueue && !s.pastCompleted && !s.abandoned && !(s.episodes.length > 0 && s.episodes.every((e) => e.watched))
   ).length;
-  const totalPast = data.series.filter((s) => Boolean(s.isPastWatch || s.inPastQueue)).length;
+  const totalPast = data.series.filter((s) => Boolean(s.isPastWatch || s.inPastQueue) && !s.pastCompleted).length;
 
   const requestBulkRating = (series: Series, scope: 'series' | 'season', season?: number) => {
-    const pastOnly = Boolean(series.isPastWatch || series.inPastQueue);
     const seasonRatings = series.seasonRatings || {};
 
     if (scope === 'series') {
@@ -1053,10 +1064,6 @@ export default function SeriesPage() {
       }
     } else {
       if (season === undefined) return;
-      if (pastOnly) {
-        showToast('Önceden izlenen dizilerde yalnızca genel puan verilebilir.', 'warning');
-        return;
-      }
       if (series.overallRating != null) {
         showToast('Sezon puanı vermek için önce genel puanı kaldır.', 'warning');
         return;
@@ -1565,6 +1572,11 @@ export default function SeriesPage() {
                             🪦 Otopsi
                           </span>
                         )}
+                        {s.pastCompleted && (
+                          <span className="svp-past-tag shrink-0" title="Önceden izlenip puanlandı">
+                            <History size={9} /> Önceden
+                          </span>
+                        )}
                         {!allWatched && nextEp && (
                           <span
                             className="svp-count-pill shrink-0"
@@ -1892,8 +1904,7 @@ export default function SeriesPage() {
                               {seasonAllWatched && (
                                 <span className="svp-done-tag"><Check size={10} /> Tamamlandı</span>
                               )}
-                              {!pastOnly && (
-                                <div className="ml-auto flex items-center gap-1.5">
+                              <div className="ml-auto flex items-center gap-1.5">
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -1933,7 +1944,6 @@ export default function SeriesPage() {
                                     </button>
                                   )}
                                 </div>
-                              )}
                             </div>
                             <div className="grid grid-cols-4 xs:grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1.5">
                               {eps.map((ep) => {
@@ -1943,13 +1953,23 @@ export default function SeriesPage() {
                                 const bulkDisplayRating =
                                   s.overallRating ?? seasonRatings[ep.season]?.rating ?? null;
                                 const bulkLocked = bulkDisplayRating != null;
+                                const episodeLocked = bulkLocked || pastOnly;
                                 return (
                                   <EpisodeBox
                                     key={ep.id}
                                     episode={ep}
                                     canWatch={canWatch}
-                                    bulkLocked={bulkLocked}
+                                    bulkLocked={episodeLocked}
+                                    lockTitle={
+                                      pastOnly
+                                        ? 'Önceden izlenen dizilerde bölüm bölüm puanlama yapılamaz — sezon veya genel puan kullan'
+                                        : undefined
+                                    }
                                     onRate={() => {
+                                      if (pastOnly) {
+                                        showToast('Önceden izlenen dizilerde bölüm bölüm puanlama yapılamaz. Sezon veya genel puan kullan.', 'warning');
+                                        return;
+                                      }
                                       if (bulkLocked) {
                                         showToast('Bu sezon/dizi toplu puanlanmış. Bölüm puanlamak için önce toplu puanı kaldır.', 'warning');
                                         return;
@@ -1963,6 +1983,10 @@ export default function SeriesPage() {
                                       unwatchEpisode(s.id, ep.id);
                                     }}
                                     onEditRating={() => {
+          if (pastOnly) {
+            showToast('Önceden izlenen dizilerde bölüm bölüm puanlama yapılamaz. Sezon veya genel puan kullan.', 'warning');
+            return;
+          }
           if (bulkLocked) {
             showToast('Bu sezon/dizi toplu puanlanmış. Bölüm puanlamak için önce toplu puanı kaldır.', 'warning');
             return;
@@ -2170,6 +2194,7 @@ function EpisodeBox({
   canWatch,
   displayRating,
   bulkLocked = false,
+  lockTitle,
   onRate,
   onUnwatch,
   onEditRating,
@@ -2181,6 +2206,8 @@ function EpisodeBox({
   displayRating: number | null;
   /** Dizi/sezon toptan puanlandıysa bölüm bazlı düzenleme gizlenir. */
   bulkLocked?: boolean;
+  /** Kilit nedeni (varsayılan: toplu puan). */
+  lockTitle?: string;
   onRate: () => void;
   onUnwatch: () => void;
   /** Çipteki kalem → onay uyarısı → RatingModal */
@@ -2201,7 +2228,7 @@ function EpisodeBox({
             className={`svp-rate font-bold px-1.5 py-0.5 rounded-full ${ratingBgClass(displayRating)} ${
               episode.watched ? '' : 'svp-rate-kept'
             }`}
-            title={bulkLocked ? 'Toplu puan — bölüm bazlı düzenlenemez' : undefined}
+            title={bulkLocked ? (lockTitle || 'Toplu puan — bölüm bazlı düzenlenemez') : undefined}
           >
             {displayRating}
           </span>
@@ -2237,7 +2264,7 @@ function EpisodeBox({
         disabled={episode.watched ? displayRating !== null : !canWatch}
         title={
           bulkLocked
-            ? 'Toplu puan — bölüm bazlı düzenlenemez'
+            ? (lockTitle || 'Toplu puan — bölüm bazlı düzenlenemez')
             : episode.watched && displayRating !== null
               ? 'Puanlı bölüm — puanı düzenlemek için kalem simgesini kullan'
               : undefined

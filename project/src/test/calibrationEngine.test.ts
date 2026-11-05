@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import {
   calculateEloDelta,
+  calculateEloTie,
+  haveDueled,
   pickDuelPair,
   detectRatingAnomalies,
   expectedWinProbability,
@@ -26,34 +28,39 @@ function makeMovie(over: Partial<Movie>): Movie {
   };
 }
 
-describe('calculateEloDelta (Kör Kalibrasyon Elo Motoru)', () => {
-  test('eşit puanlarda simetrik delta: 8.00 vs 8.00 → 8.08 / 7.92', () => {
+describe('calculateEloDelta (Düello Puan Motoru)', () => {
+  test('kazanana sabit +0.1, kaybedene -0.1: 8.00 vs 8.00 → 8.10 / 7.90', () => {
     const { winnerNew, loserNew, delta } = calculateEloDelta(8.00, 8.00);
-    expect(delta).toBe(0.08); // K=0.16 * (1 - 0.5)
-    expect(winnerNew).toBe(8.08);
-    expect(loserNew).toBe(7.92);
+    expect(delta).toBe(0.1);
+    expect(winnerNew).toBe(8.1);
+    expect(loserNew).toBe(7.9);
   });
 
-  test('Elo beklenti formülü doğru: E(8,8)=0.5, E(9,8)≈0.76', () => {
-    expect(expectedWinProbability(8, 8)).toBeCloseTo(0.5, 10);
-    expect(expectedWinProbability(9, 8)).toBeCloseTo(1 / (1 + Math.pow(10, -0.5)), 10);
-    expect(ELO_K).toBe(0.16);
-  });
-
-  test('kazanan puanı yüksekse delta küçülür (adil sermaye)', () => {
-    const fav = calculateEloDelta(9, 8);
+  test('delta her zaman 0.1 (puan farkına bağımsız)', () => {
+    const fav = calculateEloDelta(9, 1);
     const even = calculateEloDelta(8, 8);
-    expect(fav.delta).toBeLessThan(even.delta);
-    expect(fav.delta).toBe(0.04); // 0.16 * (1 - 0.760...)
+    expect(fav.delta).toBe(0.1);
+    expect(even.delta).toBe(0.1);
   });
 
-  test('clamp: sonuçlar asla 1 ve 10 sınırlarını aşmaz', () => {
+  test('clamp üst: 9.95 kazandıysa 10.05 → 10 (aşmaz)', () => {
     const top = calculateEloDelta(9.95, 9.95);
-    expect(top.winnerNew).toBeLessThanOrEqual(10);
-    expect(top.winnerNew).toBe(10); // 9.95 + 0.08 → 10.03 → 10
+    expect(top.winnerNew).toBe(10);
+  });
+
+  test('clamp alt: 1.05 kaybettiyse 0.95 → 1 (0.9\'a inmez)', () => {
     const bottom = calculateEloDelta(1.05, 1.05);
-    expect(bottom.loserNew).toBeGreaterThanOrEqual(1);
-    expect(bottom.loserNew).toBe(1); // 1.05 - 0.08 → 0.97 → 1
+    expect(bottom.loserNew).toBe(1);
+  });
+
+  test('1 puanlı film kaybettiyse 1\'de kalır (alt sınır 1)', () => {
+    const bottom = calculateEloDelta(2, 1);
+    expect(bottom.loserNew).toBe(1);
+  });
+
+  test('10 puanlı film kazandıysa 10\'da kalır (üst sınır 10)', () => {
+    const top = calculateEloDelta(10, 9);
+    expect(top.winnerNew).toBe(10);
   });
 
   test('round2: tüm sonuçlar en fazla 2 ondalık basamağa sahiptir', () => {
@@ -179,5 +186,71 @@ describe('detectRatingAnomalies', () => {
     expect(out[0].movie.id).toBe('lower');
     expect(out[0].direction).toBe('lower'); // kalibre (6.0) < rating (7.0) → puanı düşür
     expect(out[0].suggestion).toBe(6.0);
+  });
+});
+
+describe('beraberlik ve tekrar eşleşme koruması', () => {
+  test('calculateEloTie: iki film de 5 ten büyükse her ikisine +0.1', () => {
+    const { aNew, bNew, deltaA, deltaB } = calculateEloTie(8, 8);
+    expect(deltaA).toBe(0.1);
+    expect(deltaB).toBe(0.1);
+    expect(aNew).toBe(8.1);
+    expect(bNew).toBe(8.1);
+  });
+
+  test('calculateEloTie: iki film de 5 ten küçükse her ikisine -0.1 (kötü film puan kaybeder)', () => {
+    const { aNew, bNew, deltaA, deltaB } = calculateEloTie(3, 3);
+    expect(deltaA).toBe(-0.1);
+    expect(deltaB).toBe(-0.1);
+    expect(aNew).toBe(2.9);
+    expect(bNew).toBe(2.9);
+  });
+
+  test('calculateEloTie: biri 5 ten büyük diğeri 5 ten küçük — her biri kendi puanına göre hareket eder', () => {
+    const { aNew, bNew, deltaA, deltaB } = calculateEloTie(8, 3);
+    expect(deltaA).toBe(0.1);
+    expect(deltaB).toBe(-0.1);
+    expect(aNew).toBe(8.1);
+    expect(bNew).toBe(2.9);
+  });
+
+  test('calculateEloTie: puan tam 5 ise değişmez (delta 0)', () => {
+    const { aNew, bNew, deltaA, deltaB } = calculateEloTie(5, 5);
+    expect(deltaA).toBe(0);
+    expect(deltaB).toBe(0);
+    expect(aNew).toBe(5);
+    expect(bNew).toBe(5);
+  });
+
+  test('calculateEloTie clamp alt: 1 puanlı iki kötü film eşleşirse her ikisi 1\'de kalır (0.9\'a inmez)', () => {
+    const { aNew, bNew } = calculateEloTie(1, 1);
+    expect(aNew).toBe(1);
+    expect(bNew).toBe(1);
+  });
+
+  test('calculateEloTie clamp üst: 10 puanlı iki iyi film eşleşirse her ikisi 10\'da kalır', () => {
+    const { aNew, bNew } = calculateEloTie(10, 10);
+    expect(aNew).toBe(10);
+    expect(bNew).toBe(10);
+  });
+
+  test('haveDueled iki yönlü kaydı da tanır', () => {
+    const a = makeMovie({ id: 'a', duelOpponents: ['b'] });
+    const b = makeMovie({ id: 'b' });
+    const c = makeMovie({ id: 'c', duelOpponents: ['a'] });
+    expect(haveDueled(a, b)).toBe(true);
+    expect(haveDueled(c, a)).toBe(true);
+    expect(haveDueled(b, c)).toBe(false);
+  });
+
+  test('pickDuelPair daha önce karşılaşmış çifti aday göstermez', () => {
+    const movies = [
+      makeMovie({ id: 'a', rating: 8.0, duelOpponents: ['b'] }),
+      makeMovie({ id: 'b', rating: 8.1 }),
+      makeMovie({ id: 'c', rating: 8.2 }),
+    ];
+    const pair = pickDuelPair(movies, undefined, { random: true });
+    expect(pair).not.toBeNull();
+    expect([pair!.a.id, pair!.b.id]).not.toEqual(['a', 'b']);
   });
 });

@@ -31,16 +31,15 @@ export function expectedWinProbability(ratingA: number, ratingB: number): number
 }
 
 /**
- * Bir düelloyu çözer: kazananın kalibre puanı yükselir, kaybedeninkı aynı
- * miktarda düşer. Sonuç { winnerNew, loserNew } (round2 + clamp [1,10]).
- * Örnek: 8.00 vs 8.00 → 8.08 / 7.92 (delta = 0.16 * (1 - 0.5) = 0.08).
+ * Bir düelloyu çözer: kazananın kalibre puanı sabit +0.1 artar,
+ * kaybedenininkı sabit -0.1 azar. Sonuç { winnerNew, loserNew } (round2 + clamp [1,10]).
+ * Alt puan 1, üst puan 10 — 1 puanlı bir film kaybedince 0.9'a inmez, 1'de kalır.
  */
 export function calculateEloDelta(
   winnerCalibrated: number,
   loserCalibrated: number
 ): { winnerNew: number; loserNew: number; delta: number } {
-  const eWinner = expectedWinProbability(winnerCalibrated, loserCalibrated);
-  const delta = round2(ELO_K * (1 - eWinner));
+  const delta = 0.1;
   const winnerNew = round2(clampRating(winnerCalibrated + delta));
   const loserNew = round2(clampRating(loserCalibrated - delta));
   return { winnerNew, loserNew, delta };
@@ -50,6 +49,39 @@ export interface DuelPair {
   a: Movie;
   b: Movie;
   mode: 'target' | 'closest';
+}
+
+/** İki film daha önce düelloda karşılaştı mı? */
+export function haveDueled(a: Movie, b: Movie): boolean {
+  return Boolean(
+    (a.duelOpponents || []).includes(b.id) || (b.duelOpponents || []).includes(a.id)
+  );
+}
+
+/**
+ * Beraberlik: her film kendi puanına göre bağımsız olarak değişir.
+ * - Puan 5 ten büyükse → +0.1
+ * - Puan 5 ten küçükse → -0.1 (iki kötü film eşleşirse her ikisi de puan kaybeder)
+ * - Puan tam 5 ise → 0 (değişmez)
+ * Sonuç round2 + clamp [1,10].
+ */
+export function calculateEloTie(
+  aCalibrated: number,
+  bCalibrated: number
+): { aNew: number; bNew: number; deltaA: number; deltaB: number } {
+  const tieDelta = (rating: number): number => {
+    if (rating > 5) return 0.1;
+    if (rating < 5) return -0.1;
+    return 0;
+  };
+  const deltaA = round2(tieDelta(aCalibrated));
+  const deltaB = round2(tieDelta(bCalibrated));
+  return {
+    aNew: round2(clampRating(aCalibrated + deltaA)),
+    bNew: round2(clampRating(bCalibrated + deltaB)),
+    deltaA,
+    deltaB,
+  };
 }
 
 function commonGenreCount(a: Movie, b: Movie): number {
@@ -85,7 +117,7 @@ export function pickDuelPair(
     const target = pool.find((m) => m.id === targetMovieId);
     if (!target) return null;
     const targetRating = target.rating as number;
-    const others = pool.filter((m) => m.id !== target.id);
+    const others = pool.filter((m) => m.id !== target.id && !haveDueled(target, m));
     // En yakın puan; ±0.5 penceresi varsa öncelik; ortak tür beraberlik kırar.
     const sorted = [...others].sort((x, y) => {
       const dx = Math.abs((x.rating as number) - targetRating);
@@ -109,6 +141,8 @@ export function pickDuelPair(
       const a = pool[i], b = pool[j];
       const gap = Math.abs((a.rating as number) - (b.rating as number));
       if (gap > 0.5) continue;
+      // Daha önce karşılaşan filmler tekrar eşleşmez — sonuç zaten belli.
+      if (haveDueled(a, b)) continue;
       const pair: DuelPair = { a, b, mode: 'closest' };
       candidates.push(pair);
       const duels = (a.duelCount || 0) + (b.duelCount || 0);

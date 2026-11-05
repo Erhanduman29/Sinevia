@@ -40,7 +40,7 @@ import {
   XP_SOURCE_LABELS,
 } from '../lib/xpLedger';
 import type { XpEvent, XpEventSource } from '../types/appState';
-import { calculateEloDelta } from '../lib/calibrationEngine';
+import { calculateEloDelta, calculateEloTie } from '../lib/calibrationEngine';
 import { normalizeActionLabel, rewriteLegacyTemplate } from '../lib/actionBridge';
 import {
   applyBackupExtras,
@@ -642,6 +642,7 @@ type Action =
   | { type: 'ABANDON_MEDIA'; mediaType: 'movie' | 'series'; id: string; abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }
   | { type: 'REVIVE_MEDIA'; mediaType: 'movie' | 'series'; id: string }
   | { type: 'RESOLVE_DUEL'; winnerId: string; loserId: string; mediaType?: 'movie' | 'series' }
+  | { type: 'RESOLVE_DUEL_TIE'; firstId: string; secondId: string }
   | { type: 'APPLY_CALIBRATION_SUGGESTION'; id: string; newRating: number }
   | { type: 'SET_EXTERNAL_ACTIONS'; actions: ExternalActionTemplate[] }
   | { type: 'GRANT_COINS'; amount: number; kind: CoinTx['kind']; label: string; refId: string; itemId?: string }
@@ -756,16 +757,21 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
     const day = localDayKey(h.watchedAt);
     const isMovie = h.type === 'movie' || h.kind === 'movie';
     const isSeries = h.type === 'series' || h.kind === 'series';
-    const rating = h.rating;
+    const rating = h.originalRating ?? h.rating;
     const note = h.note;
     const noteLen = note ? note.trim().length : 0;
     const bulk = Boolean(h.bulkRating);
     const hr = ts.getHours();
     const dow = ts.getDay();
 
+    // Puan düzenlemesi (previousRating != null) başarım sayımlarını TETIKLEMEZ.
+    // Yalnız ilk kez verilen puan (previousRating == null) sayılır; böylece
+    // puan değiştirme yeni başarıma neden olmaz, eski kazanımlar korunur.
+    const isFirstRating = h.previousRating == null;
+
     if (h.genres) for (const g of h.genres) uniqueGenres.add(g);
 
-    if (rating !== null && rating !== undefined) {
+    if (isFirstRating && rating !== null && rating !== undefined) {
       M.rated++;
       uniqueRatings.add(rating);
       if (rating === 10) M.tens++;
@@ -825,8 +831,8 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
     if (isMovie) {
       movieDays.add(day);
       movieDayCounts[day] = (movieDayCounts[day] || 0) + 1;
-      if (rating !== null && rating !== undefined) M.movieRated++;
-      if (rating === 10) M.movieHasTen = true;
+      if (isFirstRating && rating !== null && rating !== undefined) M.movieRated++;
+      if (isFirstRating && rating === 10) M.movieHasTen = true;
       if (hr >= 6 && hr < 9) M.morningSweet++;
       if (h.year && parseInt(h.year) <= 1980) M.nostalgia++;
       if (dow === 0 || dow === 6) {
@@ -1074,10 +1080,10 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'patient_purist': currentVal = M.patientPurist; break;
       case 'secret_speedrunner': currentVal = M.secretSpeedrunner; break;
       case 'past_watcher': currentVal = pastWatchedMovies.length; break;
-      case 'past_masterpiece': currentVal = pastWatchedMovies.filter((m) => m.rating === 10).length; break;
-      case 'past_critic': currentVal = pastWatchedMovies.filter((m) => m.rating !== null && m.note && m.note.trim().length > 0).length; break;
+      case 'past_masterpiece': currentVal = pastWatchedMovies.filter((m) => (m.originalRating ?? m.rating) === 10).length; break;
+      case 'past_critic': currentVal = pastWatchedMovies.filter((m) => (m.originalRating ?? m.rating) !== null && m.note && m.note.trim().length > 0).length; break;
       case 'past_series_watcher': currentVal = pastWatchedSeries.length; break;
-      case 'past_series_masterpiece': currentVal = pastWatchedSeries.filter((s) => s.overallRating === 10).length; break;
+      case 'past_series_masterpiece': currentVal = pastWatchedSeries.filter((s) => (s.originalOverallRating ?? s.overallRating) === 10).length; break;
       case 'past_series_critic': currentVal = pastWatchedSeries.filter((s) => s.overallNote && s.overallNote.trim().length > 0).length; break;
       case 'ruthless_critic': currentVal = ruthlessCritic; break;
       case 'scale_master': currentVal = state.totalDuelsCompleted || 0; break;
@@ -1636,8 +1642,14 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       const lOld = loser.calibratedScore ?? loser.rating ?? 5;
       const { winnerNew, loserNew } = calculateEloDelta(wOld, lOld);
       nextState.movies = state.movies.map((m) => {
-        if (m.id === winner.id) return { ...m, calibratedScore: winnerNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1 };
-        if (m.id === loser.id) return { ...m, calibratedScore: loserNew, duelCount: (m.duelCount || 0) + 1 };
+        if (m.id === winner.id) {
+          const opponents = m.duelOpponents || [];
+          return { ...m, calibratedScore: winnerNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: opponents.includes(loser.id) ? opponents : [...opponents, loser.id] };
+        }
+        if (m.id === loser.id) {
+          const opponents = m.duelOpponents || [];
+          return { ...m, calibratedScore: loserNew, duelCount: (m.duelCount || 0) + 1, duelLosses: (m.duelLosses || 0) + 1, duelOpponents: opponents.includes(winner.id) ? opponents : [...opponents, winner.id] };
+        }
         return m;
       });
       // XP YOK: düelloda XP kazanılmaz; ödül yalnızca "Terazi Ustası" başarımlarından gelir.
@@ -1646,6 +1658,27 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       if (winner.rating != null && loser.rating != null && winner.rating < loser.rating) {
         nextState.giantSlayerWins = (state.giantSlayerWins || 0) + 1;
       }
+      break;
+    }
+    case 'RESOLVE_DUEL_TIE': {
+      const first = state.movies.find((m) => m.id === action.firstId);
+      const second = state.movies.find((m) => m.id === action.secondId);
+      if (!first || !second || first.id === second.id) break;
+      const firstOld = first.calibratedScore ?? first.rating ?? 5;
+      const secondOld = second.calibratedScore ?? second.rating ?? 5;
+      const { aNew, bNew } = calculateEloTie(firstOld, secondOld);
+      nextState.movies = state.movies.map((m) => {
+        if (m.id === first.id) {
+          const opponents = m.duelOpponents || [];
+          return { ...m, calibratedScore: aNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: opponents.includes(second.id) ? opponents : [...opponents, second.id] };
+        }
+        if (m.id === second.id) {
+          const opponents = m.duelOpponents || [];
+          return { ...m, calibratedScore: bNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: opponents.includes(first.id) ? opponents : [...opponents, first.id] };
+        }
+        return m;
+      });
+      nextState.totalDuelsCompleted = (state.totalDuelsCompleted || 0) + 1;
       break;
     }
     case 'APPLY_CALIBRATION_SUGGESTION': {
@@ -1675,7 +1708,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'WATCH_MOVIE':
       nextState.movies = state.movies.map((m) =>
         m.id === action.id
-          ? { ...m, watched: true, inPastQueue: false, isPastWatch: Boolean(action.isPastWatch), rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt, actualRuntime: action.actualRuntime }
+          ? { ...m, watched: true, inPastQueue: false, isPastWatch: Boolean(action.isPastWatch), rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt, actualRuntime: action.actualRuntime, ...(m.rating === null ? { originalRating: action.rating } : {}) }
           : m
       );
       nextState.history = [action.historyItem, ...state.history];
@@ -1700,20 +1733,22 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       const ratingChanged = hItem.rating !== action.rating;
       const noteChanged = (hItem.note ?? '') !== (action.note ?? '');
       const changedAt = new Date().toISOString();
-      nextState.history = state.history.map((h) => (h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: (h.kind === 'movie' || h.type === 'movie') ? Boolean(updatedIsPast) : h.isPastWatch, ...(ratingChanged ? { previousRating: hItem.rating ?? undefined, ratingChangedAt: changedAt } : {}), ...(noteChanged ? { noteChangedAt: changedAt } : {}), ...(ratingChanged || noteChanged ? { editedAt: changedAt } : {}) } : h));
+      nextState.history = state.history.map((h) => (h.id === action.historyId ? { ...h, rating: action.rating, detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: (h.kind === 'movie' || h.type === 'movie') ? Boolean(updatedIsPast) : h.isPastWatch, ...(ratingChanged ? { previousRating: hItem.rating ?? undefined, ratingChangedAt: changedAt } : {}), ...(ratingChanged && hItem.rating == null ? { originalRating: action.rating } : {}), ...(noteChanged ? { noteChangedAt: changedAt } : {}), ...(ratingChanged || noteChanged ? { editedAt: changedAt } : {}) } : h));
       const targetId = hItem.itemId || hItem.id;
       if (hItem.kind === 'movie' || hItem.type === 'movie') {
-        nextState.movies = state.movies.map((m) => (m.id === targetId ? { ...m, rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: Boolean(updatedIsPast) } : m));
+        nextState.movies = state.movies.map((m) => (m.id === targetId ? { ...m, rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, isPastWatch: Boolean(updatedIsPast), ...(ratingChanged && m.rating == null ? { originalRating: action.rating } : {}) } : m));
       } else if (hItem.bulkRating) {
         nextState.series = state.series.map((s) => {
           if (s.id !== targetId && s.id !== hItem.seriesId) return s;
           if (hItem.ratingScope === 'season' && hItem.season !== undefined) {
+            const sr = (s.seasonRatings || {})[hItem.season];
             return {
               ...s,
               seasonRatings: {
                 ...(s.seasonRatings || {}),
                 [hItem.season]: {
                   rating: action.rating,
+                  ...(ratingChanged && sr?.rating == null ? { originalRating: action.rating } : {}),
                   note: action.note,
                   ratedAt: hItem.watchedAt,
                   detailedRating: action.detailedRating,
@@ -1724,6 +1759,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
           }
           return {
             ...s,
+            ...(ratingChanged && s.overallRating == null ? { originalOverallRating: action.rating } : {}),
             overallRating: action.rating,
             overallNote: action.note,
             overallRatedAt: hItem.watchedAt,
@@ -1797,8 +1833,6 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       } else if (
         targetSeason === undefined ||
         targetSeries.overallRating != null ||
-        targetSeries.isPastWatch ||
-        targetSeries.inPastQueue ||
         targetSeries.episodes.some((e) => e.season === targetSeason && e.rating !== null && e.rating !== undefined)
       ) {
         break;
@@ -1823,14 +1857,16 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
           return { ...e, watched: true, watchedAt: e.watchedAt || action.watchedAt };
         });
         if (action.scope === 'season' && action.season !== undefined) {
+          const existingSr = (s.seasonRatings || {})[action.season];
           return {
             ...s,
             episodes,
-            ...(action.isPastWatch ? { isPastWatch: true, inPastQueue: false } : {}),
+            ...(action.isPastWatch ? { isPastWatch: true, inPastQueue: false, pastCompleted: true } : {}),
             seasonRatings: {
               ...(s.seasonRatings || {}),
               [action.season]: {
                 rating: action.rating,
+                ...(existingSr?.rating == null ? { originalRating: action.rating } : {}),
                 note: action.note,
                 ratedAt: action.watchedAt,
                 detailedRating: action.detailedRating,
@@ -1842,7 +1878,8 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
         return {
           ...s,
           episodes,
-          ...(action.isPastWatch ? { isPastWatch: true, inPastQueue: false } : {}),
+          ...(action.isPastWatch ? { isPastWatch: true, inPastQueue: false, pastCompleted: true } : {}),
+          ...(s.overallRating == null ? { originalOverallRating: action.rating } : {}),
           overallRating: action.rating,
           overallNote: action.note,
           overallRatedAt: action.watchedAt,
@@ -1881,26 +1918,34 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
           return {
             ...s,
             overallRating: null,
+            originalOverallRating: null,
             overallNote: '',
             overallRatedAt: null,
             overallDetailedRating: undefined,
             overallReviewTags: undefined,
             seasonRatings: {},
+            pastCompleted: false,
           };
         }
         if (action.scope === 'series') {
           return {
             ...s,
             overallRating: null,
+            originalOverallRating: null,
             overallNote: '',
             overallRatedAt: null,
             overallDetailedRating: undefined,
             overallReviewTags: undefined,
+            pastCompleted: Boolean(s.isPastWatch && Object.keys(s.seasonRatings || {}).length > 0),
           };
         }
         const nextSeasonRatings = { ...(s.seasonRatings || {}) };
         if (action.season !== undefined) delete nextSeasonRatings[action.season];
-        return { ...s, seasonRatings: nextSeasonRatings };
+        return {
+          ...s,
+          seasonRatings: nextSeasonRatings,
+          pastCompleted: Boolean(s.isPastWatch && (s.overallRating != null || Object.keys(nextSeasonRatings).length > 0)),
+        };
       });
       nextState.history = state.history.filter((h) => {
         if (!(h.bulkRating && h.seriesId === action.seriesId)) return true;
@@ -2103,6 +2148,8 @@ export interface AppContextValue {
   reviveMedia: (mediaType: 'movie' | 'series', id: string) => void;
   /** Kör kalibrasyon düellosunu çöz (kazanan/kaybeden film kimlikleri). */
   resolveDuel: (winnerId: string, loserId: string, mediaType?: 'movie' | 'series') => void;
+  /** Beraberlik: iki film de kazanan gibi Elo kazancı alır. */
+  resolveDuelTie: (firstId: string, secondId: string) => void;
   applyCalibrationSuggestion: (id: string, newRating: number) => void;
   setExternalActions: (actions: ExternalActionTemplate[]) => void;
 }
@@ -3195,6 +3242,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const resolveDuel = useCallback((winnerId: string, loserId: string, mediaType?: 'movie' | 'series') => {
     dispatch({ type: 'RESOLVE_DUEL', winnerId, loserId, mediaType });
   }, []);
+  const resolveDuelTie = useCallback((firstId: string, secondId: string) => {
+    dispatch({ type: 'RESOLVE_DUEL_TIE', firstId, secondId });
+  }, []);
   const applyCalibrationSuggestion = useCallback((id: string, newRating: number) => {
     dispatch({ type: 'APPLY_CALIBRATION_SUGGESTION', id, newRating });
     showToast('⚖️ Puan kalibre edildi', 'success');
@@ -3232,7 +3282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     const isSpoiler = note.toLowerCase().includes('[spoiler]') || note.toLowerCase().includes('#spoiler');
     
-    dispatch({ type: 'WATCH_MOVIE', id, rating, detailedRating, reviewTags, note, watchedAt: now, actualRuntime, isPastWatch: finalIsPastWatch, historyItem: { id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title, rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: finalIsPastWatch, startedAt: finalIsPastWatch ? null : (movie.startedAt || null), actualRuntime, originalRuntime: info.maxMins, genres: movie.genres, year: movie.year } });
+    dispatch({ type: 'WATCH_MOVIE', id, rating, detailedRating, reviewTags, note, watchedAt: now, actualRuntime, isPastWatch: finalIsPastWatch, historyItem: { id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title, rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: finalIsPastWatch, startedAt: finalIsPastWatch ? null : (movie.startedAt || null), actualRuntime, originalRuntime: info.maxMins, genres: movie.genres, year: movie.year, ...(movie.rating === null ? { originalRating: rating } : {}) } });
     
     if (!finalIsPastWatch && data.shareWatchedInFeed !== false) {
       const row = {
@@ -3334,6 +3384,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       type: 'series',
       title: series.title,
       rating,
+      ...(scope === 'series' && series.overallRating == null ? { originalRating: rating } : {}),
+      ...(scope === 'season' && season !== undefined && (series.seasonRatings || {})[season]?.rating == null ? { originalRating: rating } : {}),
       detailedRating,
       reviewTags,
       note,
@@ -3613,7 +3665,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
@@ -3632,7 +3684,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome,
     toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification,
     forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload,
-    abandonMedia, reviveMedia, resolveDuel, applyCalibrationSuggestion, setExternalActions,
+    abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions,
   ];
   const actionsValue = useMemo<ActionsSlice>(() => {
     const { data: _d, syncStatus: _ss, isQuestCelebrating: _iqc, toasts: _t, achievementToasts: _at, levelUpData: _lud, seasonCompleteData: _scd, xpGainData: _xgd, coinGainData: _cgd, weeklyPlan: _wp, ...rest } = value;

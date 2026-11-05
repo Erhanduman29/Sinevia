@@ -14,6 +14,10 @@ const STORAGE_KEY = 'sinevia-tutorial-v1';
 
 /* ---------------- Durum ---------------- */
 export interface TutorialProgress {
+  /** İlk açılışta "tutorial ister misin?" sorusu soruldu mu? */
+  permissionAsked: boolean;
+  /** Kullanıcı tutorialeri istiyor mu? false ise hiçbir otomatik tur başlamaz. */
+  enabled: boolean;
   welcomeDone: boolean;
   welcomeStep: number;
   completed: string[]; // %100 bitirilen tutorial kimlikleri
@@ -29,6 +33,8 @@ export interface TutorialProgress {
 }
 
 const defaultProgress: TutorialProgress = {
+  permissionAsked: false,
+  enabled: false,
   welcomeDone: false,
   welcomeStep: 0,
   completed: [],
@@ -47,7 +53,19 @@ function loadProgress(): TutorialProgress {
     if (localStorage.getItem('sinevia_zero_reset') === '1') return { ...defaultProgress };
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const merged = { ...defaultProgress, ...JSON.parse(raw) } as TutorialProgress;
+      const parsed = JSON.parse(raw) as Partial<TutorialProgress>;
+      const merged = { ...defaultProgress, ...parsed } as TutorialProgress;
+      // Eski kayıtlarda izin alanları yok: geçmişte tutorial kullanmış biri
+      // için yeniden sormayalım; hiç kullanmamışsa ilk açılış gibi sorulsun.
+      if (parsed.permissionAsked === undefined) {
+        const hadActivity =
+          merged.welcomeDone ||
+          merged.academyStarted ||
+          merged.completed.length > 0 ||
+          merged.academyDone.length > 0;
+        merged.permissionAsked = hadActivity;
+        merged.enabled = hadActivity;
+      }
       // Eski kayıtlarda eventCounts yoksa benzersiz events listesinden 1'er kez tohumla.
       if (!merged.eventCounts || Object.keys(merged.eventCounts).length === 0) {
         const seeded: Record<string, number> = {};
@@ -65,6 +83,12 @@ export type ActiveKind = 'welcome' | 'page' | 'modal' | null;
 
 interface TutorialContextValue {
   progress: TutorialProgress;
+  /** "Tutorial ister misin?" sorusu daha önce soruldu mu? */
+  permissionAsked: boolean;
+  /** Kullanıcı tutorialeri etkinleştirdi mi? false ise otomatik tur başlamaz. */
+  tutorialsEnabled: boolean;
+  /** İlk açılış izin cevabı: true → başlat, false → hiçbirini başlatma. */
+  answerPermission: (enabled: boolean) => void;
   // Adım-adım tutorial (karşılama / sayfa / pencere)
   activeTutorial: TutorialDef | null;
   activeKind: ActiveKind;
@@ -112,6 +136,12 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const [activeStep, setActiveStep] = useState(0);
   const [centerOpen, setCenterOpen] = useState(false);
   const [academyActive, setAcademyActive] = useState(false);
+
+  // finishActive gibi [] bağımlılıklı callback'lerde güncel izin değerini okumak için.
+  const enabledRef = useRef(progress.enabled);
+  useEffect(() => {
+    enabledRef.current = progress.enabled;
+  }, [progress.enabled]);
 
   // Değişimi izlemek için önceki değerler
   const prevMovies = useRef(0);
@@ -198,7 +228,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       });
       setActiveId(null);
       setActiveStep(0);
-      setAcademyActive((prev) => prev || id === 'welcome');
+      // Akademi yalnızca tutorialler etkinse karşılama sonrası başlar.
+      setAcademyActive((prev) => prev || (id === 'welcome' && enabledRef.current));
       // Tutorial okunup pencere kapandığında hoş bir bildirim sesi
       playLessonDoneSound();
     },
@@ -323,6 +354,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   const notifyPageVisit = useCallback(
     (page: string) => {
+      // Kullanıcı tutorial istemediyse hiçbir otomatik sayfa turu başlamasın.
+      if (!progress.enabled) return;
       // Karşılama turu önceliklidir: çocuk effect'ler ebeveyn effect'inden önce
       // çalıştığı için ilk ziyaret buradan geçer. Karşılama bitmeden sayfa turu
       // başlatılırsa boot effect onu ezer ve o sayfanın turu hiçbir zaman
@@ -347,11 +380,13 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         startTutorial(tut.id);
       }
     },
-    [activeId, academyInProgress, progress.completed, progress.pageVisited, progress.welcomeDone, notifyEvent, startTutorial]
+    [activeId, academyInProgress, progress.completed, progress.pageVisited, progress.welcomeDone, progress.enabled, notifyEvent, startTutorial]
   );
 
   const notifyModalOpen = useCallback(
     (modalId: string) => {
+      // Kullanıcı tutorial istemediyse pencere turu da başlamasın.
+      if (!progress.enabled) return;
       // Karşılama sürerken pencere turu da ertelenir (öncelik: karşılama > pencere)
       if (!progress.welcomeDone) return;
       if (activeId) return;
@@ -363,7 +398,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         startTutorial(tut.id);
       }
     },
-    [activeId, academyInProgress, progress.completed, progress.modalSeen, progress.welcomeDone, startTutorial]
+    [activeId, academyInProgress, progress.completed, progress.modalSeen, progress.welcomeDone, progress.enabled, startTutorial]
   );
 
   // Pencere kapandıysa (puanlandı/gönderdi ya da vazgeçti) açık tutoriali kapat
@@ -399,23 +434,44 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   // Akademi başlangıcı senkronu
   useEffect(() => {
+    // Tutorialler kapalıysa otomatik akademi yönetimi yapılmaz. (Manuel olarak
+    // Tutorial Merkezi'nden başlatılan dersler yine çalışır.)
+    if (!progress.enabled) return;
     if (progress.academyStarted && progress.academyStep < ACADEMY_QUESTS.length) {
       setAcademyActive(true);
     } else {
       setAcademyActive(false);
     }
-  }, [progress.academyStarted, progress.academyStep]);
+  }, [progress.academyStarted, progress.academyStep, progress.enabled]);
 
   /* ------------- Karşılama turu otomatik (ilk açılış) ------------- */
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
+    // İzin sorulmadıysa veya kullanıcı "Hayır" dediyse hiçbir otomatik tur başlamaz.
+    if (!progress.permissionAsked || !progress.enabled) return;
     if (!progress.welcomeDone) {
       setActiveId('welcome');
       setActiveStep(progress.welcomeStep || 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ------------- İlk açılış izni ------------- */
+  const answerPermission = useCallback(
+    (enabled: boolean) => {
+      setProgress((p) => ({ ...p, permissionAsked: true, enabled }));
+      if (!enabled) return;
+      // "Evet" → karşılama turu (veya kaldığı yerden) hemen başlasın.
+      if (!progress.welcomeDone) {
+        setActiveId('welcome');
+        setActiveStep(progress.welcomeStep || 0);
+      } else if (progress.academyStarted && progress.academyStep < ACADEMY_QUESTS.length) {
+        setAcademyActive(true);
+      }
+    },
+    [progress.welcomeDone, progress.welcomeStep, progress.academyStarted, progress.academyStep]
+  );
 
   const resetAll = useCallback(() => {
     setProgress({ ...defaultProgress });
@@ -429,6 +485,9 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   const value: TutorialContextValue = {
     progress,
+    permissionAsked: progress.permissionAsked,
+    tutorialsEnabled: progress.enabled,
+    answerPermission,
     activeTutorial,
     activeKind,
     activeStep,

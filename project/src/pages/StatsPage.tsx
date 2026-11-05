@@ -3,9 +3,9 @@ import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
   Hourglass, Activity, User, Users, Building2, Crown, Sparkles,
   Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon, Skull,
-  Swords, Scale, ArrowUp, ArrowDown
+  Swords, Scale, ArrowUp, ArrowDown, AlertTriangle
 } from 'lucide-react';
-import { useLibrary, useGamification, useSettings } from '../context/slices';
+import { useLibrary, useGamification, useSettings, useActions } from '../context/slices';
 import { useTutorial } from '../context/TutorialContext';
 import { useComputedStats } from '../lib/selectorHooks';
 import { ratingBgClass } from '../lib/utils';
@@ -740,6 +740,7 @@ export default function StatsPage() {
   const { movies, series, collections, history } = useLibrary();
   const { achievements, totalXp, dailyStreak } = useGamification();
   const { criteria } = useSettings();
+  const { applyCalibrationSuggestion } = useActions();
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
   const [peopleTab, setPeopleTab] = useState<'directors' | 'cast' | 'studios'>('directors');
   const [showWrapped, setShowWrapped] = useState(false);
@@ -954,6 +955,19 @@ export default function StatsPage() {
         .slice(0, 10),
     [movies]
   );
+  /** 1 puanlı filmler arasında, kaybettiği düello sayısına göre en kötü 3 film. */
+  const duelLosers = useMemo(
+    () =>
+      movies
+        .filter((m) => (m.rating ?? 0) === 1 && (m.duelLosses || 0) > 0)
+        .sort((a, b) => {
+          const ld = (b.duelLosses || 0) - (a.duelLosses || 0);
+          if (ld !== 0) return ld;
+          return (a.title || '').localeCompare(b.title || '', 'tr');
+        })
+        .slice(0, 3),
+    [movies]
+  );
   const inflation = useMemo(() => {
     const both = movies.filter(
       (m) => typeof m.rating === 'number' && typeof m.calibratedScore === 'number'
@@ -963,15 +977,40 @@ export default function StatsPage() {
       (s, m) => s + Math.abs((m.calibratedScore as number) - (m.rating as number)),
       0
     );
+    // Enflasyon listeleri anomali eşiğinden bağımsızdır: en küçük sapma bile
+    // (ör. tek düelloluk 0.08 fark) "şişirilen / düşürülen" olarak görünür.
+    const deviations = both
+      .map((m) => {
+        const rating = m.rating as number;
+        const calibrated = m.calibratedScore as number;
+        return {
+          movie: m,
+          rating,
+          calibratedScore: calibrated,
+          gap: Math.round((calibrated - rating) * 100) / 100,
+          suggestion: Math.round(Math.min(10, Math.max(1, calibrated)) * 100) / 100,
+          needsUpdate: Math.abs(calibrated - rating) >= 1,
+        };
+      })
+      .filter((d) => Math.abs(d.gap) >= 0.01);
+
     return {
       count: both.length,
+      deviationCount: deviations.length,
+      pendingCount: deviations.filter((d) => d.needsUpdate).length,
       avgAbs: Math.round((sumAbs / both.length) * 100) / 100,
-      // direction 'lower' → puan kalibreden YÜKSEK (şişirilen),
-      // direction 'raise' → puan kalibreden DÜŞÜK (düşürülen).
-      inflated: anomalies.filter((a) => a.direction === 'lower').slice(0, 5),
-      deflated: anomalies.filter((a) => a.direction === 'raise').slice(0, 5),
+      // gap < 0 → rating kalibreden YÜKSEK (şişirilen),
+      // gap > 0 → rating kalibreden DÜŞÜK (düşürülen).
+      inflated: deviations
+        .filter((a) => a.gap < 0)
+        .sort((a, b) => a.gap - b.gap)
+        .slice(0, 10),
+      deflated: deviations
+        .filter((a) => a.gap > 0)
+        .sort((a, b) => b.gap - a.gap)
+        .slice(0, 10),
     };
-  }, [movies, anomalies]);
+  }, [movies]);
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
@@ -1788,12 +1827,12 @@ export default function StatsPage() {
         )}
       </div>
 
-      {/* KÖR KALİBRASYON & ELO — Gerçek Top 10 + Puan Enflasyonu + Başlat */}
+      {/* KALİBRASYON & ELO — Gerçek Top 10 + Puan Enflasyonu + Başlat */}
       <div className={PREMIUM_PANEL}>
         <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
           <div className="min-w-0">
             <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2">
-              <Scale size={18} className="text-gold-400" /> Kör Kalibrasyon &amp; Elo
+              <Scale size={18} className="text-gold-400" /> Kalibrasyon &amp; Elo
             </h2>
             <p className="text-xs text-ink-400 mt-0.5 leading-relaxed">
               Puan ile düello tabanlı kalibre puan arasındaki fark — dürüst sıralama ve enflasyon analizi
@@ -1913,6 +1952,45 @@ export default function StatsPage() {
             </div>
           </div>
 
+          {/* (a3) EN KÖTÜ 3 FILM (1 PUANLI, KAYIP SAYISINA GÖRE) */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
+                <Swords size={13} className="text-red-400" /> En Kötü 3 Film
+              </h3>
+              <span className="text-[10px] font-bold bg-ink-950 border border-ink-800 text-ink-400 px-2 py-0.5 rounded-full shrink-0">
+                duelLosses
+              </span>
+            </div>
+            {duelLosers.length === 0 ? (
+              <p className="text-xs text-ink-500 py-5 text-center">
+                Henüz 1 puanlı filmde düello kaybı yok.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {duelLosers.map((m, idx) => (
+                  <div key={m.id} className="flex items-center gap-2.5">
+                    <span className={`${PREMIUM_NUM} text-[11px] text-ink-500 w-5 text-right flex-shrink-0`}>
+                      {idx + 1}
+                    </span>
+                    <span className="text-xs font-bold text-ink-100 truncate flex-1 min-w-0" title={m.title}>
+                      {m.title}
+                    </span>
+                    <span className="text-[11px] font-black text-red-400 flex-shrink-0 tabular-nums">
+                      {m.duelLosses} ❌
+                    </span>
+                    <span className="text-[10px] font-bold text-ink-500 tabular-nums flex-shrink-0 hidden sm:block">
+                      {m.duelCount || 0} düello
+                    </span>
+                    <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 w-9 text-center ${ratingBgClass(m.rating ?? 0)}`}>
+                      {m.rating}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* (b) PUAN ENFLASYONU ANALİZİ */}
           <div className="bg-ink-950/50 border border-ink-800/70 rounded-2xl p-3.5 sm:p-4 flex flex-col gap-3">
             <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
@@ -1927,21 +2005,40 @@ export default function StatsPage() {
               <>
                 <div className="flex items-end justify-between gap-3 bg-ink-950/60 border border-ink-800/70 rounded-xl px-3 py-2.5">
                   <div className="min-w-0">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
+                    <div
+                      className="text-[10px] font-bold uppercase tracking-wider text-ink-500"
+                      title="Hem kullanıcı puanı hem kalibre puanı olan filmlerdeki ortalama mutlak fark."
+                    >
                       Ortalama |kalibre − puan|
                     </div>
                     <div className={`${PREMIUM_NUM} text-xl text-ink-50`}>{inflation.avgAbs.toFixed(2)}</div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-ink-500">
+                    <div
+                      className="text-[10px] font-bold uppercase tracking-wider text-ink-500"
+                      title="Sapmalı: farkı en az 0.01 olan film sayısı. Ölçülen: hem puanı hem kalibre puanı olan film sayısı."
+                    >
                       Sapmalı / Ölçülen
                     </div>
                     <div className={`${PREMIUM_NUM} text-xl text-ink-50`}>
-                      {anomalies.length}
+                      {inflation.deviationCount}
                       <span className="text-xs font-bold text-ink-400"> / {inflation.count}</span>
                     </div>
                   </div>
                 </div>
+                <p className="text-[10px] text-ink-500 leading-relaxed -mt-1">
+                  Ölçülen: puanı ve kalibre puanı olan filmler · Sapmalı: farkı 0.01+ olanlar
+                </p>
+
+                {inflation.pendingCount > 0 && (
+                  <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-300">
+                    <AlertTriangle size={13} className="shrink-0" />
+                    <span>
+                      {inflation.pendingCount} filmde puan farkı 1 veya daha fazla. Güncellemek için
+                      listedeki <span className="font-black">Güncelle</span> düğmesine dokun.
+                    </span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -1968,6 +2065,16 @@ export default function StatsPage() {
                               >
                                 {a.suggestion.toFixed(1)}
                               </span>
+                              {a.needsUpdate && (
+                                <button
+                                  type="button"
+                                  onClick={() => applyCalibrationSuggestion(a.movie.id, a.suggestion)}
+                                  className="ml-0.5 px-1.5 py-0.5 rounded-md border border-amber-500/40 bg-amber-500/10 text-[9px] font-black text-amber-300 hover:bg-amber-500/20 transition-colors"
+                                  title={`Puanı ${a.rating.toFixed(1)} → ${a.suggestion.toFixed(1)} olarak güncelle`}
+                                >
+                                  Güncelle
+                                </button>
+                              )}
                             </span>
                           </div>
                         ))}
@@ -1998,6 +2105,16 @@ export default function StatsPage() {
                               >
                                 {a.suggestion.toFixed(1)}
                               </span>
+                              {a.needsUpdate && (
+                                <button
+                                  type="button"
+                                  onClick={() => applyCalibrationSuggestion(a.movie.id, a.suggestion)}
+                                  className="ml-0.5 px-1.5 py-0.5 rounded-md border border-amber-500/40 bg-amber-500/10 text-[9px] font-black text-amber-300 hover:bg-amber-500/20 transition-colors"
+                                  title={`Puanı ${a.rating.toFixed(1)} → ${a.suggestion.toFixed(1)} olarak güncelle`}
+                                >
+                                  Güncelle
+                                </button>
+                              )}
                             </span>
                           </div>
                         ))}

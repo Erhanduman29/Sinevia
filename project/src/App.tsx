@@ -29,6 +29,7 @@ import { ContractCelebrationOverlay } from './components/ContractCelebrationOver
 import TutorialOverlay from './tutorial/TutorialOverlay';
 import AcademyCompanion from './tutorial/AcademyCompanion';
 import TutorialCenter from './tutorial/TutorialCenter';
+import TutorialPermissionModal from './tutorial/TutorialPermissionModal';
 import { ACADEMY_QUESTS } from './tutorial/texts';
 // Klavye kısayolları: global dinleyici + sabit yardımcılar (bkz. src/lib/shortcuts.ts)
 import { useShortcuts } from './hooks/useShortcuts';
@@ -299,7 +300,7 @@ function AppContent() {
 
 /** Tutorial katmanı: sayfa ziyaretini bildirir, overlay + akademi + merkez + yardım butonu. */
 function TutorialLayer({ activeTab }: { activeTab: TabId }) {
-  const { notifyPageVisit, centerOpen, setCenterOpen, progress } = useTutorial();
+  const { notifyPageVisit, centerOpen, setCenterOpen, progress, permissionAsked } = useTutorial();
   const academyDone = progress.academyDone.length;
   const prevAcademyDone = useRef(academyDone);
   /** Akademi bittiği commit'teki ani notifyPageVisit tetikini atlamak için */
@@ -333,6 +334,9 @@ function TutorialLayer({ activeTab }: { activeTab: TabId }) {
     <>
       <TutorialOverlay />
       <AcademyCompanion />
+
+      {/* İlk açılış: "Tutorial ister misin?" izni */}
+      {!permissionAsked && <TutorialPermissionModal />}
 
       {/* Tutorial Merkezi düğmesi artık Layout içinde (sidebar + mobil menü). */}
       {centerOpen && <TutorialCenter onClose={() => setCenterOpen(false)} />}

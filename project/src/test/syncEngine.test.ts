@@ -1027,7 +1027,7 @@ describe('quest state — senkron kaynağı ve boş kayıt', () => {
   });
 
   describe('commit transport paketlemesi (p_payload)', () => {
-    test('commit büyük içeriği gzip zarfıyla gönderir, saveHash düz gövde üzerinden', async () => {
+    test('commit gövdeyi düz gönderir (SQL xpEvents okuyabilir), saveHash düz gövde üzerinden', async () => {
       const repetitive: AppStateV3 = stateWith({
         movies: Array.from({ length: 300 }, (_, i) => ({
           id: `m${i}`,
@@ -1069,10 +1069,12 @@ describe('quest state — senkron kaynağı ve boş kayıt', () => {
       expect(result.status).toBe('local-uploaded');
       const commitParams = captured.find((p) => p.p_payload !== undefined);
       expect(commitParams).toBeDefined();
-      // p_payload büyükse gzip zarfıyla
+      // p_payload düz V3 gövdesi olmalı: SQL sync_commit p_payload->'xpEvents'
+      // üzerinden total_xp hesaplar; gzip zarfı bu hesabı bozar.
       const pPayload = commitParams!.p_payload;
-      expect(isGzipWrapper(pPayload)).toBe(true);
-      // saveHash düz gövde üzerinden hesaplanmalı (sıkıştırılmış gövde üzerinden DEĞİL)
+      expect(isGzipWrapper(pPayload)).toBe(false);
+      expect((pPayload as AppStateV3).xpEvents).toBeDefined();
+      // saveHash düz gövde üzerinden hesaplanmalı.
       expect(typeof commitParams!.p_save_hash).toBe('string');
       expect(commitParams!.p_save_hash).toMatch(/^fnv1a-/);
     });

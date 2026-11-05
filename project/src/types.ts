@@ -51,6 +51,9 @@ export interface Movie {
   calibratedScore?: number;
   duelCount?: number;
   duelWins?: number;
+  duelLosses?: number;
+  /** Bu filmin daha önce düelloda karşılaştığı filmlerin id'leri. */
+  duelOpponents?: string[];
   posterUrl?: string;
   overview?: string;
   tmdbId?: number;
@@ -67,6 +70,8 @@ export interface Movie {
   /** Harici CSV aktarımıyla oluşturulduysa aktarım zamanı (ISO). */
   importedAt?: string;
   rating: number | null;
+  /** İlk kez verilen puan — puan düzenlemelerinde başarım sayımlarını bozmamak için korunur. */
+  originalRating?: number;
   detailedRating?: Record<string, number>;
   reviewTags?: string[];
   note: string;
@@ -124,10 +129,14 @@ export interface Series {
   inPastQueue?: boolean;
   /** Önceden izlenen dizi: istatistiklerde yalnız "Önceden" kapsamında sayılır. */
   isPastWatch?: boolean;
+  /** Önceden izlenen dizi puanlandığında "Bitenler"de ayrı işaretlenir. */
+  pastCompleted?: boolean;
   /** Harici CSV aktarımıyla oluşturulduysa aktarım zamanı (ISO). */
   importedAt?: string;
   /** Dizinin genel (toptan) puanı. */
   overallRating?: number | null;
+  /** İlk kez verilen genel puan — puan düzenlemelerinde başarım sayımlarını bozmamak için korunur. */
+  originalOverallRating?: number | null;
   overallNote?: string;
   overallRatedAt?: string | null;
   overallDetailedRating?: Record<string, number>;
@@ -135,6 +144,8 @@ export interface Series {
   /** Sezon bazlı toptan puanlar. */
   seasonRatings?: Record<number, {
     rating: number;
+    /** İlk kez verilen sezon puanı. */
+    originalRating?: number;
     note: string;
     ratedAt: string;
     detailedRating?: Record<string, number>;
@@ -173,6 +184,8 @@ export interface WatchHistoryItem {
   abandoned?: boolean;
   /** Puan düzenleme: önceki puan (yalnız sonradan yapılan değişimlerde yazılır). */
   previousRating?: number;
+  /** Puan düzenleme: ilk verilen puan. Başarımlar revizyonlarda bu değeri esas alır. */
+  originalRating?: number;
   /** Puan değişiminin yapıldığı an — sıralama/tarih önceliğinde kullanılır. */
   ratingChangedAt?: string;
   /** Notun son değiştirildiği an (görev ilerlemesi için). */

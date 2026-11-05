@@ -152,11 +152,13 @@ export function filterAndSortSeries(
   if (watchedFilter !== null) {
     list = list.filter((s) => {
       const isPast = Boolean(s.isPastWatch || s.inPastQueue);
-      if (watchedFilter === 'past') return isPast;
+      const isPastCompleted = Boolean(s.pastCompleted);
       const isCompleted = s.episodes.length > 0 && s.episodes.every((e) => e.watched);
+      // Önceden izlenip puanlananlar artık "Bitenler"de, "Önceden"de değil.
+      if (watchedFilter === 'past') return isPast && !isPastCompleted;
+      if (watchedFilter) return isPastCompleted || (!isPast && isCompleted);
       // İzlenecek: yarım bırakılanlar (abandoned) izlenecek listesine girmez.
-      if (watchedFilter) return !isPast && isCompleted;
-      return !isPast && !isCompleted && !s.abandoned;
+      return !isPast && !isCompleted && !isPastCompleted && !s.abandoned;
     });
   }
   if (selectedGenres.size > 0) list = list.filter((s) => Array.from(selectedGenres).every((g) => s.genres.includes(g)));
