@@ -980,40 +980,43 @@ export default function StatsPage() {
       (s, m) => s + Math.abs((m.calibratedScore as number) - (m.rating as number)),
       0
     );
-    // Enflasyon listeleri anomali eşiğinden bağımsızdır: en küçük sapma bile
-    // (ör. tek düelloluk 0.08 fark) "şişirilen / düşürülen" olarak görünür.
+    // Gerçek sapma (kalibre − puan) 0.01'den büyük olan her film listelenecek.
+    // Puanı değiştirmek için ise en yakın 0.5'e olan fark (suggestion − puan)
+    // en az ±0.5 olmalı → needsUpdate eşiği buradan bozulmuyor.
     const deviations = both
       .map((m) => {
         const rating = m.rating as number;
         const calibrated = m.calibratedScore as number;
         const suggestion = roundHalfRating(calibrated);
+        const deviation = Math.round((calibrated - rating) * 100) / 100;
         const gap = Math.round((suggestion - rating) * 100) / 100;
         return {
           movie: m,
           rating,
           calibratedScore: calibrated,
+          deviation,
           gap,
           suggestion,
           // En az ±0.5 fark varsa puan değiştirilebilir; altındaki fark kabul edilmez.
           needsUpdate: Math.abs(gap) >= 0.5,
         };
       })
-      .filter((d) => Math.abs(d.gap) >= 0.01);
+      .filter((d) => Math.abs(d.deviation) >= 0.01);
 
     return {
       count: both.length,
       deviationCount: deviations.length,
       pendingCount: deviations.filter((d) => d.needsUpdate).length,
       avgAbs: Math.round((sumAbs / both.length) * 100) / 100,
-      // gap < 0 → rating kalibreden YÜKSEK (puanı düşürülmeli),
-      // gap > 0 → rating kalibreden DÜŞÜK (puanı yükseltilmeli).
+      // deviation < 0 → puan kalibreden yüksek (düşürülecekler), 
+      // deviation > 0 → puan kalibreden düşük (yükselilecekler).
       inflated: deviations
-        .filter((a) => a.gap < 0)
-        .sort((a, b) => a.gap - b.gap)
+        .filter((a) => a.deviation < 0)
+        .sort((a, b) => a.deviation - b.deviation)
         .slice(0, 10),
       deflated: deviations
-        .filter((a) => a.gap > 0)
-        .sort((a, b) => b.gap - a.gap)
+        .filter((a) => a.deviation > 0)
+        .sort((a, b) => b.deviation - a.deviation)
         .slice(0, 10),
     };
   }, [movies]);
@@ -2246,13 +2249,19 @@ export default function StatsPage() {
                             >
                               {a.movie.title}
                             </span>
-                            <span className="flex items-center gap-1.5 shrink-0 tabular-nums text-[10px]">
+                            <span className="flex items-center gap-1 shrink-0 tabular-nums text-[10px]">
                               <span className="text-ink-500 font-bold">{roundHalfRating(a.rating).toFixed(1)}</span>
                               <span className="text-ink-600">→</span>
                               <span
-                                className={`px-1.5 py-0.5 rounded font-black ${ratingBgClass(a.suggestion)}`}
+                                className={`px-1.5 py-0.5 rounded font-black ${ratingBgClass(a.calibratedScore)}`}
+                                title={`Kalibre: ${a.calibratedScore.toFixed(1)}`}
                               >
-                                {a.suggestion.toFixed(1)}
+                                {a.calibratedScore.toFixed(1)}
+                              </span>
+                              <span
+                                className={`text-[9px] font-bold ${a.deviation > 0 ? 'text-green-400' : 'text-red-400'}`}
+                              >
+                                {a.deviation > 0 ? `+${a.deviation.toFixed(1)}` : a.deviation.toFixed(1)}
                               </span>
                               {a.needsUpdate && <AlertTriangle size={10} className="text-amber-400 shrink-0" />}
                               {a.needsUpdate && (
@@ -2287,13 +2296,19 @@ export default function StatsPage() {
                             >
                               {a.movie.title}
                             </span>
-                            <span className="flex items-center gap-1.5 shrink-0 tabular-nums text-[10px]">
+                            <span className="flex items-center gap-1 shrink-0 tabular-nums text-[10px]">
                               <span className="text-ink-500 font-bold">{roundHalfRating(a.rating).toFixed(1)}</span>
                               <span className="text-ink-600">→</span>
                               <span
-                                className={`px-1.5 py-0.5 rounded font-black ${ratingBgClass(a.suggestion)}`}
+                                className={`px-1.5 py-0.5 rounded font-black ${ratingBgClass(a.calibratedScore)}`}
+                                title={`Kalibre: ${a.calibratedScore.toFixed(1)}`}
                               >
-                                {a.suggestion.toFixed(1)}
+                                {a.calibratedScore.toFixed(1)}
+                              </span>
+                              <span
+                                className={`text-[9px] font-bold ${a.deviation > 0 ? 'text-green-400' : 'text-red-400'}`}
+                              >
+                                {a.deviation > 0 ? `+${a.deviation.toFixed(1)}` : a.deviation.toFixed(1)}
                               </span>
                               {a.needsUpdate && <AlertTriangle size={10} className="text-amber-400 shrink-0" />}
                               {a.needsUpdate && (
