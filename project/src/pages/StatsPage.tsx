@@ -997,8 +997,10 @@ export default function StatsPage() {
           deviation,
           gap,
           suggestion,
-          // En az ±0.5 fark varsa puan değiştirilebilir; altındaki fark kabul edilmez.
-          needsUpdate: Math.abs(gap) >= 0.5,
+          // En az ±0.5 gerçeğe yönelik sapma varsa puan değiştirilebilir; altındaki fark kabul edilmez.
+          // gap (0.5'e yuvarlanmış suggestion − puan) değil, deviation (kalibre − puan) baz alınır:
+          // örn. 7.5 → 7.8 (+0.3) buton çıkarmaz; 7.5 → 8.0 (+0.5) çıkartır.
+          needsUpdate: Math.abs(deviation) >= 0.5,
         };
       })
       .filter((d) => Math.abs(d.deviation) >= 0.01);
