@@ -28,6 +28,8 @@ import { getMarketItem, isPermanentItem, showcaseLimit, type MarketItemKind } fr
 import type { ContractRarity } from '../lib/contracts';
 import { isSoundBusy, getSoundBusyKind, getSoundBusyRemainingMs } from '../lib/sound';
 import { weekKey } from '../lib/contractLogic';
+import { getRewatchCooldown, formatRewatchRemaining } from '../lib/rewatch';
+import { roundHalfRating } from '../lib/rating';
 import { levelFromXp } from '../lib/xp';
 import {
   appendXpEvent,
@@ -275,6 +277,11 @@ export function getMovieTimerInfo(movie: Movie, nowMs = Date.now()) {
     : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
   return { isActive: true, isPaused, elapsedSec, remainingSec, elapsedMins, maxMins, minRequiredMins, canRateWithTimer, formattedRemaining };
+}
+
+/** Tekrar izleme sayacı: aynı kurallar, başlangıç alanı `rewatchStartedAt`. */
+export function getRewatchTimerInfo(movie: Movie, nowMs = Date.now()) {
+  return getMovieTimerInfo({ ...movie, startedAt: movie.rewatchStartedAt ?? null }, nowMs);
 }
 
 function planItemMinuteRange(time: string, runtime?: number): { start: number; end: number } {
@@ -588,7 +595,8 @@ function syncCalibratedRating(oldRating: number | null, oldCalibrated: number | 
 type Action =
   | { type: 'ADD_MOVIE'; movie: Movie } | { type: 'DELETE_MOVIE'; id: string }
   | { type: 'START_WATCHING_MOVIE'; id: string; startedAt: string } | { type: 'CANCEL_WATCHING_MOVIE'; id: string }
-  | { type: 'WATCH_MOVIE'; id: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; actualRuntime: number; isPastWatch?: boolean; historyItem: WatchHistoryItem }
+  | { type: 'START_REWATCH_MOVIE'; id: string; startedAt: string } | { type: 'CANCEL_REWATCH_MOVIE'; id: string }
+  | { type: 'WATCH_MOVIE'; id: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; watchedAt: string; actualRuntime: number; isPastWatch?: boolean; isRewatch?: boolean; rewatchedFromPast?: boolean; historyItem: WatchHistoryItem }
   | { type: 'UNWATCH_MOVIE'; id: string }
   | { type: 'UPDATE_HISTORY_RATING'; historyId: string; rating: number; note: string; detailedRating?: Record<string, number>; reviewTags?: string[]; isPastWatch?: boolean }
   | { type: 'ADD_SERIES'; series: Series } | { type: 'DELETE_SERIES'; id: string } | { type: 'COMPLETE_SERIES'; id: string; title: string }
@@ -1087,6 +1095,8 @@ export function applyAchievements(state: ExtendedAppData, opts?: { skipRatingUnl
       case 'past_series_critic': currentVal = pastWatchedSeries.filter((s) => s.overallNote && s.overallNote.trim().length > 0).length; break;
       case 'ruthless_critic': currentVal = ruthlessCritic; break;
       case 'scale_master': currentVal = state.totalDuelsCompleted || 0; break;
+      case 'calibration_master': currentVal = (state.movies || []).reduce((sum, m) => sum + (m.calibrationChanges || 0), 0); break;
+      case 'rewatch_master': currentVal = (state.history || []).filter((h) => h.isRewatch).length; break;
       case 'secret_duelist': currentVal = (state.movies || []).reduce((sum, m) => sum + (m.duelWins || 0), 0); break;
       case 'secret_giant_slayer': currentVal = state.giantSlayerWins || 0; break;
       case 'detail_master': currentVal = detailMaster; break;
@@ -1644,11 +1654,13 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       nextState.movies = state.movies.map((m) => {
         if (m.id === winner.id) {
           const opponents = m.duelOpponents || [];
-          return { ...m, calibratedScore: winnerNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: opponents.includes(loser.id) ? opponents : [...opponents, loser.id] };
+          const newOpponents = opponents.includes(loser.id) ? opponents : [...opponents, loser.id].slice(-200);
+          return { ...m, calibratedScore: winnerNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: newOpponents };
         }
         if (m.id === loser.id) {
           const opponents = m.duelOpponents || [];
-          return { ...m, calibratedScore: loserNew, duelCount: (m.duelCount || 0) + 1, duelLosses: (m.duelLosses || 0) + 1, duelOpponents: opponents.includes(winner.id) ? opponents : [...opponents, winner.id] };
+          const newOpponents = opponents.includes(winner.id) ? opponents : [...opponents, winner.id].slice(-200);
+          return { ...m, calibratedScore: loserNew, duelCount: (m.duelCount || 0) + 1, duelLosses: (m.duelLosses || 0) + 1, duelOpponents: newOpponents };
         }
         return m;
       });
@@ -1670,11 +1682,13 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       nextState.movies = state.movies.map((m) => {
         if (m.id === first.id) {
           const opponents = m.duelOpponents || [];
-          return { ...m, calibratedScore: aNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: opponents.includes(second.id) ? opponents : [...opponents, second.id] };
+          const newOpponents = opponents.includes(second.id) ? opponents : [...opponents, second.id].slice(-200);
+          return { ...m, calibratedScore: aNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: newOpponents };
         }
         if (m.id === second.id) {
           const opponents = m.duelOpponents || [];
-          return { ...m, calibratedScore: bNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: opponents.includes(first.id) ? opponents : [...opponents, first.id] };
+          const newOpponents = opponents.includes(first.id) ? opponents : [...opponents, first.id].slice(-200);
+          return { ...m, calibratedScore: bNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: newOpponents };
         }
         return m;
       });
@@ -1685,7 +1699,16 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       skipRatingUnlocks = true; // kalibre önerisiyle puan değişir → puan-bağılı kilit açılamaz
       nextState.movies = state.movies.map((m) =>
         m.id === action.id && m.rating != null
-          ? { ...m, rating: action.newRating, calibratedScore: action.newRating }
+          ? {
+              ...m,
+              rating: action.newRating,
+              calibratedScore: action.newRating,
+              // Bu sayaç yalnızca "Kalibrasyon Ustası" başarımını besler.
+              // Puan-bağımlı diğer başarımlar skipRatingUnlocks ile korunur;
+              // görevler/pazar görevleri history yazılmadığı için tetiklenmez.
+              calibrationChanges:
+                action.newRating === m.rating ? (m.calibrationChanges || 0) : (m.calibrationChanges || 0) + 1,
+            }
           : m
       );
       break;
@@ -1705,12 +1728,23 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       break;
     case 'START_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: action.startedAt } : m)); break;
     case 'CANCEL_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: null } : m)); break;
+    case 'START_REWATCH_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, rewatchStartedAt: action.startedAt } : m)); break;
+    case 'CANCEL_REWATCH_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, rewatchStartedAt: null } : m)); break;
     case 'WATCH_MOVIE':
-      nextState.movies = state.movies.map((m) =>
-        m.id === action.id
-          ? { ...m, watched: true, inPastQueue: false, isPastWatch: Boolean(action.isPastWatch), rating: action.rating, calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating), detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note, watchedAt: action.watchedAt, actualRuntime: action.actualRuntime, ...(m.rating === null ? { originalRating: action.rating } : {}) }
-          : m
-      );
+      nextState.movies = state.movies.map((m) => {
+        if (m.id !== action.id) return m;
+        const isRewatch = Boolean(action.isRewatch);
+        return {
+          ...m, watched: true, inPastQueue: false, isPastWatch: Boolean(action.isPastWatch), rating: action.rating,
+          calibratedScore: syncCalibratedRating(m.rating, m.calibratedScore, m.duelCount || 0, action.rating),
+          detailedRating: action.detailedRating, reviewTags: action.reviewTags, note: action.note,
+          watchedAt: action.watchedAt, actualRuntime: action.actualRuntime,
+          startedAt: null,
+          rewatchStartedAt: null,
+          ...(isRewatch ? { rewatchCount: (m.rewatchCount || 0) + 1 } : {}),
+          ...(m.rating === null ? { originalRating: action.rating } : {}),
+        };
+      });
       nextState.history = [action.historyItem, ...state.history];
       if (!action.isPastWatch) {
         const wasNewDay = state.dailyStreakDate !== todayStr();
@@ -1805,19 +1839,26 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'UNWATCH_EPISODE':
       nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: s.episodes.map((e) => (e.id === action.episodeId ? { ...e, watched: false, rating: null, detailedRating: undefined, reviewTags: undefined, note: '', watchedAt: null } : e)) } : s));
       nextState.history = state.history.filter((h) => h.itemId !== action.episodeId && h.id !== action.episodeId); break;
-    case 'DELETE_EPISODE': nextState.series = state.series.map((s) => {
-      if (s.id !== action.seriesId) return s;
-      const removed = s.episodes.find((e) => e.id === action.episodeId);
-      if (!removed) return s;
-      return {
-        ...s,
-        episodes: s.episodes.filter((e) => e.id !== action.episodeId),
-        deletedEpisodes: [
-          ...(s.deletedEpisodes || []).filter((e) => !(e.season === removed.season && e.episode === removed.episode)),
-          removed,
-        ],
-      };
-    }); break;
+    case 'DELETE_EPISODE': {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      nextState.series = state.series.map((s) => {
+        if (s.id !== action.seriesId) return s;
+        const removed = s.episodes.find((e) => e.id === action.episodeId);
+        if (!removed) return s;
+        const removedWithDeletedAt = { ...removed, deletedAt: new Date().toISOString() };
+        return {
+          ...s,
+          episodes: s.episodes.filter((e) => e.id !== action.episodeId),
+          deletedEpisodes: [
+            ...(s.deletedEpisodes || [])
+              .filter((e) => !(e.season === removed.season && e.episode === removed.episode))
+              .filter((e) => !e.deletedAt || e.deletedAt > cutoff),
+            removedWithDeletedAt,
+          ],
+        };
+      });
+      break;
+    }
     case 'SET_SERIES_PAST_QUEUE': nextState.series = state.series.map((s) => (s.id === action.id ? { ...s, inPastQueue: action.inPastQueue } : s)); break;
     case 'RATE_SERIES_BULK': {
       const targetSeries = state.series.find((s) => s.id === action.seriesId);
@@ -2088,6 +2129,8 @@ export interface AppContextValue {
   questCelebratingRef: { current: boolean }; questQueuedRef: { current: boolean }; levelUpOpenRef: { current: boolean }; seasonOpenRef: { current: boolean }; seasonQueuedRef: { current: { seriesTitle: string; season: number } | null }; xpGainOpenRef: { current: boolean };
   addMovie: (t: string, y: string, g: string[], c: string | null, r?: number, p?: string | null, o?: string, tmdbId?: number, imdbId?: string, watchProviders?: WatchProvider[], extra?: MovieExtraData) => boolean;
   deleteMovie: (id: string) => void; startWatchingMovie: (id: string, silent?: boolean) => void; togglePauseWatchingMovie: (id: string) => void; cancelWatchingMovie: (id: string) => void; canRateMovieWithTimer: (id: string) => boolean;
+  startRewatchingMovie: (id: string, fromPast?: boolean, silent?: boolean) => void; togglePauseRewatchingMovie: (id: string) => void; cancelRewatchingMovie: (id: string) => void; canRateRewatchWithTimer: (id: string) => boolean;
+  rewatchMovie: (id: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => void;
   watchMovie: (id: string, r: number, n: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   unwatchMovie: (id: string) => void; updateHistoryRating: (historyId: string, rating: number, note: string, dr?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => void;
   addSeries: (t: string, g: string[], s: number[], p?: string | null, o?: string, tmdbId?: number, y?: string, imdbId?: string, watchProviders?: WatchProvider[], extra?: SeriesExtraData, episodeRuntime?: number) => boolean;
@@ -2612,11 +2655,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState === 'visible') void check();
     };
 
-    // 120 sn: sohbet/istek bildirimi için yeterli. Uygulama kapalıyken
+    // 300 sn: sohbet/istek bildirimi için yeterli. Uygulama kapalıyken
     // zaten Web Push devrede; bu yoklama yalnızca açık sekme içindir.
+    // 120 sn -> 300 sn: aylık istek sayısını ~%60 azaltır.
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void check();
-    }, 120000);
+    }, 300000);
     document.addEventListener('visibilitychange', onVisibilityChange);
     void check();
 
@@ -3031,7 +3075,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const result = await syncEngine.sync(agentId);
       handleSyncResult(result, manual);
-    } catch {
+    } catch (error) {
+      // Sessiz yutma yok: teşhis için konsola yaz (kullanıcıya toast spam'i yok).
+      console.error('[sync] bulut eşitleme hatası:', error);
       setSyncStatus('error');
     } finally {
       syncInFlightRef.current = false;
@@ -3082,7 +3128,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const timer = window.setTimeout(() => {
       void runSyncRef.current();
       lastAutoSyncHashRef.current = hash;
-    }, 30000);
+    }, 90000);
     return () => window.clearTimeout(timer);
   }, [data, hydrated]);
 
@@ -3246,7 +3292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'RESOLVE_DUEL_TIE', firstId, secondId });
   }, []);
   const applyCalibrationSuggestion = useCallback((id: string, newRating: number) => {
-    dispatch({ type: 'APPLY_CALIBRATION_SUGGESTION', id, newRating });
+    dispatch({ type: 'APPLY_CALIBRATION_SUGGESTION', id, newRating: roundHalfRating(newRating) });
     showToast('⚖️ Puan kalibre edildi', 'success');
   }, [showToast]);
   const setExternalActions = useCallback((actions: ExternalActionTemplate[]) => {
@@ -3297,6 +3343,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // PREMIUM RİTÜEL: puanlama arp sesi (stereo, kısa)
     import('../lib/sound').then(({ playRatingArpSound }) => playRatingArpSound());
   }, [data.movies, data.agentId, data.shareWatchedInFeed, showToast]);
+
+  const startRewatchingMovie = useCallback((id: string, fromPast = false, silent = false) => {
+    const movie = data.movies.find((m) => m.id === id); if (!movie || movie.rewatchStartedAt) return;
+    if (!fromPast) {
+      const cd = getRewatchCooldown(data.history, id);
+      if (!cd.canRewatch) { if (!silent) showToast(`⛔ Tekrar izlemek için ${formatRewatchRemaining(cd.remainingMs)} daha beklemelisin.`, 'warning'); return; }
+    }
+    // Sadece GERÇEKTEN açık sayaçlar: izlenmemiş filmlerin normal sayacı veya
+    // izlenmiş filmlerin aktif tekrar izleme sayacı. İzlenmiş bir filmde kalan
+    // eski startedAt artık sayılmaz.
+    const anotherActive = data.movies.find((m) => m.id !== id && ((!m.watched && m.startedAt) || m.rewatchStartedAt));
+    if (anotherActive) { if (!silent) showToast(`⛔ Şu anda "${anotherActive.title}" için sayaç zaten açık!`, 'warning'); return; }
+    dispatch({ type: 'START_REWATCH_MOVIE', id, startedAt: new Date().toISOString() });
+    showToast(`🔁 "${movie.title}" tekrar izleme sayacı başladı!`, 'info');
+  }, [data.movies, data.history, showToast]);
+
+  const togglePauseRewatchingMovie = useCallback((id: string) => {
+    const movie = data.movies.find((m) => m.id === id); if (!movie || !movie.rewatchStartedAt) return;
+    const info = getRewatchTimerInfo(movie);
+    if (info.isPaused) { dispatch({ type: 'START_REWATCH_MOVIE', id, startedAt: new Date(Date.now() - info.elapsedSec * 1000).toISOString() }); showToast('▶️ Tekrar izleme sayacı devam ediyor', 'info'); }
+    else { dispatch({ type: 'START_REWATCH_MOVIE', id, startedAt: `PAUSED:${info.elapsedSec}` }); showToast('⏸️ Tekrar izleme sayacı duraklatıldı', 'warning'); }
+  }, [data.movies, showToast]);
+
+  const cancelRewatchingMovie = useCallback((id: string) => { dispatch({ type: 'CANCEL_REWATCH_MOVIE', id }); showToast('Tekrar izleme sayacı iptal edildi', 'info'); }, [showToast]);
+
+  const canRateRewatchWithTimer = useCallback((id: string): boolean => {
+    const movie = data.movies.find((m) => m.id === id); if (!movie || !movie.rewatchStartedAt) return true;
+    const info = getRewatchTimerInfo(movie);
+    if (!info.canRateWithTimer) { showToast(`⛔ Henüz ${info.elapsedMins} dk geçti! En az ${info.minRequiredMins} dk geçmeli.`, 'error'); return false; }
+    return true;
+  }, [data.movies, showToast]);
+
+  const rewatchMovie = useCallback((id: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[]) => {
+    const movie = data.movies.find((m) => m.id === id); if (!movie) return;
+    const info = getRewatchTimerInfo(movie);
+    // Sayaç opsiyonel: başlatılmadıysa süre zorunluluğu yok.
+    if (movie.rewatchStartedAt && !info.canRateWithTimer) { showToast(`⛔ Henüz ${info.elapsedMins} dk geçti! En az ${info.minRequiredMins} dk geçmeli.`, 'error'); return; }
+    const now = new Date().toISOString();
+    const actualRuntime = movie.rewatchStartedAt
+      ? Math.min(Math.max(1, info.elapsedMins), info.maxMins)
+      : info.maxMins;
+    const movieRecords = data.history.filter((h) => h.kind === 'movie' && h.itemId === id);
+    const first = [...movieRecords].sort((a, b) => a.watchedAt.localeCompare(b.watchedAt))[0];
+    const fromPast = !movieRecords.some((h) => !h.isPastWatch) && movieRecords.some((h) => h.isPastWatch);
+    const isSpoiler = note.toLowerCase().includes('[spoiler]') || note.toLowerCase().includes('#spoiler');
+
+    dispatch({ type: 'WATCH_MOVIE', id, rating, detailedRating, reviewTags, note, watchedAt: now, actualRuntime, isPastWatch: false, isRewatch: true, rewatchedFromPast: fromPast, historyItem: { id: uid(), itemId: movie.id, kind: 'movie', type: 'movie', title: movie.title, rating, detailedRating, reviewTags, note, watchedAt: now, isPastWatch: false, startedAt: null, actualRuntime, originalRuntime: info.maxMins, genres: movie.genres, year: movie.year, isRewatch: true, rewatchOfId: first?.id, watchNumber: movieRecords.length + 1, rewatchedFromPast: fromPast } });
+
+    if (data.shareWatchedInFeed !== false) {
+      const row = {
+        id: uid(), agent_id: data.agentId, action_type: 'watched', item_id: movie.id, item_type: 'movie',
+        item_title: movie.title, item_poster: movie.posterUrl || null, rating, note: note || '',
+        genres: movie.genres, review_tags: reviewTags || [], is_spoiler: isSpoiler, created_at: now
+      };
+      withRetry(() => supabase.from('network_logs').insert([row]).then(({ error }: { error: any }) => { if (error) throw error; }))
+        .catch(() => { enqueueLogOp({ id: row.id, kind: 'insert', row, createdAt: Date.now() }); });
+    }
+    showToast(`🔁 "${movie.title}" tekrar izleme kaydedildi`, 'success');
+    import('../lib/sound').then(({ playRatingArpSound }) => playRatingArpSound());
+  }, [data.movies, data.history, data.agentId, data.shareWatchedInFeed, showToast]);
 
   const updateHistoryRating = useCallback((historyId: string, rating: number, note: string, detailedRating?: Record<string, number>, reviewTags?: string[], isPastWatch?: boolean) => { dispatch({ type: 'UPDATE_HISTORY_RATING', historyId, rating, note, detailedRating, reviewTags, isPastWatch }); showToast('Puan güncellendi'); import('../lib/sound').then(({ playRatingArpSound }) => playRatingArpSound()); }, [showToast]);
 
@@ -3665,13 +3771,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
   // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
   const value: AppContextValue = {
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, startRewatchingMovie, togglePauseRewatchingMovie, cancelRewatchingMovie, canRateRewatchWithTimer, rewatchMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions
   };
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
   const actionDeps = [
     setIsQuestCelebrating, setNickname, recoverIdentity, updateShowcase,
-    addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer,
+    addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, startRewatchingMovie, togglePauseRewatchingMovie, cancelRewatchingMovie, canRateRewatchWithTimer, rewatchMovie,
     watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes,
     watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode,
     addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,

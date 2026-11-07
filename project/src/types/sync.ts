@@ -134,4 +134,17 @@ export interface CommitSaveRequest {
   deviceId: string;
   saveHash: string;
   payload: AppStateV3;
+  /** İsteğe bağlı: gzip sıkıştırılmış payload (byte dizisi). */
+  payloadGz?: Uint8Array;
+  /** İsteğe bağlı: istemci tarafında hesaplanan profil özeti. */
+  summary?: {
+    total_xp: number;
+    level: number;
+    movies_watched: number;
+    past_movies_watched: number;
+    series_watched: number;
+    episodes_watched: number;
+    achievements_unlocked: number;
+    quests_completed: number;
+  };
 }

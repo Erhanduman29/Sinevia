@@ -133,6 +133,8 @@ alter table public.chat_groups enable row level security;
 alter table public.chat_group_members enable row level security;
 
 -- FRIENDSHIPS
+-- (Yanlış teşhis sonrası eklenen aşırı izinli public politikası kaldırılır.)
+drop policy if exists friendships_select_public on public.friendships;
 drop policy if exists friendships_select_own on public.friendships;
 create policy friendships_select_own
   on public.friendships for select
@@ -185,6 +187,7 @@ create policy network_logs_delete_self
   using (agent_id = public.current_agent_id());
 
 -- RECOMMENDATIONS
+drop policy if exists recommendations_select_public on public.recommendations;
 drop policy if exists recommendations_select_own on public.recommendations;
 create policy recommendations_select_own
   on public.recommendations for select
@@ -211,6 +214,7 @@ create policy recommendations_delete_own
   using (sender_id = public.current_agent_id() or receiver_id = public.current_agent_id());
 
 -- MESSAGES
+drop policy if exists messages_select_public on public.messages;
 drop policy if exists messages_select_own on public.messages;
 create policy messages_select_own
   on public.messages for select

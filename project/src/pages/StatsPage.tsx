@@ -3,12 +3,13 @@ import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
   Hourglass, Activity, User, Users, Building2, Crown, Sparkles,
   Compass, Sun, Sunset, Moon, Coffee, Globe, Trophy, StickyNote, Zap, Tag, Gauge, FastForward, History, Hexagon, Skull,
-  Swords, Scale, ArrowUp, ArrowDown, AlertTriangle
+  Swords, Scale, ArrowUp, ArrowDown, AlertTriangle, Repeat
 } from 'lucide-react';
 import { useLibrary, useGamification, useSettings, useActions } from '../context/slices';
 import { useTutorial } from '../context/TutorialContext';
 import { useComputedStats } from '../lib/selectorHooks';
 import { ratingBgClass } from '../lib/utils';
+import { roundHalfRating } from '../lib/rating';
 import { countWatchedCurrentMovies, countPastMovies, handleImgFallback } from '../lib/selectors';
 import MediaDetailModal from '../components/MediaDetailModal';
 const WrappedModal = lazy(() => import('../components/WrappedModal'));
@@ -794,8 +795,8 @@ export default function StatsPage() {
         stdDev: 0,
         masterpieceRate: 0,
         tiers: [
-          { id: 'masterpiece', label: 'Başyapıt Bandı', range: '9.0 – 10', count: 0, pct: 0, color: 'text-amber-300', bar: 'from-amber-400 to-yellow-500', border: 'border-amber-500/30' },
-          { id: 'great', label: 'Güçlü Yapımlar', range: '7.0 – 8.9', count: 0, pct: 0, color: 'text-emerald-300', bar: 'from-emerald-500 to-teal-400', border: 'border-emerald-500/30' },
+          { id: 'masterpiece', label: 'Başyapıt Bandı', range: '10', count: 0, pct: 0, color: 'text-amber-300', bar: 'from-amber-400 to-yellow-500', border: 'border-amber-500/30' },
+          { id: 'great', label: 'Güçlü Yapımlar', range: '7.0 – 9.9', count: 0, pct: 0, color: 'text-emerald-300', bar: 'from-emerald-500 to-teal-400', border: 'border-emerald-500/30' },
           { id: 'decent', label: 'Ortalama / Çerezlik', range: '5.0 – 6.9', count: 0, pct: 0, color: 'text-sky-300', bar: 'from-sky-500 to-blue-400', border: 'border-sky-500/30' },
           { id: 'poor', label: 'Hayal Kırıklığı', range: '1.0 – 4.9', count: 0, pct: 0, color: 'text-rose-400', bar: 'from-red-600 to-rose-500', border: 'border-red-500/30' },
         ],
@@ -819,7 +820,7 @@ export default function StatsPage() {
 
     entries.forEach(([r, c]) => {
       const num = Number(r);
-      if (num >= 9) masterpiece += c;
+      if (num >= 10) masterpiece += c;
       else if (num >= 7) great += c;
       else if (num >= 5) decent += c;
       else poor += c;
@@ -835,8 +836,8 @@ export default function StatsPage() {
       stdDev,
       masterpieceRate: pctOf(masterpiece),
       tiers: [
-        { id: 'masterpiece', label: 'Başyapıt Bandı', range: '9.0 – 10', count: masterpiece, pct: pctOf(masterpiece), color: 'text-amber-300', bar: 'from-amber-400 to-yellow-500', border: 'border-amber-500/30' },
-        { id: 'great', label: 'Güçlü Yapımlar', range: '7.0 – 8.9', count: great, pct: pctOf(great), color: 'text-emerald-300', bar: 'from-emerald-500 to-teal-400', border: 'border-emerald-500/30' },
+        { id: 'masterpiece', label: 'Başyapıt Bandı', range: '10', count: masterpiece, pct: pctOf(masterpiece), color: 'text-amber-300', bar: 'from-amber-400 to-yellow-500', border: 'border-amber-500/30' },
+        { id: 'great', label: 'Güçlü Yapımlar', range: '7.0 – 9.9', count: great, pct: pctOf(great), color: 'text-emerald-300', bar: 'from-emerald-500 to-teal-400', border: 'border-emerald-500/30' },
         { id: 'decent', label: 'Ortalama / Çerezlik', range: '5.0 – 6.9', count: decent, pct: pctOf(decent), color: 'text-sky-300', bar: 'from-sky-500 to-blue-400', border: 'border-sky-500/30' },
         { id: 'poor', label: 'Hayal Kırıklığı', range: '1.0 – 4.9', count: poor, pct: pctOf(poor), color: 'text-rose-400', bar: 'from-red-600 to-rose-500', border: 'border-red-500/30' },
       ],
@@ -955,17 +956,19 @@ export default function StatsPage() {
         .slice(0, 10),
     [movies]
   );
-  /** 1 puanlı filmler arasında, kaybettiği düello sayısına göre en kötü 3 film. */
+  /** En kötü 6 film: önce puan (en düşük önce), eşit puanda kaybedilen düello (çok olan önce). */
   const duelLosers = useMemo(
     () =>
       movies
-        .filter((m) => (m.rating ?? 0) === 1 && (m.duelLosses || 0) > 0)
+        .filter((m) => typeof m.rating === 'number')
         .sort((a, b) => {
+          const rd = (a.rating as number) - (b.rating as number);
+          if (rd !== 0) return rd;
           const ld = (b.duelLosses || 0) - (a.duelLosses || 0);
           if (ld !== 0) return ld;
           return (a.title || '').localeCompare(b.title || '', 'tr');
         })
-        .slice(0, 3),
+        .slice(0, 6),
     [movies]
   );
   const inflation = useMemo(() => {
@@ -983,13 +986,16 @@ export default function StatsPage() {
       .map((m) => {
         const rating = m.rating as number;
         const calibrated = m.calibratedScore as number;
+        const suggestion = roundHalfRating(calibrated);
+        const gap = Math.round((suggestion - rating) * 100) / 100;
         return {
           movie: m,
           rating,
           calibratedScore: calibrated,
-          gap: Math.round((calibrated - rating) * 100) / 100,
-          suggestion: Math.round(Math.min(10, Math.max(1, calibrated)) * 100) / 100,
-          needsUpdate: Math.abs(calibrated - rating) >= 1,
+          gap,
+          suggestion,
+          // En az ±0.5 fark varsa puan değiştirilebilir; altındaki fark kabul edilmez.
+          needsUpdate: Math.abs(gap) >= 0.5,
         };
       })
       .filter((d) => Math.abs(d.gap) >= 0.01);
@@ -999,8 +1005,8 @@ export default function StatsPage() {
       deviationCount: deviations.length,
       pendingCount: deviations.filter((d) => d.needsUpdate).length,
       avgAbs: Math.round((sumAbs / both.length) * 100) / 100,
-      // gap < 0 → rating kalibreden YÜKSEK (şişirilen),
-      // gap > 0 → rating kalibreden DÜŞÜK (düşürülen).
+      // gap < 0 → rating kalibreden YÜKSEK (puanı düşürülmeli),
+      // gap > 0 → rating kalibreden DÜŞÜK (puanı yükseltilmeli).
       inflated: deviations
         .filter((a) => a.gap < 0)
         .sort((a, b) => a.gap - b.gap)
@@ -1011,6 +1017,83 @@ export default function StatsPage() {
         .slice(0, 10),
     };
   }, [movies]);
+
+  const formatMinutes = (mins: number) => {
+    if (mins >= 60) return `${Math.floor(mins / 60)} sa ${mins % 60} dk`;
+    return `${mins} dk`;
+  };
+
+  const rewatchStats = useMemo(() => {
+    const allHistory = history || [];
+    // Hangi filmler tekrar izlenmiş? (isRewatch=true olan kayıtlardan itemId'leri topla)
+    const rewatchedItemIds = new Set(
+      allHistory
+        .filter((h) => h.isRewatch)
+        .map((h) => h.itemId || h.id)
+    );
+
+    if (rewatchedItemIds.size === 0) {
+      return { total: 0, uniqueMovies: 0, totalMinutes: 0, top: [], all: [], ratingChanges: 0 };
+    }
+
+    // Her tekrar izlenen film için TÜM geçmiş puanlarını topla (ilk izleme + tekrarlar)
+    const byItem = new Map<string, {
+      id: string;
+      title: string;
+      count: number;          // kaç kez tekrar izlenmiş (isRewatch=true)
+      posterUrl?: string;
+      ratings: number[];      // tüm puanlar, izleme sırasıyla (ilk izleme dahil)
+      firstRating?: number;   // ilk izleme puanı
+      lastRating?: number;    // son izleme puanı
+      lastWatchedAt: string;
+    }>();
+
+    rewatchedItemIds.forEach((itemId) => {
+      const movie = movies.find((m) => m.id === itemId);
+      // Bu filme ait tüm history kayıtları (ilk izleme + tekrar izlemeler)
+      const itemHistory = allHistory.filter((h) => (h.itemId || h.id) === itemId);
+      // watchedAt'ye göre sırala (en eski önce)
+      itemHistory.sort((a, b) => a.watchedAt.localeCompare(b.watchedAt));
+
+      const ratings = itemHistory
+        .map((h) => h.rating != null ? roundHalfRating(h.rating) : null)
+        .filter((r): r is number => r != null);
+
+      const lastItem = itemHistory[itemHistory.length - 1];
+      const rewatchCount = itemHistory.filter((h) => h.isRewatch).length;
+
+      byItem.set(itemId, {
+        id: itemId,
+        title: lastItem?.title || movie?.title || itemId,
+        count: rewatchCount,
+        posterUrl: movie?.posterUrl,
+        ratings,
+        firstRating: ratings.length > 0 ? ratings[0] : undefined,
+        lastRating: ratings.length > 0 ? ratings[ratings.length - 1] : undefined,
+        lastWatchedAt: lastItem?.watchedAt || '',
+      });
+    });
+
+    const all = Array.from(byItem.values())
+      .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title, 'tr'));
+    const top = all.slice(0, 5);
+    const totalMinutes = allHistory
+      .filter((h) => h.isRewatch && rewatchedItemIds.has(h.itemId || h.id))
+      .reduce((sum, h) => sum + (h.actualRuntime || 0), 0);
+    const ratingChanges = all.reduce((s, r) => {
+      if (r.firstRating != null && r.lastRating != null && r.firstRating !== r.lastRating) return s + 1;
+      return s;
+    }, 0);
+
+    return {
+      total: allHistory.filter((h) => h.isRewatch).length,
+      uniqueMovies: byItem.size,
+      totalMinutes,
+      top,
+      all,
+      ratingChanges,
+    };
+  }, [history, movies]);
 
   const genreAllSorted = Array.from(stats.genreAllMap.entries()).sort((a, b) => b[1].count - a[1].count);
   const maxGenreCount = Math.max(...genreAllSorted.map(([, v]) => v.count), 1);
@@ -1589,6 +1672,155 @@ export default function StatsPage() {
         </div>
       )}
 
+      {duelLosers.length > 0 && (
+        <div className={PREMIUM_PANEL}>
+          <div className="mb-3.5">
+            <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100 flex items-center gap-2"><Swords size={18} className="text-red-400" /> En Kötü 6 Film</h2>
+            <p className="text-xs text-ink-400 mt-0.5">Önce en düşük puan; puan eşitse en çok düello kaybeden önde</p>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-2.5 sm:gap-3.5">
+            {duelLosers.map((m, i) => (
+              <button key={m.id} type="button" onClick={() => setDetailTarget({ type: 'movie', data: m })} className="group relative flex flex-col text-left bg-ink-950/70 border border-ink-800 hover:border-red-500/50 hover:shadow-[0_0_0_1px_rgba(232,56,79,0.35),0_16px_38px_-16px_rgba(232,56,79,0.6)] rounded-xl sm:rounded-2xl overflow-hidden shadow-lg transition-all hover:-translate-y-1 cursor-pointer">
+                <div className="aspect-[2/3] w-full bg-ink-900 relative overflow-hidden">
+                  {m.posterUrl ? <img loading="lazy" decoding="async" src={m.posterUrl} alt={m.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" onError={handleImgFallback}/> : <div className="w-full h-full flex items-center justify-center text-ink-600"><Film size={24} /></div>}
+                  <div className="absolute top-1.5 left-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-gradient-to-br from-red-500 to-red-700 backdrop-blur-md border border-rose-300/30 flex items-center justify-center text-[10px] font-black text-white">#{i + 1}</div>
+                  {m.rating != null && <div className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-lg text-[10px] sm:text-xs font-black shadow-md ${ratingBgClass(m.rating)}`}>{roundHalfRating(m.rating).toFixed(1)}</div>}
+                  <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-red-600/90 backdrop-blur-md text-[9px] sm:text-[10px] font-black text-white shadow-md">
+                    <Swords size={9} /> {m.duelLosses || 0}
+                  </div>
+                </div>
+                <div className="p-2">
+                  <div className="text-[11px] sm:text-xs font-bold text-ink-100 truncate group-hover:text-rose-300 transition-colors">{m.title}</div>
+                  <div className="text-[9px] sm:text-[10px] text-ink-400 mt-0.5 truncate">{m.year || 'Film'}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {rewatchStats.total > 0 && (
+        <div className={PREMIUM_PANEL}>
+          {/* Üst genel bilgi şeridi */}
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Repeat size={20} className="text-sky-400" />
+              <div>
+                <h2 className="text-base sm:text-lg font-extrabold uppercase tracking-tight text-ink-100">Tekrar İzlemeler</h2>
+                <p className="text-xs text-ink-400 mt-0.5">
+                  {rewatchStats.uniqueMovies} farklı film, {rewatchStats.total} kez tekrar izlendi
+                  {rewatchStats.ratingChanges > 0 ? ` · ${rewatchStats.ratingChanges} filmde puan değişti` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-2xl font-black text-ink-100 tabular-nums">{rewatchStats.total}</div>
+              <div className="text-xs text-ink-400 flex flex-col items-end">
+                <span className="font-bold text-ink-200">toplam tekrar</span>
+                <span className="text-[10px] text-ink-500">{formatMinutes(rewatchStats.totalMinutes)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Kaydırılabilir film listesi — 10'dan fazlaysa kaydırma çubuğu görünür */}
+          <div className="relative overflow-x-auto custom-scrollbar pr-2 pb-1">
+            <div className="inline-flex gap-3 sm:gap-4 min-w-[calc(100%+2px)]">
+              {rewatchStats.all.map((r, i) => {
+                const movie = movies.find((m) => m.id === r.id);
+                const posterUrl = r.posterUrl || movie?.posterUrl;
+                const first = r.firstRating != null ? roundHalfRating(r.firstRating) : null;
+                const last = r.lastRating != null ? roundHalfRating(r.lastRating) : null;
+                const changed = first != null && last != null && first !== last;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      const m = movies.find((x) => x.id === r.id);
+                      if (m) setDetailTarget({ type: 'movie', data: m });
+                    }}
+                    className="group relative flex flex-col items-center gap-1.5 shrink-0 w-44 sm:w-50"
+                  >
+                    {/* Puan değişimi — poster üstünde, geçmiş sayfası renkleriyle */}
+                    {changed && (
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <span className={`px-1.5 py-0.5 rounded-md font-black text-[9px] shadow-sm ${ratingBgClass(first)}`}>
+                          {first.toFixed(1)}
+                        </span>
+                        <span className="text-[9px] text-ink-500 font-black">→</span>
+                        <span className={`px-1.5 py-0.5 rounded-md font-black text-[9px] shadow-sm ${ratingBgClass(last)}`}>
+                          {last.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                    {!changed && last && (
+                      <div className="flex justify-center mb-0.5">
+                        <span className={`px-1.5 py-0.5 rounded-md font-black text-[9px] shadow-sm ${ratingBgClass(last)}`}>
+                          {last.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Afiş — orta boyutlu */}
+                    <div className="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-ink-900 border border-ink-800/50 shadow-lg group-hover:shadow-[0_0_0_1px_rgba(139,92,246,0.4)] transition-all">
+                      {posterUrl ? (
+                        <img
+                          loading="lazy"
+                          decoding="async"
+                          src={posterUrl}
+                          alt={r.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={handleImgFallback}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-ink-600">
+                          <Film size={16} />
+                        </div>
+                      )}
+                      {/* Sıra rozeti */}
+                      <div className="absolute top-1 left-1 w-5 h-5 rounded-full bg-gradient-to-br from-sky-400 to-blue-600 backdrop-blur-sm border border-sky-200/40 flex items-center justify-center text-[9px] font-black text-white shadow-sm">
+                        #{i + 1}
+                      </div>
+                    </div>
+
+                    {/* Başlık */}
+                    <div className="w-full px-0.5">
+                      <div className="text-xs sm:text-sm font-bold text-ink-100 truncate group-hover:text-sky-300 transition-colors" title={r.title}>
+                        {r.title}
+                      </div>
+                      <div className="text-[10px] text-ink-500 mt-0.5 tabular-nums">
+                        ×{r.count} kez
+                      </div>
+                    </div>
+
+                    {/* Puan ilerleme — tüm puanlar (ilk izleme dahil), geçmiş sayfası renkleriyle */}
+                    <div className="w-full mt-1 px-0.5">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <span className="text-[9px] text-ink-500 font-medium uppercase tracking-wider">Puanlar</span>
+                        <span className="text-[9px] text-ink-500 font-normal">(ilk izleme dahil)</span>
+                      </div>
+                      <div className="flex gap-0.5">
+                        {r.ratings.map((rating, idx) => (
+                          <div
+                            key={idx}
+                            className={`w-4 h-4 rounded-sm flex items-center justify-center text-[8px] font-black shadow-sm transition-all ${ratingBgClass(rating)}`}
+                            title={`${idx + 1}. izleme: ${rating.toFixed(1)}`}
+                          >
+                            {rating.toFixed(1)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+              {/* Boş genişlik şeridi — kaydırma sonunda içeriğin tam görünmesi için */}
+              <div className="w-8 sm:w-12" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {(stats.criteriaAverages.length > 0 || stats.decades.length > 0) && (
         <div className="grid md:grid-cols-2 gap-4">
           <div className={`${PREMIUM_PANEL} flex flex-col`}>
@@ -1860,16 +2092,13 @@ export default function StatsPage() {
               <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
                 <Trophy size={13} className="text-gold-400" /> Gerçek Top 10
               </h3>
-              <span className="text-[10px] font-bold bg-ink-950 border border-ink-800 text-ink-400 px-2 py-0.5 rounded-full shrink-0">
-                calibratedScore
-              </span>
             </div>
             {realTop10.length === 0 ? (
               <p className="text-xs text-ink-500 py-6 text-center">Henüz puanlı film yok.</p>
             ) : (
               <div className="space-y-1.5">
                 {realTop10.map((m, idx) => {
-                  const honest = m.calibratedScore ?? m.rating ?? 0;
+                  const honest = roundHalfRating(m.calibratedScore ?? m.rating ?? 1);
                   const anomaly = anomalyById.get(m.id);
                   return (
                     <div key={m.id} className="flex items-center gap-2.5">
@@ -1920,9 +2149,6 @@ export default function StatsPage() {
                 <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
                   <Swords size={13} className="text-gold-400" /> En Çok Düello Kazananlar
                 </h3>
-                <span className="text-[10px] font-bold bg-ink-950 border border-ink-800 text-ink-400 px-2 py-0.5 rounded-full shrink-0">
-                  duelWins
-                </span>
               </div>
               {duelWinners.length === 0 ? (
                 <p className="text-xs text-ink-500 py-5 text-center">Henüz düello kazanmadın.</p>
@@ -1950,45 +2176,6 @@ export default function StatsPage() {
                 </div>
               )}
             </div>
-          </div>
-
-          {/* (a3) EN KÖTÜ 3 FILM (1 PUANLI, KAYIP SAYISINA GÖRE) */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <h3 className="text-xs font-black uppercase tracking-widest text-ink-300 flex items-center gap-1.5">
-                <Swords size={13} className="text-red-400" /> En Kötü 3 Film
-              </h3>
-              <span className="text-[10px] font-bold bg-ink-950 border border-ink-800 text-ink-400 px-2 py-0.5 rounded-full shrink-0">
-                duelLosses
-              </span>
-            </div>
-            {duelLosers.length === 0 ? (
-              <p className="text-xs text-ink-500 py-5 text-center">
-                Henüz 1 puanlı filmde düello kaybı yok.
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {duelLosers.map((m, idx) => (
-                  <div key={m.id} className="flex items-center gap-2.5">
-                    <span className={`${PREMIUM_NUM} text-[11px] text-ink-500 w-5 text-right flex-shrink-0`}>
-                      {idx + 1}
-                    </span>
-                    <span className="text-xs font-bold text-ink-100 truncate flex-1 min-w-0" title={m.title}>
-                      {m.title}
-                    </span>
-                    <span className="text-[11px] font-black text-red-400 flex-shrink-0 tabular-nums">
-                      {m.duelLosses} ❌
-                    </span>
-                    <span className="text-[10px] font-bold text-ink-500 tabular-nums flex-shrink-0 hidden sm:block">
-                      {m.duelCount || 0} düello
-                    </span>
-                    <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 w-9 text-center ${ratingBgClass(m.rating ?? 0)}`}>
-                      {m.rating}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* (b) PUAN ENFLASYONU ANALİZİ */}
@@ -2034,8 +2221,10 @@ export default function StatsPage() {
                   <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-300">
                     <AlertTriangle size={13} className="shrink-0" />
                     <span>
-                      {inflation.pendingCount} filmde puan farkı 1 veya daha fazla. Güncellemek için
-                      listedeki <span className="font-black">Güncelle</span> düğmesine dokun.
+                      {inflation.pendingCount} filmde düello kaynaklı puan farkı 0.5 veya daha fazla.
+                      Puanı kalibre değere çekmek için <span className="font-black">Puanı Değiştir</span> düğmesine dokun.
+                      Bu değişiklikler puan başarımlarını, görevleri ve pazar görevlerini tetiklemez;
+                      yalnızca <span className="font-black">Kalibrasyon Ustası</span> başarımını besler.
                     </span>
                   </div>
                 )}
@@ -2043,7 +2232,7 @@ export default function StatsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-ink-400 mb-1.5 flex items-center gap-1">
-                      <ArrowUp size={11} className="text-red-400" /> En Çok Şişirilen
+                      <ArrowDown size={11} className="text-red-400" /> Puanı Düşürülecekler
                     </div>
                     {inflation.inflated.length === 0 ? (
                       <p className="text-[11px] text-ink-500">—</p>
@@ -2058,21 +2247,22 @@ export default function StatsPage() {
                               {a.movie.title}
                             </span>
                             <span className="flex items-center gap-1.5 shrink-0 tabular-nums text-[10px]">
-                              <span className="text-ink-500 font-bold">{a.rating.toFixed(1)}</span>
+                              <span className="text-ink-500 font-bold">{roundHalfRating(a.rating).toFixed(1)}</span>
                               <span className="text-ink-600">→</span>
                               <span
                                 className={`px-1.5 py-0.5 rounded font-black ${ratingBgClass(a.suggestion)}`}
                               >
                                 {a.suggestion.toFixed(1)}
                               </span>
+                              {a.needsUpdate && <AlertTriangle size={10} className="text-amber-400 shrink-0" />}
                               {a.needsUpdate && (
                                 <button
                                   type="button"
                                   onClick={() => applyCalibrationSuggestion(a.movie.id, a.suggestion)}
-                                  className="ml-0.5 px-1.5 py-0.5 rounded-md border border-amber-500/40 bg-amber-500/10 text-[9px] font-black text-amber-300 hover:bg-amber-500/20 transition-colors"
-                                  title={`Puanı ${a.rating.toFixed(1)} → ${a.suggestion.toFixed(1)} olarak güncelle`}
+                                  className="ml-0.5 px-1.5 py-0.5 rounded-md border text-[9px] font-black transition-colors border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                                  title={`Puanı ${roundHalfRating(a.rating).toFixed(1)} → ${a.suggestion.toFixed(1)} olarak değiştir (başarım/görev tetiklemez)`}
                                 >
-                                  Güncelle
+                                  Puanı Değiştir
                                 </button>
                               )}
                             </span>
@@ -2083,7 +2273,7 @@ export default function StatsPage() {
                   </div>
                   <div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-ink-400 mb-1.5 flex items-center gap-1">
-                      <ArrowDown size={11} className="text-gold-400" /> En Çok Düşürülen
+                      <ArrowUp size={11} className="text-gold-400" /> Puanı Yükseltilecekler
                     </div>
                     {inflation.deflated.length === 0 ? (
                       <p className="text-[11px] text-ink-500">—</p>
@@ -2098,21 +2288,22 @@ export default function StatsPage() {
                               {a.movie.title}
                             </span>
                             <span className="flex items-center gap-1.5 shrink-0 tabular-nums text-[10px]">
-                              <span className="text-ink-500 font-bold">{a.rating.toFixed(1)}</span>
+                              <span className="text-ink-500 font-bold">{roundHalfRating(a.rating).toFixed(1)}</span>
                               <span className="text-ink-600">→</span>
                               <span
                                 className={`px-1.5 py-0.5 rounded font-black ${ratingBgClass(a.suggestion)}`}
                               >
                                 {a.suggestion.toFixed(1)}
                               </span>
+                              {a.needsUpdate && <AlertTriangle size={10} className="text-amber-400 shrink-0" />}
                               {a.needsUpdate && (
                                 <button
                                   type="button"
                                   onClick={() => applyCalibrationSuggestion(a.movie.id, a.suggestion)}
-                                  className="ml-0.5 px-1.5 py-0.5 rounded-md border border-amber-500/40 bg-amber-500/10 text-[9px] font-black text-amber-300 hover:bg-amber-500/20 transition-colors"
-                                  title={`Puanı ${a.rating.toFixed(1)} → ${a.suggestion.toFixed(1)} olarak güncelle`}
+                                  className="ml-0.5 px-1.5 py-0.5 rounded-md border text-[9px] font-black transition-colors border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                                  title={`Puanı ${roundHalfRating(a.rating).toFixed(1)} → ${a.suggestion.toFixed(1)} olarak değiştir (başarım/görev tetiklemez)`}
                                 >
-                                  Güncelle
+                                  Puanı Değiştir
                                 </button>
                               )}
                             </span>
@@ -2192,7 +2383,7 @@ export default function StatsPage() {
                   <div className={`${PREMIUM_NUM} text-xl sm:text-2xl text-amber-300 mt-1`}>
                     %{ratingAnalytics.masterpieceRate}
                   </div>
-                  <div className="text-[10px] text-ink-500 mt-0.5">9.0 ve üzeri puanlananlar</div>
+                  <div className="text-[10px] text-ink-500 mt-0.5">10 tam puan verilenler</div>
                 </div>
 
                 <div className={`${PREMIUM_CELL} p-3`}>
@@ -2268,7 +2459,7 @@ export default function StatsPage() {
                       <div className="flex-1 h-4 bg-ink-900 rounded-md overflow-hidden border border-ink-800/80">
                         <div
                           className={`h-full rounded-md transition-all duration-700 ${
-                            Number(rating) >= 9
+                            Number(rating) >= 10
                               ? 'bg-gradient-to-r from-amber-500 to-yellow-400 shadow-[0_0_10px_rgba(251,191,36,0.45)]'
                               : Number(rating) >= 7
                               ? 'bg-gradient-to-r from-red-600 to-rose-400 shadow-[0_0_10px_rgba(232,56,79,0.4)]'

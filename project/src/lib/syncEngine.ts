@@ -47,6 +47,7 @@ import { mergeQuestStates } from './localStateV3';
 
 export const SYNC_RPC = {
   getState: 'sync_get_state',
+  getMeta: 'sync_get_meta',
   commit: 'sync_commit',
 } as const;
 
@@ -59,6 +60,8 @@ export type SyncCommitResponse =
 export interface SyncClient {
   /** `sync_get_state(p_agent_id)` — kayıt yoksa `null`. */
   getRemote(agentId: string): Promise<CloudSaveRecord | null>;
+  /** `sync_get_meta(p_agent_id)` — sadece revision/hash/zaman, payload YOK. */
+  getRemoteMeta(agentId: string): Promise<{ revision: number; saveHash: string; updatedAt: string; deviceId: string } | null>;
   /** `sync_commit(...)` — sunucu `baseRevision` uyuşmazsa `conflict` döner. */
   commit(agentId: string, request: CommitSaveRequest): Promise<SyncCommitResponse>;
   /**
@@ -702,12 +705,64 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     };
     const saveHash = makeSaveHash(payload);
 
+    // ADIM 3: XP defteri checkpoint — 90 günden eski event'leri tek girişle topla (disk/RAM tasarrufu).
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const xpEvents = Array.isArray(payload.xpEvents) ? payload.xpEvents : [];
+    const recentEvents = xpEvents.filter((e) => !e.createdAt || e.createdAt >= ninetyDaysAgo);
+    const oldEvents = xpEvents.filter((e) => e.createdAt && e.createdAt < ninetyDaysAgo);
+    if (oldEvents.length > 1) {
+      const oldTotal = oldEvents.reduce((sum, e) => sum + (e.amount || 0), 0);
+      payload.xpEvents = [
+        ...recentEvents,
+        { id: `xp-checkpoint-${Date.now()}`, source: 'adjustment', sourceId: 'xp-checkpoint', label: 'XP checkpoint (90 gün)', base: oldTotal, multiplier: 1, amount: oldTotal, createdAt: ninetyDaysAgo },
+      ];
+    }
+
+    // ADIM 3: Özet hesapla ve payload'ı gzip'le (sunucu CPU'sunu ve disk'i korur).
+    const totalXp = sumXpEvents(payload.xpEvents);
+    const level = Math.max(1, Math.floor(
+      (-212.5 + Math.sqrt(45156.25 + 50 * (225 + totalXp))) / 25
+    ));
+    const moviesWatched = payload.movies.filter(
+      m => m.watched && !m.isPastWatch
+    ).length;
+    const pastMoviesWatched = payload.movies.filter(
+      m => m.watched && m.isPastWatch
+    ).length;
+    const seriesWatched = payload.series.filter(
+      s => s.episodes.length > 0 && s.episodes.every(e => e.watched)
+    ).length;
+    const episodesWatched = payload.series.reduce(
+      (sum, s) => sum + s.episodes.filter(e => e.watched).length,
+      0
+    );
+    const achievementsUnlocked = payload.achievements.reduce(
+      (sum, a) => sum + (a.unlockedTiers?.length || 0),
+      0
+    );
+    const questsCompleted = payload.quests?.completedQuests?.length || 0;
+
+    const summary = {
+      total_xp: totalXp,
+      level,
+      movies_watched: moviesWatched,
+      past_movies_watched: pastMoviesWatched,
+      series_watched: seriesWatched,
+      episodes_watched: episodesWatched,
+      achievements_unlocked: achievementsUnlocked,
+      quests_completed: questsCompleted,
+    };
+
+    // NOT: payload_gz artık ÜRETİLMEZ ve GÖNDERİLMEZ. Sunucu onu hiçbir okuma
+    // yolunda kullanmıyordu (sync_get_state düz `payload` döner); her commit'te
+    // aynı veriyi ikinci kez yazmak free plan diskini boşa şişiriyordu.
     const response = await deps.client.commit(agentId, {
       ownerAgentId: agentId,
       baseRevision: Math.max(0, Math.floor(baseRevision)),
       deviceId: deps.deviceId,
       saveHash,
       payload,
+      summary,
     });
 
     if (response.status === 'conflict') {
@@ -882,15 +937,40 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       };
     }
 
-    let cloud: CloudSaveRecord | null;
+    const localHash = makeSaveHash(local);
+
+    // ADIM 1: Hafif meta (sadece hash + revision) — tam yük indirmeden
+    // "değişmiş mi?" sorusuna cevap ver.
+    let meta: { revision: number; saveHash: string; updatedAt: string; deviceId: string } | null = null;
     try {
-      cloud = await fetchRemote(agentId);
-    } catch (error) {
-      const classified = classifySyncError(error);
-      return { status: 'error', revision: Math.max(0, Number(local.revision) || 0), error: classified };
+      meta = await deps.client.getRemoteMeta(agentId);
+    } catch {
+      // Meta okunamazsa (eski sunucu / ağ hatası) tam yük yoluna düş.
     }
 
-    const localHash = makeSaveHash(local);
+    let cloud: CloudSaveRecord | null = null;
+
+    if (meta && sameSaveHash(localHash, meta.saveHash)) {
+      // İçerik aynı: tam yük indirmeye gerek yok. Yerel kaydı bulut özetine
+      // eşle (payload içeriği zaten aynı, yalnız zarf alanları farklı olabilir).
+      cloud = {
+        revision: meta.revision,
+        updatedAt: meta.updatedAt,
+        deviceId: meta.deviceId,
+        saveHash: meta.saveHash,
+        payload: local,
+        source: 'app_saves',
+      };
+    } else {
+      // Hash farklı veya meta yok → tam yükü çek.
+      try {
+        cloud = await fetchRemote(agentId);
+      } catch (error) {
+        const classified = classifySyncError(error);
+        return { status: 'error', revision: Math.max(0, Number(local.revision) || 0), error: classified };
+      }
+    }
+
     const decision = decideSyncAction({
       localHash,
       localContentHash: makeContentHash(local),
@@ -1208,6 +1288,24 @@ export function createSupabaseSyncClient(
   const fetchImpl = options.fetchImpl ?? fetch;
   const archiveTried = new Set<string>();
   const importedAgents = new Set<string>();
+  // sync_get_meta sunucuda tanımlı değilse/bozuksa bir süre doğrudan
+  // sync_get_state'e düşeriz; her senkronda 400 hatası üretmeyiz.
+  let metaUnavailableUntil = 0;
+  const META_RETRY_MS = 60 * 60 * 1000;
+  // Sunucudaki sync_commit yeni parametreleri (p_payload_gz/p_summary) kabul
+  // etmiyorsa eski 5 parametreli imzaya düşeriz; oturum boyunca hatırlanır.
+  let legacyCommitSignature = false;
+
+  /** meta kaydından hafif özet çıkarır (tam yük yok). */
+  function metaFromRecord(record: Record<string, unknown> | null) {
+    if (!record || typeof record !== 'object') return null;
+    return {
+      revision: Math.max(0, Number(record.revision) || 0),
+      saveHash: typeof record.save_hash === 'string' ? record.save_hash : '',
+      updatedAt: typeof record.updated_at === 'string' ? record.updated_at : '',
+      deviceId: typeof record.device_id === 'string' ? record.device_id : '',
+    };
+  }
 
   async function normalizeCloudRecord(data: unknown): Promise<CloudSaveRecord | null> {
     if (!data) return null;
@@ -1313,18 +1411,71 @@ export function createSupabaseSyncClient(
       return archive;
     },
 
+    async getRemoteMeta(agentId) {
+      // Sunucudaki sync_get_meta bozuksa (ör. 400/PGRST202) senkronu kırma:
+      // sync_get_state zaten çalışıyor, özeti ondan çıkarıp payload'ı atarız.
+      if (Date.now() < metaUnavailableUntil) {
+        const { data: fullData, error: fullError } = await client.rpc(SYNC_RPC.getState, { p_agent_id: agentId });
+        if (fullError) throw fullError;
+        const full = (Array.isArray(fullData) ? fullData[0] : fullData) as Record<string, unknown> | null;
+        return metaFromRecord(full);
+      }
+
+      const { data, error } = await client.rpc(SYNC_RPC.getMeta, { p_agent_id: agentId });
+      if (error) {
+        metaUnavailableUntil = Date.now() + META_RETRY_MS;
+        const { data: fullData, error: fullError } = await client.rpc(SYNC_RPC.getState, { p_agent_id: agentId });
+        if (fullError) throw fullError;
+        const full = (Array.isArray(fullData) ? fullData[0] : fullData) as Record<string, unknown> | null;
+        return metaFromRecord(full);
+      }
+      return metaFromRecord((Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null);
+    },
+
     async commit(agentId, request) {
       // sync_commit SQL işlevi p_payload içinden doğrudan xpEvents,
       // movies, series gibi alanları okur. Gzip zarfı SQL tarafından
       // çözülemediği için total_xp her zaman 0 olarak kaydediliyordu.
       // Bu yüzden DÜZ (sıkıştırılmamış) payload gönderilir.
-      const { data, error } = await client.rpc(SYNC_RPC.commit, {
-        p_agent_id: agentId,
-        p_base_revision: request.baseRevision,
-        p_device_id: request.deviceId,
-        p_save_hash: request.saveHash,
-        p_payload: request.payload,
-      });
+      // `p_payload_gz` HER ZAMAN null gönderilir: gzip kopyası sunucuda hiçbir
+      // okuma yolunda kullanılmıyor ve diskte ikinci bir kopya demek.
+      // `p_summary` profiles özetini hızlı güncellemek için kullanılır.
+      // Gzip parametresi yine de gönderilir (null) ki eski 7'li imza da eşleşsin.
+
+      // Sunucudaki sync_commit eski sürüm olabilir (p_payload_gz / p_summary yok).
+      // 7 parametreli çağrı PGRST202 verirse 5 parametreli eski imzaya düşeriz.
+      let data: unknown;
+      let error: unknown;
+      if (legacyCommitSignature) {
+        ({ data, error } = await client.rpc(SYNC_RPC.commit, {
+          p_agent_id: agentId,
+          p_base_revision: request.baseRevision,
+          p_device_id: request.deviceId,
+          p_save_hash: request.saveHash,
+          p_payload: request.payload,
+        }));
+      } else {
+        ({ data, error } = await client.rpc(SYNC_RPC.commit, {
+          p_agent_id: agentId,
+          p_base_revision: request.baseRevision,
+          p_device_id: request.deviceId,
+          p_save_hash: request.saveHash,
+          p_payload: request.payload,
+          p_payload_gz: null,
+          p_summary: request.summary,
+        }));
+        if (error) {
+          // Eski imza: yeni parametreler yok. Bir kez düş, oturum boyunca hatırla.
+          legacyCommitSignature = true;
+          ({ data, error } = await client.rpc(SYNC_RPC.commit, {
+            p_agent_id: agentId,
+            p_base_revision: request.baseRevision,
+            p_device_id: request.deviceId,
+            p_save_hash: request.saveHash,
+            p_payload: request.payload,
+          }));
+        }
+      }
       if (error) throw error;
       const record = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
       if (!record || typeof record !== 'object') {

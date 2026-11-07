@@ -133,6 +133,7 @@ create table if not exists public.app_saves (
   revision bigint not null default 0,
   save_hash text not null,
   payload jsonb not null,
+  payload_gz bytea,
   device_id text,
   updated_at timestamptz not null default now()
 );
@@ -141,6 +142,7 @@ create table if not exists public.app_saves (
 alter table public.app_saves add column if not exists revision bigint not null default 0;
 alter table public.app_saves add column if not exists save_hash text not null default '';
 alter table public.app_saves add column if not exists payload jsonb not null default '{}'::jsonb;
+alter table public.app_saves add column if not exists payload_gz bytea;
 alter table public.app_saves add column if not exists device_id text;
 alter table public.app_saves add column if not exists updated_at timestamptz not null default now();
 
@@ -536,7 +538,6 @@ create index if not exists idx_chat_groups_creator on public.chat_groups (create
 create index if not exists idx_recommendations_receiver on public.recommendations (receiver_id, created_at desc);
 create index if not exists idx_recommendations_sender on public.recommendations (sender_id, created_at desc);
 
-create index if not exists idx_app_saves_updated_at on public.app_saves (updated_at desc);
 
 
 -- ============================================================================
@@ -1337,7 +1338,8 @@ begin
   update public.network_devices
   set last_seen_at = now()
   where device_secret = p_new_secret
-    and agent_id = v_agent;
+    and agent_id = v_agent
+    and last_seen_at < now() - interval '1 hour';
 
   return not v_exists; -- true: bu cihaz ilk kez kaydedildi
 end;
@@ -1404,7 +1406,8 @@ begin
   set last_seen_at = now(),
       label = coalesce(nullif(btrim(p_label), ''), label)
   where device_secret = p_secret
-    and agent_id = v_agent;
+    and agent_id = v_agent
+    and last_seen_at < now() - interval '1 hour';
 
   return not v_exists;
 end;
@@ -1982,6 +1985,57 @@ comment on function public.sync_get_state(text) is
   'V3 bulut kaydını döner: revision, save_hash, payload, updated_at. Kayıt yoksa NULL.';
 
 
+-- Kimlik kartı: tam yük (payload) indirmeden "değişmiş mi?" kontrolü.
+-- Yalnızca revision, save_hash, updated_at, device_id döner; payload hariç.
+create or replace function public.sync_get_meta(p_agent_id text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_agent text := btrim(coalesce(p_agent_id, ''));
+  v_actor text;
+  v_revision bigint;
+  v_save_hash text;
+  v_updated_at timestamptz;
+  v_device_id text;
+begin
+  if v_agent = '' then
+    raise exception 'sync_get_meta: p_agent_id zorunlu.';
+  end if;
+
+  v_actor := public.current_agent_id();
+  if v_actor is not null and v_actor <> v_agent then
+    raise exception 'sync_get_meta: bu kayıt başka bir ajana ait.';
+  end if;
+
+  select s.revision, s.save_hash, s.updated_at, s.device_id
+  into v_revision, v_save_hash, v_updated_at, v_device_id
+  from public.app_saves s
+  where s.agent_id = v_agent;
+
+  if not found then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'revision', v_revision,
+    'save_hash', v_save_hash,
+    'updated_at', to_char(v_updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'device_id', v_device_id
+  );
+end;
+$$;
+
+revoke all on function public.sync_get_meta(text) from public;
+grant execute on function public.sync_get_meta(text) to anon, authenticated;
+
+comment on function public.sync_get_meta(text) is
+  'Tam yük indirmeden senkron kontrolü: revision, save_hash, updated_at, device_id.';
+
+
 -- Atomik commit:
 --   * Satır FOR UPDATE ile kilitlenir.
 --   * Satır yoksa YALNIZCA base_revision = 0 kabul edilir ve revision = 1 insert.
@@ -1993,10 +2047,13 @@ create or replace function public.sync_commit(
   p_base_revision bigint,
   p_device_id text,
   p_save_hash text,
-  p_payload jsonb
+  p_payload jsonb,
+  p_payload_gz bytea default null,
+  p_summary jsonb default null
 )
 returns jsonb
 language plpgsql
+security definer
 security definer
 set search_path = public
 as $$
@@ -2035,8 +2092,21 @@ begin
     raise exception 'sync_commit: bu kayıt başka bir ajana ait (yetkisiz).';
   end if;
 
-  -- 3) profiles özetini payload'dan türet (aynı transaction'da yazılır) --
-  --    total_xp: payload.totalXp (sayı ise) yoksa xpEvents.amount toplamı.
+  -- 3) profiles özeti: p_summary varsa doğrudan kullan (payload dizi
+  --    dolaşımından kaçın → CPU tasarrufu). Yoksa payload'dan türet (eski
+  --    istemciler için uyumluluk).
+  if p_summary is not null and jsonb_typeof(p_summary) = 'object' then
+    v_total_xp := coalesce((p_summary->>'total_xp')::numeric, 0);
+    v_level := greatest(1, coalesce((p_summary->>'level')::integer, 1));
+    v_movies := coalesce((p_summary->>'movies_watched')::integer, 0);
+    v_past_movies := coalesce((p_summary->>'past_movies_watched')::integer, 0);
+    v_series := coalesce((p_summary->>'series_watched')::integer, 0);
+    v_episodes := coalesce((p_summary->>'episodes_watched')::integer, 0);
+    v_achievements := coalesce((p_summary->>'achievements_unlocked')::integer, 0);
+    v_quests := coalesce((p_summary->>'quests_completed')::integer, 0);
+  else
+    -- 3a) Eski yol: payload'dan hesapla (geri uyumluluk).
+    --    total_xp: payload.totalXp (sayı ise) yoksa xpEvents.amount toplamı.
   if jsonb_typeof(p_payload->'totalXp') = 'number' then
     v_total_xp := (p_payload->>'totalXp')::numeric;
   elsif jsonb_typeof(p_payload->'xpEvents') = 'array' then
@@ -2118,6 +2188,7 @@ begin
   if jsonb_typeof(p_payload->'quests'->'completedQuests') = 'array' then
     v_quests := jsonb_array_length(p_payload->'quests'->'completedQuests');
   end if;
+  end if;
 
   -- 4) Satırı kilitle ve revizyon kuralını uygula -----------------------
   select s.revision into v_revision
@@ -2137,8 +2208,8 @@ begin
 
     v_next := 1;
 
-    insert into public.app_saves (agent_id, revision, save_hash, payload, device_id, updated_at)
-    values (v_agent, v_next, btrim(p_save_hash), p_payload, nullif(btrim(coalesce(p_device_id, '')), ''), v_now)
+    insert into public.app_saves (agent_id, revision, save_hash, payload, payload_gz, device_id, updated_at)
+    values (v_agent, v_next, btrim(p_save_hash), p_payload, p_payload_gz, nullif(btrim(coalesce(p_device_id, '')), ''), v_now)
     on conflict (agent_id) do nothing;
 
     if not found then
@@ -2168,6 +2239,7 @@ begin
     set revision = v_next,
         save_hash = btrim(p_save_hash),
         payload = p_payload,
+        payload_gz = p_payload_gz,
         device_id = nullif(btrim(coalesce(p_device_id, '')), ''),
         updated_at = v_now
     where s.agent_id = v_agent;
@@ -2184,7 +2256,7 @@ begin
       episodes_watched = greatest(p.episodes_watched, v_episodes),
       achievements_unlocked = greatest(p.achievements_unlocked, v_achievements),
       quests_completed = greatest(p.quests_completed, v_quests),
-      last_seen = v_now
+      last_seen = case when last_seen < now() - interval '1 hour' then v_now else last_seen end
   where p.agent_id = v_agent;
 
   -- 6) Başarı yanıtı ----------------------------------------------------
@@ -2197,11 +2269,18 @@ begin
 end;
 $$;
 
-revoke all on function public.sync_commit(text, bigint, text, text, jsonb) from public;
-grant execute on function public.sync_commit(text, bigint, text, text, jsonb) to anon, authenticated;
+-- Yeni imza (7 parametre): düz payload + gzip kopya + profil özeti.
+revoke all on function public.sync_commit(text, bigint, text, text, jsonb, bytea, jsonb) from public;
+grant execute on function public.sync_commit(text, bigint, text, text, jsonb, bytea, jsonb) to anon, authenticated;
 
-comment on function public.sync_commit(text, bigint, text, text, jsonb) is
+comment on function public.sync_commit(text, bigint, text, text, jsonb, bytea, jsonb) is
   'Atomik V3 commit: FOR UPDATE kilidi, base_revision eşleşme şartı, conflict yanıtı ve profiles özet güncellemesi.';
+
+-- Eski 5 parametreli imza KALDIRILIR: 7'li imzada varsayılanlar olduğu için
+-- ikisi birlikte PostgREST'te "hangi fonksiyon?" belirsizliği (PGRST203)
+-- yaratıyor. 5 parametre gönderen eski istemci yine çalışır; eksik parametreler
+-- varsayılan (null) olur.
+drop function if exists public.sync_commit(text, bigint, text, text, jsonb);
 
 
 -- Eski Storage arşivini temizleme (yalnızca app_saves'e taşındıktan sonra).
@@ -2372,6 +2451,7 @@ alter table public.chat_groups enable row level security;
 alter table public.chat_group_members enable row level security;
 
 -- FRIENDSHIPS
+drop policy if exists friendships_select_public on public.friendships;
 drop policy if exists friendships_select_own on public.friendships;
 create policy friendships_select_own
   on public.friendships for select
@@ -2424,6 +2504,7 @@ create policy network_logs_delete_self
   using (agent_id = public.current_agent_id());
 
 -- RECOMMENDATIONS
+drop policy if exists recommendations_select_public on public.recommendations;
 drop policy if exists recommendations_select_own on public.recommendations;
 create policy recommendations_select_own
   on public.recommendations for select
@@ -2450,6 +2531,7 @@ create policy recommendations_delete_own
   using (sender_id = public.current_agent_id() or receiver_id = public.current_agent_id());
 
 -- MESSAGES
+drop policy if exists messages_select_public on public.messages;
 drop policy if exists messages_select_own on public.messages;
 create policy messages_select_own
   on public.messages for select
@@ -2744,6 +2826,50 @@ end $$;
 -- ----------------------------------------------------------------------------
 -- Yeni tablo/fonksiyonlar eklendiğinde istemci "Could not find the function ...
 -- in the schema cache" hatası alabilir. Bu bildirim önbelleği hemen yeniler.
+-- ----------------------------------------------------------------------------
+-- notify_poll — tek çağrıda 3 bildirim sorgusu (NetworkPage polling optimizasyonu)
+-- ----------------------------------------------------------------------------
+create or replace function public.notify_poll(p_agent_id text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+begin
+  select jsonb_build_object(
+    'friendships', coalesce((
+      select jsonb_agg(to_jsonb(f) order by f.created_at desc)
+      from public.friendships f
+      where f.requester_id = p_agent_id or f.receiver_id = p_agent_id
+    ), '[]'::jsonb),
+    'recommendations', coalesce((
+      select jsonb_agg(to_jsonb(r)) from (
+        select * from public.recommendations r
+        where r.receiver_id = p_agent_id or r.sender_id = p_agent_id
+        order by r.created_at desc limit 100
+      ) r
+    ), '[]'::jsonb),
+    'unread_messages', coalesce((
+      select jsonb_object_agg(sender_id, cnt)
+      from (
+        select sender_id, count(*)::int as cnt
+        from public.messages
+        where receiver_id = p_agent_id
+          and is_read = false
+          and group_id is null
+        group by sender_id
+      ) m
+    ), '{}'::jsonb)
+  ) into v_result;
+  return v_result;
+end;
+$$;
+
+revoke all on function public.notify_poll(text) from public;
+grant execute on function public.notify_poll(text) to anon, authenticated;
+
 notify pgrst, 'reload schema';
 
 

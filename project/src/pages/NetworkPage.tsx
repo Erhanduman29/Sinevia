@@ -275,9 +275,10 @@ function NetworkPageContent() {
     };
 
     loadProfileChat();
+    // 20 sn -> 120 sn: açık sohbet panelindeki yoklama isteklerini 6 kat azaltır.
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') loadProfileChat();
-    }, 20000);
+    }, 120000);
     const onVisible = () => {
       if (document.visibilityState === 'visible') loadProfileChat();
     };
@@ -295,15 +296,34 @@ function NetworkPageContent() {
     if (!isSilent) setRefreshing(true);
 
     try {
-      // BAĞIMSIZ SORULAR PARALEL: 6 sıralı istek yerine 2 tur.
-      const [friendshipsRes, recRes, unreadRes] = await Promise.all([
-        supabase.from('friendships').select(FRIENDSHIP_COLUMNS).or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`),
-        supabase.from('recommendations').select(RECOMMENDATION_COLUMNS).or(`receiver_id.eq.${data.agentId},sender_id.eq.${data.agentId}`).order('created_at', { ascending: false }).limit(100),
-        supabase.from('messages').select('sender_id, group_id').eq('receiver_id', data.agentId).eq('is_read', false),
-      ]);
+      // Tek notify_poll RPC çağrısı ile 3 bildirim sorgusu toplanır.
+      let pollData: any = null;
+      try {
+        const res = await supabase.rpc('notify_poll', { p_agent_id: data.agentId });
+        if (res.error) throw res.error;
+        pollData = res.data;
+      } catch (pollErr: any) {
+        console.warn('notify_poll hatası, eski sorgulara dönülüyor:', pollErr.message);
+        const [fRes, rRes, mRes] = await Promise.allSettled([
+          supabase.from('friendships').select('*').or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`),
+          supabase.from('recommendations').select('*').or(`receiver_id.eq.${data.agentId},sender_id.eq.${data.agentId}`).limit(100),
+          supabase.from('messages').select('sender_id').eq('receiver_id', data.agentId).eq('is_read', false).is('group_id', null),
+        ]);
+        const fList: any[] = fRes.status === 'fulfilled' ? (fRes.value.data || []) : [];
+        const rList: any[] = rRes.status === 'fulfilled' ? (rRes.value.data || []) : [];
+        const mList: any[] = mRes.status === 'fulfilled' ? (mRes.value.data || []) : [];
+        const unreadCounts: Record<string, number> = {};
+        mList.forEach((m: any) => { unreadCounts[m.sender_id] = (unreadCounts[m.sender_id] || 0) + 1; });
+        pollData = {
+          friendships: fList,
+          recommendations: rList,
+          unread_messages: unreadCounts,
+        };
+      }
 
-      const friendshipsData = friendshipsRes.data;
-      const fList = friendshipsData || [];
+      if (!pollData) throw new Error('notify_poll boş döndü');
+
+      const fList: any[] = (pollData?.friendships || []);
       const acceptedIds = new Set<string>();
       const incoming: any[] = [];
       const outgoing: any[] = [];
@@ -315,19 +335,14 @@ function NetworkPageContent() {
 
       const allRelevantIds = Array.from(new Set([data.agentId, ...Array.from(acceptedIds), ...incoming.map((i: any) => i.requester_id), ...outgoing.map((o: any) => o.receiver_id)]));
 
-      const recData = recRes.data;
-      const recList = recData || [];
+      const recList: any[] = (pollData?.recommendations || []);
       recList.forEach((r: any) => {
         if (!allRelevantIds.includes(r.sender_id)) allRelevantIds.push(r.sender_id);
         if (!allRelevantIds.includes(r.receiver_id)) allRelevantIds.push(r.receiver_id);
       });
       setRecommendations(recList);
 
-      const unreadDataRaw = unreadRes.data;
-      const unreadData = (unreadDataRaw || []).filter((m: any) => !m.group_id);
-
-      const unreads: Record<string, number> = {};
-      unreadData.forEach((msg: any) => { unreads[msg.sender_id] = (unreads[msg.sender_id] || 0) + 1; });
+      const unreads: Record<string, number> = pollData?.unread_messages || {};
       setUnreadMessages(unreads);
 
       let pMap = { ...profilesMapRef.current };
@@ -335,17 +350,20 @@ function NetworkPageContent() {
       // İkinci tur: profiller + liderlik + akış paralel.
       // Akış yalnızca sekmesi açıkken çekilir (boşa trafik üretmemek için).
       const shouldFetchFeed = activeTab === 'feed';
-      const [profilesRes, leadersRes, logsRes] = await Promise.all([
-        allRelevantIds.length > 0
-          ? supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', allRelevantIds)
-          : Promise.resolve({ data: [] as any[] } as any),
-        supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).order('total_xp', { ascending: false }).limit(20),
-        shouldFetchFeed && acceptedIds.size > 0
-          ? supabase.from('network_logs').select(NETWORK_LOG_COLUMNS).in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(30)
-          : Promise.resolve({ data: [] as any[] } as any),
-      ]);
+      const profilesPromise = allRelevantIds.length > 0
+        ? supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', allRelevantIds)
+        : Promise.resolve({ data: [] as any[] } as any);
+      const leadersPromise = supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).order('total_xp', { ascending: false }).limit(20);
+      const logsPromise = shouldFetchFeed && acceptedIds.size > 0
+        ? supabase.from('network_logs').select(NETWORK_LOG_COLUMNS).in('agent_id', Array.from(acceptedIds)).order('created_at', { ascending: false }).limit(30)
+        : Promise.resolve({ data: [] as any[] } as any);
 
-      (profilesRes.data || []).forEach((p: any) => {
+      const [profilesRes, leadersRes, logsRes] = await Promise.allSettled([profilesPromise, leadersPromise, logsPromise]);
+      const pData: any[] = profilesRes.status === 'fulfilled' ? (profilesRes.value.data || []) : [];
+      const leadersData: any[] = leadersRes.status === 'fulfilled' ? (leadersRes.value.data || []) : [];
+      const logsData: any[] = logsRes.status === 'fulfilled' ? (logsRes.value.data || []) : [];
+
+      (pData || []).forEach((p: any) => {
         // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
         if (p.agent_id === data.agentId) {
           p.movies_watched = localMoviesWatched;
@@ -354,7 +372,6 @@ function NetworkPageContent() {
         pMap[p.agent_id] = p;
       });
 
-      const leadersData = leadersRes.data;
       if (leadersData) {
         leadersData.forEach((p: any) => {
           // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
@@ -377,7 +394,6 @@ function NetworkPageContent() {
       setFriends(acceptedFriends); setPendingIncoming(incoming); setPendingOutgoing(outgoing);
 
       if (shouldFetchFeed) {
-        const logsData = logsRes.data;
         // Akıştan gizlenen eski izleme kayıtlarını client-side ele (NULL korunur).
         setFeed((logsData || []).filter((l: any) => l.action_type !== 'watched_hidden'));
       }
@@ -390,13 +406,13 @@ function NetworkPageContent() {
     fetchData();
     if (!data.agentId) return;
 
-    // Filtresiz realtime aboneliği kaldırıldı: tek bir yazma tüm istemcileri
-    // uyandırıp 6 sorgu çalıştırıyordu. Yerine 90 saniyede bir sessiz yenileme
-    // var; sekme gizliyken yoklama tamamen durur (boşa trafik üretmemek için).
+    // Realtime abonelik yok (tek yazma tüm istemcileri uyandırıyordu).
+    // 600 sn sessiz yenileme: 180 sn -> 600 sn, aylık istek ~%70 azalır.
+    // Sekme gizliyken yoklama tamamen durur; sekmeye dönünce hemen bir kez.
     let interval: number | undefined;
     const start = () => {
       if (interval !== undefined) return;
-      interval = window.setInterval(() => fetchData(true), 90000);
+      interval = window.setInterval(() => fetchData(true), 600000);
     };
     const stop = () => {
       if (interval !== undefined) {

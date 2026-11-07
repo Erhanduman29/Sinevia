@@ -54,6 +54,12 @@ export interface Movie {
   duelLosses?: number;
   /** Bu filmin daha önce düelloda karşılaştığı filmlerin id'leri. */
   duelOpponents?: string[];
+  /** Tekrar izleme sayacı (ISO veya PAUSED:<sn>). */
+  rewatchStartedAt?: string | null;
+  /** Bu film kaç kez tekrar izlendi. */
+  rewatchCount?: number;
+  /** Puan enflasyonu panelinden uygulanan kalibrasyon sayısı (başarım sayacı). */
+  calibrationChanges?: number;
   posterUrl?: string;
   overview?: string;
   tmdbId?: number;
@@ -91,6 +97,8 @@ export interface Episode {
   reviewTags?: string[];
   note: string;
   watchedAt: string | null;
+  /** Bölüm silindiği zaman (ISO) — 30 günden eski deletedEpisodes temizliği için. */
+  deletedAt?: string;
 }
 
 export interface Series {
@@ -198,6 +206,14 @@ export interface WatchHistoryItem {
   bulkRating?: boolean;
   /** Toptan puanlamada istatistiğe eklenen %25 süre (dakika). */
   bulkRuntimeMinutes?: number;
+  /** Bu kayıt bir tekrar izleme mi? */
+  isRewatch?: boolean;
+  /** Tekrar izlemenin bağlı olduğu ilk izleme kaydının id'si. */
+  rewatchOfId?: string;
+  /** Bu film/dizi için kaçıncı izleme (ilk izleme = 1). */
+  watchNumber?: number;
+  /** Tekrar izleme, "önceden izlenenler" kaydından mı başlatıldı? */
+  rewatchedFromPast?: boolean;
 }
 
 export interface AchievementProgress {

@@ -36,6 +36,16 @@ class FakeCloud {
       if (this.failWith) throw this.failWith;
       return this.record ? JSON.parse(JSON.stringify(this.record)) : null;
     },
+    getRemoteMeta: async (): Promise<{ revision: number; saveHash: string; updatedAt: string; deviceId: string } | null> => {
+      if (this.failWith) throw this.failWith;
+      if (!this.record) return null;
+      return {
+        revision: this.record.revision,
+        saveHash: this.record.saveHash,
+        updatedAt: this.record.updatedAt,
+        deviceId: this.record.deviceId,
+      };
+    },
     commit: async (_agentId: string, request: CommitSaveRequest): Promise<SyncCommitResponse> => {
       if (this.failWith) throw this.failWith;
       this.commits.push(request);
@@ -450,6 +460,15 @@ describe('syncEngine.sync', () => {
     let commitAttempts = 0;
     const racingClient: SyncClient = {
       getRemote: async () => cloudOf({ ...remote, deviceId: 'dev-2' }, 4),
+      getRemoteMeta: async () => {
+        const rec = cloudOf({ ...remote, deviceId: 'dev-2' }, 4);
+        return {
+          revision: rec.revision,
+          saveHash: rec.saveHash,
+          updatedAt: rec.updatedAt,
+          deviceId: rec.deviceId,
+        };
+      },
       commit: async () => {
         commitAttempts += 1;
         return { status: 'conflict', revision: 4 };
@@ -478,6 +497,15 @@ describe('syncEngine.sync', () => {
     cloud.record = cloudOf(remote, 1);
     cloud.client = {
       getRemote: async () => cloudOf(remote, 1),
+      getRemoteMeta: async () => {
+        const rec = cloudOf(remote, 1);
+        return {
+          revision: rec.revision,
+          saveHash: rec.saveHash,
+          updatedAt: rec.updatedAt,
+          deviceId: rec.deviceId,
+        };
+      },
       // Sunucu, istemcinin gördüğünden farklı bir revizyonda: conflict.
       commit: async () => ({ status: 'conflict', revision: 2 }),
     };

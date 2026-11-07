@@ -36,6 +36,16 @@ class FakeCloud {
       const record = this.records.get(agentId);
       return record ? JSON.parse(JSON.stringify(record)) : null;
     },
+    getRemoteMeta: async (agentId: string): Promise<{ revision: number; saveHash: string; updatedAt: string; deviceId: string } | null> => {
+      const record = this.records.get(agentId);
+      if (!record) return null;
+      return {
+        revision: record.revision,
+        saveHash: record.saveHash,
+        updatedAt: record.updatedAt,
+        deviceId: record.deviceId,
+      };
+    },
     commit: async (agentId: string, request: CommitSaveRequest): Promise<SyncCommitResponse> => {
       this.commits.push({ agentId, request });
       const current = this.records.get(agentId)?.revision ?? 0;
@@ -105,6 +115,10 @@ describe('iki cihaz — revizyon yarışı', () => {
           await a.engine.pushLocal(id);
         }
         return before;
+      },
+      getRemoteMeta: async (id) => {
+        const record = await cloud.client.getRemoteMeta(id);
+        return record;
       },
       commit: (id, request) => cloud.client.commit(id, request),
     };
@@ -388,7 +402,7 @@ describe('SQL istemci sözleşmesi', () => {
     expect(calls[0]).toEqual({ name: 'sync_get_state', params: { p_agent_id: 'SNV-AAAA-0001' } });
     expect(calls[1].name).toBe('sync_commit');
     expect(Object.keys(calls[1].params).sort()).toEqual(
-      ['p_agent_id', 'p_base_revision', 'p_device_id', 'p_payload', 'p_save_hash'].sort(),
+      ['p_agent_id', 'p_base_revision', 'p_device_id', 'p_payload', 'p_save_hash', 'p_payload_gz', 'p_summary'].sort(),
     );
     expect(calls[1].params).toMatchObject({
       p_agent_id: 'SNV-AAAA-0001',
@@ -402,19 +416,27 @@ describe('SQL istemci sözleşmesi', () => {
       /create or replace function public\.sync_get_state\(\s*p_agent_id text\s*\)/i,
     );
     expect(functionsSql).toMatch(
-      /create or replace function public\.sync_commit\(\s*p_agent_id text,\s*p_base_revision bigint,\s*p_device_id text,\s*p_save_hash text,\s*p_payload jsonb\s*\)/i,
+      /create or replace function public\.sync_commit\(\s*p_agent_id text,\s*p_base_revision bigint,\s*p_device_id text,\s*p_save_hash text,\s*p_payload jsonb,\s*p_payload_gz bytea default null,\s*p_summary jsonb default null\s*\)/i,
+    );
+    // sync_get_meta mevcut.
+    expect(functionsSql).toMatch(
+      /create or replace function public\.sync_get_meta\(\s*p_agent_id text\s*\)/i,
     );
     // Kanonik birleşik şema da aynı imzaları taşımalı.
     expect(combinedSql).toMatch(/create or replace function public\.sync_get_state\(\s*p_agent_id text\s*\)/i);
+    expect(combinedSql).toMatch(/create or replace function public\.sync_get_meta\(\s*p_agent_id text\s*\)/i);
     expect(combinedSql).toMatch(/create or replace function public\.sync_commit\(/i);
   });
 
   test('app_saves kolonları ve sync RPC grant’leri kanonik şemada tanımlı', () => {
     expect(combinedSql).toMatch(/create table if not exists public\.app_saves \(/i);
-    for (const column of ['agent_id', 'revision', 'save_hash', 'payload', 'device_id', 'updated_at']) {
+    for (const column of ['agent_id', 'revision', 'save_hash', 'payload', 'payload_gz', 'device_id', 'updated_at']) {
       expect(combinedSql).toMatch(new RegExp(`\\b${column}\\b`, 'i'));
     }
     expect(functionsSql).toMatch(/grant execute on function public\.sync_get_state\(text\) to anon, authenticated;/i);
-    expect(functionsSql).toMatch(/grant execute on function public\.sync_commit\(text, bigint, text, text, jsonb\) to anon, authenticated;/i);
+    expect(functionsSql).toMatch(/grant execute on function public\.sync_get_meta\(text\) to anon, authenticated;/i);
+    expect(functionsSql).toMatch(/grant execute on function public\.sync_commit\(text, bigint, text, text, jsonb, bytea, jsonb\) to anon, authenticated;/i);
+    // Eski 5'li overload PostgREST belirsizliği (PGRST203) yüzünden kaldırılır.
+    expect(functionsSql).toMatch(/drop function if exists public\.sync_commit\(text, bigint, text, text, jsonb\);/i);
   });
 });

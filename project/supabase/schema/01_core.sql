@@ -110,6 +110,7 @@ create table if not exists public.app_saves (
   revision bigint not null default 0,
   save_hash text not null,
   payload jsonb not null,
+  payload_gz bytea,
   device_id text,
   updated_at timestamptz not null default now()
 );
@@ -118,6 +119,7 @@ create table if not exists public.app_saves (
 alter table public.app_saves add column if not exists revision bigint not null default 0;
 alter table public.app_saves add column if not exists save_hash text not null default '';
 alter table public.app_saves add column if not exists payload jsonb not null default '{}'::jsonb;
+alter table public.app_saves add column if not exists payload_gz bytea;
 alter table public.app_saves add column if not exists device_id text;
 alter table public.app_saves add column if not exists updated_at timestamptz not null default now();
 
@@ -498,4 +500,4 @@ create index if not exists idx_chat_groups_creator on public.chat_groups (create
 create index if not exists idx_recommendations_receiver on public.recommendations (receiver_id, created_at desc);
 create index if not exists idx_recommendations_sender on public.recommendations (sender_id, created_at desc);
 
-create index if not exists idx_app_saves_updated_at on public.app_saves (updated_at desc);
+

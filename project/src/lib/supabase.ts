@@ -22,7 +22,7 @@ function getOrCreateSecretToken(): string {
 // - Her yazma (POST/PATCH/PUT/DELETE /rest/v1/*) önbelleği temizler → mutasyon sonrası taze veri.
 type BufferedRead = { ok: boolean; status: number; body: string; contentType: string | null };
 type CachedRead = { exp: number } & BufferedRead;
-const READ_CACHE_TTL_MS = 15000;
+const READ_CACHE_TTL_MS = 60000;
 const READ_CACHE_MAX_ENTRIES = 80;
 const readCache = new Map<string, CachedRead>();
 const inflightReads = new Map<string, Promise<BufferedRead>>();

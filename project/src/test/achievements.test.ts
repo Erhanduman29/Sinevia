@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'vitest';
-import { applyAchievements } from '../context/AppContext';
+import { applyAchievements, rootReducer } from '../context/AppContext';
 import type { ExtendedAppData } from '../context/AppContext';
 import { ACHIEVEMENT_DEFS } from '../lib/achievements';
 
@@ -327,6 +327,64 @@ describe('🏆 TÜM BAŞARIMLAR (ACHIEVEMENTS) %100 KAPSAM TESTİ', () => {
       expect(getBadgeCurrent(state, 'past_watcher')).toBe(2);
       expect(getBadgeCurrent(state, 'past_masterpiece')).toBe(1); 
       expect(getBadgeCurrent(state, 'past_critic')).toBe(1); 
+    });
+  });
+
+  // ==========================================
+  // 10. PUAN ENFLASYONU KALİBRASYONU
+  // ==========================================
+  describe('Kalibrasyon Ustası (puan enflasyonu)', () => {
+    test('Kalibrasyon sayacı toplamı başarımı besler', () => {
+      const state = getBaseState();
+      state.movies = [
+        { id: 'm1', calibrationChanges: 2 },
+        { id: 'm2', calibrationChanges: 3 },
+      ] as any[];
+
+      expect(getBadgeCurrent(state, 'calibration_master')).toBe(5);
+      const badge = applyAchievements(state).achievements.find((a) => a.achievementId === 'calibration_master')!;
+      expect(badge.unlockedTiers).toContain('gold');
+    });
+
+    test('Kalibrasyon aksiyonu sayacı artırır, history yazmaz ve puan başarımlarını açmaz', () => {
+      const state = getBaseState();
+      state.history = [
+        { id: 'h1', kind: 'movie', itemId: 'm1', rating: 10, watchedAt: '2026-01-01T12:00:00', isPastWatch: false },
+      ] as any[];
+      state.movies = [{ id: 'm1', title: 'Test', rating: 10, calibratedScore: 9.5, watched: true }] as any[];
+
+      const next = rootReducer(state, {
+        type: 'APPLY_CALIBRATION_SUGGESTION',
+        id: 'm1',
+        newRating: 9.5,
+      } as any);
+
+      expect((next.movies[0] as any).rating).toBe(9.5);
+      expect((next.movies[0] as any).calibratedScore).toBe(9.5);
+      expect((next.movies[0] as any).calibrationChanges).toBe(1);
+      // Görev / pazar görevi tetiklenmemesi için history'ye dokunulmamalı.
+      expect(next.history).toHaveLength(1);
+      expect((next.history[0] as any).rating).toBe(10);
+
+      // Puan-bağımlı başarımlar kilitli kalmalı.
+      const perfect = next.achievements.find((a) => a.achievementId === 'perfect_rating')!;
+      expect(perfect.unlockedTiers).toHaveLength(0);
+      // Yeni kalibrasyon başarımı ise açılmalı.
+      const calibration = next.achievements.find((a) => a.achievementId === 'calibration_master')!;
+      expect(calibration.unlockedTiers).toContain('bronze');
+    });
+
+    test('Aynı puan tekrar uygulanırsa sayaç artmaz', () => {
+      const state = getBaseState();
+      state.movies = [{ id: 'm1', rating: 9.5, calibratedScore: 9.5, calibrationChanges: 4 }] as any[];
+
+      const next = rootReducer(state, {
+        type: 'APPLY_CALIBRATION_SUGGESTION',
+        id: 'm1',
+        newRating: 9.5,
+      } as any);
+
+      expect((next.movies[0] as any).calibrationChanges).toBe(4);
     });
   });
 

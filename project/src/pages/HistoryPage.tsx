@@ -23,9 +23,13 @@ import {
   History,
   Skull,
   X,
+  Repeat,
+  Swords,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ratingBgClass, formatDateTime, formatDateShort, localDayKey } from '../lib/utils';
+import { getRewatchCooldown, formatRewatchRemaining } from '../lib/rewatch';
+import { roundHalfRating } from '../lib/rating';
 import RatingModal from '../components/RatingModal';
 import MediaDetailModal from '../components/MediaDetailModal';
 import type { DetailModalTarget } from '../components/MediaDetailModal';
@@ -217,7 +221,7 @@ export default function HistoryPage() {
     });
   };
 
-  const openMovieDetail = (item: WatchHistoryItem, movieData?: Movie) => {
+  const openMovieDetail = (item: WatchHistoryItem, movieData?: Movie, rewatch = false) => {
     const fallbackMovie: Movie = movieData || {
       id: item.itemId || item.id,
       title: item.title,
@@ -233,7 +237,7 @@ export default function HistoryPage() {
       watchedAt: item.watchedAt,
       addedAt: item.watchedAt,
     };
-    setDetailTarget({ type: 'movie', data: fallbackMovie, historyItem: item });
+    setDetailTarget({ type: 'movie', data: fallbackMovie, historyItem: item, ...(rewatch ? { rewatch: true } : {}) });
   };
 
   const openSeriesDetail = (item: WatchHistoryItem, seriesData?: Series) => {
@@ -553,6 +557,12 @@ export default function HistoryPage() {
                 onSelectDetail={() =>
                   isSeries ? openSeriesDetail(item, seriesData) : openMovieDetail(item, movieData)
                 }
+                rewatch={movieData ? { canRewatch: true, remainingMs: 0 } : undefined}
+                onRewatch={
+                  movieData
+                    ? () => openMovieDetail(item, movieData, true)
+                    : undefined
+                }
               />
             );
           })}
@@ -700,6 +710,19 @@ export default function HistoryPage() {
                         onToggleNote={() => toggleNoteExpand(item.id)}
                         onEdit={() => setEditingItem(item)}
                         onSelectDetail={() => openMovieDetail(item, movieData)}
+                        rewatch={
+                          movieData
+                            ? (() => {
+                                const c = getRewatchCooldown(data.history, movieData.id);
+                                return { canRewatch: c.canRewatch, remainingMs: c.remainingMs };
+                              })()
+                            : undefined
+                        }
+                        onRewatch={
+                          movieData
+                            ? () => openMovieDetail(item, movieData, true)
+                            : undefined
+                        }
                       />
                     );
                   } else {
@@ -1187,6 +1210,8 @@ function MovieHistoryCard({
   onToggleNote,
   onEdit,
   onSelectDetail,
+  onRewatch,
+  rewatch,
 }: {
   item: WatchHistoryItem;
   movieData?: Movie;
@@ -1196,6 +1221,8 @@ function MovieHistoryCard({
   onToggleNote: () => void;
   onEdit: () => void;
   onSelectDetail: () => void;
+  onRewatch?: () => void;
+  rewatch?: { canRewatch: boolean; remainingMs: number };
 }) {
   const hasDetailed = item.detailedRating && Object.keys(item.detailedRating).length > 0;
   const hasTags = item.reviewTags && item.reviewTags.length > 0;
@@ -1205,9 +1232,13 @@ function MovieHistoryCard({
   const [showTags, setShowTags] = useState(false);
   const isSeries = Boolean(seriesData) || item.kind === 'series' || item.type === 'series';
   const posterUrl = movieData?.posterUrl || seriesData?.posterUrl;
-  const isPast = Boolean(item.isPastWatch || movieData?.isPastWatch || seriesData?.isPastWatch);
+  const isPast = Boolean(item.isPastWatch || item.rewatchedFromPast || movieData?.isPastWatch || seriesData?.isPastWatch);
   // Sinematik Otopsi: item.abandoned yoksa itemId → film lookup ile türetilir.
   const isDnf = Boolean(item.abandoned ?? movieData?.abandoned ?? seriesData?.abandoned);
+  const duelRating = !isSeries && movieData?.calibratedScore != null
+    ? roundHalfRating(movieData.calibratedScore)
+    : null;
+  const isRewatch = Boolean(item.isRewatch);
 
   return (
     <div className="relative bg-[color:var(--glass, var(--bg-card))] backdrop-blur-md border border-[color:var(--line-2,var(--border-dim))] hover:border-[color:var(--red, var(--color-1, #e8384f))]/40 hover:shadow-[var(--glow)] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))] transition-all overflow-hidden group">
@@ -1237,9 +1268,14 @@ function MovieHistoryCard({
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
+              {isRewatch && (
+                <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30`}>
+                  <Repeat size={10} /> Tekrar İzleme
+                </span>
+              )}
               {isPast ? (
                 <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30`}>
-                  <History size={10} /> Daha Önce İzlendi
+                  <History size={10} /> {item.rewatchedFromPast && !item.isPastWatch ? 'Önceden İzlenmişti' : 'Daha Önce İzlendi'}
                 </span>
               ) : isSeries ? (
                 <span className={`${monoLabel} inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-azure-500/20 text-azure-300 border border-azure-500/30`}>
@@ -1382,11 +1418,37 @@ function MovieHistoryCard({
         </div>
 
         <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 pt-2.5 sm:pt-0 border-t border-[color:var(--line,var(--border-dim))] sm:border-0 flex-shrink-0">
-          {item.rating !== null && (
-            <RatingChangeChip rating={item.rating} previousRating={item.previousRating} size="lg" />
-          )}
+          {item.rating !== null ? (
+            <div className="flex items-center gap-1 flex-wrap justify-center sm:justify-end">
+              <RatingChangeChip rating={roundHalfRating(item.rating)} previousRating={item.previousRating} size="lg" />
+              {!isSeries && duelRating !== null && Math.abs(duelRating - roundHalfRating(item.rating)) >= 0.5 && (
+                <span className={`${monoLabel} inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30`} title="Düello puanı">
+                  <Swords size={11} /> {duelRating.toFixed(1)}
+                </span>
+              )}
+            </div>
+          ) : null}
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap justify-center sm:justify-end">
+            {!isSeries && movieData && onRewatch && (
+              <button
+                type="button"
+                onClick={onRewatch}
+                disabled={rewatch ? !rewatch.canRewatch : false}
+                title={
+                  rewatch && !rewatch.canRewatch
+                    ? `Tekrar izlemek için ${formatRewatchRemaining(rewatch.remainingMs)} kaldı`
+                    : 'Tekrar izleme modunda aç'
+                }
+                className={`flex items-center gap-1 text-xs font-bold uppercase tracking-wider px-2.5 py-1.5 min-h-11 sm:min-h-0 rounded-xl border transition-colors ${
+                  rewatch && !rewatch.canRewatch
+                    ? 'bg-[color:var(--surface,var(--bg-surface))] text-ink-500 border-[color:var(--line-2,var(--border-dim))] cursor-not-allowed'
+                    : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border-sky-500/30'
+                }`}
+              >
+                <Repeat size={13} /> <span>Tekrar İzle</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onSelectDetail}

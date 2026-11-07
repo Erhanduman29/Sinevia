@@ -3,10 +3,12 @@ import {
   X, Calendar, Clock, Star, Film, Tv, PlayCircle, ExternalLink, Search,
   User, Users, Sparkles, StickyNote, SlidersHorizontal, Youtube, Layers,
   Building2, Tag, Edit2, CheckCircle2, Play, Pause, Timer, Zap, Lock, History,
-  Info, MessageSquare, MonitorPlay,
+  Info, MessageSquare, MonitorPlay, Repeat,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useApp, getMovieTimerInfo } from '../context/AppContext';
+import { useApp, getMovieTimerInfo, getRewatchTimerInfo } from '../context/AppContext';
+import { getRewatchCooldown, formatRewatchRemaining } from '../lib/rewatch';
+import { roundHalfRating } from '../lib/rating';
 import { normalizeActionLabel, resolveActionUrl } from '../lib/actionBridge';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
 import RatingModal from './RatingModal';
@@ -14,8 +16,8 @@ import type { Movie, Series, Episode, WatchHistoryItem } from '../types';
 import { handleImgFallback } from '../lib/selectors';
 
 export type DetailModalTarget =
-  | { type: 'movie'; data: Movie; historyItem?: WatchHistoryItem }
-  | { type: 'series'; data: Series; historyItem?: WatchHistoryItem };
+  | { type: 'movie'; data: Movie; historyItem?: WatchHistoryItem; rewatch?: boolean }
+  | { type: 'series'; data: Series; historyItem?: WatchHistoryItem; rewatch?: boolean };
 
 /** Hızlı Aksiyon Köprüsü şablon ikonları (lucide adı → bileşen). */
 const QUICK_ACTION_ICONS: Record<string, LucideIcon> = {
@@ -34,6 +36,8 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
   const {
     data: appData, startWatchingMovie, togglePauseWatchingMovie,
     cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, updateHistoryRating,
+    startRewatchingMovie, togglePauseRewatchingMovie, cancelRewatchingMovie,
+    canRateRewatchWithTimer, rewatchMovie,
   } = useApp();
 
   const [isMainNoteExpanded, setIsMainNoteExpanded] = useState(false);
@@ -58,10 +62,12 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
   const liveHistoryItem = target.historyItem ? (appData.history.find((h) => h.id === target.historyItem!.id) || target.historyItem) : undefined;
 
   useEffect(() => {
-    if (!isMovie || !liveMovie?.startedAt || liveMovie.watched) return;
+    if (!isMovie || !liveMovie) return;
+    const normalActive = !liveMovie.watched && Boolean(liveMovie.startedAt);
+    if (!normalActive && !liveMovie.rewatchStartedAt) return;
     const interval = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [isMovie, liveMovie?.startedAt, liveMovie?.watched]);
+  }, [isMovie, liveMovie?.startedAt, liveMovie?.watched, liveMovie?.rewatchStartedAt]);
 
   // YENİ: Film haftalık planda kayıtlı mı kontrol et
   const isPlanned = useMemo(() => {
@@ -106,7 +112,19 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
   const collectionName = isMovie && liveMovie!.collectionId ? appData.collections.find((c) => c.id === liveMovie!.collectionId)?.name : undefined;
 
   const timerInfo = isMovie && liveMovie && !liveMovie.watched && liveMovie.startedAt ? getMovieTimerInfo(liveMovie, nowMs) : null;
-  const anotherTimerActive = isMovie && liveMovie ? appData.movies.some((m) => !m.watched && m.id !== liveMovie.id && m.startedAt) : false;
+  const rewatchTimerInfo = isMovie && liveMovie?.rewatchStartedAt ? getRewatchTimerInfo(liveMovie, nowMs) : null;
+  const rewatchCooldown = isMovie && liveMovie && !rewatchTimerInfo ? getRewatchCooldown(appData.history, liveMovie.id, nowMs) : null;
+  const isPastForRewatch = Boolean(isMovie && (liveHistoryItem?.isPastWatch || liveHistoryItem?.rewatchedFromPast || liveMovie?.isPastWatch));
+  const movieHistory = useMemo(() => {
+    if (!isMovie || !liveMovie) return [] as WatchHistoryItem[];
+    return appData.history
+      .filter((h) => (h.kind === 'movie' || h.type === 'movie') && (h.itemId === liveMovie.id || h.id === liveMovie.id))
+      .sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
+  }, [isMovie, liveMovie, appData.history]);
+  const firstWatch = movieHistory[0];
+  const duelRating = isMovie && liveMovie?.calibratedScore != null ? roundHalfRating(liveMovie.calibratedScore) : null;
+  const anotherTimerActive = isMovie && liveMovie ? appData.movies.some((m) => m.id !== liveMovie.id && ((!m.watched && m.startedAt) || m.rewatchStartedAt)) : false;
+  const isRewatchFlow = Boolean(isMovie && (target.rewatch || liveMovie?.rewatchStartedAt));
 
   // Hızlı Aksiyon Köprüsü — kullanıcının tanımladığı harici şablonlar.
   // targetScope filtresi (film/dizi/tümü) + resolveActionUrl (null → disabled).
@@ -128,19 +146,26 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
 
   const handleOpenMovieRating = () => {
     if (!liveMovie) return;
-    if (!liveMovie.watched && !liveHistoryItem && !canRateMovieWithTimer(liveMovie.id)) return;
+    if (isRewatchFlow) {
+      // Sayaç opsiyonel: yalnızca başlatıldıysa süre şartı uygulanır.
+      if (liveMovie.rewatchStartedAt && !canRateRewatchWithTimer(liveMovie.id)) return;
+    } else if (!liveMovie.watched && !liveHistoryItem && !canRateMovieWithTimer(liveMovie.id)) {
+      return;
+    }
 
     setRatingModalConfig({
       title: liveMovie.title,
       subtitle: liveMovie.year ? `Çıkış Yılı: ${liveMovie.year}` : 'Film',
-      initialRating: liveHistoryItem ? liveHistoryItem.rating : liveMovie.rating,
-      initialNote: liveHistoryItem ? liveHistoryItem.note : liveMovie.note,
-      initialDetailedRating: liveHistoryItem ? liveHistoryItem.detailedRating : liveMovie.detailedRating,
-      initialReviewTags: liveHistoryItem ? liveHistoryItem.reviewTags : liveMovie.reviewTags,
-      initialIsPastWatch: Boolean(liveHistoryItem?.isPastWatch || liveMovie.isPastWatch || liveMovie.inPastQueue),
-      allowPastWatch: true,
+      initialRating: isRewatchFlow ? liveMovie.rating : liveHistoryItem ? liveHistoryItem.rating : liveMovie.rating,
+      initialNote: isRewatchFlow ? liveMovie.note : liveHistoryItem ? liveHistoryItem.note : liveMovie.note,
+      initialDetailedRating: isRewatchFlow ? liveMovie.detailedRating : liveHistoryItem ? liveHistoryItem.detailedRating : liveMovie.detailedRating,
+      initialReviewTags: isRewatchFlow ? liveMovie.reviewTags : liveHistoryItem ? liveHistoryItem.reviewTags : liveMovie.reviewTags,
+      initialIsPastWatch: isRewatchFlow ? false : Boolean(liveHistoryItem?.isPastWatch || liveMovie.isPastWatch || liveMovie.inPastQueue),
+      allowPastWatch: !isRewatchFlow,
       onSubmit: (r, n, dr, tags, isPast) => {
-        if (liveHistoryItem) {
+        if (isRewatchFlow) {
+          rewatchMovie(liveMovie.id, r, n, dr, tags);
+        } else if (liveHistoryItem) {
           updateHistoryRating(liveHistoryItem.id, r, n, dr, tags, isPast);
         } else if (liveMovie.watched) {
           const hist = appData.history.find((h) => (h.itemId === liveMovie.id || h.id === liveMovie.id) && (h.kind === 'movie' || h.type === 'movie'));
@@ -319,17 +344,57 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
                     <div className="flex flex-col items-center md:items-end">
                       <div className={`flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-black text-lg sm:text-xl shadow-lg ${ratingBgClass(displayRating)}`}>
                         <Star size={18} className="fill-current" />
-                        <span>{displayRating}</span>
+                        <span>{isMovie ? roundHalfRating(displayRating).toFixed(1) : displayRating}</span>
                         <span className="text-xs opacity-75 font-bold">/ 10</span>
                       </div>
                       <span className="text-[10px] text-ink-400 mt-1 font-semibold uppercase tracking-wider">
                         {!isMovie && !liveHistoryItem ? 'Ortalama Puan' : 'Senin Puanın'}
                       </span>
+                      {isMovie && duelRating !== null && displayRating !== null && Math.abs(duelRating - roundHalfRating(displayRating)) >= 0.5 && (
+                        <span className="text-[10px] text-amber-300 mt-0.5 font-bold">Düello: {duelRating.toFixed(1)}</span>
+                      )}
                     </div>
                   )}
 
                   {isMovie && liveMovie && (
                     <div className="flex items-center gap-2 flex-wrap justify-center mt-2">
+                      {rewatchTimerInfo && (
+                        <div className="flex items-center gap-1.5 bg-sky-500/15 border border-sky-500/40 text-sky-300 px-3 py-2 rounded-xl text-xs font-bold">
+                          <Timer size={14} className={rewatchTimerInfo.isPaused ? 'text-amber-400' : 'animate-pulse text-sky-400'} />
+                          <span className="tabular-nums">{rewatchTimerInfo.formattedRemaining}</span>
+                          <button
+                            type="button"
+                            onClick={() => togglePauseRewatchingMovie(liveMovie.id)}
+                            title={rewatchTimerInfo.isPaused ? 'Devam Et' : 'Duraklat'}
+                            className="ml-1 text-amber-300 hover:text-white"
+                          >
+                            {rewatchTimerInfo.isPaused ? <Play size={13} className="fill-current" /> : <Pause size={13} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cancelRewatchingMovie(liveMovie.id)}
+                            title="Sayacı İptal Et"
+                            className="ml-0.5 text-ink-400 hover:text-red-400"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                      {isRewatchFlow && !rewatchTimerInfo && (
+                        <button
+                          type="button"
+                          onClick={() => startRewatchingMovie(liveMovie.id, isPastForRewatch)}
+                          disabled={anotherTimerActive}
+                          title={anotherTimerActive ? 'Başka bir filmin sayacı açık!' : 'İsterseniz tekrar izleme sayacını başlatın'}
+                          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                            anotherTimerActive
+                              ? 'bg-ink-900 text-ink-500 border-ink-800 cursor-not-allowed'
+                              : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border-sky-500/30'
+                          }`}
+                        >
+                          {anotherTimerActive ? <Lock size={13} /> : <Play size={13} className="fill-current" />} Sayaç Başlat (Opsiyonel)
+                        </button>
+                      )}
                       {!liveMovie.watched && !liveHistoryItem && (
                         isPlanned ? (
                           // YENİ: HAFTALIK PLANA EKLENMİŞ FİLM İÇİN KİLİTLİ BUTON
@@ -388,7 +453,15 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
                               : 'bg-gradient-to-r from-gold-500 to-gold-600 hover:from-gold-400 hover:to-gold-500 text-ink-950 font-black shadow-gold-500/20 hover:scale-105'
                           }`}
                         >
-                          {liveMovie.watched || liveHistoryItem ? (
+                          {rewatchTimerInfo ? (
+                            rewatchTimerInfo.canRateWithTimer ? (
+                              <><CheckCircle2 size={13} /> Bitir &amp; Puanla</>
+                            ) : (
+                              <><Lock size={13} /> Kilitli ({rewatchTimerInfo.minRequiredMins - rewatchTimerInfo.elapsedMins} dk)</>
+                            )
+                          ) : isRewatchFlow ? (
+                            <><CheckCircle2 size={13} /> Bitir &amp; Puanla</>
+                          ) : liveMovie.watched || liveHistoryItem ? (
                             <><Edit2 size={13} /> Puanı / Notu Düzenle</>
                           ) : timerInfo && !timerInfo.canRateWithTimer ? (
                             <><Lock size={13} /> Kilitli ({timerInfo.minRequiredMins - timerInfo.elapsedMins} dk)</>
@@ -397,6 +470,37 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
                           )}
                         </button>
                       )}
+
+                      {liveMovie.watched && !rewatchTimerInfo && !isRewatchFlow && (
+                        <button
+                          type="button"
+                          onClick={() => startRewatchingMovie(liveMovie.id, isPastForRewatch)}
+                          disabled={!isPastForRewatch && Boolean(rewatchCooldown && !rewatchCooldown.canRewatch)}
+                          title={
+                            !isPastForRewatch && rewatchCooldown && !rewatchCooldown.canRewatch
+                              ? `Tekrar izlemek için ${formatRewatchRemaining(rewatchCooldown.remainingMs)} kaldı`
+                              : 'Filmi tekrar izle'
+                          }
+                          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all shadow-md ${
+                            !isPastForRewatch && rewatchCooldown && !rewatchCooldown.canRewatch
+                              ? 'bg-ink-800 text-ink-500 border-ink-700 cursor-not-allowed'
+                              : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border-sky-500/30 hover:scale-105'
+                          }`}
+                        >
+                          <Repeat size={13} /> Tekrar İzle
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {isMovie && liveMovie && firstWatch && movieHistory.length > 1 && (
+                    <div className="mt-2 inline-flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-ink-300 bg-[color:var(--surface,var(--bg-surface))] border border-[color:var(--line-2,var(--border-dim))] px-2.5 py-1.5 rounded-xl">
+                      <History size={11} className="text-violet-300" />
+                      <span>İlk izleme: {formatDateShort(firstWatch.watchedAt)}</span>
+                      {firstWatch.rating != null && (
+                        <span className="text-ink-400">· {roundHalfRating(firstWatch.rating).toFixed(1)}/10</span>
+                      )}
+                      {firstWatch.note && <span className="text-ink-500 truncate max-w-[220px]">· {firstWatch.note}</span>}
                     </div>
                   )}
 

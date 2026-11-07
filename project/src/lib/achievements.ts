@@ -414,6 +414,26 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     { threshold: 300, xp: 1200, tier: 'diamond', name: 'Mutlak Adalet' }
   ]},
 
+  // --- PUAN ENFLASYONU KALİBRASYONU ---
+  { id: 'calibration_master', name: 'Kalibrasyon Ustası', description: 'Puan enflasyonu panelinden {threshold} kez puan kalibrasyonu uygula.', icon: 'Scale', hidden: false, secret: false, category: 'Puanlama', tiers: [
+    { threshold: 1, xp: 15, tier: 'bronze', name: 'İlk Ayar' },
+    { threshold: 3, xp: 40, tier: 'silver', name: 'İnce Ayar' },
+    { threshold: 5, xp: 90, tier: 'gold', name: 'Dengeli Kalem' },
+    { threshold: 10, xp: 180, tier: 'platinum', name: 'Kalibrasyon Ustası' },
+    { threshold: 25, xp: 400, tier: 'emerald', name: 'Ölçü Bilgesi' },
+    { threshold: 50, xp: 800, tier: 'diamond', name: 'Mutlak Denge' }
+  ]},
+
+  // --- TEKRAR İZLEME ---
+  { id: 'rewatch_master', name: 'Tekrar İzleme Ustası', description: 'Aynı filmi {threshold} kez tekrar izle ve yeniden puanla.', icon: 'RotateCcw', hidden: false, secret: false, category: 'İzleme', tiers: [
+    { threshold: 1, xp: 15, tier: 'bronze', name: 'İkinci Bakış' },
+    { threshold: 3, xp: 40, tier: 'silver', name: 'Kadraj Aşinası' },
+    { threshold: 5, xp: 90, tier: 'gold', name: 'Tekrarın Ustası' },
+    { threshold: 10, xp: 180, tier: 'platinum', name: 'Sinema Müdavimi' },
+    { threshold: 25, xp: 400, tier: 'emerald', name: 'Ebedi İzleyici' },
+    { threshold: 50, xp: 800, tier: 'diamond', name: 'Zaman Yolcusu' }
+  ]},
+
   // --- KÖR KALİBRASYON GİZLİ BAŞARIMI ---
   { id: 'secret_giant_slayer', name: 'Taht Deviren', description: 'Kör düellolarda orijinal puanı rakibinden daha düşük olan bir yapımı {threshold} kez galip getirerek kendi geçmiş puanına meydan oku.', icon: 'Swords', hidden: true, secret: true, category: 'Gizli', tiers: [
     { threshold: 10, xp: 300, tier: 'platinum', name: 'Taht Deviren' }
@@ -959,6 +979,18 @@ export const ACHIEVEMENT_ILLUSTRATIONS: Record<string, AchievementArtLayers> = {
     base: 'M3 15.5L6.5 8.5L10 15.5C8.5 17 4.5 17 3 15.5Z M14 15.5L17.5 8.5L21 15.5C19.5 17 15.5 17 14 15.5Z',
     line: 'M12 3V20 M4.5 7.5H19.5 M6.5 7.5L3 15.5H10L6.5 7.5Z M17.5 7.5L14 15.5H21L17.5 7.5Z M7 20H17',
     core: 'M12 2.5L14 5.5L12 8.5L10 5.5L12 2.5Z',
+  },
+  // 72. Kalibrasyon Ustası: Ayar kadranı ve ibre
+  calibration_master: {
+    base: 'M12 3A9 9 0 1 0 12 21A9 9 0 1 0 12 3Z',
+    line: 'M12 3A9 9 0 1 0 12 21A9 9 0 1 0 12 3Z M12 12L16.5 7.5 M7 16.5H17',
+    core: 'M12 10.4A1.6 1.6 0 1 0 12 13.6A1.6 1.6 0 1 0 12 10.4Z',
+  },
+  // 73. Tekrar İzleme Ustası: Dairesel geri sarma oku
+  rewatch_master: {
+    base: 'M12 3A9 9 0 1 0 21 12H18A6 6 0 1 1 12 6V9L7.5 4.5L12 0V3Z',
+    line: 'M12 3A9 9 0 1 0 21 12H18A6 6 0 1 1 12 6V9L7.5 4.5L12 0V3Z',
+    core: 'M12 9.5A2.5 2.5 0 1 0 12 14.5A2.5 2.5 0 1 0 12 9.5Z',
   },
   // 72. Taht Deviren: Devrilen tacı kesen çapraz kılıçlar
   secret_giant_slayer: {
