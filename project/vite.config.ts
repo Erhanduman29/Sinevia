@@ -103,9 +103,10 @@ export default defineConfig({
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-        // public/push-sw.js → üretilen service worker'a dahil edilir.
-        // Web Push + bildirime tıklama davranışı burada tanımlı.
-        importScripts: ['push-sw.js'],
+        // public/push-sw.js → Web Push + bildirime tıklama davranışı.
+        // public/update-sw.js → yeni SW aktif olunca eski sürümdeki açık
+        // sayfaları (özellikle ana ekran PWA'larını) otomatik yeniler.
+        importScripts: ['push-sw.js', 'update-sw.js'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/image\.tmdb\.org\/.*/i,

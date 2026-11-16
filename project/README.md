@@ -2,7 +2,7 @@
 
 Sinevia, film ve dizi koleksiyonunu takip etmek, puanlamak, yorumlamak ve sosyal olarak paylaşmak için geliştirilmiş bir web uygulamasıdır. PWA (Progressive Web App) olarak kurulabilir, çevrimdışı çalışabilir ve bulut senkronizasyonu ile birden fazla cihazda aynı veriyi kullanabilir.
 
-**Sürüm:** 5.3
+**Sürüm:** 5.4
 
 ---
 
