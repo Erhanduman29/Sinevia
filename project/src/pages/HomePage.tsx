@@ -1212,6 +1212,7 @@ export default function HomePage() {
   const [showPick, setShowPick] = useState(false);
   const [showDnaModal, setShowDnaModal] = useState(false);
   const [showCalibration, setShowCalibration] = useState(false);
+  const handleCalibrationClose = useCallback(() => setShowCalibration(false), []);
   const [spotlightOffset, setSpotlightOffset] = useState(0);
   const [spotlightMoreOpen, setSpotlightMoreOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
@@ -2420,7 +2421,7 @@ export default function HomePage() {
           <DnaSynthesizerModal onClose={() => setShowDnaModal(false)} />
         </Suspense>
       )}
-      {showCalibration && <CalibrationDuelModal onClose={() => setShowCalibration(false)} />}
+      {showCalibration && <CalibrationDuelModal onClose={handleCalibrationClose} />}
       {pickedItem && (
         <RatingModal
           title={pickedItem.kind === 'movie' ? pickedItem.movie.title : pickedItem.series.title}

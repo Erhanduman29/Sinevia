@@ -726,13 +726,13 @@ function formatDeviceSeen(iso: string | null | undefined): string {
 
 export default function SettingsPage() {
   const { movies, series, collections, genres } = useLibrary();
-  const { criteria, reviewTags, tagSentiments, theme: activeTheme, altWatchTemplate, nickname, agentId, notificationsEnabled, notifyFriendRequests, notifyLists, notifyMessages, shareWatchedInFeed, sharePastWatchedInFeed, showLockedNames, showBadgeDetails, reducedMotion, fastCelebrations, externalActions } = useSettings();
+  const { criteria, reviewTags, tagSentiments, theme: activeTheme, altWatchTemplate, nickname, agentId, notificationsEnabled, notifyFriendRequests, notifyLists, notifyMessages, shareWatchedInFeed, sharePastWatchedInFeed, showLockedNames, showBadgeDetails, reducedMotion, fastCelebrations, externalActions, duelRounds } = useSettings();
   const {
     addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData,
     toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
-    setNickname, setExternalActions, forceCloudUpload, forceCloudDownload
+    setNickname, setExternalActions, forceCloudUpload, forceCloudDownload, setDuelRounds
   } = useActions();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
   const { questState, togglePenalty } = useQuests();
@@ -2180,6 +2180,46 @@ export default function SettingsPage() {
 
       {activeSettingsTab === 'game' && (
         <>
+          <CollapsibleSection
+            title="Düello Sayısı"
+            icon={<Gamepad2 size={18} className="text-gold-400 flex-shrink-0" />}
+            badge={
+              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-gold-500/20 text-gold-400 border border-gold-500/30 flex items-center gap-1 flex-shrink-0">
+                <Zap size={10} /> {duelRounds || 10} Tur
+              </span>
+            }
+            desc="Kör kalibrasyon düellosunun tur sayısını seç. Daha çok tur, puanların daha isabetli kalibre edilmesini sağlar."
+          >
+            <div className="grid grid-cols-5 gap-2 sm:gap-3">
+              {[10, 15, 20, 30, 50].map((rounds) => {
+                const isSelected = (duelRounds || 10) === rounds;
+                return (
+                  <button
+                    key={rounds}
+                    type="button"
+                    onClick={() => setDuelRounds(rounds)}
+                    aria-pressed={isSelected}
+                    className={`py-3 rounded-xl border font-black text-sm sm:text-base tabular-nums transition-all active:scale-[0.97] ${
+                      isSelected
+                        ? 'border-[color:var(--red,var(--color-1,#e8384f))] text-[color:var(--text-main,#f4f4f2)]'
+                        : 'border-ink-700/60 text-ink-300 hover:border-ink-500'
+                    }`}
+                    style={{
+                      background: isSelected
+                        ? 'color-mix(in srgb, var(--red, var(--color-1, #e8384f)) 18%, transparent)'
+                        : 'rgba(255,255,255,.03)',
+                    }}
+                  >
+                    {rounds}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] sm:text-xs text-ink-400 mt-3 leading-relaxed">
+              Yeni tur sayısı bir sonraki düello oturumundan itibaren geçerli olur.
+            </p>
+          </CollapsibleSection>
+
           <CollapsibleSection
             title="Puanlama Kriterleri"
             icon={<SlidersHorizontal size={18} className="text-gold-400 flex-shrink-0" />}

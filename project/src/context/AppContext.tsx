@@ -43,7 +43,7 @@ import {
   XP_SOURCE_LABELS,
 } from '../lib/xpLedger';
 import type { XpEvent, XpEventSource } from '../types/appState';
-import { calculateEloDelta, calculateEloTie } from '../lib/calibrationEngine';
+import { calculateEloDelta, calculateEloTie, duelPairKey, effectiveSeriesRating } from '../lib/calibrationEngine';
 import { normalizeActionLabel, rewriteLegacyTemplate } from '../lib/actionBridge';
 import {
   applyBackupExtras,
@@ -365,6 +365,7 @@ function defaultData(): ExtendedAppData {
     showLockedNames: false, showBadgeDetails: false, reducedMotion: false, fastCelebrations: false, aiChatHistory: [], theme: 'premium-dark',
     altWatchTemplate: 'https://duckduckgo.com/?q=\\site:hdfilmcehennemi.nl+{title}+{year}+izle',
     externalActions: [], totalDuelsCompleted: 0, giantSlayerWins: 0,
+    duelRounds: 10, duelSeenPairs: [],
     weeklyPlan: [], notificationsEnabled: false, shareWatchedInFeed: true, sharePastWatchedInFeed: true,
     notifyMessages: true, notifyFriendRequests: true, notifyLists: true,
     coins: 150, coinLedger: [{ id: 'welcome', amount: 150, kind: 'welcome', label: 'Pazar açılış hediyesi', refId: 'welcome', createdAt: new Date().toISOString() }], inventory: [], equipped: {}, activeEffects: [],
@@ -657,7 +658,9 @@ type Action =
   | { type: 'ABANDON_MEDIA'; mediaType: 'movie' | 'series'; id: string; abandonedAt?: string; progress?: AbandonedProgress; reasons?: string[]; note?: string }
   | { type: 'REVIVE_MEDIA'; mediaType: 'movie' | 'series'; id: string }
   | { type: 'RESOLVE_DUEL'; winnerId: string; loserId: string; mediaType?: 'movie' | 'series' }
-  | { type: 'RESOLVE_DUEL_TIE'; firstId: string; secondId: string }
+  | { type: 'RESOLVE_DUEL_TIE'; firstId: string; secondId: string; mediaType?: 'movie' | 'series' }
+  | { type: 'SKIP_DUEL'; aId: string; bId: string; mediaType: 'movie' | 'series' }
+  | { type: 'SET_DUEL_ROUNDS'; rounds: number }
   | { type: 'APPLY_CALIBRATION_SUGGESTION'; id: string; newRating: number }
   | { type: 'SET_EXTERNAL_ACTIONS'; actions: ExternalActionTemplate[] }
   | { type: 'GRANT_COINS'; amount: number; kind: CoinTx['kind']; label: string; refId: string; itemId?: string }
@@ -1651,55 +1654,168 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       break;
     }
     case 'RESOLVE_DUEL': {
-      if (action.mediaType === 'series') break; // Düello motoru film puanları içindir.
-      const winner = state.movies.find((m) => m.id === action.winnerId);
-      const loser = state.movies.find((m) => m.id === action.loserId);
+      const mediaType = action.mediaType || 'movie';
+      const list = mediaType === 'series' ? state.series : state.movies;
+      const winner = list.find((m) => m.id === action.winnerId);
+      const loser = list.find((m) => m.id === action.loserId);
       if (!winner || !loser) break;
-      const wOld = winner.calibratedScore ?? winner.rating ?? 5;
-      const lOld = loser.calibratedScore ?? loser.rating ?? 5;
+      const wOld =
+        winner.calibratedScore ??
+        (mediaType === 'series'
+          ? effectiveSeriesRating(winner as Series)
+          : (winner as Movie).rating) ??
+        5;
+      const lOld =
+        loser.calibratedScore ??
+        (mediaType === 'series'
+          ? effectiveSeriesRating(loser as Series)
+          : (loser as Movie).rating) ??
+        5;
       const { winnerNew, loserNew } = calculateEloDelta(wOld, lOld);
-      nextState.movies = state.movies.map((m) => {
-        if (m.id === winner.id) {
-          const opponents = m.duelOpponents || [];
-          const newOpponents = opponents.includes(loser.id) ? opponents : [...opponents, loser.id].slice(-200);
-          return { ...m, calibratedScore: winnerNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: newOpponents };
-        }
-        if (m.id === loser.id) {
-          const opponents = m.duelOpponents || [];
-          const newOpponents = opponents.includes(winner.id) ? opponents : [...opponents, winner.id].slice(-200);
-          return { ...m, calibratedScore: loserNew, duelCount: (m.duelCount || 0) + 1, duelLosses: (m.duelLosses || 0) + 1, duelOpponents: newOpponents };
-        }
-        return m;
-      });
-      // XP YOK: düelloda XP kazanılmaz; ödül yalnızca "Terazi Ustası" başarımlarından gelir.
+
+      if (mediaType === 'series') {
+        nextState.series = state.series.map((s) => {
+          if (s.id === winner.id) {
+            return {
+              ...s,
+              calibratedScore: winnerNew,
+              duelCount: (s.duelCount || 0) + 1,
+              duelWins: (s.duelWins || 0) + 1,
+              duelOpponents: [...(s.duelOpponents || []), loser.id].slice(-200),
+            };
+          }
+          if (s.id === loser.id) {
+            return {
+              ...s,
+              calibratedScore: loserNew,
+              duelCount: (s.duelCount || 0) + 1,
+              duelLosses: (s.duelLosses || 0) + 1,
+              duelOpponents: [...(s.duelOpponents || []), winner.id].slice(-200),
+            };
+          }
+          return s;
+        });
+      } else {
+        nextState.movies = state.movies.map((m) => {
+          if (m.id === winner.id) {
+            return {
+              ...m,
+              calibratedScore: winnerNew,
+              duelCount: (m.duelCount || 0) + 1,
+              duelWins: (m.duelWins || 0) + 1,
+              duelOpponents: [...(m.duelOpponents || []), loser.id].slice(-200),
+            };
+          }
+          if (m.id === loser.id) {
+            return {
+              ...m,
+              calibratedScore: loserNew,
+              duelCount: (m.duelCount || 0) + 1,
+              duelLosses: (m.duelLosses || 0) + 1,
+              duelOpponents: [...(m.duelOpponents || []), winner.id].slice(-200),
+            };
+          }
+          return m;
+        });
+      }
+
+      // Kalıcı eşleşme kaydı: bu çift tekrar gelmez.
+      const seenPairs = new Set(state.duelSeenPairs || []);
+      seenPairs.add(duelPairKey(mediaType, winner.id, loser.id));
+      nextState.duelSeenPairs = Array.from(seenPairs);
+
       nextState.totalDuelsCompleted = (state.totalDuelsCompleted || 0) + 1;
       // GİZLİ BAŞARIM "Taht Deviren": orijinal puanı düşük olan kazandıysa sayaç +1
-      if (winner.rating != null && loser.rating != null && winner.rating < loser.rating) {
+      const wRating = mediaType === 'series' ? effectiveSeriesRating(winner as Series) : (winner as Movie).rating;
+      const lRating = mediaType === 'series' ? effectiveSeriesRating(loser as Series) : (loser as Movie).rating;
+      if (wRating != null && lRating != null && wRating < lRating) {
         nextState.giantSlayerWins = (state.giantSlayerWins || 0) + 1;
       }
       break;
     }
     case 'RESOLVE_DUEL_TIE': {
-      const first = state.movies.find((m) => m.id === action.firstId);
-      const second = state.movies.find((m) => m.id === action.secondId);
+      const mediaType = action.mediaType || 'movie';
+      const list = mediaType === 'series' ? state.series : state.movies;
+      const first = list.find((m) => m.id === action.firstId);
+      const second = list.find((m) => m.id === action.secondId);
       if (!first || !second || first.id === second.id) break;
-      const firstOld = first.calibratedScore ?? first.rating ?? 5;
-      const secondOld = second.calibratedScore ?? second.rating ?? 5;
+      const firstOld =
+        first.calibratedScore ??
+        (mediaType === 'series'
+          ? effectiveSeriesRating(first as Series)
+          : (first as Movie).rating) ??
+        5;
+      const secondOld =
+        second.calibratedScore ??
+        (mediaType === 'series'
+          ? effectiveSeriesRating(second as Series)
+          : (second as Movie).rating) ??
+        5;
       const { aNew, bNew } = calculateEloTie(firstOld, secondOld);
-      nextState.movies = state.movies.map((m) => {
-        if (m.id === first.id) {
-          const opponents = m.duelOpponents || [];
-          const newOpponents = opponents.includes(second.id) ? opponents : [...opponents, second.id].slice(-200);
-          return { ...m, calibratedScore: aNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: newOpponents };
-        }
-        if (m.id === second.id) {
-          const opponents = m.duelOpponents || [];
-          const newOpponents = opponents.includes(first.id) ? opponents : [...opponents, first.id].slice(-200);
-          return { ...m, calibratedScore: bNew, duelCount: (m.duelCount || 0) + 1, duelWins: (m.duelWins || 0) + 1, duelOpponents: newOpponents };
-        }
-        return m;
-      });
+
+      if (mediaType === 'series') {
+        nextState.series = state.series.map((s) => {
+          if (s.id === first.id) {
+            return {
+              ...s,
+              calibratedScore: aNew,
+              duelCount: (s.duelCount || 0) + 1,
+              duelWins: (s.duelWins || 0) + 1,
+              duelOpponents: [...(s.duelOpponents || []), second.id].slice(-200),
+            };
+          }
+          if (s.id === second.id) {
+            return {
+              ...s,
+              calibratedScore: bNew,
+              duelCount: (s.duelCount || 0) + 1,
+              duelWins: (s.duelWins || 0) + 1,
+              duelOpponents: [...(s.duelOpponents || []), first.id].slice(-200),
+            };
+          }
+          return s;
+        });
+      } else {
+        nextState.movies = state.movies.map((m) => {
+          if (m.id === first.id) {
+            return {
+              ...m,
+              calibratedScore: aNew,
+              duelCount: (m.duelCount || 0) + 1,
+              duelWins: (m.duelWins || 0) + 1,
+              duelOpponents: [...(m.duelOpponents || []), second.id].slice(-200),
+            };
+          }
+          if (m.id === second.id) {
+            return {
+              ...m,
+              calibratedScore: bNew,
+              duelCount: (m.duelCount || 0) + 1,
+              duelWins: (m.duelWins || 0) + 1,
+              duelOpponents: [...(m.duelOpponents || []), first.id].slice(-200),
+            };
+          }
+          return m;
+        });
+      }
+
+      const seenPairs = new Set(state.duelSeenPairs || []);
+      seenPairs.add(duelPairKey(mediaType, first.id, second.id));
+      nextState.duelSeenPairs = Array.from(seenPairs);
+
       nextState.totalDuelsCompleted = (state.totalDuelsCompleted || 0) + 1;
+      break;
+    }
+    case 'SKIP_DUEL': {
+      // Atlama skor/duelCount/tur sayısını değiştirmez; yalnızca çifti
+      // kalıcı olarak engeller (duelSeenPairs).
+      const seenPairs = new Set(state.duelSeenPairs || []);
+      seenPairs.add(duelPairKey(action.mediaType, action.aId, action.bId));
+      nextState.duelSeenPairs = Array.from(seenPairs);
+      break;
+    }
+    case 'SET_DUEL_ROUNDS': {
+      nextState.duelRounds = action.rounds;
       break;
     }
     case 'APPLY_CALIBRATION_SUGGESTION': {
@@ -2208,9 +2324,13 @@ export interface AppContextValue {
   /** Kör kalibrasyon düellosunu çöz (kazanan/kaybeden film kimlikleri). */
   resolveDuel: (winnerId: string, loserId: string, mediaType?: 'movie' | 'series') => void;
   /** Beraberlik: iki film de kazanan gibi Elo kazancı alır. */
-  resolveDuelTie: (firstId: string, secondId: string) => void;
+  resolveDuelTie: (firstId: string, secondId: string, mediaType?: 'movie' | 'series') => void;
+  /** Atla: çifti kalıcı olarak "görüldü" olarak işaretler; skor/tur değiştirmez. */
+  skipDuel: (aId: string, bId: string, mediaType: 'movie' | 'series') => void;
   applyCalibrationSuggestion: (id: string, newRating: number) => void;
   setExternalActions: (actions: ExternalActionTemplate[]) => void;
+  /** Kör kalibrasyon tur sayısı (10/15/20/30/50). */
+  setDuelRounds: (rounds: number) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -3304,8 +3424,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const resolveDuel = useCallback((winnerId: string, loserId: string, mediaType?: 'movie' | 'series') => {
     dispatch({ type: 'RESOLVE_DUEL', winnerId, loserId, mediaType });
   }, []);
-  const resolveDuelTie = useCallback((firstId: string, secondId: string) => {
-    dispatch({ type: 'RESOLVE_DUEL_TIE', firstId, secondId });
+  const resolveDuelTie = useCallback((firstId: string, secondId: string, mediaType?: 'movie' | 'series') => {
+    dispatch({ type: 'RESOLVE_DUEL_TIE', firstId, secondId, mediaType });
+  }, []);
+  const skipDuel = useCallback((aId: string, bId: string, mediaType: 'movie' | 'series') => {
+    dispatch({ type: 'SKIP_DUEL', aId, bId, mediaType });
+  }, []);
+  const setDuelRounds = useCallback((rounds: number) => {
+    dispatch({ type: 'SET_DUEL_ROUNDS', rounds });
   }, []);
   const applyCalibrationSuggestion = useCallback((id: string, newRating: number) => {
     dispatch({ type: 'APPLY_CALIBRATION_SUGGESTION', id, newRating: roundHalfRating(newRating) });
@@ -3759,8 +3885,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // State Slicing — yoğun sayfaların re-render izolasyonu için memo'lu dilimler (opt-in).
   const librarySlice = useMemo<LibrarySlice>(() => ({
     movies: data.movies, series: data.series, collections: data.collections,
-    history: data.history, genres: data.genres,
-  }), [data.movies, data.series, data.collections, data.history, data.genres]);
+    history: data.history, genres: data.genres, duelSeenPairs: data.duelSeenPairs || [],
+  }), [data.movies, data.series, data.collections, data.history, data.genres, data.duelSeenPairs]);
 
   const gamificationSlice = useMemo<GamificationSlice>(() => ({
     xp: data.xp, level: data.level, totalXp: data.totalXp, dailyStreak: data.dailyStreak,
@@ -3782,7 +3908,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     agentId: data.agentId || '',
     nickname: data.nickname || '',
     tagSentiments: data.tagSentiments,
-  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.notifyFriendRequests, data.notifyLists, data.notifyMessages, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.showBadgeDetails, data.reducedMotion, data.fastCelebrations, data.altWatchTemplate, data.externalActions, data.agentId, data.nickname, data.tagSentiments]);
+    duelRounds: typeof data.duelRounds === 'number' ? data.duelRounds : 10,
+  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.notifyFriendRequests, data.notifyLists, data.notifyMessages, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.showBadgeDetails, data.reducedMotion, data.fastCelebrations, data.altWatchTemplate, data.externalActions, data.agentId, data.nickname, data.tagSentiments, data.duelRounds]);
 
   // Global tik YOK — sadece aktif timer filmini verir (seyrek değişir); sayfalar kendi
   // yerel nowMs tik'lerini tutmaya devam eder (HomePage dahil — kullanıcıya ait dosya).
@@ -3825,7 +3952,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome,
     toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification,
     forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload,
-    abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions,
+    abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, skipDuel, setDuelRounds, applyCalibrationSuggestion, setExternalActions,
   ];
 
   // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
@@ -3833,7 +3960,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // `useMemo`: yalnızca veri veya geçici durumlardan biri değişince yeni nesne üretilir;
   // aksi hâlde tüketiciler gereksiz yere yeniden render edilmez.
   const value = useMemo<AppContextValue>(() => ({
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, startRewatchingMovie, togglePauseRewatchingMovie, cancelRewatchingMovie, canRateRewatchWithTimer, rewatchMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, startRewatchingMovie, togglePauseRewatchingMovie, cancelRewatchingMovie, canRateRewatchWithTimer, rewatchMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, skipDuel, setDuelRounds, applyCalibrationSuggestion, setExternalActions
   }), [
     data, syncStatus, cloudConflict, isQuestCelebrating, toasts, achievementToasts,
     levelUpData, seasonCompleteData, isContractCelebrating, contractCelebrationData,

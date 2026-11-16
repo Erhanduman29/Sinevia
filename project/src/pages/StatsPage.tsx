@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense } from 'react';
+import { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import {
   BarChart3, Film, Tv, Star, TrendingUp, Calendar, Award, Clock, Flame, Layers,
   Hourglass, Activity, User, Users, Building2, Crown, Sparkles,
@@ -740,7 +740,7 @@ function WatchMap({ history }: { history: WatchHistoryItem[] }) {
 export default function StatsPage() {
   const { movies, series, collections, history } = useLibrary();
   const { achievements, totalXp, dailyStreak } = useGamification();
-  const { criteria } = useSettings();
+  const { criteria, duelRounds } = useSettings();
   const { applyCalibrationSuggestion } = useActions();
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
   const [peopleTab, setPeopleTab] = useState<'directors' | 'cast' | 'studios'>('directors');
@@ -753,6 +753,7 @@ export default function StatsPage() {
     notifyEvent('stats_mode_changed');
   };
   const [showCalibration, setShowCalibration] = useState(false);
+  const handleCalibrationClose = useCallback(() => setShowCalibration(false), []);
 
   const currentMoviesCount = useMemo(
     () => countWatchedCurrentMovies(movies),
@@ -2084,7 +2085,7 @@ export default function StatsPage() {
               borderColor: 'var(--red, var(--color-1, #e8384f))',
             }}
             className="px-4 py-2.5 min-h-11 rounded-xl border font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-transform active:scale-[0.98] shadow-[0_12px_30px_-12px_rgba(232,56,79,0.9)] shrink-0"
-            title="5'li tur halinde kör düello — eşleşmeler ±0.5 puan aralığından seçilir"
+            title={`${duelRounds || 10}'li tur halinde kör düello — eşleşmeler ±0.5 puan aralığından seçilir`}
           >
             <Swords size={14} /> Düelloya Başla
           </button>
@@ -2543,7 +2544,7 @@ export default function StatsPage() {
           <WrappedModal onClose={() => setShowWrapped(false)} />
         </Suspense>
       )}
-      {showCalibration && <CalibrationDuelModal onClose={() => setShowCalibration(false)} />}
+      {showCalibration && <CalibrationDuelModal onClose={handleCalibrationClose} />}
     </div>
   );
 }

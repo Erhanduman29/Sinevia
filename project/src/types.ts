@@ -135,6 +135,10 @@ export interface Series {
   calibratedScore?: number;
   duelCount?: number;
   duelWins?: number;
+  /** Dizilerde kalibre puan eşleşmesi için kaybediş sayısı. */
+  duelLosses?: number;
+  /** Düelloda karşılaştığı yapımlar (eski kayıtlarla geriye uyumluluk). */
+  duelOpponents?: string[];
   /** Filmlerdeki Eskiden İzlenenler sırasının dizi karşılığı. */
   inPastQueue?: boolean;
   /** Önceden izlenen dizi: istatistiklerde yalnız "Önceden" kapsamında sayılır. */
@@ -357,6 +361,10 @@ export interface AppData {
   externalActions?: ExternalActionTemplate[];
   /** Kör kalibrasyon: tamamlanan düello sayısı (Terazi Ustası başarımı için). */
   totalDuelsCompleted?: number;
+  /** Kör kalibrasyon: kullanıcı başına seçilen tur sayısı (10/15/20/30/50). */
+  duelRounds?: number;
+  /** Kör kalibrasyon: zaten karşılaşan (veya atlanan) çiftlerin kalıcı kaydı. */
+  duelSeenPairs?: string[];
   /** Kör kalibrasyon: "Taht Deviren" gizli başarımı için — orijinal puanı düşük olan kazanan düello sayısı. */
   giantSlayerWins?: number;
   pendingToasts?: {

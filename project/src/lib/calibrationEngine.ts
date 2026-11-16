@@ -1,4 +1,4 @@
-import type { Movie } from '../types';
+import type { Movie, Series } from '../types';
 
 /* =========================================================================
    KÖR KALİBRASYON VE ELO MOTORU
@@ -45,106 +45,225 @@ export function calculateEloDelta(
   return { winnerNew, loserNew, delta };
 }
 
-export interface DuelPair {
-  a: Movie;
-  b: Movie;
-  mode: 'target' | 'closest';
-}
-
-/** İki film daha önce düelloda karşılaştı mı? */
-export function haveDueled(a: Movie, b: Movie): boolean {
-  return Boolean(
-    (a.duelOpponents || []).includes(b.id) || (b.duelOpponents || []).includes(a.id)
-  );
-}
-
 /**
- * Beraberlik: her film kendi puanına göre bağımsız olarak değişir.
- * - Puan 5 ten büyükse → +0.1
- * - Puan 5 ten küçükse → -0.1 (iki kötü film eşleşirse her ikisi de puan kaybeder)
- * - Puan tam 5 ise → 0 (değişmez)
- * Sonuç round2 + clamp [1,10].
+ * Beraberlik: iki taraf da "kazanan" sayılır, ancak hareket yönü kendi
+ * puanına göre belirlenir — 5 üstü +0.1, 5 altı -0.1, tam 5 sabit.
+ * (Kötü bir film berabere kaldığında puan kazanmaz.)
  */
 export function calculateEloTie(
-  aCalibrated: number,
-  bCalibrated: number
+  firstCalibrated: number,
+  secondCalibrated: number
 ): { aNew: number; bNew: number; deltaA: number; deltaB: number } {
-  const tieDelta = (rating: number): number => {
-    if (rating > 5) return 0.1;
-    if (rating < 5) return -0.1;
-    return 0;
-  };
-  const deltaA = round2(tieDelta(aCalibrated));
-  const deltaB = round2(tieDelta(bCalibrated));
+  const step = (v: number): number => (v > 5 ? 0.1 : v < 5 ? -0.1 : 0);
+  const deltaA = step(firstCalibrated);
+  const deltaB = step(secondCalibrated);
   return {
-    aNew: round2(clampRating(aCalibrated + deltaA)),
-    bNew: round2(clampRating(bCalibrated + deltaB)),
+    aNew: round2(clampRating(firstCalibrated + deltaA)),
+    bNew: round2(clampRating(secondCalibrated + deltaB)),
     deltaA,
     deltaB,
   };
 }
 
-function commonGenreCount(a: Movie, b: Movie): number {
+/**
+ * DÜELLO ADAYI — film veya dizi ortak modeli.
+ * DuelSide / eşleşme motoru bu arayüz üzerinden çalışır; mediaType sayesinde
+ * film-dizi karışımı asla olmaz.
+ */
+export interface DuelCandidate {
+  id: string;
+  title: string;
+  year?: number;
+  genres: string[];
+  posterUrl: string | null;
+  rating: number;
+  calibratedScore?: number;
+  duelCount?: number;
+  duelWins?: number;
+  duelLosses?: number;
+  duelOpponents?: string[]; // legacy fallback (eski kayıtlar için)
+  mediaType: 'movie' | 'series';
+}
+
+/** Eşleşme sonucu. */
+export interface DuelPair {
+  a: DuelCandidate;
+  b: DuelCandidate;
+  mode: 'target' | 'closest';
+}
+
+/** Eşleşme anahtarı: mediaType + sıralı id çifti. Aynı film/dizi çifti
+ *  film ile dizi arasında çakışmaz; id sırası değiştirilse de aynı anahtar olur. */
+export function duelPairKey(
+  mediaType: 'movie' | 'series',
+  aId: string,
+  bId: string
+): string {
+  const [x, y] = [aId, bId].sort();
+  return `${mediaType}:${x}::${y}`;
+}
+
+/** İki yapım daha önce düelloda karşılaştı mı?
+ *  - `seenPairs` kayıtlı çiftleri kontrol eder (kanonik, kalıcı).
+ *  - Eski `duelOpponents` alanına düşer (geriye uyumluluk). */
+export interface DuelRecord {
+  id: string;
+  mediaType?: 'movie' | 'series';
+  duelOpponents?: string[];
+}
+
+export function haveDueled(
+  a: DuelRecord,
+  b: DuelRecord,
+  seenPairs?: Set<string>
+): boolean {
+  const typeA = a.mediaType ?? 'movie';
+  const typeB = b.mediaType ?? 'movie';
+  if (typeA !== typeB) return false;
+  const key = duelPairKey(typeA, a.id, b.id);
+  if (seenPairs?.has(key)) return true;
+  return Boolean(
+    (a.duelOpponents?.includes(b.id) ?? false) ||
+    (b.duelOpponents?.includes(a.id) ?? false)
+  );
+}
+
+/** Film → DuelCandidate dönüştürücü. */
+export function movieToDuelCandidate(m: Movie): DuelCandidate {
+  return {
+    id: m.id,
+    title: m.title,
+    year: m.year ? Number(m.year) : undefined,
+    genres: m.genres || [],
+    posterUrl: m.posterUrl ?? null,
+    rating: typeof m.rating === 'number' ? m.rating : 0,
+    calibratedScore: m.calibratedScore,
+    duelCount: m.duelCount,
+    duelWins: m.duelWins,
+    duelLosses: m.duelLosses,
+    duelOpponents: m.duelOpponents,
+    mediaType: 'movie',
+  };
+}
+
+/** Dizi → DuelCandidate dönüştürücü. Etkin puan:
+ *  overallRating → seasonRatings ortalaması → puanlı bölümlerin ortalaması. */
+export function seriesToDuelCandidate(s: Series): DuelCandidate | null {
+  const rating = effectiveSeriesRating(s);
+  if (rating == null) return null; // puanız dizi aday değildir
+  return {
+    id: s.id,
+    title: s.title,
+    year: s.year ? Number(s.year) : undefined,
+    genres: s.genres || [],
+    posterUrl: s.posterUrl ?? null,
+    rating,
+    calibratedScore: s.calibratedScore,
+    duelCount: s.duelCount,
+    duelWins: s.duelWins,
+    duelLosses: s.duelLosses,
+    duelOpponents: s.duelOpponents,
+    mediaType: 'series',
+  };
+}
+
+/**
+ * Dizi için etkin puanı döndürür.
+ * Öncelik: overallRating → seasonRatings içindeki geçerli puanların ortalaması →
+ * puanlı bölümlerin ortalaması. Hiçbiri yoksa null.
+ */
+export function effectiveSeriesRating(s: Series): number | null {
+  if (typeof s.overallRating === 'number') return round2(s.overallRating);
+
+  const seasonRatings = Object.values(s.seasonRatings || {}).filter(
+    (sr) => typeof sr?.rating === 'number'
+  );
+  if (seasonRatings.length > 0) {
+    const avg =
+      seasonRatings.reduce((sum, sr) => sum + sr.rating, 0) / seasonRatings.length;
+    return round2(avg);
+  }
+
+  const episodeRatings = s.episodes.filter((ep) => typeof ep.rating === 'number');
+  if (episodeRatings.length > 0) {
+    const avg =
+      episodeRatings.reduce((sum, ep) => sum + (ep.rating as number), 0) /
+      episodeRatings.length;
+    return round2(avg);
+  }
+
+  return null;
+}
+
+/** İki adayın ortak tür sayısı. */
+function commonGenreCount(a: DuelCandidate, b: DuelCandidate): number {
   const setB = new Set(b.genres || []);
   return (a.genres || []).filter((g) => setB.has(g)).length;
 }
 
 /**
  * Sıradaki düello eşleşmesini seçer.
- * - `targetMovieId` verilirse (Mod 1 — Anlık Kalibrasyon): hedef filmin puanına
- *   en yakın (±0.5 penceresi), ortak tür avantajlı film.
- * - Verilmezse (Mod 2 — Filmleri Karşılaştır): puan farkı <= 0.5 olan (aynı puanlı
- *   ikiliye öncelik), en az düelloya girmiş (duelCount en düşük) ikili.
- * - `opts.genres` verilirse sadece o tür(lere) sahip filmler havuza girer.
+ * - `targetId` verilirse: hedef adayın puanına en yakın (±0.5 penceresi),
+ *   ortak tür avantajlı eşlikçi.
+ * - Verilmezse: puan farkı <= 0.5 olan, en az düelloya girmiş ikili.
+ * - `opts.genres` verilirse sadece o tür(lere) sahip adaylar havuza girer.
  * - `opts.random` ise eşleşmeler arasından rastgele seçilir.
+ * - `opts.seenPairs` verilirse bu çiftler devre dışı bırakılır.
+ * - Film ve dizi asla aynı havuzda eşleşmez (çağıran ayrı havuz oluşturur).
  * Düello YALNIZCA aynı puanlı veya ±0.5 farkla mümkündür; fallback yoktur.
+ * Karmaşıklık: O(n · k), k = ortalama ±0.5 bandındaki aday sayısı (n² değil).
  */
-export function pickDuelPair(
-  movies: Movie[],
-  targetMovieId?: string,
-  opts?: { genres?: string[]; random?: boolean }
+export function pickDuelCandidatePair(
+  candidates: DuelCandidate[],
+  targetId?: string,
+  opts?: { genres?: string[]; random?: boolean; seenPairs?: Set<string> }
 ): DuelPair | null {
-  let pool = movies.filter(
-    (m) => m.watched && m.rating != null && !m.abandoned
-  );
+  const seen = opts?.seenPairs;
+
+  let pool = candidates.filter((c) => c.rating != null && c.rating > 0);
   if (opts?.genres && opts.genres.length > 0) {
     const gs = new Set(opts.genres);
-    pool = pool.filter((m) => (m.genres || []).some((g) => gs.has(g)));
+    pool = pool.filter((c) => (c.genres || []).some((g) => gs.has(g)));
   }
   if (pool.length < 2) return null;
 
-  if (targetMovieId) {
-    const target = pool.find((m) => m.id === targetMovieId);
+  if (targetId) {
+    const target = pool.find((c) => c.id === targetId);
     if (!target) return null;
-    const targetRating = target.rating as number;
-    const others = pool.filter((m) => m.id !== target.id && !haveDueled(target, m));
-    // En yakın puan; ±0.5 penceresi varsa öncelik; ortak tür beraberlik kırar.
+    const targetRating = target.rating;
+    const others = pool.filter(
+      (c) => c.id !== target.id && c.mediaType === target.mediaType && !haveDueled(target, c, seen)
+    );
     const sorted = [...others].sort((x, y) => {
-      const dx = Math.abs((x.rating as number) - targetRating);
-      const dy = Math.abs((y.rating as number) - targetRating);
+      const dx = Math.abs(x.rating - targetRating);
+      const dy = Math.abs(y.rating - targetRating);
       if (dx !== dy) return dx - dy;
       return commonGenreCount(target, y) - commonGenreCount(target, x);
     });
     const best = sorted[0];
     if (!best) return null;
-    // Kural: düello yalnızca aynı puanlı veya ±0.5 farkla mümkün.
-    if (Math.abs((best.rating as number) - targetRating) > 0.5) return null;
+    if (Math.abs(best.rating - targetRating) > 0.5) return null;
     return { a: target, b: best, mode: 'target' };
   }
 
-  // Mod 2: ±0.5 penceresindeki aday ikililer — aynı puan önce, sonra en az duelCount.
+  // Mod 2: puanlara göre sırala, sonra ±0.5 bandındaki komşuları tara (O(n·k)).
+  const sorted = [...pool].sort((a, b) => a.rating - b.rating);
+
   let bestPair: DuelPair | null = null;
   let bestKey: { gap: number; duels: number; genre: number } | null = null;
-  const candidates: DuelPair[] = [];
-  for (let i = 0; i < pool.length; i++) {
-    for (let j = i + 1; j < pool.length; j++) {
-      const a = pool[i], b = pool[j];
-      const gap = Math.abs((a.rating as number) - (b.rating as number));
-      if (gap > 0.5) continue;
-      // Daha önce karşılaşan filmler tekrar eşleşmez — sonuç zaten belli.
-      if (haveDueled(a, b)) continue;
+  const candidatePairs: DuelPair[] = [];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i];
+    for (let j = i + 1; j < sorted.length; j++) {
+      const b = sorted[j];
+      const gap = b.rating - a.rating; // sıralı olduğu için gap >= 0
+      if (gap > 0.5) break; // daha ileri gap'ler de büyük olacak, dur
+      // Film-dizi asla eşleşmez (havuz karışık gelse bile).
+      if (a.mediaType !== b.mediaType) continue;
+      if (haveDueled(a, b, seen)) continue;
       const pair: DuelPair = { a, b, mode: 'closest' };
-      candidates.push(pair);
+      candidatePairs.push(pair);
       const duels = (a.duelCount || 0) + (b.duelCount || 0);
       const genre = commonGenreCount(a, b);
       const key = { gap: round2(gap), duels, genre };
@@ -153,18 +272,49 @@ export function pickDuelPair(
         key.gap < bestKey.gap ||                       // aynı/en yakın puan önce
         (key.gap === bestKey.gap &&
           (key.duels < bestKey.duels ||                 // en az düelloya girmiş
-            (key.duels === bestKey.duels && key.genre > bestKey.genre))); // ortak tür
+            (key.duels === bestKey.duels &&
+              key.genre > bestKey.genre))); // ortak tür
       if (better) {
         bestKey = key;
         bestPair = pair;
       }
     }
   }
-  // ±0.5 dışı eşleşme YOK (kural: aynı puan veya en fazla 0.5 fark). Aday yoksa null.
-  if (opts?.random && candidates.length > 0) {
-    return candidates[Math.floor(Math.random() * candidates.length)];
+
+  // ±0.5 dışı eşleşme YOK (kural: aynı puan veya en fazla 0.5 fark).
+  if (opts?.random && candidatePairs.length > 0) {
+    return candidatePairs[Math.floor(Math.random() * candidatePairs.length)];
   }
   return bestPair;
+}
+
+/**
+ * Geriye uyumlu sarmalayıcı: Movie[] alır, Movie[] üzerinde çalışır.
+ * RatingModal tarafından kullanılır; imza aynı kalır.
+ */
+export interface MovieDuelPair {
+  a: Movie;
+  b: Movie;
+  mode: 'target' | 'closest';
+}
+
+export function pickDuelPair(
+  movies: Movie[],
+  targetMovieId?: string,
+  opts?: { genres?: string[]; random?: boolean }
+): MovieDuelPair | null {
+  // Eski davranış korunur: izlenmemiş, puansız ve yarım bırakılmış filmler havuza girmez.
+  const eligible = movies.filter(
+    (m) => m.watched && typeof m.rating === 'number' && !m.abandoned
+  );
+  const candidates = eligible.map(movieToDuelCandidate);
+  const result = pickDuelCandidatePair(candidates, targetMovieId, opts);
+  if (!result) return null;
+  const byId = new Map(eligible.map((m) => [m.id, m]));
+  const a = byId.get(result.a.id);
+  const b = byId.get(result.b.id);
+  if (!a || !b) return null;
+  return { a, b, mode: result.mode };
 }
 
 export interface RatingAnomaly {

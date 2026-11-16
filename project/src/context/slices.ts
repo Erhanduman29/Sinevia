@@ -32,6 +32,7 @@ export interface LibrarySlice {
   collections: ExtendedAppData['collections'];
   history: ExtendedAppData['history'];
   genres: ExtendedAppData['genres'];
+  duelSeenPairs: ExtendedAppData['duelSeenPairs'];
 }
 
 export interface GamificationSlice {
@@ -73,6 +74,8 @@ export interface SettingsSlice {
   nickname: string;
   /** Etiket duygu haritası (pozitif / negatif). */
   tagSentiments: ExtendedAppData['tagSentiments'];
+  /** Kör kalibrasyon düello sayısı (10 / 15 / 20 / 30 / 50). */
+  duelRounds: number;
 }
 
 export interface TimerSlice {

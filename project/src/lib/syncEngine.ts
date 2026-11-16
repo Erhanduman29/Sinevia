@@ -614,6 +614,7 @@ export function mergeForks(local: AppStateV3, cloud: AppStateV3, updatedAt: stri
     deletedItems: tombstones,
     genres: unionStrings(cloud.genres, local.genres),
     removedSeriesTitles: unionStrings(cloud.removedSeriesTitles, local.removedSeriesTitles),
+    duelSeenPairs: unionStrings(cloud.duelSeenPairs, local.duelSeenPairs),
     achievements: mergeAchievements(cloud.achievements, local.achievements),
     quests: mergeQuestStates(local.quests, cloud.quests),
     coinLedger: mergeByIdKeepingBoth(cloud.coinLedger, local.coinLedger),

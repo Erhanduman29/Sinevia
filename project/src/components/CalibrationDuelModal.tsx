@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,27 +10,29 @@ import {
   SkipForward,
   Star,
   Swords,
+  Tv,
   X,
 } from 'lucide-react';
-import { useActions, useLibrary } from '../context/slices';
-import { calculateEloDelta, calculateEloTie, pickDuelPair } from '../lib/calibrationEngine';
+import { useActions, useLibrary, useSettings } from '../context/slices';
+import { calculateEloDelta, calculateEloTie, DuelCandidate, DuelPair, duelPairKey, movieToDuelCandidate, pickDuelCandidatePair, seriesToDuelCandidate } from '../lib/calibrationEngine';
 import { handleImgFallback } from '../lib/selectors';
 import { ratingBgClass } from '../lib/utils';
 import { isTypingTarget } from '../lib/shortcuts';
 import { useShortcuts } from '../hooks/useShortcuts';
-import type { Movie } from '../types';
 
 /**
  * KÖR KALİBRASYON DÜELLO MODALI (Zevk Kalibrasyonu — Mod 2)
  *
- * pickDuelPair() ile sıradaki eşleşme seçilir; kullanıcı ← / → ile (veya
- * afiş kartlarına dokunarak) kazananı seçer, ↓/Boşluk ile atlar. resolveDuel()
+ * Medya türü (film/dizi) seçilir, ardından tür filtresi/rastgele mod ayarlanır.
+ * pickDuelCandidatePair() ile sıradaki eşleşme seçilir; kullanıcı ← / → ile
+ * (veya afiş kartlarına dokunarak) kazananı seçer, ↓/Boşluk ile atlar. resolveDuel()
  * reducer'ı Elo güncellemesini (calibratedScore, duelCount/duelWins) halleder.
- * 5 düello tamamlanınca modal kapanır ve toast yayınlanır.
+ * Tur sayısı settings.duelRounds'tan gelir (10/15/20/30/50, varsayılan 10);
+ * tamamlanınca modal kapanır ve toast yayınlanır.
  *
  * Tasarım: masaüstünde sinematik VS ekranı (büyük afişler, tıklanabilir kart),
- * mobilde kompakt tek-satır meta. 5'lik tur ilerlemesi modalın en üstünde
- * ince bar olarak taşınır.
+ * mobilde kompakt tek-satır meta. Tur ilerlemesi modalın en üstünde ince bar
+ * olarak taşınır.
  *
  * Klavye: useShortcuts "close" (ESC) eylemini taşır; ok/boşluk tuşları
  * modalın kendi keydown dinleyicisinde yakalanır (metin girişi odaktayken
@@ -52,10 +54,26 @@ const GLASS_TEXT = `color-mix(in srgb, ${TEXT} 35%, transparent)`;
 const POSTER_SCRIM =
   'linear-gradient(to top, rgba(8, 8, 12, 0.96) 0%, rgba(8, 8, 12, 0.55) 32%, rgba(8, 8, 12, 0.08) 62%, transparent 100%)';
 
-/** Tur uzunluğu: 5 düello → kapanış + toast. */
-const ROUNDS = 5;
+/** Tur uzunluğu: varsayılan 10 düello (settings'ten override olur). */
+const DEFAULT_ROUNDS = 10;
 /** Tur sonu (delta animasyonu) ekranının gösterim süresi. */
 const REVEAL_MS = 1400;
+
+/** İşaretli delta metni: +0.10 / −0.10 / ±0.00. */
+function formatDelta(d: number): string {
+  if (d > 0) return `+${d.toFixed(2)}`;
+  if (d < 0) return `−${Math.abs(d).toFixed(2)}`;
+  return `±0.00`;
+}
+
+export type MediaType = 'movie' | 'series';
+
+interface MediaTypeCardProps {
+  type: MediaType;
+  count: number;
+  selected: boolean;
+  onSelect: (type: MediaType) => void;
+}
 
 interface RevealSide {
   id: string;
@@ -63,6 +81,7 @@ interface RevealSide {
   posterUrl: string | null;
   oldScore: number;
   newScore: number;
+  mediaType?: MediaType;
 }
 
 interface RevealState {
@@ -84,24 +103,23 @@ interface CalibrationDuelModalProps {
  * kenarlık aksan rengine döner); alt şeritte kalibre puan + düello sayısı.
  */
 function DuelSide({
-  movie,
+  candidate,
   side,
   disabled,
   onPick,
 }: {
-  movie: Movie;
+  candidate: DuelCandidate;
   side: 'a' | 'b';
   disabled: boolean;
   onPick: () => void;
 }) {
-  const calibrated =
-    movie.calibratedScore ?? (typeof movie.rating === 'number' ? movie.rating : null);
+  const calibrated = candidate.calibratedScore ?? candidate.rating;
   return (
     <button
       type="button"
       onClick={onPick}
       disabled={disabled}
-      title={`Kazanan: ${movie.title} (${side === 'a' ? '←' : '→'})`}
+      title={`Kazanan: ${candidate.title} (${side === 'a' ? '←' : '→'})`}
       style={{ background: GLASS, borderColor: LINE }}
       className="group relative w-full min-w-0 max-w-[min(300px,28svh)] sm:max-w-[min(320px,28svh)] lg:max-w-[min(340px,30svh)] mx-auto rounded-2xl overflow-hidden border text-left transition-all duration-200 hover:border-[color:var(--red,#e8384f)] hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60 disabled:hover:translate-y-0"
     >
@@ -110,12 +128,11 @@ function DuelSide({
         style={{ background: SURFACE }}
         className="relative w-full aspect-[2/3] overflow-hidden"
       >
-        {movie.posterUrl ? (
+        {candidate.posterUrl ? (
           <img
-            loading="lazy"
             decoding="async"
-            src={movie.posterUrl}
-            alt={movie.title}
+            src={candidate.posterUrl}
+            alt={candidate.title}
             onError={handleImgFallback}
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
           />
@@ -124,7 +141,11 @@ function DuelSide({
             style={{ color: MUTED }}
             className="absolute inset-0 grid place-items-center"
           >
-            <Film size={34} strokeWidth={1.5} />
+            {candidate.mediaType === 'series' ? (
+              <Tv size={34} strokeWidth={1.5} />
+            ) : (
+              <Film size={34} strokeWidth={1.5} />
+            )}
           </div>
         )}
 
@@ -133,9 +154,9 @@ function DuelSide({
 
         {/* Puan rozeti — afişin sol üstünde (Geçmiş'teki ratingBgClass paleti) */}
         <span
-          className={`absolute top-2.5 left-2.5 sm:top-3 sm:left-3 text-[11px] sm:text-sm font-black px-2 py-1 rounded-lg flex items-center gap-1 tabular-nums shadow-lg ${ratingBgClass(movie.rating ?? 0)}`}
+          className={`absolute top-2.5 left-2.5 sm:top-3 sm:left-3 text-[11px] sm:text-sm font-black px-2 py-1 rounded-lg flex items-center gap-1 tabular-nums shadow-lg ${ratingBgClass(candidate.rating ?? 0)}`}
         >
-          <Star size={11} fill="currentColor" /> {movie.rating ?? '—'}
+          <Star size={11} fill="currentColor" /> {candidate.rating ?? '—'}
         </span>
 
         {/* Kazanan yön ipucu — afişin sağ üstünde (sadece hover) */}
@@ -153,13 +174,13 @@ function DuelSide({
             style={{ color: TEXT }}
             className="text-[13px] sm:text-lg lg:text-xl font-black leading-tight line-clamp-2 drop-shadow"
           >
-            {movie.title}
+            {candidate.title}
           </div>
           <div
             style={{ color: 'color-mix(in srgb, var(--text-main, #f4f4f2) 60%, transparent)' }}
             className="text-[10px] sm:text-xs font-bold mt-0.5 tabular-nums"
           >
-            {movie.year || '—'}
+            {candidate.year || '—'}
           </div>
         </div>
       </div>
@@ -178,11 +199,53 @@ function DuelSide({
         <span
           style={{ color: MUTED }}
           className="text-[9.5px] sm:text-[10px] font-bold tabular-nums flex items-center gap-1"
-          title="Bu filmin girdiği düello sayısı"
+          title="Bu media girdiği düello sayısı"
         >
-          <Swords size={10} /> {movie.duelCount || 0} düello
+          <Swords size={10} /> {candidate.duelCount || 0} düello
         </span>
       </div>
+    </button>
+  );
+}
+
+/** Medya türü seçimi kartı (Film / Dizi). */
+function MediaTypeCard({ type, count, selected, onSelect }: MediaTypeCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(type)}
+      style={{
+        background: selected
+          ? `color-mix(in srgb, ${RED} 14%, transparent)`
+          : GLASS,
+        borderColor: selected
+          ? `color-mix(in srgb, ${RED} 45%, transparent)`
+          : LINE,
+        color: selected ? RED : TEXT,
+      }}
+      className="w-full flex flex-col items-center gap-2.5 px-3.5 sm:px-5 py-4 sm:py-5 rounded-2xl border transition-all hover:border-[color:var(--red,#e8384f)]"
+    >
+      <div
+        style={{
+          background: selected ? RED : 'rgba(255,255,255,0.06)',
+          color: selected ? ON_RED : TEXT,
+        }}
+        className="w-14 sm:w-16 h-14 sm:h-16 rounded-2xl flex items-center justify-center shrink-0 transition-all"
+      >
+        {type === 'movie' ? <Film size={24} strokeWidth={2} /> : <Tv size={24} strokeWidth={2} />}
+      </div>
+      <span
+        style={{ color: TEXT }}
+        className="text-sm sm:text-base font-black uppercase tracking-wider"
+      >
+        {type === 'movie' ? 'Film' : 'Dizi'}
+      </span>
+      <span
+        style={{ color: MUTED }}
+        className="text-[10px] sm:text-xs font-bold"
+      >
+        {count} uygun aday
+      </span>
     </button>
   );
 }
@@ -222,42 +285,78 @@ function KeyCap({ children }: { children: React.ReactNode }) {
 }
 
 export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalProps) {
-  const { movies } = useLibrary();
-  const { resolveDuel, resolveDuelTie, showToast } = useActions();
+  const { movies, series, duelSeenPairs } = useLibrary();
+  const { resolveDuel, resolveDuelTie, skipDuel, showToast } = useActions();
+  const { duelRounds: settingsRounds } = useSettings();
+
+  // Ref'ler: reveal effect'in onClose/round/totalRounds dependency'sinden kurtulmak için.
+  // `onClose` parent render'ında yeni referans alıyor (useVisibleNow regresyonu).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   const [round, setRound] = useState(0);
-  /** Kullanıcının atlattığı adaylar (b tarafı) — eşleşme çeşitliliği için. */
-  const [excluded, setExcluded] = useState<string[]>([]);
+  const totalRounds = Math.max(10, Math.min(50, settingsRounds || DEFAULT_ROUNDS));
+  const totalRoundsRef = useRef(totalRounds);
+  useEffect(() => { totalRoundsRef.current = totalRounds; }, [totalRounds]);
+
+  /** Ekran adımı: 'media' → 'setup' → 'duel'. */
+  const [step, setStep] = useState<'media' | 'setup' | 'duel'>('media');
+  /** Seçilen medya türü: 'movie' | 'series'. */
+  const [mediaType, setMediaType] = useState<MediaType>('movie');
+  /** Kullanıcının atlattığı çiftler (kalıcı, skipDuel üzerinden). */
+  const [excludedPairKeys, setExcludedPairKeys] = useState<Set<string>>(new Set());
   const [reveal, setReveal] = useState<RevealState | null>(null);
-  /** Açılışta filtre penceresi gösterilir; düello "Başla" ile başlar. */
-  const [phase, setPhase] = useState<'setup' | 'duel'>('setup');
   /** Seçilen türler (boş = tüm türler). */
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   /** Rastgele mod: eşit puan bandında rastgele ikili seçer. */
   const [randomMode, setRandomMode] = useState(false);
 
-  /** Düello havuzundaki (izlenmiş + puanlı + abandoned olmayan) filmlerin türleri. */
+  /** Seçilen mediaType'e göre DuelCandidate havuzu. */
+  const pool = useMemo(() => {
+    if (mediaType === 'movie') {
+      return movies
+        .filter((m) => m.watched && typeof m.rating === 'number' && !m.abandoned)
+        .map(movieToDuelCandidate);
+    }
+    return series
+      .filter((s) => !s.abandoned)
+      .map(seriesToDuelCandidate)
+      .filter((c): c is DuelCandidate => c !== null);
+  }, [movies, series, mediaType]);
+
+  /** Film ve dizi aday sayıları (media seçim ekranında gösterilir). */
+  const movieCandidateCount = movies.filter(
+    (m) => m.watched && typeof m.rating === 'number' && !m.abandoned
+  ).length;
+  const seriesCandidateCount = series.filter(
+    (s) => !s.abandoned && seriesToDuelCandidate(s) !== null
+  ).length;
+
+  /** Havuzun türleri. */
   const allGenres = useMemo(() => {
     const set = new Set<string>();
-    movies
-      .filter((m) => m.watched && typeof m.rating === 'number' && !m.abandoned)
-      .forEach((m) => (m.genres || []).forEach((g) => set.add(g)));
+    pool.forEach((c) => (c.genres || []).forEach((g) => set.add(g)));
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'tr'));
-  }, [movies]);
+  }, [pool]);
 
   const toggleGenre = (g: string) =>
     setSelectedGenres((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
 
-  const pair = useMemo(() => {
-    const pool = excluded.length > 0 ? movies.filter((m) => !excluded.includes(m.id)) : movies;
-    return pickDuelPair(pool, undefined, {
+  /** Mevcut çift — seenPairs + mediaType guard ile filtrelenmiş. */
+  const pair = useMemo<DuelPair | null>(() => {
+    const seen = new Set<string>();
+    // Kalıcı çift veritabanı (duelSeenPairs) + bu oturumda atlananlar.
+    (duelSeenPairs || []).forEach((k) => seen.add(k));
+    excludedPairKeys.forEach((k) => seen.add(k));
+    return pickDuelCandidatePair(pool, undefined, {
       genres: selectedGenres.length > 0 ? selectedGenres : undefined,
       random: randomMode,
+      seenPairs: seen,
     });
-  }, [movies, excluded, selectedGenres, randomMode]);
+  }, [pool, duelSeenPairs, excludedPairKeys, selectedGenres, randomMode]);
 
   // ESC — useShortcuts'ın "close" eylemi (modal açıkken de tetiklenir).
-  useShortcuts({ close: () => onClose() });
+  useShortcuts({ close: () => onCloseRef.current() });
 
   const pickWinner = (side: 'a' | 'b') => {
     if (!pair || reveal) return;
@@ -278,6 +377,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
         posterUrl: winner.posterUrl || null,
         oldScore: wOld,
         newScore: winnerNew,
+        mediaType: winner.mediaType,
       },
       loser: {
         id: loser.id,
@@ -285,15 +385,23 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
         posterUrl: loser.posterUrl || null,
         oldScore: lOld,
         newScore: loserNew,
+        mediaType: loser.mediaType,
       },
     });
-    // Reducer: Elo + duelCount/duelWins.
-    resolveDuel(winner.id, loser.id, 'movie');
+    // Reducer: Elo + duelCount/duelWins + duelSeenPairs kaydı.
+    resolveDuel(winner.id, loser.id, mediaType);
   };
 
   const skipPair = () => {
     if (!pair || reveal) return;
-    setExcluded((prev) => (prev.includes(pair.b.id) ? prev : [...prev, pair.b.id]));
+    import('../lib/sound').then(({ playDuelSelectSound }) => playDuelSelectSound());
+    // Çifti kalıcı olarak engelle (skor/duelCount/tur değiştirmez).
+    skipDuel(pair.a.id, pair.b.id, mediaType);
+    setExcludedPairKeys((prev) => {
+      const next = new Set(prev);
+      next.add(duelPairKey(mediaType, pair.a.id, pair.b.id));
+      return next;
+    });
   };
 
   /** Beraberlik: iki film de kazanan gibi Elo kazancı alır. */
@@ -313,6 +421,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
         posterUrl: pair.a.posterUrl || null,
         oldScore: aOld,
         newScore: aNew,
+        mediaType: pair.a.mediaType,
       },
       loser: {
         id: pair.b.id,
@@ -320,55 +429,65 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
         posterUrl: pair.b.posterUrl || null,
         oldScore: bOld,
         newScore: bNew,
+        mediaType: pair.b.mediaType,
       },
     });
-    resolveDuelTie(pair.a.id, pair.b.id);
+    resolveDuelTie(pair.a.id, pair.b.id, mediaType);
   };
 
-  // Tur akışı: sonuç ekranı REVEAL_MS → sonraki tur; 5. turda kapanış + toast.
+  // Tur akışı: sonuç ekranı REVEAL_MS → sonraki tur; son turda kapanış + toast.
   useEffect(() => {
     if (!reveal) return;
     const t = window.setTimeout(() => {
       setReveal(null);
       const next = round + 1;
-      if (next >= ROUNDS) {
-        showToast(`⚖️ ${ROUNDS} düello tamamlandı — puanların kalibre edildi`, 'success');
-        onClose();
+      if (next >= totalRoundsRef.current) {
+        showToast(`⚖️ ${totalRoundsRef.current} düello tamamlandı — puanlar kalibre edildi`, 'success');
+        onCloseRef.current();
       } else {
         setRound(next);
       }
     }, REVEAL_MS);
     return () => window.clearTimeout(t);
-  }, [reveal, round, onClose, showToast]);
+  }, [reveal, round, showToast]);
+
+  // Klavye işleyicileri güncel state'i (reveal/pair) görmeli; listener'ı her
+  // render'da yeniden kurmamak için ref üzerinden çağrılır.
+  const pickWinnerRef = useRef(pickWinner);
+  const skipPairRef = useRef(skipPair);
+  useEffect(() => {
+    pickWinnerRef.current = pickWinner;
+    skipPairRef.current = skipPair;
+  });
 
   // Klavye: ← Sol kazanan, → Sağ kazanan, ↓ / Boşluk atla.
   // (useShortcuts yalnızca tanımlı eylemleri yürütür; ok/boşluk eylem
   //  listesinde olmadığından modal kendi dinleyicisini kurar — core'a dokunmadan.)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (phase !== 'duel') return;
+      if (step !== 'duel') return;
       if (e.defaultPrevented || e.repeat) return;
       if (isTypingTarget(e.target)) return;
       // Odaklı butonda Boşluk doğal tıklamayı tetikler — çift aksiyonu engelle.
       const onButton = (e.target as HTMLElement | null)?.tagName === 'BUTTON';
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        pickWinner('a');
+        pickWinnerRef.current('a');
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        pickWinner('b');
+        pickWinnerRef.current('b');
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        skipPair();
+        skipPairRef.current();
       } else if (e.key === ' ') {
         if (onButton) return;
         e.preventDefault();
-        skipPair();
+        skipPairRef.current();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  });
+  }, [step]);
 
   const aRating = typeof pair?.a.rating === 'number' ? pair.a.rating : 0;
   const bRating = typeof pair?.b.rating === 'number' ? pair.b.rating : 0;
@@ -390,7 +509,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{
-              width: `${phase === 'duel' ? ((round + (reveal ? 1 : 0)) / ROUNDS) * 100 : 0}%`,
+              width: `${step === 'duel' ? ((round + (reveal ? 1 : 0)) / totalRounds) * 100 : 0}%`,
               background: RED,
             }}
           />
@@ -412,17 +531,21 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
               style={{ color: TEXT }}
               className="text-base sm:text-2xl font-black uppercase tracking-tight truncate leading-none"
             >
-              Düelloya Başla
+              {step === 'media'
+                ? 'Düello Modu'
+                : step === 'setup'
+                  ? 'Düello Filtresi'
+                  : 'Düelloya Başla'}
             </h2>
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            {phase === 'duel' && (
+            {step === 'duel' && (
               <span
                 style={{ color: MUTED }}
                 className="text-[10px] sm:text-xs font-black tabular-nums uppercase tracking-wider"
               >
-                {round} / {ROUNDS}
+                {Math.min(round + 1, totalRounds)} / {totalRounds}
               </span>
             )}
             <button
@@ -453,11 +576,11 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                   className="text-4xl sm:text-6xl font-black tabular-nums tracking-tight mt-1.5"
                 >
                   {reveal.side === 'tie'
-                    ? `+${reveal.delta.toFixed(2)} · +${(reveal.tieDeltaB ?? reveal.delta).toFixed(2)}`
+                    ? `${formatDelta(reveal.delta)} · ${formatDelta(reveal.tieDeltaB ?? reveal.delta)}`
                     : `±${reveal.delta.toFixed(2)}`}
                 </div>
                 <div style={{ color: MUTED }} className="text-[11px] sm:text-xs font-bold mt-1">
-                  {reveal.side === 'tie' ? 'Berabere — iki film de kazandı' : 'Elo güncellemesi uygulandı'}
+                  {reveal.side === 'tie' ? 'Berabere — iki yapım da kazandı' : 'Elo güncellemesi uygulandı'}
                 </div>
               </div>
 
@@ -499,7 +622,11 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                             style={{ color: MUTED }}
                             className="w-full h-full grid place-items-center"
                           >
-                            <Film size={16} />
+                            {item.mediaType === 'series' ? (
+                              <Tv size={16} />
+                            ) : (
+                              <Film size={16} />
+                            )}
                           </div>
                         )}
                       </div>
@@ -521,8 +648,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                             style={{ color: won ? RED : MUTED }}
                             className="text-xs sm:text-sm font-black tabular-nums"
                           >
-                            {won ? '+' : '−'}
-                            {itemDelta.toFixed(2)}
+                            {formatDelta(won ? itemDelta : -itemDelta)}
                           </span>
                         </div>
                         <div
@@ -544,7 +670,72 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                 })}
               </div>
             </div>
-          ) : phase === 'setup' ? (
+          ) : step === 'media' ? (
+            /* ---------- 1. ADIM: MEDYA TÜRÜ SEÇİMİ ---------- */
+            <div className="space-y-5 sm:space-y-6 max-w-lg mx-auto animate-fade-in-up">
+              <div className="text-center">
+                <div
+                  style={{ color: RED }}
+                  className="text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] flex items-center justify-center gap-1.5"
+                >
+                  <Swords size={13} /> Medya Türü
+                </div>
+                <h2
+                  style={{ color: TEXT }}
+                  className="text-base sm:text-2xl font-black uppercase tracking-tight truncate leading-none mb-2"
+                >
+                  Hangi türde düello yapmak istersin?
+                </h2>
+                <p
+                  style={{ color: MUTED }}
+                  className="text-[11px] sm:text-sm leading-relaxed"
+                >
+                  Filmler filmlerle, diziler dizilerle eşleşir. Bir film ile bir
+                  dizi asla karşılaşmaz.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <MediaTypeCard
+                  type="movie"
+                  count={movieCandidateCount}
+                  selected={mediaType === 'movie'}
+                  onSelect={setMediaType}
+                />
+                <MediaTypeCard
+                  type="series"
+                  count={seriesCandidateCount}
+                  selected={mediaType === 'series'}
+                  onSelect={setMediaType}
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{ background: GLASS, borderColor: LINE, color: MUTED }}
+                  className="flex-1 sm:flex-1 py-3 sm:py-3.5 rounded-xl border font-black text-[11px] sm:text-sm uppercase tracking-wider transition-all hover:opacity-80 active:scale-[0.98]"
+                >
+                  İptal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep('setup')}
+                  disabled={movieCandidateCount === 0 && seriesCandidateCount === 0}
+                  style={{ background: RED, color: ON_RED, borderColor: RED }}
+                  className="flex-1 sm:flex-1 py-3 sm:py-3.5 min-h-12 rounded-xl border font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                  <Swords size={16} /> Devam
+                </button>
+              </div>
+
+              <p style={{ color: MUTED }} className="text-[10px] text-center leading-relaxed">
+                Filmler ve diziler ayrı havuzlardan eşleştirilir. Film ile dizi
+                asla karşılaşmaz.
+              </p>
+            </div>
+          ) : step === 'setup' ? (
             /* ---------- AÇILIŞ: FİLTRE PENCERESİ ---------- */
             <div className="space-y-4 sm:space-y-5 max-w-lg mx-auto animate-fade-in-up">
               <div className="text-center">
@@ -558,9 +749,9 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                   style={{ color: MUTED }}
                   className="text-[11px] sm:text-sm mt-1.5 leading-relaxed"
                 >
-                  Düellolara hangi filmlerle gireceğini seç. Eşleşmeler yalnızca aynı
+                  Düellolara hangi yapımlarla gireceğini seç. Eşleşmeler yalnızca aynı
                   puanlı (veya <strong style={{ color: TEXT }}>±0.5</strong> puan
-                  aralığındaki) filmler arasından yapılır.
+                  aralığındaki) yapımlar arasından yapılır.
                 </p>
               </div>
 
@@ -612,7 +803,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                 </div>
                 {allGenres.length === 0 ? (
                   <p style={{ color: MUTED }} className="text-xs py-3 text-center">
-                    Düello havuzunda film yok — önce izleyip puanla.
+                    Düello havuzunda uygun yapım yok — önce izleyip puanla.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
@@ -657,24 +848,24 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
               {/* BAŞLA */}
               <button
                 type="button"
-                onClick={() => setPhase('duel')}
-                disabled={allGenres.length === 0}
+                onClick={() => { setRound(0); setStep('duel'); }}
+                disabled={pool.length < 2}
                 style={{ background: RED, color: ON_RED, borderColor: RED }}
                 className="w-full py-3.5 sm:py-4 min-h-12 rounded-xl border font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 <Swords size={16} /> Düelloya Başla
               </button>
               <p style={{ color: MUTED }} className="text-[10px] text-center leading-relaxed">
-                Eşleşme bulunamazsa (±0.5 puan bandında film yoksa) düello boş durumu gösterir.
-                5 düello tamamlanınca modal kapanır.
+                Eşleşme bulunamazsa (±0.5 puan bandında yapım yoksa) düello boş durumu gösterir.
+                {`${totalRounds} düello tamamlanınca modal kapanır.`}
               </p>
             </div>
-          ) : pair ? (
+          ) : step === 'duel' && pair ? (
             /* ---------- VS EKRANI ---------- */
             <div className="space-y-2 sm:space-y-3">
               <div className="grid grid-cols-[1fr_auto_1fr] gap-1.5 sm:gap-5 items-center">
                 <DuelSide
-                  movie={pair.a}
+                  candidate={pair.a}
                   side="a"
                   disabled={Boolean(reveal)}
                   onPick={() => pickWinner('a')}
@@ -683,7 +874,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                   label={pair.mode === 'target' ? 'Anlık Eşleşme' : 'En Yakın Eşleşme'}
                 />
                 <DuelSide
-                  movie={pair.b}
+                  candidate={pair.b}
                   side="b"
                   disabled={Boolean(reveal)}
                   onPick={() => pickWinner('b')}
@@ -723,7 +914,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                   disabled={Boolean(reveal)}
                   style={{ background: RED, color: ON_RED, borderColor: RED }}
                   className="py-2.5 min-h-10 rounded-xl border font-black text-[11px] sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-50"
-                  title="Kazanan: Sol film (←)"
+                  title="Kazanan: Sol yapım (←)"
                 >
                   <ArrowLeft size={15} /> <span className="hidden sm:inline">Sol Kazandı</span>
                   <span className="sm:hidden">Sol</span>
@@ -734,7 +925,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                   disabled={Boolean(reveal)}
                   style={{ background: 'color-mix(in srgb, #f59e0b 16%, transparent)', borderColor: 'color-mix(in srgb, #f59e0b 55%, transparent)', color: '#fbbf24' }}
                   className="py-2.5 min-h-10 rounded-xl border font-black text-[11px] sm:text-sm flex items-center justify-center gap-1 transition-all hover:opacity-85 active:scale-[0.98] disabled:opacity-50"
-                  title="Berabere — iki film de kazanan sayılır"
+                  title="Berabere — iki yapım da kazanan sayılır"
                 >
                   <Scale size={13} /> Eşit
                 </button>
@@ -754,7 +945,7 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                   disabled={Boolean(reveal)}
                   style={{ background: RED, color: ON_RED, borderColor: RED }}
                   className="py-2.5 min-h-10 rounded-xl border font-black text-[11px] sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-50"
-                  title="Kazanan: Sağ film (→)"
+                  title="Kazanan: Sağ yapım (→)"
                 >
                   <span className="hidden sm:inline">Sağ Kazandı</span>
                   <span className="sm:hidden">Sağ</span> <ArrowRight size={15} />
@@ -769,21 +960,13 @@ export default function CalibrationDuelModal({ onClose }: CalibrationDuelModalPr
                 Uygun düello adayı yok
               </p>
               <p style={{ color: MUTED }} className="text-xs mt-1.5 leading-relaxed max-w-sm mx-auto">
-                En az 2 izlenmiş ve puanlı film gerekiyor
-                {excluded.length > 0
-                  ? ' — atlattığın adaylar da havuzu tüketmiş olabilir.'
+                {mediaType === 'movie'
+                  ? 'En az 2 izlenmiş ve puanlı film gerekiyor.'
+                  : 'En az 2 izlenmiş dizi gerekiyor.'}
+                {excludedPairKeys.size > 0
+                  ? ' Atlattığın eşleşmeler kalıcı olarak engellenmiştir.'
                   : '.'}
               </p>
-              {excluded.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setExcluded([])}
-                  style={{ background: RED, color: ON_RED, borderColor: RED }}
-                  className="mt-4 px-4 py-2.5 rounded-xl border font-black text-xs uppercase tracking-wider transition-all active:scale-[0.98]"
-                >
-                  Atlananları Sıfırla
-                </button>
-              )}
             </div>
           )}
         </div>

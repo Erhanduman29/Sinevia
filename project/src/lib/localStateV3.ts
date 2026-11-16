@@ -263,6 +263,7 @@ function emptySettings(nickname?: string): AppSettingsV3 {
     altWatchTemplate: DEFAULT_ALT_WATCH_TEMPLATE_V3,
     externalActions: [],
     reviewTags: [],
+    duelRounds: 10,
   };
 }
 
@@ -393,6 +394,7 @@ const MAPPED_CORE_KEYS = new Set<string>([
   'theme', 'nickname', 'notificationsEnabled', 'shareWatchedInFeed', 'sharePastWatchedInFeed',
   'notifyMessages', 'notifyFriendRequests', 'notifyLists', 'showLockedNames', 'showBadgeDetails',
   'reducedMotion', 'fastCelebrations', 'altWatchTemplate', 'reviewTags', 'tagSentiments',
+  'duelRounds', 'duelSeenPairs',
   'agentId', 'lastCloudSync', 'aiChatHistory',
   // Türetilmiş XP alanları — deftere çevrildi, saklanmaz.
   'xp', 'level', 'totalXp', 'bonusXp', 'xpBaseline',
@@ -600,7 +602,16 @@ function normalizeSettings(
       ? asStringArray(pick('reviewTags'))
       : fallback.reviewTags ?? [],
     tagSentiments: asRecord<'positive' | 'negative'>(pick('tagSentiments')) ?? fallback.tagSentiments,
+    duelRounds: pickNumber(pick('duelRounds'), fallback.duelRounds ?? 10),
   };
+  // Geçersiz duelRounds'u (10/15/20/30/50 dışı) 10'a düşür.
+  const ALLOWED_DUEL_ROUNDS = [10, 15, 20, 30, 50];
+  if (
+    typeof settings.duelRounds !== 'number' ||
+    !ALLOWED_DUEL_ROUNDS.includes(settings.duelRounds)
+  ) {
+    settings.duelRounds = fallback.duelRounds ?? 10;
+  }
   // Hiçbir zaman undefined anahtar bırakma (hash kararlılığı).
   for (const key of Object.keys(settings) as (keyof AppSettingsV3)[]) {
     if (settings[key] === undefined) delete settings[key];
@@ -724,6 +735,7 @@ function mapContentFromCore(
     lastWatchDate: 'lastWatchDate' in core ? asNullableString(core.lastWatchDate) : fallback.lastWatchDate,
     totalDuelsCompleted: pickNumber(core.totalDuelsCompleted, fallback.totalDuelsCompleted ?? 0),
     giantSlayerWins: pickNumber(core.giantSlayerWins, fallback.giantSlayerWins ?? 0),
+    duelSeenPairs: pickArray<string>(core.duelSeenPairs, fallback.duelSeenPairs ?? []),
     weeklyPlan: pickArray<WeeklyPlanItem>(core.weeklyPlan, fallback.weeklyPlan),
     externalActions: settings.externalActions ?? fallback.externalActions,
     tutorial: isRecord(tutorialSource) ? normalizeTutorial(tutorialSource) : fallback.tutorial,
@@ -906,6 +918,7 @@ export function toLegacyCoreView(state: AppStateV3): Record<string, unknown> {
     lastWatchDate: state.lastWatchDate,
     totalDuelsCompleted: state.totalDuelsCompleted,
     giantSlayerWins: state.giantSlayerWins,
+    duelSeenPairs: state.duelSeenPairs,
     weeklyPlan: state.weeklyPlan,
     externalActions: state.externalActions,
     reviewTags: settings.reviewTags ?? [],
@@ -923,6 +936,7 @@ export function toLegacyCoreView(state: AppStateV3): Record<string, unknown> {
     reducedMotion: settings.reducedMotion,
     fastCelebrations: settings.fastCelebrations,
     altWatchTemplate: settings.altWatchTemplate,
+    duelRounds: settings.duelRounds,
     agentId: state.ownerAgentId ?? undefined,
     lastCloudSync: state.lastCloudSync,
     aiChatHistory: state.aiChatHistory,

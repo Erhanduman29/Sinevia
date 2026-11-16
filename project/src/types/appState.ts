@@ -154,6 +154,8 @@ export interface AppSettingsV3 {
   externalActions?: ExternalActionTemplate[];
   reviewTags?: string[];
   tagSentiments?: Record<string, 'positive' | 'negative'>;
+  /** Kör kalibrasyon tur sayısı: 10 / 15 / 20 / 30 / 50. */
+  duelRounds?: number;
 }
 
 /** V3'te artık kullanılmayan, göçte `xpEvents`'e çevrilen V2 XP alanları. */
@@ -234,6 +236,8 @@ export interface AppStateV3 {
   lastWatchDate: string | null;
   totalDuelsCompleted?: number;
   giantSlayerWins?: number;
+  /** Kör kalibrasyon: zaten karşılaşan (veya atlanan) çiftlerin kalıcı kaydı. */
+  duelSeenPairs?: string[];
 
   /* ---------------- Planlama ---------------- */
   weeklyPlan: WeeklyPlanItem[];

@@ -2,15 +2,18 @@ import { describe, test, expect } from 'vitest';
 import {
   calculateEloDelta,
   calculateEloTie,
+  duelPairKey,
+  effectiveSeriesRating,
   haveDueled,
+  movieToDuelCandidate,
+  pickDuelCandidatePair,
   pickDuelPair,
+  seriesToDuelCandidate,
   detectRatingAnomalies,
-  expectedWinProbability,
-  ELO_K,
   ANOMALY_DELTA,
   ANOMALY_MIN_DUELS,
 } from '../lib/calibrationEngine';
-import type { Movie } from '../types';
+import type { Episode, Movie, Series } from '../types';
 
 function makeMovie(over: Partial<Movie>): Movie {
   return {
@@ -252,5 +255,102 @@ describe('beraberlik ve tekrar eşleşme koruması', () => {
     const pair = pickDuelPair(movies, undefined, { random: true });
     expect(pair).not.toBeNull();
     expect([pair!.a.id, pair!.b.id]).not.toEqual(['a', 'b']);
+  });
+});
+
+function makeSeries(over: Partial<Series>): Series {
+  return {
+    id: over.id ?? 's1',
+    title: over.title ?? 'Dizi',
+    year: '2020',
+    genres: [],
+    episodes: [],
+    addedAt: '2024-01-01T10:00:00.000Z',
+    ...over,
+  };
+}
+
+function makeEpisode(over: Partial<Episode>): Episode {
+  return {
+    id: over.id ?? 'e1',
+    season: 1,
+    episode: 1,
+    watched: true,
+    rating: null,
+    note: '',
+    watchedAt: '2024-01-01T10:00:00.000Z',
+    ...over,
+  };
+}
+
+describe('dizi desteği ve film-dizi ayrımı', () => {
+  test('duelPairKey sıra bağımsızdır ve mediaType ile ayrışır', () => {
+    expect(duelPairKey('movie', 'a', 'b')).toBe(duelPairKey('movie', 'b', 'a'));
+    expect(duelPairKey('movie', 'a', 'b')).not.toBe(duelPairKey('series', 'a', 'b'));
+  });
+
+  test('haveDueled seenPairs kaydını tanır', () => {
+    const a = movieToDuelCandidate(makeMovie({ id: 'a', rating: 8 }));
+    const b = movieToDuelCandidate(makeMovie({ id: 'b', rating: 8 }));
+    const seen = new Set([duelPairKey('movie', 'a', 'b')]);
+    expect(haveDueled(a, b, seen)).toBe(true);
+    expect(haveDueled(a, b)).toBe(false);
+  });
+
+  test('effectiveSeriesRating: overallRating → sezon ortalaması → bölüm ortalaması', () => {
+    expect(effectiveSeriesRating(makeSeries({ overallRating: 8.4 }))).toBe(8.4);
+    expect(
+      effectiveSeriesRating(
+        makeSeries({
+          seasonRatings: {
+            1: { rating: 8, note: '', ratedAt: '2024-01-01' },
+            2: { rating: 9, note: '', ratedAt: '2024-01-01' },
+          },
+        })
+      )
+    ).toBe(8.5);
+    expect(
+      effectiveSeriesRating(
+        makeSeries({
+          episodes: [
+            makeEpisode({ id: 'e1', rating: 7 }),
+            makeEpisode({ id: 'e2', rating: 8 }),
+            makeEpisode({ id: 'e3', rating: null }),
+          ],
+        })
+      )
+    ).toBe(7.5);
+    expect(effectiveSeriesRating(makeSeries({}))).toBeNull();
+  });
+
+  test('seriesToDuelCandidate puansız diziyi aday yapmaz', () => {
+    expect(seriesToDuelCandidate(makeSeries({}))).toBeNull();
+    const candidate = seriesToDuelCandidate(makeSeries({ overallRating: 8 }));
+    expect(candidate).not.toBeNull();
+    expect(candidate!.mediaType).toBe('series');
+    expect(candidate!.rating).toBe(8);
+  });
+
+  test('pickDuelCandidatePair karışık havuzda film-dizi eşleştirmez', () => {
+    const movie = movieToDuelCandidate(makeMovie({ id: 'm1', rating: 8 }));
+    const series = seriesToDuelCandidate(makeSeries({ id: 's1', overallRating: 8 }))!;
+    // Yalnız bir film + bir dizi varsa eşleşme olmamalı.
+    expect(pickDuelCandidatePair([movie, series])).toBeNull();
+    // İki film + iki dizi varsa eşleşme kendi türünde olmalı.
+    const m2 = movieToDuelCandidate(makeMovie({ id: 'm2', rating: 8.1 }));
+    const s2 = seriesToDuelCandidate(makeSeries({ id: 's2', overallRating: 8.1 }))!;
+    const pair = pickDuelCandidatePair([movie, series, m2, s2]);
+    expect(pair).not.toBeNull();
+    expect(pair!.a.mediaType).toBe(pair!.b.mediaType);
+  });
+
+  test('pickDuelCandidatePair seenPairs çiftleri tekrar önermez', () => {
+    const a = movieToDuelCandidate(makeMovie({ id: 'a', rating: 8 }));
+    const b = movieToDuelCandidate(makeMovie({ id: 'b', rating: 8.1 }));
+    const c = movieToDuelCandidate(makeMovie({ id: 'c', rating: 8.2 }));
+    const seen = new Set([duelPairKey('movie', 'a', 'b'), duelPairKey('movie', 'a', 'c')]);
+    const pair = pickDuelCandidatePair([a, b, c], undefined, { seenPairs: seen });
+    expect(pair).not.toBeNull();
+    expect([pair!.a.id, pair!.b.id].sort()).toEqual(['b', 'c']);
   });
 });
