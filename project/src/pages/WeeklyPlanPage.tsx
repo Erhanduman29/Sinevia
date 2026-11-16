@@ -6,7 +6,9 @@ import {
   LayoutList, Activity, AlertCircle, GripVertical, CalendarPlus,
   Target, Zap, Flame, Shuffle
 } from 'lucide-react';
-import { useApp, getMovieTimerInfo } from '../context/AppContext';
+import { getMovieTimerInfo } from '../context/AppContext';
+import { useActions, useLibrary, useSettings } from '../context/slices';
+import { useVisibleNow } from '../hooks/useVisibleNow';
 import { ratingBgClass } from '../lib/utils';
 import RatingModal from '../components/RatingModal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -104,7 +106,9 @@ function formatDayDate(d: Date): string {
 }
 
 export default function WeeklyPlanPage() {
-  const { data, deletePlanItem, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie } = useApp();
+  const { movies } = useLibrary();
+  const { weeklyPlan } = useSettings();
+  const { deletePlanItem, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie } = useActions();
   
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
   const [showAdd, setShowAdd] = useState<{ presetDate?: string } | null>(null);
@@ -112,35 +116,33 @@ export default function WeeklyPlanPage() {
   const [editPlanTarget, setEditPlanTarget] = useState<{ item: WeeklyPlanItem; presetDate?: string } | null>(null);
   const [ratingTarget, setRatingTarget] = useState<{ item: WeeklyPlanItem; movie: Movie } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WeeklyPlanItem | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [idleNowMs, setIdleNowMs] = useState(() => Date.now());
 
   const [draggedItem, setDraggedItem] = useState<WeeklyPlanItem | null>(null);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
-  const plan = data.weeklyPlan || [];
+  const plan = weeklyPlan || [];
   const today = useMemo(() => startOfToday(), []);
   const todayStrVal = toDateStr(today);
+
+  const activeTimerMovie = useMemo(() => movies.find((m) => !m.watched && m.startedAt) || null, [movies]);
+
+  // Aktif sayaç varken: görünürlük duyarlı 1 sn tik (sekme gizliyken durur).
+  // Boşta: yalnız dakika sınırında tazele — geçmiş-saat vurgusu (currentTimeStr) doğru kalsın.
+  const liveNowMs = useVisibleNow(Boolean(activeTimerMovie));
+  const nowMs = activeTimerMovie ? liveNowMs : idleNowMs;
 
   const currentTimeStr = useMemo(() => {
     const d = new Date(nowMs);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }, [nowMs]);
 
-  const activeTimerMovie = useMemo(() => data.movies.find((m) => !m.watched && m.startedAt) || null, [data.movies]);
-
-  // Sayaç tick'i: yalnız aktif geri sayım varken 1sn'de bir (timer barı birebir aynı).
-  // Boşta: yalnız dakika sınırında tazele — geçmiş-saat vurgusu (currentTimeStr) doğru kalsın,
-  // ama 60 render/dakika yerine 1 render/dakika.
   useEffect(() => {
-    if (activeTimerMovie) {
-      setNowMs(Date.now());
-      const interval = setInterval(() => setNowMs(Date.now()), 1000);
-      return () => clearInterval(interval);
-    }
+    if (activeTimerMovie) return;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
       timeout = setTimeout(() => {
-        setNowMs(Date.now());
+        setIdleNowMs(Date.now());
         schedule();
       }, 60000 - (Date.now() % 60000));
     };
@@ -154,7 +156,7 @@ export default function WeeklyPlanPage() {
   const windowStartStr = toDateStr(windowDays[0]);
   const windowEndStr = toDateStr(windowDays[WINDOW_SIZE - 1]);
 
-  const movieMap = useMemo(() => new Map(data.movies.map((m) => [m.id, m])), [data.movies]);
+  const movieMap = useMemo(() => new Map(movies.map((m) => [m.id, m])), [movies]);
 
   const groupedByDate = useMemo(() => {
     const map = new Map<string, WeeklyPlanItem[]>();
@@ -666,7 +668,9 @@ function TimelineIcon({ className, size }: { className?: string; size?: number }
 }
 
 function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: () => void }) {
-  const { data, addPlanItem, showToast } = useApp();
+  const { movies, collections, genres } = useLibrary();
+  const { weeklyPlan } = useSettings();
+  const { addPlanItem, showToast } = useActions();
   const [search, setSearch] = useState('');
   const [collectionFilter, setCollectionFilter] = useState('');
   const [genreFilter, setGenreFilter] = useState('');
@@ -675,29 +679,29 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
   const [time, setTime] = useState('20:00');
   const [showPick, setShowPick] = useState(false);
 
-  const plannedMovieIds = useMemo(() => new Set((data.weeklyPlan || []).filter((p) => !data.movies.find((m) => m.id === p.movieId)?.watched).map((p) => p.movieId)), [data.weeklyPlan, data.movies]);
+  const plannedMovieIds = useMemo(() => new Set((weeklyPlan || []).filter((p) => !movies.find((m) => m.id === p.movieId)?.watched).map((p) => p.movieId)), [weeklyPlan, movies]);
 
   const candidates = useMemo(() => {
-    return data.movies
+    return movies
       .filter((m) => !m.watched && !plannedMovieIds.has(m.id) && !m.inPastQueue)
       .filter((m) => !search.trim() || m.title.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR')))
       .filter((m) => !collectionFilter || m.collectionId === collectionFilter)
       .filter((m) => !genreFilter || m.genres?.includes(genreFilter));
-  }, [data.movies, plannedMovieIds, search, collectionFilter, genreFilter]);
+  }, [movies, plannedMovieIds, search, collectionFilter, genreFilter]);
 
   const endTimePreview = selectedMovie ? computeEndTime(time, selectedMovie.runtime || 115) : null;
 
   const dayPlans = useMemo(() => {
-    return (data.weeklyPlan || [])
+    return (weeklyPlan || [])
       .filter((p) => p.date === date)
       .sort((a, b) => a.time.localeCompare(b.time));
-  }, [data.weeklyPlan, date]);
+  }, [weeklyPlan, date]);
 
   const handleConfirm = (closeAfter: boolean) => {
     if (!selectedMovie || !date || !time) return;
 
     const hasOverlap = dayPlans.some((p) => {
-      const m = data.movies.find(x => x.id === p.movieId);
+      const m = movies.find(x => x.id === p.movieId);
       const pDur = p.runtime || m?.runtime || 115;
       return checkOverlap(time, selectedMovie.runtime || 115, p.time, pDur);
     });
@@ -758,11 +762,11 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
               <div className="flex gap-2">
                 <select value={collectionFilter} onChange={(e) => setCollectionFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-300 focus:outline-none focus:border-gold-500/50 transition-colors">
                   <option value="">Koleksiyon: Tümü</option>
-                  {data.collections.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                  {collections.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
                 </select>
                 <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)} className="flex-1 bg-ink-950 border border-ink-800 rounded-xl px-2.5 py-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-300 focus:outline-none focus:border-gold-500/50 transition-colors">
                   <option value="">Tür: Tümü</option>
-                  {data.genres.map((g) => (<option key={g} value={g}>{g}</option>))}
+                  {genres.map((g) => (<option key={g} value={g}>{g}</option>))}
                 </select>
               </div>
 
@@ -842,7 +846,7 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
                 ) : (
                   <div className="space-y-1.5 max-h-24 sm:max-h-32 overflow-y-auto custom-scrollbar pr-1">
                     {dayPlans.map(p => {
-                      const m = data.movies.find(x => x.id === p.movieId);
+                      const m = movies.find(x => x.id === p.movieId);
                       const pDur = p.runtime || m?.runtime || 115;
                       const pEnd = computeEndTime(p.time, pDur);
                       const isOverlapping = checkOverlap(time, selectedMovie.runtime || 115, p.time, pDur);
@@ -907,8 +911,10 @@ function AddPlanModal({ presetDate, onClose }: { presetDate?: string; onClose: (
 }
 
 function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; presetDate?: string; onClose: () => void }) {
-  const { data, updatePlanItem, showToast } = useApp();
-  const movie = data.movies.find(m => m.id === item.movieId);
+  const { movies } = useLibrary();
+  const { weeklyPlan } = useSettings();
+  const { updatePlanItem, showToast } = useActions();
+  const movie = movies.find(m => m.id === item.movieId);
 
   const [date, setDate] = useState(presetDate || item.date);
   const [time, setTime] = useState(item.time);
@@ -916,16 +922,16 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
   if (!movie) return null;
 
   const dayPlans = useMemo(() => {
-    return (data.weeklyPlan || [])
+    return (weeklyPlan || [])
       .filter((p) => p.date === date && p.id !== item.id)
       .sort((a, b) => a.time.localeCompare(b.time));
-  }, [data.weeklyPlan, date, item.id]);
+  }, [weeklyPlan, date, item.id]);
 
   const endTimePreview = computeEndTime(time, movie.runtime || 115);
 
   const handleConfirm = () => {
     const hasOverlap = dayPlans.some((p) => {
-      const m = data.movies.find(x => x.id === p.movieId);
+      const m = movies.find(x => x.id === p.movieId);
       const pDur = p.runtime || m?.runtime || 115;
       return checkOverlap(time, movie.runtime || 115, p.time, pDur);
     });
@@ -986,7 +992,7 @@ function EditPlanModal({ item, presetDate, onClose }: { item: WeeklyPlanItem; pr
             ) : (
               <div className="space-y-1.5 max-h-24 sm:max-h-32 overflow-y-auto custom-scrollbar pr-1">
                 {dayPlans.map(p => {
-                  const m = data.movies.find(x => x.id === p.movieId);
+                  const m = movies.find(x => x.id === p.movieId);
                   const pDur = p.runtime || m?.runtime || 115;
                   const pEnd = computeEndTime(p.time, pDur);
                   const isOverlapping = checkOverlap(time, movie.runtime || 115, p.time, pDur);

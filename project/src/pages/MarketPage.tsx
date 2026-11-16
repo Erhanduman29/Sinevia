@@ -17,7 +17,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useActions, useGamification, useLibrary, useMarket } from '../context/slices';
 import { useQuests } from '../context/QuestContext';
 import { useTutorial } from '../context/TutorialContext';
 import CoinPill, { SineCoinIcon } from '../components/CoinPill';
@@ -133,7 +133,6 @@ const EFFECT_LABELS: Record<string, string> = {
 
 export default function MarketPage() {
   const {
-    data,
     showToast,
     purchaseItem,
     equipItem,
@@ -142,7 +141,10 @@ export default function MarketPage() {
     grantItem,
     grantXp,
     pinContract,
-  } = useApp();
+  } = useActions();
+  const market = useMarket();
+  const { history, movies } = useLibrary();
+  const { dailyStreak, xpEvents } = useGamification();
   const {
     activeContract,
     activeContractProgress,
@@ -192,30 +194,30 @@ export default function MarketPage() {
     if (!pendingActivation || activeContract) return;
     const ok = activateContract(pendingActivation);
     if (ok) setPendingActivation(null);
-  }, [pendingActivation, activeContract, activateContract, data.inventory]);
+  }, [pendingActivation, activeContract, activateContract, market.inventory]);
 
-  const coins = Number(data.coins) || 0;
-  const inventory = data.inventory || [];
+  const coins = Number(market.coins) || 0;
+  const inventory = market.inventory || [];
   const sortedInventory = [...inventory].sort((a, b) => Number(Boolean(parseContractItemId(b.itemId))) - Number(Boolean(parseContractItemId(a.itemId))));
-  const equipped = data.equipped || {};
-  const effects = data.activeEffects || [];
-  const ledger = data.coinLedger || [];
+  const equipped = market.equipped || {};
+  const effects = market.activeEffects || [];
+  const ledger = market.coinLedger || [];
   const couponActive = effects.some(
     (effect) => effect.itemId === 'util_market_coupon' && (effect.charges || 0) > 0,
   );
 
-  const perks = data.perks || [];
+  const perks = market.perks || [];
   const storeItems = useMemo(() => [...MARKET_ITEMS, ...SEASONAL_ITEMS], []);
 
   const offers = useMemo(() => {
     const base = getMarketOffers(
       weekKey(),
-      Number(data.marketRerollNonce) || 0,
-      Number(data.marketDailyNonce) || 0,
-      Number(data.marketWeeklyNonce) || 0,
+      Number(market.marketRerollNonce) || 0,
+      Number(market.marketDailyNonce) || 0,
+      Number(market.marketWeeklyNonce) || 0,
       perks.includes('contract_slot') ? 1 : 0,
     );
-    const pin = data.pinnedContract;
+    const pin = market.pinnedContract;
     if (!pin || pin.week !== base.weekKey) return base;
     const pinnedDef = CONTRACT_MAP.get(pin.contractId);
     if (!pinnedDef) return base;
@@ -225,14 +227,14 @@ export default function MarketPage() {
     else list.push(pinnedDef);
     return pinnedDef.type === 'daily' ? { ...base, daily: list } : { ...base, weekly: list };
   }, [
-    data.marketRerollNonce,
-    data.marketDailyNonce,
-    data.marketWeeklyNonce,
-    data.pinnedContract,
-    data.perks,
+    market.marketRerollNonce,
+    market.marketDailyNonce,
+    market.marketWeeklyNonce,
+    market.pinnedContract,
+    market.perks,
   ]);
 
-  const owned = (itemId: string) => inventoryQuantity(data, itemId) > 0;
+  const owned = (itemId: string) => inventoryQuantity(market, itemId) > 0;
 
   // Bu hafta satın alınan görevler bir daha satın alınamaz. Kayıt, coin
   // hareketlerindeki satın alma işlemlerinden türetilir; böylece görev
@@ -267,31 +269,31 @@ export default function MarketPage() {
     questState.freeDailyUsage?.date === todayStr() ? questState.freeDailyUsage.count : 0;
   const freeDailyAvailable = !activeContract && freeDailyUsed < freeDailyLimit;
   const pinnedFreeAvailable = useMemo(() => {
-    const pin = data.pinnedContract;
+    const pin = market.pinnedContract;
     if (activeContract || !pin || pin.week !== offers.weekKey) return false;
     const usage = questState.freePinnedUsage;
     return !(usage?.week === pin.week && usage?.contractId === pin.contractId);
-  }, [activeContract, data.pinnedContract, offers.weekKey, questState.freePinnedUsage]);
+  }, [activeContract, market.pinnedContract, offers.weekKey, questState.freePinnedUsage]);
   const freeStartIds = useMemo(() => {
     const ids = new Set<string>();
     if (freeDailyAvailable) {
       for (const contract of offers.daily) ids.add(contract.id);
     }
-    if (pinnedFreeAvailable && data.pinnedContract) {
-      ids.add(data.pinnedContract.contractId);
+    if (pinnedFreeAvailable && market.pinnedContract) {
+      ids.add(market.pinnedContract.contractId);
     }
     return ids;
-  }, [freeDailyAvailable, pinnedFreeAvailable, offers.daily, data.pinnedContract]);
+  }, [freeDailyAvailable, pinnedFreeAvailable, offers.daily, market.pinnedContract]);
 
   const activeDaysThisWeek = useMemo(() => {
     const days = new Set<string>();
-    for (const entry of data.history || []) {
+    for (const entry of history || []) {
       if (entry.isPastWatch || !entry.watchedAt) continue;
       if (weekKey(new Date(entry.watchedAt)) !== offers.weekKey) continue;
       days.add(localDayKey(entry.watchedAt));
     }
     return days.size;
-  }, [data.history, offers.weekKey]);
+  }, [history, offers.weekKey]);
 
   const contractBoard = useMemo(() => {
     const all = [...offers.daily, ...offers.weekly];
@@ -314,7 +316,7 @@ export default function MarketPage() {
   );
 
   const weeklyActivityClaimed = ledger.some((tx) => tx.refId === `activity:${offers.weekKey}`);
-  const todayStreakReward = streakDayCoinReward(Number(data.dailyStreak) || 0);
+  const todayStreakReward = streakDayCoinReward(Number(dailyStreak) || 0);
 
   const isSoldOut = (entry: PurchaseTarget): boolean => {
     if (entry.contract) return purchasedContracts.has(entry.contract.id);
@@ -445,7 +447,7 @@ export default function MarketPage() {
       .filter((tx) => tx.kind === 'purchase' && tx.itemId === itemId)
       .map((tx) => tx.refId)
       .reverse(); // appendCoinTx başa yazar → en eski alım önce.
-    const usedCount = (data.xpEvents || []).filter(
+    const usedCount = (xpEvents || []).filter(
       (event) => event.source === 'market'
         && typeof event.sourceId === 'string'
         && event.sourceId.startsWith(`market:${itemId}:`),
@@ -477,7 +479,7 @@ export default function MarketPage() {
     }
 
     if (item.effect === 'discovery_ticket') {
-      const candidates = (data.movies || []).filter(
+      const candidates = (movies || []).filter(
         (movie) => !movie.watched && Number(movie.rating) >= 7.5,
       );
       const pick = candidates[Math.floor(Math.random() * Math.max(1, candidates.length))];
@@ -682,7 +684,7 @@ export default function MarketPage() {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 pb-24 pt-4 sm:px-6 sm:pt-6">
       {/* İlk Giriş Tanıtım Modalı */}
-      {!data.marketIntroSeen && (
+      {!market.marketIntroSeen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
           <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-gold-400/40 bg-gradient-to-b from-ink-900 via-ink-950 to-ink-950 p-8 text-center shadow-[0_25px_70px_-15px_rgba(245,158,11,0.35)]">
             <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-gold-500/25 blur-3xl" />
@@ -956,7 +958,7 @@ export default function MarketPage() {
               </div>
               <button
                 onClick={() => {
-                  if (inventoryQuantity(data, 'util_contract_reroll') <= 0) {
+                  if (inventoryQuantity(market, 'util_contract_reroll') <= 0) {
                     showToast('Görev yenileme jetonun yok. İtem sekmesinden alabilirsin.', 'info');
                     return;
                   }
@@ -965,7 +967,7 @@ export default function MarketPage() {
                 className="inline-flex items-center gap-2 rounded-xl border border-gold-500/30 bg-gold-500/10 px-4 py-2.5 text-xs font-black text-gold-200 transition hover:border-gold-400/60 hover:bg-gold-500/20"
               >
                 <RefreshCw className="h-3.5 w-3.5" /> Görevleri Yenile (
-                {inventoryQuantity(data, 'util_contract_reroll')})
+                {inventoryQuantity(market, 'util_contract_reroll')})
               </button>
             </div>
 
@@ -1154,7 +1156,7 @@ export default function MarketPage() {
                     Günlük seri
                   </p>
                   <p className="mt-1 text-lg font-black text-white">
-                    {data.dailyStreak || 0}. gün
+                    {dailyStreak || 0}. gün
                   </p>
                   <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-amber-200">
                     <SineCoinIcon className="h-3.5 w-3.5" /> Bugün +{todayStreakReward} SC

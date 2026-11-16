@@ -83,6 +83,8 @@ export interface Movie {
   note: string;
   watchedAt: string | null;
   addedAt: string;
+  /** Son değişiklik zamanı (ISO) — senkron birleştirmede "daha yeni kazanır". */
+  updatedAt?: string;
 }
 
 export interface Episode {
@@ -159,11 +161,15 @@ export interface Series {
     detailedRating?: Record<string, number>;
     reviewTags?: string[];
   }>;
+  /** Son değişiklik zamanı (ISO) — senkron birleştirmede "daha yeni kazanır". */
+  updatedAt?: string;
 }
 
 export interface Collection {
   id: string;
   name: string;
+  /** Son değişiklik zamanı (ISO) — senkron birleştirmede "daha yeni kazanır". */
+  updatedAt?: string;
 }
 
 export interface WatchHistoryItem {
@@ -214,6 +220,8 @@ export interface WatchHistoryItem {
   watchNumber?: number;
   /** Tekrar izleme, "önceden izlenenler" kaydından mı başlatıldı? */
   rewatchedFromPast?: boolean;
+  /** Son değişiklik zamanı (ISO) — senkron birleştirmede "daha yeni kazanır". */
+  updatedAt?: string;
 }
 
 export interface AchievementProgress {

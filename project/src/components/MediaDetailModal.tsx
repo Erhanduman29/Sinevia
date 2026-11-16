@@ -8,6 +8,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useApp, getMovieTimerInfo, getRewatchTimerInfo } from '../context/AppContext';
 import { getRewatchCooldown, formatRewatchRemaining } from '../lib/rewatch';
+import { useVisibleNow } from '../hooks/useVisibleNow';
 import { roundHalfRating } from '../lib/rating';
 import { normalizeActionLabel, resolveActionUrl } from '../lib/actionBridge';
 import { ratingBgClass, formatDateShort, formatDateTime, getNextUnwatchedEpisode } from '../lib/utils';
@@ -42,7 +43,6 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
 
   const [isMainNoteExpanded, setIsMainNoteExpanded] = useState(false);
   const [expandedEpNotes, setExpandedEpNotes] = useState<Set<string>>(new Set());
-  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [ratingModalConfig, setRatingModalConfig] = useState<{
     title: string;
@@ -61,13 +61,11 @@ export default function MediaDetailModal({ target, onClose, senderRating }: Medi
   const liveSeries = !isMovie ? (appData.series.find((s) => s.id === target.data.id) || (target.data as Series)) : null;
   const liveHistoryItem = target.historyItem ? (appData.history.find((h) => h.id === target.historyItem!.id) || target.historyItem) : undefined;
 
-  useEffect(() => {
-    if (!isMovie || !liveMovie) return;
-    const normalActive = !liveMovie.watched && Boolean(liveMovie.startedAt);
-    if (!normalActive && !liveMovie.rewatchStartedAt) return;
-    const interval = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [isMovie, liveMovie?.startedAt, liveMovie?.watched, liveMovie?.rewatchStartedAt]);
+  // Sayaç tiki yalnızca sekme görünürken ve bir sayaç (normal ya da tekrar izleme) aktifken çalışır.
+  const timerActive = Boolean(
+    isMovie && liveMovie && ((!liveMovie.watched && liveMovie.startedAt) || liveMovie.rewatchStartedAt)
+  );
+  const nowMs = useVisibleNow(timerActive);
 
   // YENİ: Film haftalık planda kayıtlı mı kontrol et
   const isPlanned = useMemo(() => {

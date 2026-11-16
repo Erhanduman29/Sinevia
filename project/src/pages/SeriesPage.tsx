@@ -6,7 +6,7 @@ import {
   Play, Info, Film, MessageSquare, MonitorPlay, MoreHorizontal, History
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useActions, useLibrary, useSettings } from '../context/slices';
 import { ratingBgClass, getNextUnwatchedEpisode, uid } from '../lib/utils';
 import { normalizeActionLabel, resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDBSeries, fetchSeriesSeasonDetails } from '../lib/tmdb';
@@ -763,7 +763,9 @@ function saveKeptRatings(map: Record<string, number>) {
 }
 
 export default function SeriesPage() {
-  const { data, editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia, restoreEpisodes, setSeriesRuntime, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings } = useApp();
+  const { series, history } = useLibrary();
+  const { agentId, externalActions, altWatchTemplate } = useSettings();
+  const { editSeries, deleteSeries, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, updateHistoryRating, showToast, abandonMedia, reviveMedia, restoreEpisodes, setSeriesRuntime, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings } = useActions();
   const [showAdd, setShowAdd] = useState(false);
   const [showPick, setShowPick] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -836,7 +838,7 @@ export default function SeriesPage() {
       const alive = new Set<string>();
       let changed = false;
       const next = { ...prev };
-      data.series.forEach((s) =>
+      series.forEach((s) =>
         s.episodes.forEach((ep) => {
           alive.add(ep.id);
           if (ep.rating !== null && ep.rating !== undefined && next[ep.id] !== ep.rating) {
@@ -853,7 +855,7 @@ export default function SeriesPage() {
       });
       return changed ? next : prev;
     });
-  }, [data.series]);
+  }, [series]);
 
   // 3) Kalıcılık
   useEffect(() => {
@@ -861,13 +863,13 @@ export default function SeriesPage() {
   }, [keptRatings]);
 
   const detailSeries = useMemo(
-    () => (detailSeriesId ? data.series.find((s) => s.id === detailSeriesId) || null : null),
-    [data.series, detailSeriesId]
+    () => (detailSeriesId ? series.find((s) => s.id === detailSeriesId) || null : null),
+    [series, detailSeriesId]
   );
 
   const handleSyncTMDBSeries = async () => {
     setIsSyncing(true);
-    const seriesToSync = data.series.filter(
+    const seriesToSync = series.filter(
       (s) => !s.tmdbId || !s.posterUrl || !s.imdbId || !s.watchProviders || !s.creators || s.creators.length === 0 || !s.cast || s.cast.length === 0
     );
     let syncedCount = 0;
@@ -899,7 +901,7 @@ export default function SeriesPage() {
     // Aynı taramada bölüm süreleri de toplanır: runtimes `${season}:${episode}` → dk
     // olarak yazılır, ortalama süre dizinin episodeRuntime'ı olur.
     let addedEpisodes = 0;
-    for (const s of data.series) {
+    for (const s of series) {
       const tmdbId = resolvedTmdb.get(s.id) ?? s.tmdbId;
       if (!tmdbId) continue;
       try {
@@ -975,19 +977,19 @@ export default function SeriesPage() {
   };
 
   const nextEpisodes = useMemo(() => {
-    return data.series
+    return series
       .map((s) => {
         const next = getNextUnwatchedEpisode(s.episodes);
         return next ? { series: s, episode: next } : null;
       })
       .filter((x): x is { series: Series; episode: Episode } => x !== null);
-  }, [data.series]);
+  }, [series]);
 
   const allGenres = useMemo(() => {
     const set = new Set<string>();
-    data.series.forEach((s) => s.genres.forEach((g) => set.add(g)));
+    series.forEach((s) => s.genres.forEach((g) => set.add(g)));
     return Array.from(set).sort();
-  }, [data.series]);
+  }, [series]);
 
   const toggleGenre = (g: string) => {
     setSelectedGenres((prev) => {
@@ -1004,9 +1006,9 @@ export default function SeriesPage() {
   const resetAllFilters = () => { setSearch(''); setSelectedGenres(new Set()); setSortMode('az'); };
 
   // MEZARLIK: abandoned diziler (izleme durumu filtrelerinden bağımsız görünüm).
-  const graveyardSeries = useMemo(() => data.series.filter((s) => Boolean(s.abandoned)), [data.series]);
+  const graveyardSeries = useMemo(() => series.filter((s) => Boolean(s.abandoned)), [series]);
   const filteredSeriesBase = useFilteredSeries(
-    graveyardView ? graveyardSeries : data.series,
+    graveyardView ? graveyardSeries : series,
     graveyardView ? null : watchedFilter,
     selectedGenres,
     search,
@@ -1016,7 +1018,7 @@ export default function SeriesPage() {
     if (!platformFilter) return filteredSeriesBase;
     return filteredSeriesBase.filter((s) => (s.watchProviders || []).some((p) => p.providerName === platformFilter));
   }, [filteredSeriesBase, platformFilter]);
-  const platformOptions = useMemo(() => listLibraryPlatforms(data.series), [data.series]);
+  const platformOptions = useMemo(() => listLibraryPlatforms(series), [series]);
 
   const toggleSeries = (id: string) => {
     setExpandedSeries((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -1024,7 +1026,7 @@ export default function SeriesPage() {
 
   // TAVSİYE MODALINI AÇ (TEKİL VEYA TOPLU)
   const openSendModal = (singleSeries?: Series) => {
-    if (!data.agentId) { showToast('Lütfen önce ayarlardan Sinevia Ağı kimliğinizi oluşturun!', 'error'); return; }
+    if (!agentId) { showToast('Lütfen önce ayarlardan Sinevia Ağı kimliğinizi oluşturun!', 'error'); return; }
 
     if (singleSeries) {
       setSendInitial({ title: `Tavsiye: ${singleSeries.title}`, selectedIds: [singleSeries.id] });
@@ -1035,15 +1037,15 @@ export default function SeriesPage() {
     setShowSendModal(true);
   };
 
-  const totalCompleted = data.series.filter(
+  const totalCompleted = series.filter(
     (s) => s.pastCompleted || (!s.isPastWatch && !s.inPastQueue && s.episodes.length > 0 && s.episodes.every((e) => e.watched))
   ).length;
   // İzlenecek: yarım bırakılanlar (abandoned) bu sayıya girmez.
-  const totalAbandoned = data.series.filter((s) => Boolean(s.abandoned)).length;
-  const totalOngoing = data.series.filter(
+  const totalAbandoned = series.filter((s) => Boolean(s.abandoned)).length;
+  const totalOngoing = series.filter(
     (s) => !s.isPastWatch && !s.inPastQueue && !s.pastCompleted && !s.abandoned && !(s.episodes.length > 0 && s.episodes.every((e) => e.watched))
   ).length;
-  const totalPast = data.series.filter((s) => Boolean(s.isPastWatch || s.inPastQueue) && !s.pastCompleted).length;
+  const totalPast = series.filter((s) => Boolean(s.isPastWatch || s.inPastQueue) && !s.pastCompleted).length;
 
   const requestBulkRating = (series: Series, scope: 'series' | 'season', season?: number) => {
     const seasonRatings = series.seasonRatings || {};
@@ -1116,7 +1118,7 @@ export default function SeriesPage() {
   };
 
   const bulkRatingHistory = bulkRatingTarget
-    ? data.history.find(
+    ? history.find(
         (h) =>
           h.bulkRating &&
           h.seriesId === bulkRatingTarget.series.id &&
@@ -1235,7 +1237,7 @@ export default function SeriesPage() {
       </div>
 
       {/* SEKMELER & TIKLANINCA AÇILAN ARAMA/FİLTRELEME BARI */}
-      {data.series.length > 0 && (
+      {series.length > 0 && (
         <div className="space-y-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
             <div className="svp-chipbar">
@@ -1243,7 +1245,7 @@ export default function SeriesPage() {
                 onClick={() => { setGraveyardView(false); setWatchedFilter(null); }}
                 className={`svp-tab px-2.5 sm:px-3 py-1.5 truncate ${!graveyardView && watchedFilter === null ? 'svp-tab-on' : ''}`}
               >
-                Tümü <span className="svp-tab-n">({data.series.length})</span>
+                Tümü <span className="svp-tab-n">({series.length})</span>
               </button>
               <button
                 onClick={() => { setGraveyardView(false); setWatchedFilter(false); }}
@@ -1424,7 +1426,7 @@ export default function SeriesPage() {
         </div>
       )}
 
-      {data.series.length === 0 ? (
+      {series.length === 0 ? (
         <div className="svp-empty text-center py-10 px-4 sm:py-16 sm:px-6">
           <div className="svp-empty-tile mx-auto mb-4">
             <Tv size={32} />
@@ -1482,7 +1484,7 @@ export default function SeriesPage() {
 
             // Hızlı Aksiyon Köprüsü — varsa (isPrimary + resolve edilebilir + kapsam uygun)
             // ilk harici şablon, kartta birincil buton olarak dışarı açılır.
-            const primaryAction = (data.externalActions || []).find(
+            const primaryAction = (externalActions || []).find(
               (t) =>
                 t.isPrimary &&
                 (t.targetScope === 'all' || t.targetScope === 'series') &&
@@ -1503,10 +1505,10 @@ export default function SeriesPage() {
 
             // Köprü, eski tekli alternatif şablonun kendisiyle aynıysa ikisi birden görünmesin.
             const skipLegacyAlt = Boolean(
-              primaryAction && data.altWatchTemplate && primaryAction.urlTemplate === rewriteLegacyTemplate(data.altWatchTemplate)
+              primaryAction && altWatchTemplate && primaryAction.urlTemplate === rewriteLegacyTemplate(altWatchTemplate)
             );
 
-            if (data.altWatchTemplate && !skipLegacyAlt && (s.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
+            if (altWatchTemplate && !skipLegacyAlt && (s.imdbId || altWatchTemplate.includes('{slug}') || altWatchTemplate.includes('{title}'))) {
               const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
               const slug = s.title
                 .toLocaleLowerCase('tr-TR')
@@ -1514,7 +1516,7 @@ export default function SeriesPage() {
                 .replace(/\s+/g, '-')
                 .replace(/[^a-z0-9-]/g, '');
 
-              const finalAltHref = data.altWatchTemplate
+              const finalAltHref = altWatchTemplate
                 .replace('{imdb}', s.imdbId || '')
                 .replace('{slug}', slug)
                 .replace('{title}', encodeURIComponent(s.title))
@@ -2061,7 +2063,7 @@ export default function SeriesPage() {
           onRate={(rating, note, detailedRating, reviewTags) => {
             const targetEp = ratingTarget.episode;
             // Puanlı bölümde duplicate geçmiş kaydı OLMAMALI: var olan kaydı güncelle
-            const hist = data.history.find((h) => h.itemId === targetEp.id || h.id === targetEp.id);
+            const hist = history.find((h) => h.itemId === targetEp.id || h.id === targetEp.id);
             if (hist) updateHistoryRating(hist.id, rating, note, detailedRating, reviewTags);
             else watchEpisode(ratingTarget.series.id, targetEp.id, rating, note, detailedRating, reviewTags);
           }}

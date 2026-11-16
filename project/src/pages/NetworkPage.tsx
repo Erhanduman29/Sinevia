@@ -5,7 +5,8 @@ import {
   ListVideo, Eye, Info, MessageSquare, MessageCircle, Crown, Radio, Flame,
   ExternalLink, FileText, Award, History, Skull
 } from 'lucide-react';
-import { useApp, isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
+import { isPositiveTag, getMovieTimerInfo } from '../context/AppContext';
+import { useActions, useGamification, useLibrary, useMarket, useSettings } from '../context/slices';
 import { useNetworkAuth } from '../context/NetworkAuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import type { ShowcaseItem } from '../context/AppContext';
@@ -143,21 +144,25 @@ export default function NetworkPage() {
 }
 
 function NetworkPageContent() {
-  const { data, showToast, addMovie, addSeries, updateShowcase } = useApp();
+  const { movies, series } = useLibrary();
+  const { totalXp, level, achievements, showcase } = useGamification();
+  const { agentId, nickname, tagSentiments } = useSettings();
+  const { perks } = useMarket();
+  const { showToast, addMovie, addSeries, updateShowcase } = useActions();
   const { notifyEvent } = useTutorial();
 
   // SİNEMATİK OTOPSİ LOOKUP: log'ta abandoned alanı yok → başlık üzerinden
   // kütüphanemdeki film/dizi kayıtlarından abandoned türetilir.
   const abandonedLogKeys = useMemo(() => {
     const set = new Set<string>();
-    data.movies.forEach((m: Movie) => {
+    movies.forEach((m: Movie) => {
       if (m.abandoned) set.add(`movie|${cleanLogTitle(m.title)}`);
     });
-    data.series.forEach((s) => {
+    series.forEach((s) => {
       if (s.abandoned) set.add(`series|${cleanLogTitle(s.title)}`);
     });
     return set;
-  }, [data.movies, data.series]);
+  }, [movies, series]);
 
   const isLogAbandoned = (log: { item_type?: string; item_title?: string }) =>
     abandonedLogKeys.has(`${log.item_type || 'movie'}|${cleanLogTitle(log.item_title || '')}`);
@@ -214,17 +219,17 @@ function NetworkPageContent() {
   }, []);
 
   // YEREL KULLANICININ İSTATİSTİKLERİ: VERİTABANINI BEKLEMEDEN ANINDA HESAPLAR
-  const localMoviesWatched = useMemo(() => data.movies.filter((m: Movie) => m.watched && !m.isPastWatch).length, [data.movies]);
-  const localPastMoviesWatched = useMemo(() => data.movies.filter((m: Movie) => m.watched && m.isPastWatch).length, [data.movies]);
+  const localMoviesWatched = useMemo(() => movies.filter((m: Movie) => m.watched && !m.isPastWatch).length, [movies]);
+  const localPastMoviesWatched = useMemo(() => movies.filter((m: Movie) => m.watched && m.isPastWatch).length, [movies]);
 
   const myStatsSummary = useMemo(() => ({
-    xp: data.totalXp || 0,
-    level: data.level || 1,
+    xp: totalXp || 0,
+    level: level || 1,
     moviesWatched: localMoviesWatched,
     pastMoviesWatched: localPastMoviesWatched,
-    episodesWatched: data.series.reduce((sum: number, s: any) => sum + (s.episodes?.filter((e: any) => e.watched).length || 0), 0),
-    achievementsUnlocked: data.achievements.reduce((acc: number, curr: any) => acc + (curr.unlockedTiers?.length || 0), 0),
-  }), [data.totalXp, data.level, localMoviesWatched, localPastMoviesWatched, data.series, data.achievements]);
+    episodesWatched: series.reduce((sum: number, s: any) => sum + (s.episodes?.filter((e: any) => e.watched).length || 0), 0),
+    achievementsUnlocked: achievements.reduce((acc: number, curr: any) => acc + (curr.unlockedTiers?.length || 0), 0),
+  }), [totalXp, level, localMoviesWatched, localPastMoviesWatched, series, achievements]);
 
   const openProfileModal = async (targetId: string, initialTab: ProfileTabType = 'stats') => {
     if (!targetId) return;
@@ -246,7 +251,7 @@ function NetworkPageContent() {
   };
 
   useEffect(() => {
-    if (!(viewingProfileId && viewingProfileId !== data.agentId && profileTab === 'chat' && data.agentId)) return;
+    if (!(viewingProfileId && viewingProfileId !== agentId && profileTab === 'chat' && agentId)) return;
 
     let cancelled = false;
 
@@ -254,7 +259,7 @@ function NetworkPageContent() {
       const { data: rawMsgs } = await supabase
         .from('messages')
         .select(MESSAGE_COLUMNS)
-        .or(`and(sender_id.eq.${data.agentId},receiver_id.eq.${viewingProfileId}),and(sender_id.eq.${viewingProfileId},receiver_id.eq.${data.agentId})`)
+        .or(`and(sender_id.eq.${agentId},receiver_id.eq.${viewingProfileId}),and(sender_id.eq.${viewingProfileId},receiver_id.eq.${agentId})`)
         .order('created_at', { ascending: false })
         .limit(200);
 
@@ -265,11 +270,11 @@ function NetworkPageContent() {
 
       setChatMessages((prev: any[]) => {
         const fetchedIds = new Set(newMsgs.map((m: any) => m.id));
-        const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === data.agentId && m.receiver_id === viewingProfileId && !m.group_id);
+        const localOnly = prev.filter((m: any) => !fetchedIds.has(m.id) && m.sender_id === agentId && m.receiver_id === viewingProfileId && !m.group_id);
         return [...newMsgs, ...localOnly].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       });
 
-      await supabase.from('messages').update({ is_read: true }).eq('receiver_id', data.agentId).eq('sender_id', viewingProfileId).eq('is_read', false);
+      await supabase.from('messages').update({ is_read: true }).eq('receiver_id', agentId).eq('sender_id', viewingProfileId).eq('is_read', false);
       // Rozet anında temizlenir; sayfa yenilemeyi beklemez.
       setUnreadMessages((prev) => (prev[viewingProfileId] ? { ...prev, [viewingProfileId]: 0 } : prev));
     };
@@ -289,25 +294,25 @@ function NetworkPageContent() {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [viewingProfileId, profileTab, data.agentId, syncTick]);
+  }, [viewingProfileId, profileTab, agentId, syncTick]);
 
   const fetchData = useCallback(async (isSilent = false) => {
-    if (!data.agentId) return;
+    if (!agentId) return;
     if (!isSilent) setRefreshing(true);
 
     try {
       // Tek notify_poll RPC çağrısı ile 3 bildirim sorgusu toplanır.
       let pollData: any = null;
       try {
-        const res = await supabase.rpc('notify_poll', { p_agent_id: data.agentId });
+        const res = await supabase.rpc('notify_poll', { p_agent_id: agentId });
         if (res.error) throw res.error;
         pollData = res.data;
       } catch (pollErr: any) {
         console.warn('notify_poll hatası, eski sorgulara dönülüyor:', pollErr.message);
         const [fRes, rRes, mRes] = await Promise.allSettled([
-          supabase.from('friendships').select('*').or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`),
-          supabase.from('recommendations').select('*').or(`receiver_id.eq.${data.agentId},sender_id.eq.${data.agentId}`).limit(100),
-          supabase.from('messages').select('sender_id').eq('receiver_id', data.agentId).eq('is_read', false).is('group_id', null),
+          supabase.from('friendships').select('*').or(`requester_id.eq.${agentId},receiver_id.eq.${agentId}`),
+          supabase.from('recommendations').select('*').or(`receiver_id.eq.${agentId},sender_id.eq.${agentId}`).limit(100),
+          supabase.from('messages').select('sender_id').eq('receiver_id', agentId).eq('is_read', false).is('group_id', null),
         ]);
         const fList: any[] = fRes.status === 'fulfilled' ? (fRes.value.data || []) : [];
         const rList: any[] = rRes.status === 'fulfilled' ? (rRes.value.data || []) : [];
@@ -329,11 +334,11 @@ function NetworkPageContent() {
       const outgoing: any[] = [];
 
       fList.forEach((f: any) => {
-        if (f.status === 'accepted') { acceptedIds.add(f.requester_id === data.agentId ? f.receiver_id : f.requester_id); }
-        else if (f.status === 'pending') { if (f.receiver_id === data.agentId) incoming.push(f); else outgoing.push(f); }
+        if (f.status === 'accepted') { acceptedIds.add(f.requester_id === agentId ? f.receiver_id : f.requester_id); }
+        else if (f.status === 'pending') { if (f.receiver_id === agentId) incoming.push(f); else outgoing.push(f); }
       });
 
-      const allRelevantIds = Array.from(new Set([data.agentId, ...Array.from(acceptedIds), ...incoming.map((i: any) => i.requester_id), ...outgoing.map((o: any) => o.receiver_id)]));
+      const allRelevantIds = Array.from(new Set([agentId, ...Array.from(acceptedIds), ...incoming.map((i: any) => i.requester_id), ...outgoing.map((o: any) => o.receiver_id)]));
 
       const recList: any[] = (pollData?.recommendations || []);
       recList.forEach((r: any) => {
@@ -365,7 +370,7 @@ function NetworkPageContent() {
 
       (pData || []).forEach((p: any) => {
         // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
-        if (p.agent_id === data.agentId) {
+        if (p.agent_id === agentId) {
           p.movies_watched = localMoviesWatched;
           p.past_movies_watched = localPastMoviesWatched;
         }
@@ -375,7 +380,7 @@ function NetworkPageContent() {
       if (leadersData) {
         leadersData.forEach((p: any) => {
           // KENDİ VERİMİZİ ZORLA DÜZELTİYORUZ (YAMA)
-          if (p.agent_id === data.agentId) {
+          if (p.agent_id === agentId) {
             p.movies_watched = localMoviesWatched;
             p.past_movies_watched = localPastMoviesWatched;
           }
@@ -400,11 +405,11 @@ function NetworkPageContent() {
 
     } catch (error: any) { console.error('Ağ hatası:', error); }
     finally { if (!isSilent) setLoading(false); setRefreshing(false); }
-  }, [data.agentId, localMoviesWatched, localPastMoviesWatched, activeTab]);
+  }, [agentId, localMoviesWatched, localPastMoviesWatched, activeTab]);
 
   useEffect(() => {
     fetchData();
-    if (!data.agentId) return;
+    if (!agentId) return;
 
     // Realtime abonelik yok (tek yazma tüm istemcileri uyandırıyordu).
     // 600 sn sessiz yenileme: 180 sn -> 600 sn, aylık istek ~%70 azalır.
@@ -435,7 +440,7 @@ function NetworkPageContent() {
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [data.agentId, fetchData]);
+  }, [agentId, fetchData]);
 
   useEffect(() => {
     if (syncTick > 0) fetchData(true);
@@ -459,18 +464,18 @@ function NetworkPageContent() {
     const isFirstLoad = chatLastMsgIdRef.current === null;
     chatLastMsgIdRef.current = lastId;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    const isOwnMessage = !!lastMsg && lastMsg.sender_id === data.agentId;
+    const isOwnMessage = !!lastMsg && lastMsg.sender_id === agentId;
     if (isFirstLoad || isOwnMessage || nearBottom) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [chatMessages, data.agentId]);
+  }, [chatMessages, agentId]);
 
   const handleProfileSendMessage = async (customContent?: string) => {
     const content = (customContent !== undefined ? customContent : chatInput).trim();
     if (!content || !viewingProfileId) return;
     if (customContent === undefined) setChatInput('');
     try {
-      const newMsg = { id: uid(), sender_id: data.agentId, receiver_id: viewingProfileId, group_id: null, content, created_at: new Date().toISOString(), is_read: false };
+      const newMsg = { id: uid(), sender_id: agentId, receiver_id: viewingProfileId, group_id: null, content, created_at: new Date().toISOString(), is_read: false };
       setChatMessages((prev: any[]) => [...prev, newMsg]);
       const { error } = await supabase.from('messages').insert([newMsg]);
       if (error) {
@@ -486,13 +491,13 @@ function NetworkPageContent() {
   const handleSendRequest = async () => {
     const code = friendCode.trim().toUpperCase();
     if (!code) return;
-    if (code === data.agentId) { showToast('Kendini ekleyemezsin!', 'warning'); return; }
+    if (code === agentId) { showToast('Kendini ekleyemezsin!', 'warning'); return; }
     if (friends.some((f: any) => f.agent_id === code) || pendingOutgoing.some((p: any) => p.receiver_id === code) || pendingIncoming.some((p: any) => p.requester_id === code)) { showToast('Zaten bir bağınız var.', 'warning'); return; }
 
     try {
       const { data: targetProfile } = await supabase.from('profiles').select('agent_id').eq('agent_id', code).maybeSingle();
       if (!targetProfile) { showToast('Bu kimlik koduna sahip bir kullanıcı bulunamadı!', 'error'); return; }
-      await supabase.from('friendships').insert([{ id: uid(), requester_id: data.agentId, receiver_id: code, status: 'pending' }]);
+      await supabase.from('friendships').insert([{ id: uid(), requester_id: agentId, receiver_id: code, status: 'pending' }]);
       showToast('Arkadaşlık isteği gönderildi!', 'success'); setFriendCode(''); setSyncTick(t => t + 1);
     } catch { showToast('İstek gönderilirken hata oluştu.', 'error'); }
   };
@@ -522,8 +527,8 @@ function NetworkPageContent() {
   const handleNavigateFromLog = (logItem: any, addIfMissing = false) => {
     const cleanTitle = (logItem.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim();
     const alreadyInLib =
-      data.movies.some((m: Movie) => m.title.toLowerCase() === cleanTitle.toLowerCase()) ||
-      data.series.some((s: any) => s.title.toLowerCase() === cleanTitle.toLowerCase());
+      movies.some((m: Movie) => m.title.toLowerCase() === cleanTitle.toLowerCase()) ||
+      series.some((s: any) => s.title.toLowerCase() === cleanTitle.toLowerCase());
 
     if (!alreadyInLib && addIfMissing) {
       handleAddToLibrary(logItem, false);
@@ -540,7 +545,7 @@ function NetworkPageContent() {
 
   const handleViewList = async (list: any) => {
     setViewingList(list);
-    if (list.status === 'pending' && list.receiver_id === data.agentId) {
+    if (list.status === 'pending' && list.receiver_id === agentId) {
       await supabase.from('recommendations').update({ status: 'viewed' }).eq('id', list.id);
       setSyncTick(t => t + 1);
     }
@@ -550,11 +555,11 @@ function NetworkPageContent() {
     updateShowcase(newShowcase);
     notifyEvent('showcase_updated');
     setShowShowcaseModal(false);
-    if (data.agentId) {
-      await supabase.from('profiles').update({ showcase: newShowcase }).eq('agent_id', data.agentId);
+    if (agentId) {
+      await supabase.from('profiles').update({ showcase: newShowcase }).eq('agent_id', agentId);
       setProfilesMap(prev => ({
         ...prev,
-        [data.agentId!]: { ...(prev[data.agentId!] || {}), showcase: newShowcase }
+        [agentId!]: { ...(prev[agentId!] || {}), showcase: newShowcase }
       }));
     }
   };
@@ -562,12 +567,12 @@ function NetworkPageContent() {
   const liveWatchingList = useMemo(() => {
     const list: { friend: any; radar: NonNullable<ReturnType<typeof getLiveRadarStatus>>; isMe?: boolean }[] = [];
 
-    const myActiveMovie = data.movies.find((m: Movie) => !m.watched && m.startedAt);
+    const myActiveMovie = movies.find((m: Movie) => !m.watched && m.startedAt);
     if (myActiveMovie && myActiveMovie.startedAt) {
       const tInfo = getMovieTimerInfo(myActiveMovie, radarTick);
       const progress = Math.min(100, Math.max(3, Math.round((tInfo.elapsedMins / tInfo.maxMins) * 100)));
       list.push({
-        friend: { agent_id: data.agentId, nickname: `${data.nickname || 'Sen'} (Sen)` },
+        friend: { agent_id: agentId, nickname: `${nickname || 'Sen'} (Sen)` },
         radar: {
           id: myActiveMovie.id,
           title: myActiveMovie.title,
@@ -583,7 +588,7 @@ function NetworkPageContent() {
     }
 
     friends.forEach((f: any) => {
-      if (f.agent_id === data.agentId) return;
+      if (f.agent_id === agentId) return;
       const prof = profilesMap[f.agent_id] || f;
       const radar = getLiveRadarStatus(prof?.currently_watching, radarTick);
       if (radar) {
@@ -592,7 +597,7 @@ function NetworkPageContent() {
     });
 
     return list;
-  }, [data.movies, data.agentId, data.nickname, friends, profilesMap, radarTick]);
+  }, [movies, agentId, nickname, friends, profilesMap, radarTick]);
 
   // AKIŞ AKILLI FİLTRELEME VE AĞIN GÜNDEMİ (TRENDING) HESAPLAMASI
   // GÖRÜNÜRLÜK SINIRI: akışta yalnızca son 7 gün + kişi başına en fazla 20 öğe.
@@ -653,7 +658,7 @@ function NetworkPageContent() {
 
   // LİDERLİK TABLOSU SIRALAMASI VE KAPSAM FİLTRESİ
   const sortedLeaderboard = useMemo(() => {
-    const friendIdSet = new Set([data.agentId, ...friends.map((f: any) => f.agent_id)]);
+    const friendIdSet = new Set([agentId, ...friends.map((f: any) => f.agent_id)]);
     const baseList = leaderboardScope === 'friends'
       ? leaderboard.filter((u: any) => friendIdSet.has(u.agent_id))
       : leaderboard;
@@ -668,7 +673,7 @@ function NetworkPageContent() {
       if (leaderboardCategory === 'quests') return (b.quests_completed || 0) - (a.quests_completed || 0);
       return 0;
     });
-  }, [leaderboard, leaderboardScope, leaderboardCategory, friends, data.agentId]);
+  }, [leaderboard, leaderboardScope, leaderboardCategory, friends, agentId]);
 
   const getLeaderboardScoreText = (user: any) => {
     if (leaderboardCategory === 'xp') return `${user.total_xp || 0} XP`;
@@ -681,11 +686,11 @@ function NetworkPageContent() {
     return '';
   };
 
-  const incomingLists = recommendations.filter((r: any) => r.receiver_id === data.agentId);
+  const incomingLists = recommendations.filter((r: any) => r.receiver_id === agentId);
   const unreadListsCount = incomingLists.filter((r: any) => r.status === 'pending').length;
-  const outgoingLists = recommendations.filter((r: any) => r.sender_id === data.agentId);
+  const outgoingLists = recommendations.filter((r: any) => r.sender_id === agentId);
   const totalUnread = Object.values(unreadMessages).reduce((a: number, b: number) => a + b, 0);
-  const myValidShowcase = (data.showcase || []).filter((s: any) => s && s.title);
+  const myValidShowcase = (showcase || []).filter((s: any) => s && s.title);
 
   const topThreeLeaderboard = sortedLeaderboard.slice(0, 3);
   const remainingLeaderboard = sortedLeaderboard.slice(3);
@@ -705,18 +710,18 @@ function NetworkPageContent() {
       <div className="ntw-card flex flex-col lg:flex-row items-center justify-between gap-4 p-4 sm:p-5">
         <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-start">
           <button
-            onClick={() => data.agentId && openProfileModal(data.agentId)}
+            onClick={() => agentId && openProfileModal(agentId)}
             className="flex items-center gap-4 text-left group"
             title="Profilimi Önizle"
           >
             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-azure-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-2xl sm:text-3xl group-hover:scale-105 transition-transform">
-              {data.nickname?.[0]?.toUpperCase() || 'U'}
+              {nickname?.[0]?.toUpperCase() || 'U'}
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white leading-tight group-hover:text-emerald-300 transition-colors">{data.nickname}</h1>
+              <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white leading-tight group-hover:text-emerald-300 transition-colors">{nickname}</h1>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-lg">Lvl {data.level}</span>
-                <span className="text-xs text-ink-300 px-2 py-0.5 bg-ink-900 rounded-lg border border-ink-800">{data.totalXp} XP</span>
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-lg">Lvl {level}</span>
+                <span className="text-xs text-ink-300 px-2 py-0.5 bg-ink-900 rounded-lg border border-ink-800">{totalXp} XP</span>
               </div>
             </div>
           </button>
@@ -761,13 +766,13 @@ function NetworkPageContent() {
         <div className="flex flex-wrap sm:flex-row items-center gap-2 w-full lg:w-auto">
           <button onClick={() => setShowShowcaseModal(true)} className="sm:hidden w-full min-h-11 flex items-center justify-center gap-2 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 text-gold-400 px-4 py-2.5 rounded-xl transition-all">
             <Crown size={15} />
-            <span className="text-xs font-black uppercase tracking-wider">Vitrinim ({myValidShowcase.length}/{showcaseLimit(data.perks)})</span>
+            <span className="text-xs font-black uppercase tracking-wider">Vitrinim ({myValidShowcase.length}/{showcaseLimit(perks)})</span>
           </button>
-          <button onClick={() => data.agentId && openProfileModal(data.agentId)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-ink-900 hover:bg-ink-800 border border-ink-700 text-ink-200 px-4 py-3 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold transition-all">
+          <button onClick={() => agentId && openProfileModal(agentId)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-ink-900 hover:bg-ink-800 border border-ink-700 text-ink-200 px-4 py-3 min-h-11 sm:min-h-0 rounded-xl text-xs font-bold transition-all">
             <Eye size={15} className="text-emerald-400" /> Profilim
           </button>
-          <button onClick={() => { navigator.clipboard.writeText(data.agentId || ''); showToast('Kod kopyalandı!', 'success'); }} className="flex-1 sm:flex-none flex items-center gap-2.5 bg-ink-900/50 hover:bg-ink-800 border border-ink-800 hover:border-emerald-500/40 px-4 py-3 min-h-11 sm:min-h-0 rounded-xl transition-all group justify-center">
-            <span className="text-emerald-400 text-sm font-black tracking-widest truncate">{data.agentId}</span>
+          <button onClick={() => { navigator.clipboard.writeText(agentId || ''); showToast('Kod kopyalandı!', 'success'); }} className="flex-1 sm:flex-none flex items-center gap-2.5 bg-ink-900/50 hover:bg-ink-800 border border-ink-800 hover:border-emerald-500/40 px-4 py-3 min-h-11 sm:min-h-0 rounded-xl transition-all group justify-center">
+            <span className="text-emerald-400 text-sm font-black tracking-widest truncate">{agentId}</span>
             <Copy size={15} className="text-ink-500 group-hover:text-emerald-400 transition-colors shrink-0" />
           </button>
           <button onClick={() => setIsChatHubOpen(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-azure-600/20 hover:bg-azure-600/30 border border-azure-500/30 text-azure-400 px-5 py-3 min-h-11 sm:min-h-0 rounded-xl transition-all shadow-sm">
@@ -1204,7 +1209,7 @@ function NetworkPageContent() {
                   if (!user) return <div key={podiumIdx} className="hidden md:block" />;
 
                   const rank = podiumIdx + 1;
-                  const isMe = user.agent_id === data.agentId;
+                  const isMe = user.agent_id === agentId;
                   const liveStatus = getLiveRadarStatus(user.currently_watching, radarTick);
                   const uShowcase: any[] = Array.isArray(user.showcase)
                     ? user.showcase.filter((x: any) => x && x.title)
@@ -1378,7 +1383,7 @@ function NetworkPageContent() {
 
                 <div>
                   {remainingLeaderboard.map((user: any, index: number) => {
-                    const isMe = user.agent_id === data.agentId;
+                    const isMe = user.agent_id === agentId;
                     const rank = index + 4;
                     const liveStatus = getLiveRadarStatus(user.currently_watching, radarTick);
 
@@ -1594,31 +1599,31 @@ function NetworkPageContent() {
         <AgentProfileModal
           viewingProfileId={viewingProfileId}
           profile={
-            viewingProfileId === data.agentId
+            viewingProfileId === agentId
               ? {
-                  agent_id: data.agentId,
-                  nickname: data.nickname,
-                  level: data.level,
-                  total_xp: data.totalXp,
+                  agent_id: agentId,
+                  nickname: nickname,
+                  level: level,
+                  total_xp: totalXp,
                   movies_watched: myStatsSummary.moviesWatched,
                   past_movies_watched: myStatsSummary.pastMoviesWatched,
-                  series_watched: data.series.filter((s: any) => s.episodes?.every((e: any) => e.watched)).length,
+                  series_watched: series.filter((s: any) => s.episodes?.every((e: any) => e.watched)).length,
                   episodes_watched: myStatsSummary.episodesWatched,
                   achievements_unlocked: myStatsSummary.achievementsUnlocked,
-                  showcase: data.showcase || []
+                  showcase: showcase || []
                 }
               : (profilesMap[viewingProfileId] || { nickname: 'Bilinmeyen Ajan', level: 1, total_xp: 0 })
           }
-          isOwnProfile={viewingProfileId === data.agentId}
+          isOwnProfile={viewingProfileId === agentId}
           liveStatus={
-            viewingProfileId === data.agentId
+            viewingProfileId === agentId
               ? (liveWatchingList.find(x => x.isMe)?.radar || null)
               : getLiveRadarStatus(profilesMap[viewingProfileId]?.currently_watching, radarTick)
           }
           friendLogs={friendLogs}
-          myMovies={data.movies}
-          mySeries={data.series}
-          myShowcase={data.showcase || []}
+          myMovies={movies}
+          mySeries={series}
+          myShowcase={showcase || []}
           myStats={myStatsSummary}
           profileTab={profileTab}
           setProfileTab={setProfileTab}
@@ -1632,10 +1637,10 @@ function NetworkPageContent() {
               msg,
               allMsgList,
               isGroupChat,
-              myAgentId: data.agentId ?? null,
+              myAgentId: agentId ?? null,
               profilesMap,
-              myMovies: data.movies,
-              mySeries: data.series,
+              myMovies: movies,
+              mySeries: series,
               onAddToLibrary: handleAddToLibrary,
               showToast,
             })
@@ -1651,26 +1656,26 @@ function NetworkPageContent() {
       {/* 2. VİTRİN DÜZENLEME MODALI */}
       <ShowcaseEditorModal
         isOpen={showShowcaseModal}
-        initialShowcase={data.showcase || []}
-        movies={data.movies}
-        series={data.series}
+        initialShowcase={showcase || []}
+        movies={movies}
+        series={series}
         onSave={handleSaveShowcase}
         onClose={() => setShowShowcaseModal(false)}
         showToast={showToast}
-        maxItems={showcaseLimit(data.perks)}
+        maxItems={showcaseLimit(perks)}
       />
 
       {/* 3. MESAJLAŞMA MERKEZİ (CHAT HUB) MODALI */}
       <ChatHubModal
         isOpen={isChatHubOpen}
         onClose={() => setIsChatHubOpen(false)}
-        myAgentId={data.agentId ?? null}
-        myNickname={data.nickname || 'Ajan'}
+        myAgentId={agentId ?? null}
+        myNickname={nickname || 'Ajan'}
         friends={friends}
         profilesMap={profilesMap}
         setProfilesMap={setProfilesMap}
-        movies={data.movies}
-        series={data.series}
+        movies={movies}
+        series={series}
         onAddToLibrary={handleAddToLibrary}
         showToast={showToast}
         syncTick={syncTick}
@@ -1685,7 +1690,7 @@ function NetworkPageContent() {
 
       {/* 4. TAVSİYE KOLEKSİYONU GÖNDERME & İNCELEME MODALLARI */}
       <RecommendationModals
-        myAgentId={data.agentId ?? null}
+        myAgentId={agentId ?? null}
         friends={friends}
         profilesMap={profilesMap}
         showSendModal={showSendModal}
@@ -1738,7 +1743,7 @@ function NetworkPageContent() {
                       </div>
                     )}
                     {selectedLog.review_tags?.map((tag: string) => (
-                      <span key={tag} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg border ${isPositiveTag(tag, data.tagSentiments) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                      <span key={tag} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg border ${isPositiveTag(tag, tagSentiments) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                         {tag}
                       </span>
                     ))}
@@ -1774,8 +1779,8 @@ function NetworkPageContent() {
               {(() => {
                 const cleanTitle = (selectedLog.item_title || '').replace(/\s\(S\d+\sB\d+\)$/i, '').trim().toLowerCase();
                 const alreadyInMyLib =
-                  data.movies.some((m: Movie) => m.title.toLowerCase() === cleanTitle) ||
-                  data.series.some((s: any) => s.title.toLowerCase() === cleanTitle);
+                  movies.some((m: Movie) => m.title.toLowerCase() === cleanTitle) ||
+                  series.some((s: any) => s.title.toLowerCase() === cleanTitle);
 
                 return (
                   <div className="space-y-2 mt-auto shrink-0">

@@ -41,6 +41,8 @@ export interface GamificationSlice {
   dailyStreak: number;
   achievements: ExtendedAppData['achievements'];
   showcase: ExtendedAppData['showcase'];
+  /** XP defteri (AchievementsPage zaman çizelgesi için). */
+  xpEvents: ExtendedAppData['xpEvents'];
 }
 
 export interface SettingsSlice {
@@ -49,6 +51,10 @@ export interface SettingsSlice {
   reviewTags: ExtendedAppData['reviewTags'];
   weeklyPlan: ExtendedAppData['weeklyPlan'];
   notificationsEnabled: boolean;
+  /** Belirli bildirim türleri açık mı (ayarlar ekranı). */
+  notifyFriendRequests: boolean;
+  notifyLists: boolean;
+  notifyMessages: boolean;
   shareWatchedInFeed: boolean;
   sharePastWatchedInFeed: boolean;
   showLockedNames: boolean;
@@ -63,6 +69,10 @@ export interface SettingsSlice {
   externalActions: NonNullable<ExtendedAppData['externalActions']>;
   /** Kimlik (seyrek değişir) — ağ paylaşımları için gerekli. */
   agentId: string;
+  /** Görünen ad (profil / ağ paylaşımları). */
+  nickname: string;
+  /** Etiket duygu haritası (pozitif / negatif). */
+  tagSentiments: ExtendedAppData['tagSentiments'];
 }
 
 export interface TimerSlice {
@@ -70,10 +80,29 @@ export interface TimerSlice {
   activeTimerMovie: ExtendedAppData['movies'][number] | null;
 }
 
+/**
+ * Ekonomi / Pazar alanları (MarketPage). Bu alanlar sık değişir; sayfa sadece
+ * bunlara ve kendi aksiyonlarına bağlanır.
+ */
+export interface MarketSlice {
+  coins: number;
+  inventory: ExtendedAppData['inventory'];
+  equipped: ExtendedAppData['equipped'];
+  activeEffects: ExtendedAppData['activeEffects'];
+  coinLedger: ExtendedAppData['coinLedger'];
+  perks: string[];
+  pinnedContract: ExtendedAppData['pinnedContract'];
+  marketIntroSeen?: boolean;
+  marketRerollNonce?: number;
+  marketDailyNonce?: number;
+  marketWeeklyNonce?: number;
+}
+
 export const LibraryContext = createContext<LibrarySlice | null>(null);
 export const GamificationContext = createContext<GamificationSlice | null>(null);
 export const SettingsContext = createContext<SettingsSlice | null>(null);
 export const TimerContext = createContext<TimerSlice | null>(null);
+export const MarketContext = createContext<MarketSlice | null>(null);
 
 function useSlice<T>(ctx: React.Context<T | null>, name: string): T {
   const v = useContext(ctx);
@@ -85,3 +114,4 @@ export const useLibrary = () => useSlice(LibraryContext, 'useLibrary');
 export const useGamification = () => useSlice(GamificationContext, 'useGamification');
 export const useSettings = () => useSlice(SettingsContext, 'useSettings');
 export const useTimer = () => useSlice(TimerContext, 'useTimer');
+export const useMarket = () => useSlice(MarketContext, 'useMarket');

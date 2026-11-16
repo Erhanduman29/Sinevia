@@ -30,6 +30,7 @@ import { isSoundBusy, getSoundBusyKind, getSoundBusyRemainingMs } from '../lib/s
 import { weekKey } from '../lib/contractLogic';
 import { getRewatchCooldown, formatRewatchRemaining } from '../lib/rewatch';
 import { roundHalfRating } from '../lib/rating';
+import { createTombstone, type DeletedItem } from '../lib/syncMerge';
 import { levelFromXp } from '../lib/xp';
 import {
   appendXpEvent,
@@ -92,8 +93,8 @@ import {
 import { makeContentHash, makeSaveHash } from '../lib/syncContract';
 import type { AppStateV3 } from '../types/appState';
 import type { ConflictChoice, SyncConflict, SyncResult } from '../types/sync';
-import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext } from './slices';
-import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, ActionsSlice } from './slices';
+import { LibraryContext, GamificationContext, SettingsContext, TimerContext, ActionsContext, MarketContext } from './slices';
+import type { LibrarySlice, GamificationSlice, SettingsSlice, TimerSlice, ActionsSlice, MarketSlice } from './slices';
 
 const STORAGE_KEY = 'sinevia-v1';
 const QUEST_STORAGE_KEY = 'sinevia-quests-v1';
@@ -214,6 +215,12 @@ export interface ExtendedAppData extends AppData {
     totalCoinsSpent?: number;
     completedEpicContracts?: number;
   };
+  /**
+   * Silinen kayıtların "mezar taşları" (sync Merge V2). Bir cihazda silinen
+   * film/dizi/koleksiyon/geçmiş kaydı, diğer cihazın eski kopyasından geri
+   * gelmez. Opsiyoneldir; eski kayıtlarda yoktur.
+   */
+  deletedItems?: DeletedItem[];
 }
 
 function generateAgentId() {
@@ -1725,6 +1732,8 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
     case 'DELETE_MOVIE':
       nextState.movies = state.movies.filter((m) => m.id !== action.id);
       nextState.weeklyPlan = (state.weeklyPlan || []).filter((p) => p.movieId !== action.id);
+      // Merge V2: silinen film, diğer cihazın eski kopyasından geri gelmesin.
+      nextState.deletedItems = createTombstone(state.deletedItems, 'movie', action.id);
       break;
     case 'START_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: action.startedAt } : m)); break;
     case 'CANCEL_WATCHING_MOVIE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, startedAt: null } : m)); break;
@@ -1756,9 +1765,16 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
         nextState = withWatchEconomyRewards(nextState, wasNewDay);
       }
       break;
-    case 'UNWATCH_MOVIE':
+    case 'UNWATCH_MOVIE': {
       nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, watched: false, isPastWatch: false, rating: null, detailedRating: undefined, reviewTags: undefined, note: '', watchedAt: null, startedAt: null, actualRuntime: null } : m));
-      nextState.history = state.history.filter((h) => h.itemId !== action.id && h.id !== action.id); break;
+      const removedHistory = state.history.filter((h) => h.itemId === action.id || h.id === action.id);
+      nextState.history = state.history.filter((h) => h.itemId !== action.id && h.id !== action.id);
+      // Merge V2: izleme kayıtları silindi → diğer cihazdan geri gelmesin.
+      let tombstones = state.deletedItems;
+      for (const entry of removedHistory) tombstones = createTombstone(tombstones, 'history', entry.id);
+      nextState.deletedItems = tombstones;
+      break;
+    }
     case 'UPDATE_HISTORY_RATING': {
       skipRatingUnlocks = true; // puan düzenleme → puan-bağılı yeni kilit açılamaz
       const hItem = state.history.find((h) => h.id === action.historyId); if (!hItem) break;
@@ -1810,7 +1826,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       const resolved = resolveTMDBGenres(action.series.genres, state.genres);
       action.series.genres = resolved; nextState.genres = addNewGenres(state.genres, resolved); nextState.series = [...state.series, action.series]; break;
     }
-    case 'DELETE_SERIES': nextState.series = state.series.filter((s) => s.id !== action.id); break;
+    case 'DELETE_SERIES': nextState.series = state.series.filter((s) => s.id !== action.id); nextState.deletedItems = createTombstone(state.deletedItems, 'series', action.id); break;
     case 'COMPLETE_SERIES': break;
     case 'ADD_EPISODES': nextState.series = state.series.map((s) => (s.id === action.seriesId ? { ...s, episodes: [...s.episodes, ...action.episodes] } : s)); break;
     case 'RESTORE_EPISODES': nextState.series = state.series.map((s) => {
@@ -2084,7 +2100,7 @@ export function rootReducer(state: ExtendedAppData, action: Action): ExtendedApp
       } : s)); break;
     }
     case 'ADD_COLLECTION': nextState.collections = [...state.collections, action.collection]; break;
-    case 'DELETE_COLLECTION': nextState.collections = state.collections.filter((c) => c.id !== action.id); nextState.movies = state.movies.map((m) => (m.collectionId === action.id ? { ...m, collectionId: null } : m)); break;
+    case 'DELETE_COLLECTION': nextState.collections = state.collections.filter((c) => c.id !== action.id); nextState.movies = state.movies.map((m) => (m.collectionId === action.id ? { ...m, collectionId: null } : m)); nextState.deletedItems = createTombstone(state.deletedItems, 'collection', action.id); break;
     case 'RENAME_COLLECTION': nextState.collections = state.collections.map((c) => (c.id === action.id ? { ...c, name: action.name } : c)); break;
     case 'SET_MOVIE_COLLECTION': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, collectionId: action.collectionId } : m)); break;
     case 'SET_MOVIE_PAST_QUEUE': nextState.movies = state.movies.map((m) => (m.id === action.id ? { ...m, inPastQueue: action.inPastQueue } : m)); break;
@@ -3749,18 +3765,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const gamificationSlice = useMemo<GamificationSlice>(() => ({
     xp: data.xp, level: data.level, totalXp: data.totalXp, dailyStreak: data.dailyStreak,
     achievements: data.achievements, showcase: data.showcase,
-  }), [data.xp, data.level, data.totalXp, data.dailyStreak, data.achievements, data.showcase]);
+    xpEvents: data.xpEvents || [],
+  }), [data.xp, data.level, data.totalXp, data.dailyStreak, data.achievements, data.showcase, data.xpEvents]);
 
   const settingsSlice = useMemo<SettingsSlice>(() => ({
     theme: data.theme || 'premium-dark', criteria: data.criteria, reviewTags: data.reviewTags,
     weeklyPlan: data.weeklyPlan || [], notificationsEnabled: !!data.notificationsEnabled,
+    notifyFriendRequests: data.notifyFriendRequests !== false,
+    notifyLists: data.notifyLists !== false,
+    notifyMessages: data.notifyMessages !== false,
     shareWatchedInFeed: data.shareWatchedInFeed !== false, sharePastWatchedInFeed: data.sharePastWatchedInFeed !== false,
     showLockedNames: !!data.showLockedNames, showBadgeDetails: !!data.showBadgeDetails,
     reducedMotion: !!data.reducedMotion, fastCelebrations: !!data.fastCelebrations,
     altWatchTemplate: data.altWatchTemplate || '',
     externalActions: data.externalActions || [],
     agentId: data.agentId || '',
-  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.showBadgeDetails, data.reducedMotion, data.fastCelebrations, data.altWatchTemplate, data.externalActions, data.agentId]);
+    nickname: data.nickname || '',
+    tagSentiments: data.tagSentiments,
+  }), [data.theme, data.criteria, data.reviewTags, data.weeklyPlan, data.notificationsEnabled, data.notifyFriendRequests, data.notifyLists, data.notifyMessages, data.shareWatchedInFeed, data.sharePastWatchedInFeed, data.showLockedNames, data.showBadgeDetails, data.reducedMotion, data.fastCelebrations, data.altWatchTemplate, data.externalActions, data.agentId, data.nickname, data.tagSentiments]);
 
   // Global tik YOK — sadece aktif timer filmini verir (seyrek değişir); sayfalar kendi
   // yerel nowMs tik'lerini tutmaya devam eder (HomePage dahil — kullanıcıya ait dosya).
@@ -3768,11 +3790,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeTimerMovie: data.movies.find((m) => !m.watched && m.startedAt) || null,
   }), [data.movies]);
 
-  // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
-  // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
-  const value: AppContextValue = {
-    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, startRewatchingMovie, togglePauseRewatchingMovie, cancelRewatchingMovie, canRateRewatchWithTimer, rewatchMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions
-  };
+  // Market / ekonomi dilimi — sadece bu alanlar değişince MarketPage yenilenir.
+  const marketSlice = useMemo<MarketSlice>(() => ({
+    coins: Number(data.coins) || 0,
+    inventory: data.inventory || [],
+    equipped: data.equipped || {},
+    activeEffects: data.activeEffects || [],
+    coinLedger: data.coinLedger || [],
+    perks: data.perks || [],
+    pinnedContract: data.pinnedContract ?? null,
+    marketIntroSeen: data.marketIntroSeen,
+    marketRerollNonce: data.marketRerollNonce,
+    marketDailyNonce: data.marketDailyNonce,
+    marketWeeklyNonce: data.marketWeeklyNonce,
+  }), [
+    data.coins, data.inventory, data.equipped, data.activeEffects, data.coinLedger,
+    data.perks, data.pinnedContract, data.marketIntroSeen, data.marketRerollNonce,
+    data.marketDailyNonce, data.marketWeeklyNonce,
+  ]);
 
   // Aksiyon bağımlılıkları (state hariç 59 ref) — sadece bunlar değişince actionsValue yenilenir.
   const actionDeps = [
@@ -3792,6 +3827,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload,
     abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions,
   ];
+
+  // Context değeri (tek kaynak) — useApp() bunu kullanır; ActionsContext bunun aksiyon
+  // alt kümesini türetir (transient state değişince aksiyon referansı değişmez → izolasyon).
+  // `useMemo`: yalnızca veri veya geçici durumlardan biri değişince yeni nesne üretilir;
+  // aksi hâlde tüketiciler gereksiz yere yeniden render edilmez.
+  const value = useMemo<AppContextValue>(() => ({
+    data, syncStatus, cloudConflict, resolveCloudConflict, isQuestCelebrating, setIsQuestCelebrating, setNickname, recoverIdentity, adoptNetworkIdentity, updateShowcase, addMovie, deleteMovie, startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, startRewatchingMovie, togglePauseRewatchingMovie, cancelRewatchingMovie, canRateRewatchWithTimer, rewatchMovie, watchMovie, unwatchMovie, updateHistoryRating, addSeries, deleteSeries, addEpisodes, restoreEpisodes, watchEpisode, canWatchEpisode, unwatchEpisode, deleteEpisode, addGenre, deleteGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment, editMovie, editSeries, addCollection, deleteCollection, renameCollection, setMovieCollection, setMoviePastQueue, setSeriesPastQueue, rateSeriesBulk, clearSeriesRatings, clearSeriesEpisodeRatings, exportData, importData, importLegacyData, resetData, exportShareList, importShareList, toasts, showToast, achievementToasts, levelUpData, seasonCompleteData, dismissLevelUp, dismissSeasonComplete, isContractCelebrating, contractCelebrationData, requestContractCelebration, dismissContractCelebration, setContractCompletionPending, toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, xpGainData, coinGainData, queuedCoinGain, levelUpQueuedRef, contractCelebratingRef, contractQueuedRef, questCelebratingRef, questQueuedRef, levelUpOpenRef, seasonOpenRef, seasonQueuedRef, xpGainOpenRef, updateAIHistory, addCriterion, editCriterion, deleteCriterion, updateAltWatchTemplate, updateTheme, weeklyPlan: data.weeklyPlan || [], addPlanItem, deletePlanItem, updatePlanItem, grantXp, grantCoins, grantContractReward, purchaseItem, equipItem, activateItem, pinContract, consumeEffect, setSeriesRuntime, markMarketIntroSeen, rerollMarket, grantItem, recordMarketOutcome, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, forceXpSync, syncAchievements, forceCloudUpload, forceCloudDownload, abandonMedia, reviveMedia, resolveDuel, resolveDuelTie, applyCalibrationSuggestion, setExternalActions
+  }), [
+    data, syncStatus, cloudConflict, isQuestCelebrating, toasts, achievementToasts,
+    levelUpData, seasonCompleteData, isContractCelebrating, contractCelebrationData,
+    xpGainData, coinGainData, queuedCoinGain,
+    resolveCloudConflict, adoptNetworkIdentity, setContractCompletionPending,
+    ...actionDeps,
+  ]);
+
   const actionsValue = useMemo<ActionsSlice>(() => {
     const { data: _d, syncStatus: _ss, isQuestCelebrating: _iqc, toasts: _t, achievementToasts: _at, levelUpData: _lud, seasonCompleteData: _scd, xpGainData: _xgd, coinGainData: _cgd, weeklyPlan: _wp, ...rest } = value;
     return rest;
@@ -3803,11 +3853,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       <GamificationContext.Provider value={gamificationSlice}>
         <SettingsContext.Provider value={settingsSlice}>
           <TimerContext.Provider value={timerSlice}>
-            <ActionsContext.Provider value={actionsValue}>
-              <AppContext.Provider value={value}>
-                {children}
-              </AppContext.Provider>
-            </ActionsContext.Provider>
+            <MarketContext.Provider value={marketSlice}>
+              <ActionsContext.Provider value={actionsValue}>
+                <AppContext.Provider value={value}>
+                  {children}
+                </AppContext.Provider>
+              </ActionsContext.Provider>
+            </MarketContext.Provider>
           </TimerContext.Provider>
         </SettingsContext.Provider>
       </GamificationContext.Provider>

@@ -26,7 +26,7 @@ import {
   Repeat,
   Swords,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useActions, useLibrary, useSettings } from '../context/slices';
 import { ratingBgClass, formatDateTime, formatDateShort, localDayKey } from '../lib/utils';
 import { getRewatchCooldown, formatRewatchRemaining } from '../lib/rewatch';
 import { roundHalfRating } from '../lib/rating';
@@ -52,7 +52,9 @@ const monoLabel = 'text-[10px] font-bold uppercase tracking-[0.22em] text-[color
 const accent = 'var(--red, var(--color-1, #e8384f))';
 
 export default function HistoryPage() {
-  const { data, updateHistoryRating } = useApp();
+  const { history, movies, series } = useLibrary();
+  const { criteria } = useSettings();
+  const { updateHistoryRating } = useActions();
   const { notifyEvent } = useTutorial();
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set());
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
@@ -71,25 +73,25 @@ export default function HistoryPage() {
   const isItemPastWatch = (h: WatchHistoryItem): boolean => {
     if (h.isPastWatch) return true;
     if (h.kind === 'series' || h.type === 'series') {
-      const s = data.series.find((x) => x.id === (h.seriesId || h.itemId || h.id));
+      const s = series.find((x) => x.id === (h.seriesId || h.itemId || h.id));
       if (s?.isPastWatch) return true;
       return false;
     }
     if (h.kind === 'movie' || h.type === 'movie') {
-      const m = data.movies.find((x) => x.id === (h.itemId || h.id));
+      const m = movies.find((x) => x.id === (h.itemId || h.id));
       if (m?.isPastWatch) return true;
     }
     return false;
   };
 
   const regularHistory = useMemo(
-    () => data.history.filter((h) => !isItemPastWatch(h)),
-    [data.history, data.movies, data.series]
+    () => history.filter((h) => !isItemPastWatch(h)),
+    [history, movies, series]
   );
 
   const pastHistory = useMemo(
-    () => data.history.filter((h) => isItemPastWatch(h)),
-    [data.history, data.movies, data.series]
+    () => history.filter((h) => isItemPastWatch(h)),
+    [history, movies, series]
   );
 
   const activeBaseHistory = viewMode === 'past' ? pastHistory : regularHistory;
@@ -272,11 +274,11 @@ export default function HistoryPage() {
               </p>
             </div>
           </div>
-          {data.history.length > 0 && (
+          {history.length > 0 && (
             <div className="flex items-center gap-2">
               <span className={`${monoLabel} text-ink-400`}>Arşiv</span>
               <span className="text-lg font-black text-ink-50 tabular-nums leading-none">
-                {String(data.history.length).padStart(3, '0')}
+                {String(history.length).padStart(3, '0')}
               </span>
             </div>
           )}
@@ -284,7 +286,7 @@ export default function HistoryPage() {
       </div>
 
       {/* 2. SİNEMA GÜNLÜĞÜ ÖZET — MONO SAYAÇ BANDI */}
-      {data.history.length > 0 && (
+      {history.length > 0 && (
         <div
           data-tutorial="history-stats"
           className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-2 rounded-2xl border border-[color:var(--line-2,var(--border-dim))] bg-[color:var(--glass, var(--bg-card))] shadow-[var(--shadow,0_1px_3px_rgba(0,0,0,0.25))]"
@@ -337,7 +339,7 @@ export default function HistoryPage() {
       )}
 
       {/* 3. GÖRÜNÜM SEÇİCİ SEKMELER & ARAMA/FİLTRE BUTONU */}
-      {data.history.length > 0 && (
+      {history.length > 0 && (
         <div className="space-y-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div
@@ -540,9 +542,9 @@ export default function HistoryPage() {
             const isSeries = item.kind === 'series' || item.type === 'series';
             const movieData = isSeries
               ? undefined
-              : data.movies.find((m) => m.id === (item.itemId || item.id));
+              : movies.find((m) => m.id === (item.itemId || item.id));
             const seriesData = isSeries
-              ? data.series.find((s) => s.id === (item.seriesId || item.itemId || item.id))
+              ? series.find((s) => s.id === (item.seriesId || item.itemId || item.id))
               : undefined;
             return (
               <MovieHistoryCard
@@ -550,7 +552,7 @@ export default function HistoryPage() {
                 item={item}
                 movieData={movieData}
                 seriesData={seriesData}
-                criteriaList={data.criteria || []}
+                criteriaList={criteria || []}
                 isNoteExpanded={expandedNotes.has(item.id)}
                 onToggleNote={() => toggleNoteExpand(item.id)}
                 onEdit={() => setEditingItem(item)}
@@ -572,10 +574,10 @@ export default function HistoryPage() {
           {displayItems.map(({ type, item, seriesId }) => {
             const isMovie = type === 'movie';
             const movieData = isMovie
-              ? data.movies.find((m) => m.id === (item.itemId || item.id))
+              ? movies.find((m) => m.id === (item.itemId || item.id))
               : undefined;
             const seriesData = !isMovie
-              ? data.series.find((s) => s.id === (seriesId || item.seriesId || item.itemId || item.id))
+              ? series.find((s) => s.id === (seriesId || item.seriesId || item.itemId || item.id))
               : undefined;
             const posterUrl = isMovie ? movieData?.posterUrl : seriesData?.posterUrl;
             const epsCount = !isMovie && seriesId ? (seriesGroups.get(seriesId) || []).length : 0;
@@ -699,13 +701,13 @@ export default function HistoryPage() {
               <div className="space-y-3 sm:space-y-4">
                 {items.map(({ type, item, seriesId }) => {
                   if (type === 'movie') {
-                    const movieData = data.movies.find((m) => m.id === (item.itemId || item.id));
+                    const movieData = movies.find((m) => m.id === (item.itemId || item.id));
                     return (
                       <MovieHistoryCard
                         key={item.id}
                         item={item}
                         movieData={movieData}
-                        criteriaList={data.criteria || []}
+                        criteriaList={criteria || []}
                         isNoteExpanded={expandedNotes.has(item.id)}
                         onToggleNote={() => toggleNoteExpand(item.id)}
                         onEdit={() => setEditingItem(item)}
@@ -713,7 +715,7 @@ export default function HistoryPage() {
                         rewatch={
                           movieData
                             ? (() => {
-                                const c = getRewatchCooldown(data.history, movieData.id);
+                                const c = getRewatchCooldown(history, movieData.id);
                                 return { canRewatch: c.canRewatch, remainingMs: c.remainingMs };
                               })()
                             : undefined
@@ -727,7 +729,7 @@ export default function HistoryPage() {
                     );
                   } else {
                     const sid = seriesId!;
-                    const seriesData = data.series.find((s) => s.id === sid);
+                    const seriesData = series.find((s) => s.id === sid);
                     // Sinematik Otopsi: item.abandoned yoksa seriesId lookup ile türetilir.
                     const isDnf = Boolean(item.abandoned ?? seriesData?.abandoned);
                     const eps = (seriesGroups.get(sid) || []).sort((a, b) => {

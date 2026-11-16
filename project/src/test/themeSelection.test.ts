@@ -70,7 +70,7 @@ describe('TEMA SEÇİMİ — AYARLAR MENÜSÜ (THEMES)', () => {
 
   test('Ayarlar sayfası tema seçtiğinde updateTheme çağırmalı (kaynak sözleşmesi)', () => {
     expect(settingsSource).toContain('updateTheme(theme.id)');
-    expect(settingsSource).toContain("isSelected = (data.theme || 'default') === theme.id");
+    expect(settingsSource).toContain("isSelected = (activeTheme || 'default') === theme.id");
   });
 });
 

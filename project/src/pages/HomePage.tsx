@@ -5,7 +5,9 @@ import {
   ChevronRight, Target, Film, RefreshCw, Users, Lock,
   Timer, Play, Pause, X, ShieldAlert, Copy, Crown, Swords, Clapperboard, MoreHorizontal
 } from 'lucide-react';
-import { useApp, getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
+import { useActions, useGamification, useLibrary, useMarket, useSettings } from '../context/slices';
+import { useVisibleNow } from '../hooks/useVisibleNow';
 import { useNetworkAuth } from '../context/NetworkAuthContext';
 import { useQuests } from '../context/QuestContext';
 import { QUEST_DEFS, QuestIcon } from '../lib/quests';
@@ -1196,10 +1198,11 @@ function timeAgo(dateString: string) {
 }
 
 export default function HomePage() {
-  const {
-    data, startWatchingMovie, togglePauseWatchingMovie,
-    cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, showToast
-  } = useApp();
+  const { movies, series, collections, history } = useLibrary();
+  const { achievements, totalXp, dailyStreak } = useGamification();
+  const { agentId, nickname, showLockedNames, altWatchTemplate, weeklyPlan } = useSettings();
+  const { coins, equipped } = useMarket();
+  const { startWatchingMovie, togglePauseWatchingMovie, cancelWatchingMovie, canRateMovieWithTimer, watchMovie, watchEpisode, showToast } = useActions();
 
   const { networkUser } = useNetworkAuth();
 
@@ -1212,7 +1215,6 @@ export default function HomePage() {
   const [spotlightOffset, setSpotlightOffset] = useState(0);
   const [spotlightMoreOpen, setSpotlightMoreOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState<DetailModalTarget | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [networkFeed, setNetworkFeed] = useState<any[]>([]);
   const [profilesMap, setProfilesMap] = useState<Record<string, any>>({});
@@ -1224,21 +1226,18 @@ export default function HomePage() {
     | null
   >(null);
 
-  const activeTimerMovie = useMemo(() => data.movies.find((m) => !m.watched && m.startedAt) || null, [data.movies]);
+  const activeTimerMovie = useMemo(() => movies.find((m) => !m.watched && m.startedAt) || null, [movies]);
 
-  useEffect(() => {
-    if (!activeTimerMovie) return;
-    const interval = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [activeTimerMovie]);
+  // Sayaç tiki yalnızca sekme görünürken ve aktif sayaç varken çalışır.
+  const nowMs = useVisibleNow(Boolean(activeTimerMovie));
 
   const fetchNetworkFeed = useCallback(async () => {
-    if (!data.agentId) { setNetworkLoading(false); return; }
+    if (!agentId) { setNetworkLoading(false); return; }
     try {
-      const { data: fData } = await supabase.from('friendships').select(FRIENDSHIP_COLUMNS).or(`requester_id.eq.${data.agentId},receiver_id.eq.${data.agentId}`).eq('status', 'accepted');
+      const { data: fData } = await supabase.from('friendships').select(FRIENDSHIP_COLUMNS).or(`requester_id.eq.${agentId},receiver_id.eq.${agentId}`).eq('status', 'accepted');
       if (!fData || fData.length === 0) { setNetworkFeed([]); setNetworkLoading(false); return; }
       
-      const friendIds = fData.map(f => f.requester_id === data.agentId ? f.receiver_id : f.requester_id);
+      const friendIds = fData.map(f => f.requester_id === agentId ? f.receiver_id : f.requester_id);
       
       const { data: pData } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).in('agent_id', friendIds).returns<any[]>();
       const pMap: Record<string, any> = {};
@@ -1252,7 +1251,7 @@ export default function HomePage() {
     } finally {
       setNetworkLoading(false);
     }
-  }, [data.agentId]);
+  }, [agentId]);
 
   useEffect(() => {
     fetchNetworkFeed();
@@ -1266,21 +1265,21 @@ export default function HomePage() {
   const pastColIds = useMemo(
     () =>
       new Set(
-        data.collections
+        collections
           .filter((c) => normalize(c.name) === normalize(PAST_WATCH_COLLECTION_NAME))
           .map((c) => c.id)
       ),
-    [data.collections]
+    [collections]
   );
 
   const plannedMovieIds = useMemo(() => {
     const ids = new Set<string>();
-    (data.weeklyPlan || []).forEach(p => ids.add(p.movieId));
+    (weeklyPlan || []).forEach(p => ids.add(p.movieId));
     return ids;
-  }, [data.weeklyPlan]);
+  }, [weeklyPlan]);
 
   const eligibleMovies = useMemo(() => {
-    const unwatched = data.movies.filter(
+    const unwatched = movies.filter(
       (m) => !m.watched && (!m.collectionId || !pastColIds.has(m.collectionId)) && !plannedMovieIds.has(m.id)
     );
     const standalone = unwatched.filter((m) => !m.collectionId);
@@ -1296,10 +1295,10 @@ export default function HomePage() {
       if (sorted.length > 0) sequentialCollectionMovies.push(sorted[0]);
     });
     return [...standalone, ...sequentialCollectionMovies];
-  }, [data.movies, pastColIds, plannedMovieIds]);
+  }, [movies, pastColIds, plannedMovieIds]);
 
   const allNextEpisodes = useMemo(() => {
-    return data.series
+    return series
       .map((s) => {
         const next = getNextUnwatchedEpisode(s.episodes);
         if (!next) return null;
@@ -1309,7 +1308,7 @@ export default function HomePage() {
         return { series: s, episode: next, watchedCount, totalCount, pct };
       })
       .filter((x): x is { series: Series; episode: Episode; watchedCount: number; totalCount: number; pct: number } => x !== null);
-  }, [data.series]);
+  }, [series]);
 
   const ongoingSeries = useMemo(() => {
     return allNextEpisodes.filter((x) => x.watchedCount > 0);
@@ -1324,13 +1323,13 @@ export default function HomePage() {
 
   const isSpotlightPlanned = useMemo(() => {
     if (!spotlightMovie) return false;
-    return (data.weeklyPlan || []).some(p => p.movieId === spotlightMovie.id);
-  }, [spotlightMovie, data.weeklyPlan]);
+    return (weeklyPlan || []).some(p => p.movieId === spotlightMovie.id);
+  }, [spotlightMovie, weeklyPlan]);
 
   const quickMetrics = useMemo(() => {
-    const watchedMoviesCount = data.movies.filter((m) => m.watched && !m.isPastWatch).length;
-    const watchedEpsCount = data.series.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0);
-    const unlockedAchievementsCount = data.achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0);
+    const watchedMoviesCount = movies.filter((m) => m.watched && !m.isPastWatch).length;
+    const watchedEpsCount = series.reduce((sum, s) => sum + s.episodes.filter((e) => e.watched).length, 0);
+    const unlockedAchievementsCount = achievements.reduce((acc, curr) => acc + (curr.unlockedTiers?.length || 0), 0);
 
     let questsCompleted = 0;
     try { 
@@ -1342,24 +1341,24 @@ export default function HomePage() {
     } catch (e) { console.warn(e); }
 
     const tierCounts = { bronze: 0, silver: 0, gold: 0, platinum: 0, emerald: 0, diamond: 0, secret: 0, total: 0 };
-    (data.achievements || []).forEach((a) => {
+    (achievements || []).forEach((a) => {
       (a.unlockedTiers || []).forEach((t) => {
         if (t in tierCounts) (tierCounts as any)[t]++;
         tierCounts.total++;
       });
     });
 
-    const regularHistoryCount = data.history.filter((h) => !h.isPastWatch).length;
+    const regularHistoryCount = history.filter((h) => !h.isPastWatch).length;
 
     return { tierCounts, watchedMoviesCount, watchedEpsCount, unlockedAchievementsCount, questsCompleted, regularHistoryCount };
-  }, [data.movies, data.series, data.history, data.achievements]);
+  }, [movies, series, history, achievements]);
 
   const closestAchievements = useMemo(() => {
-    const progMap = new Map((data.achievements || []).map((a) => [a.achievementId, a]));
+    const progMap = new Map((achievements || []).map((a) => [a.achievementId, a]));
     const candidates: { id: string; name: string; desc: string; achievementId: string; tier: string; current: number; target: number; pct: number; xp: number }[] = [];
 
     ACHIEVEMENT_DEFS.forEach((def: any) => {
-      if (def.secret && !data.showLockedNames) return;
+      if (def.secret && !showLockedNames) return;
       const prog = progMap.get(def.id);
       const unlocked = prog?.unlockedTiers || [];
       const current = prog?.current || 0;
@@ -1378,21 +1377,21 @@ export default function HomePage() {
     });
 
     return candidates.sort((a, b) => b.pct - a.pct).slice(0, 3);
-  }, [data.achievements, data.showLockedNames]);
+  }, [achievements, showLockedNames]);
 
   const recentWatched = useMemo(() => {
-    return [...(data.history || [])]
+    return [...(history || [])]
       .filter((h) => !h.isPastWatch)
       .sort((a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime())
       .slice(0, 5)
       .map((h) => {
         const isMovie = h.kind === 'movie' || h.type === 'movie';
         const posterUrl = isMovie
-          ? data.movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl
-          : data.series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.posterUrl;
+          ? movies.find((m) => m.id === (h.itemId || h.id))?.posterUrl
+          : series.find((s) => s.id === (h.seriesId || h.itemId || h.id))?.posterUrl;
         return { h, isMovie, posterUrl: posterUrl || null };
       });
-  }, [data.history, data.movies, data.series]);
+  }, [history, movies, series]);
 
   const [posterErrors, setPosterErrors] = useState<Record<string, boolean>>({});
 
@@ -1402,13 +1401,13 @@ export default function HomePage() {
     if (log?.poster_url) return log.poster_url;
     const normTitle = normalize(log?.item_title || '');
     if (!normTitle) return null;
-    const matchedMovie = data.movies.find((m) => normalize(m.title) === normTitle && m.posterUrl);
+    const matchedMovie = movies.find((m) => normalize(m.title) === normTitle && m.posterUrl);
     if (matchedMovie?.posterUrl) return matchedMovie.posterUrl;
-    const matchedSeries = data.series.find((s) => normalize(s.title) === normTitle && s.posterUrl);
+    const matchedSeries = series.find((s) => normalize(s.title) === normTitle && s.posterUrl);
     return matchedSeries?.posterUrl || null;
-  }, [data.movies, data.series]);
+  }, [movies, series]);
 
-  const lvl = levelFromXp(data.totalXp);
+  const lvl = levelFromXp(totalXp);
   const currentRankIndex = useMemo(() => {
     for (let i = RANK_TIERS.length - 1; i >= 0; i--) {
       if (lvl.level >= RANK_TIERS[i].minLevel) return i;
@@ -1417,15 +1416,15 @@ export default function HomePage() {
   }, [lvl.level]);
 
   const userPersona = RANK_TIERS[currentRankIndex];
-  const equippedFrame = data.equipped?.frameId ? MARKET_ITEM_MAP.get(data.equipped.frameId) : null;
-  const equippedTitle = data.equipped?.titleId ? MARKET_ITEM_MAP.get(data.equipped.titleId) : null;
-  const equippedBadge = data.equipped?.badgeId ? MARKET_ITEM_MAP.get(data.equipped.badgeId) : null;
-  const equippedBadge2 = data.equipped?.badgeId2 ? MARKET_ITEM_MAP.get(data.equipped.badgeId2) : null;
-  const equippedBackground = data.equipped?.backgroundId
-    ? MARKET_ITEM_MAP.get(data.equipped.backgroundId)
+  const equippedFrame = equipped?.frameId ? MARKET_ITEM_MAP.get(equipped.frameId) : null;
+  const equippedTitle = equipped?.titleId ? MARKET_ITEM_MAP.get(equipped.titleId) : null;
+  const equippedBadge = equipped?.badgeId ? MARKET_ITEM_MAP.get(equipped.badgeId) : null;
+  const equippedBadge2 = equipped?.badgeId2 ? MARKET_ITEM_MAP.get(equipped.badgeId2) : null;
+  const equippedBackground = equipped?.backgroundId
+    ? MARKET_ITEM_MAP.get(equipped.backgroundId)
     : null;
-  const equippedNameEffect = data.equipped?.nameEffectId
-    ? MARKET_ITEM_MAP.get(data.equipped.nameEffectId)
+  const equippedNameEffect = equipped?.nameEffectId
+    ? MARKET_ITEM_MAP.get(equipped.nameEffectId)
     : null;
   const nextRank = RANK_TIERS[currentRankIndex + 1] || null;
   const CurrentRankIcon = userPersona.icon;
@@ -1483,10 +1482,10 @@ export default function HomePage() {
     const searchQuery = encodeURIComponent(`${movie.title} ${movie.year || ''} İzle`);
     links.push({ href: `https://www.google.com/search?q=${searchQuery}`, text: "Google'da Bul", logo: null, icon: Search });
 
-    if (data.altWatchTemplate && (movie.imdbId || data.altWatchTemplate.includes('{slug}') || data.altWatchTemplate.includes('{title}'))) {
+    if (altWatchTemplate && (movie.imdbId || altWatchTemplate.includes('{slug}') || altWatchTemplate.includes('{title}'))) {
       const charMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
       const slug = movie.title.toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (match) => charMap[match]).replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      const finalAltHref = data.altWatchTemplate.replace('{imdb}', movie.imdbId || '').replace('{slug}', slug).replace('{title}', encodeURIComponent(movie.title)).replace('{year}', movie.year || '');
+      const finalAltHref = altWatchTemplate.replace('{imdb}', movie.imdbId || '').replace('{slug}', slug).replace('{title}', encodeURIComponent(movie.title)).replace('{year}', movie.year || '');
       links.push({ href: finalAltHref, text: 'İzle', logo: null, icon: PlayCircle });
     }
     return links;
@@ -1494,7 +1493,7 @@ export default function HomePage() {
 
   const openHistoryItemDetail = (h: WatchHistoryItem) => {
     if (h.kind === 'movie' || h.type === 'movie') {
-      const found = data.movies.find((m) => m.id === (h.itemId || h.id));
+      const found = movies.find((m) => m.id === (h.itemId || h.id));
       const fallback: Movie = found || {
         id: h.itemId || h.id, title: h.title, year: h.year || '', genres: h.genres || [], collectionId: null,
         watched: true, isPastWatch: h.isPastWatch, rating: h.rating, detailedRating: h.detailedRating, reviewTags: h.reviewTags, note: h.note, watchedAt: h.watchedAt, addedAt: h.watchedAt,
@@ -1502,7 +1501,7 @@ export default function HomePage() {
       setDetailTarget({ type: 'movie', data: fallback, historyItem: h });
     } else {
       const sid = h.seriesId || h.itemId || h.id;
-      const found = data.series.find((s) => s.id === sid);
+      const found = series.find((s) => s.id === sid);
       const fallback: Series = found || { id: sid, title: h.title, year: h.year, genres: h.genres || [], episodes: [], addedAt: h.watchedAt };
       setDetailTarget({ type: 'series', data: fallback, historyItem: h });
     }
@@ -1617,16 +1616,16 @@ export default function HomePage() {
                     className="snv-code-btn"
                     title="Ajan kodunu kopyala"
                     onClick={() => {
-                      navigator.clipboard.writeText(data.agentId || '');
+                      navigator.clipboard.writeText(agentId || '');
                       showToast('Kod kopyalandı!', 'success');
                     }}
                   >
-                    {data.agentId} <Copy size={11} />
+                    {agentId} <Copy size={11} />
                   </button>
                 </div>
 
                 <h1 className={`snv-hero-name ${equippedNameEffect?.nameEffectClass || ''}`}>
-                  {data.nickname}
+                  {nickname}
                 </h1>
                 <div className="snv-hero-sub">{userPersona.subtitle}</div>
               </div>
@@ -1642,11 +1641,11 @@ export default function HomePage() {
                     </span>
                   </div>
                   <div className="snv-readout-num">
-                    <b>{data.dailyStreak || 0}</b>
+                    <b>{dailyStreak || 0}</b>
                     <em className="warm">Gün</em>
                   </div>
                   <div className="snv-readout-foot">
-                    {data.dailyStreak > 0 ? 'Seri aktif devam ediyor' : 'Bugün izle, seri başlat'}
+                    {dailyStreak > 0 ? 'Seri aktif devam ediyor' : 'Bugün izle, seri başlat'}
                   </div>
                 </div>
 
@@ -1657,7 +1656,7 @@ export default function HomePage() {
                     <span className="xp-pct">%{Math.floor(lvl.progress)}</span>
                   </div>
                   <div className="snv-readout-num">
-                    <b>{(data.totalXp || 0).toLocaleString('tr-TR')}</b>
+                    <b>{(totalXp || 0).toLocaleString('tr-TR')}</b>
                     <em>XP</em>
                   </div>
                   <div className="snv-readout-foot">
@@ -1674,7 +1673,7 @@ export default function HomePage() {
                     <span className="snv-coin-arrow">→</span>
                   </div>
                   <div className="snv-readout-num">
-                    <b>{(data.coins || 0).toLocaleString('tr-TR')}</b>
+                    <b>{(coins || 0).toLocaleString('tr-TR')}</b>
                     <em>SC</em>
                   </div>
                   <div className="snv-readout-foot">Envanteri Aç</div>
@@ -1819,7 +1818,7 @@ export default function HomePage() {
           <div className="snv-id-footer">
             <div className="snv-id-metrics">
               <div className="snv-id-mitem"><b>{quickMetrics.watchedMoviesCount}</b><span>Film</span></div>
-              <div className="snv-id-mitem"><b>{data.series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span>Dizi</span></div>
+              <div className="snv-id-mitem"><b>{series.filter(s => s.episodes?.every(e => e.watched)).length}</b><span>Dizi</span></div>
               <div className="snv-id-mitem"><b>{quickMetrics.watchedEpsCount}</b><span>Bölüm</span></div>
               <div className="snv-id-mitem"><b>{quickMetrics.unlockedAchievementsCount}</b><span>Kupa</span></div>
               <div className="snv-id-mitem"><b>{quickMetrics.questsCompleted}</b><span>Kontrat</span></div>
@@ -1977,7 +1976,7 @@ export default function HomePage() {
             </div>
 
             <div className="flex flex-row items-center justify-between gap-2 border-t border-white/5 pt-2 sm:min-w-[184px] sm:flex-col sm:items-end sm:border-0 sm:pt-0 sm:gap-2.5">
-              <CoinPill amount={data.coins || 0} onClick={() => navigateTo('market')} />
+              <CoinPill amount={coins || 0} onClick={() => navigateTo('market')} />
               <button
                 type="button"
                 onClick={() => navigateTo('market')}
@@ -2036,8 +2035,8 @@ export default function HomePage() {
           ========================================================= */}
       {spotlightMovie && (() => {
         const isSpotlightTimerActive = activeTimerMovie?.id === spotlightMovie.id;
-        const spotlightColName = spotlightMovie.collectionId ? data.collections.find((c) => c.id === spotlightMovie.collectionId)?.name : null;
-        const spotlightNo = String(data.movies.findIndex((m) => m.id === spotlightMovie.id) + 1).padStart(3, '0');
+        const spotlightColName = spotlightMovie.collectionId ? collections.find((c) => c.id === spotlightMovie.collectionId)?.name : null;
+        const spotlightNo = String(movies.findIndex((m) => m.id === spotlightMovie.id) + 1).padStart(3, '0');
 
         return (
           <section className="hn-sec">

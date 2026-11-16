@@ -55,7 +55,9 @@ export default function QuestBoard() {
   useEffect(() => {
     if (!questState.questCooldownUntil) return;
 
-    const interval = setInterval(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    const tick = () => {
       const now = Date.now();
       const diff = questState.questCooldownUntil! - now;
 
@@ -63,16 +65,39 @@ export default function QuestBoard() {
         setTimeLeft('');
         window.location.reload();
       } else {
-        const hrs = Math.floor(diff / (1000 * 60 * 60));
-        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
         setTimeLeft(
-          `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+          `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
         );
       }
-    }, 1000);
+    };
 
-    return () => clearInterval(interval);
+    const stop = () => {
+      if (interval !== undefined) {
+        clearInterval(interval);
+        interval = undefined;
+      }
+    };
+
+    const start = () => {
+      if (interval !== undefined) return;
+      interval = setInterval(tick, 1000);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') start();
+      else stop();
+    };
+
+    onVisibilityChange();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [questState.questCooldownUntil]);
 
   const getRandomQuest = (availableQuests: QuestDef[]) => {

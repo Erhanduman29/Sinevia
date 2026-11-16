@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX, ExternalLink, ChevronUp, Star, Search, Info, Film, Play, MonitorPlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useApp, DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
+import { DEFAULT_REVIEW_TAGS, isPositiveTag } from '../context/AppContext';
+import { useActions, useLibrary, useSettings } from '../context/slices';
 import { useNetworkAuth } from '../context/NetworkAuthContext';
 import { useQuests } from '../context/QuestContext';
 import { useTutorial } from '../context/TutorialContext';
@@ -724,13 +725,15 @@ function formatDeviceSeen(iso: string | null | undefined): string {
 }
 
 export default function SettingsPage() {
+  const { movies, series, collections, genres } = useLibrary();
+  const { criteria, reviewTags, tagSentiments, theme: activeTheme, altWatchTemplate, nickname, agentId, notificationsEnabled, notifyFriendRequests, notifyLists, notifyMessages, shareWatchedInFeed, sharePastWatchedInFeed, showLockedNames, showBadgeDetails, reducedMotion, fastCelebrations, externalActions } = useSettings();
   const {
-    data, addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
+    addGenre, renameGenre, addReviewTag, deleteReviewTag, renameReviewTag, setTagSentiment,
     addCollection, deleteCollection, renameCollection, exportData, importData,
     toggleLockedNames, toggleBadgeDetails, toggleReducedMotion, toggleFastCelebrations, addCriterion, editCriterion,
     deleteCriterion, updateAltWatchTemplate, updateTheme, toggleNotifications, toggleShareWatched, toggleSharePastWatched, toggleSpecificNotification, showToast,
     setNickname, setExternalActions, forceCloudUpload, forceCloudDownload
-  } = useApp();
+  } = useActions();
   const { setCenterOpen, progress, notifyEvent } = useTutorial();
   const { questState, togglePenalty } = useQuests();
   const { networkUser, logout: networkLogout } = useNetworkAuth();
@@ -754,7 +757,7 @@ export default function SettingsPage() {
   };
 
   const [editingNickname, setEditingNickname] = useState(false);
-  const [tempNickname, setTempNickname] = useState(data.nickname || '');
+  const [tempNickname, setTempNickname] = useState(nickname || '');
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [newGenre, setNewGenre] = useState('');
   const [newCollection, setNewCollection] = useState('');
@@ -854,10 +857,10 @@ export default function SettingsPage() {
   const [editingCritId, setEditingCritId] = useState<string | null>(null);
   const [deleteCritTarget, setDeleteCritTarget] = useState<string | null>(null);
 
-  const [altTemplate, setAltTemplate] = useState(data.altWatchTemplate || '');
-  const reviewTagsList = data.reviewTags && data.reviewTags.length > 0 ? data.reviewTags : DEFAULT_REVIEW_TAGS;
-  const positiveTags = reviewTagsList.filter((t) => isPositiveTag(t, data.tagSentiments));
-  const negativeTags = reviewTagsList.filter((t) => !isPositiveTag(t, data.tagSentiments));
+  const [altTemplate, setAltTemplate] = useState(altWatchTemplate || '');
+  const reviewTagsList = reviewTags && reviewTags.length > 0 ? reviewTags : DEFAULT_REVIEW_TAGS;
+  const positiveTags = reviewTagsList.filter((t) => isPositiveTag(t, tagSentiments));
+  const negativeTags = reviewTagsList.filter((t) => !isPositiveTag(t, tagSentiments));
 
   const THEMES = [
     { id: 'premium-dark', name: 'Premium Koyu', desc: 'Cam Yüzeyler & Kırmızı Vurgu', icon: Flame, previewBg: '#000000', textMode: 'dark', colors: ['#e8384f', '#ff6b7a', '#8e1220'] },
@@ -886,7 +889,7 @@ export default function SettingsPage() {
       return;
     }
     
-    if (newName.toLowerCase() === (data.nickname || '').toLowerCase()) {
+    if (newName.toLowerCase() === (nickname || '').toLowerCase()) {
       setEditingNickname(false);
       return;
     }
@@ -897,7 +900,7 @@ export default function SettingsPage() {
         .from('profiles')
         .select('nickname')
         .ilike('nickname', newName)
-        .neq('agent_id', data.agentId)
+        .neq('agent_id', agentId)
         .maybeSingle();
 
       if (error) throw error;
@@ -939,16 +942,16 @@ export default function SettingsPage() {
     const payload = {
       sineviaShare: 1,
       exportedAt: new Date().toISOString(),
-      nickname: data.nickname || '',
-      collections: (data.collections || []).map((c) => ({ id: c.id, name: c.name })),
-      movies: (data.movies || []).map((m) => ({
+      nickname: nickname || '',
+      collections: (collections || []).map((c) => ({ id: c.id, name: c.name })),
+      movies: (movies || []).map((m) => ({
         id: m.id, title: m.title, year: m.year, genres: m.genres, posterUrl: m.posterUrl,
         tmdbId: m.tmdbId, imdbId: m.imdbId, runtime: m.runtime,
         directors: m.directors, cast: m.cast, studios: m.studios,
         collectionId: m.collectionId, watched: m.watched, rating: m.rating,
         isPastWatch: Boolean(m.isPastWatch),
       })),
-      series: (data.series || []).map((s) => ({
+      series: (series || []).map((s) => ({
         id: s.id, title: s.title, year: s.year, genres: s.genres, posterUrl: s.posterUrl,
         tmdbId: s.tmdbId,
         episodes: (s.episodes || []).map((ep) => ({
@@ -963,8 +966,8 @@ export default function SettingsPage() {
     a.download = `sinevia-liste-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    const w = (data.movies || []).filter((m) => m.watched).length;
-    showToast(`Liste indirildi: ${(data.movies || []).length} film (${w} izlendi), ${(data.series || []).length} dizi.`, 'success');
+    const w = (movies || []).filter((m) => m.watched).length;
+    showToast(`Liste indirildi: ${(movies || []).length} film (${w} izlendi), ${(series || []).length} dizi.`, 'success');
   };
 
   const handleShareImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1086,7 +1089,7 @@ export default function SettingsPage() {
   const renderTagChip = (tag: string) => (
     <div key={tag} className="flex items-center gap-1.5 px-2.5 pr-2 py-1.5 transition-colors rounded-xl" style={{
       background: PREMIUM_ROW_BG,
-      border: `1px solid ${isPositiveTag(tag, data.tagSentiments) ? 'rgba(16, 185, 129, .4)' : 'rgba(232, 56, 79, .4)'}`,
+      border: `1px solid ${isPositiveTag(tag, tagSentiments) ? 'rgba(16, 185, 129, .4)' : 'rgba(232, 56, 79, .4)'}`,
     }}>
       {editingReviewTag === tag ? (
         <>
@@ -1112,13 +1115,13 @@ export default function SettingsPage() {
         <>
           <span className="text-xs sm:text-sm font-medium text-ink-100">{tag}</span>
           <button
-            onClick={() => { const newSent = isPositiveTag(tag, data.tagSentiments) ? 'negative' : 'positive'; setTagSentiment(tag, newSent); }}
-            className={`p-0.5 rounded transition-colors ${isPositiveTag(tag, data.tagSentiments) ? 'text-emerald-500 hover:text-emerald-400' : 'text-red-500 hover:text-red-400'}`}
-            title={isPositiveTag(tag, data.tagSentiments) ? 'Övgü (değiştirmek için tıkla)' : 'Eleştiri (değiştirmek için tıkla)'}
+            onClick={() => { const newSent = isPositiveTag(tag, tagSentiments) ? 'negative' : 'positive'; setTagSentiment(tag, newSent); }}
+            className={`p-0.5 rounded transition-colors ${isPositiveTag(tag, tagSentiments) ? 'text-emerald-500 hover:text-emerald-400' : 'text-red-500 hover:text-red-400'}`}
+            title={isPositiveTag(tag, tagSentiments) ? 'Övgü (değiştirmek için tıkla)' : 'Eleştiri (değiştirmek için tıkla)'}
           >
-            {isPositiveTag(tag, data.tagSentiments) ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
+            {isPositiveTag(tag, tagSentiments) ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />}
           </button>
-          <button onClick={() => { setEditingReviewTag(tag); setEditReviewTagName(tag); setEditTagSentiment(isPositiveTag(tag, data.tagSentiments) ? 'positive' : 'negative'); }} className="text-ink-400 hover:text-gold-400 transition-colors p-0.5"><Edit2 size={12} /></button>
+          <button onClick={() => { setEditingReviewTag(tag); setEditReviewTagName(tag); setEditTagSentiment(isPositiveTag(tag, tagSentiments) ? 'positive' : 'negative'); }} className="text-ink-400 hover:text-gold-400 transition-colors p-0.5"><Edit2 size={12} /></button>
           <button onClick={() => setDeleteReviewTagTarget(tag)} className="text-ink-400 hover:text-red-400 transition-colors p-0.5"><X size={13} /></button>
         </>
       )}
@@ -1236,21 +1239,21 @@ export default function SettingsPage() {
                       <button onClick={handleSaveNickname} disabled={isCheckingName} className={`text-emerald-400 hover:text-emerald-300 p-1 ${isCheckingName ? 'opacity-50' : ''}`}>
                         {isCheckingName ? <span className="animate-spin inline-block w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full" /> : <Check size={18} />}
                       </button>
-                      <button onClick={() => { setEditingNickname(false); setTempNickname(data.nickname || ''); }} disabled={isCheckingName} className="text-ink-400 hover:text-ink-200 p-1"><X size={18} /></button>
+                      <button onClick={() => { setEditingNickname(false); setTempNickname(nickname || ''); }} disabled={isCheckingName} className="text-ink-400 hover:text-ink-200 p-1"><X size={18} /></button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-3">
-                      <span className="text-lg font-black text-white">{data.nickname}</span>
+                      <span className="text-lg font-black text-white">{nickname}</span>
                       <button onClick={() => setEditingNickname(true)} className="text-ink-500 hover:text-emerald-400 transition-colors p-1" title="İsmini Değiştir"><Edit2 size={16} /></button>
                     </div>
                   )}
                 </div>
             
                 <div className="flex flex-col gap-2">
-                  <button onClick={() => copyToClipboard(data.agentId || '', 'Ağ Kodun')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
+                  <button onClick={() => copyToClipboard(agentId || '', 'Ağ Kodun')} className="flex items-center justify-between gap-3 px-3 py-1.5 transition-colors group" style={{ background: PREMIUM_ROW_BG, border: `1px solid ${PREMIUM_LINE}`, borderRadius: PREMIUM_RADIUS_SM }}>
                     <span className="text-[10px] text-ink-400 font-bold uppercase tracking-wider">Destek Kodun:</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-emerald-400 text-xs sm:text-sm font-bold">{data.agentId}</span>
+                      <span className="text-emerald-400 text-xs sm:text-sm font-bold">{agentId}</span>
                       <Copy size={12} className="text-ink-500 group-hover:text-emerald-400" />
                     </div>
                   </button>
@@ -1370,18 +1373,18 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={() => {
-                  const next = data.shareWatchedInFeed === false;
+                  const next = shareWatchedInFeed === false;
                   toggleShareWatched(next);
                   showToast(next ? 'İzlenenlerin artık akışta görünüyor.' : 'İzlenenlerin akışta paylaşılmıyor.', 'info');
                 }}
                 role="switch"
-                aria-checked={data.shareWatchedInFeed !== false}
+                aria-checked={shareWatchedInFeed !== false}
                 aria-label="İzlenenlerin akışta görünmesi"
                 className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
-                style={switchTrackStyle(data.shareWatchedInFeed !== false)}
+                style={switchTrackStyle(shareWatchedInFeed !== false)}
               >
                 <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.shareWatchedInFeed !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${shareWatchedInFeed !== false ? 'translate-x-5' : 'translate-x-0'}`}
                   style={SWITCH_KNOB_STYLE}
                 />
               </button>
@@ -1394,18 +1397,18 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={() => {
-                  const next = data.sharePastWatchedInFeed === false;
+                  const next = sharePastWatchedInFeed === false;
                   toggleSharePastWatched(next);
                   showToast(next ? 'Eskiden izlenenlerin yeniden akışta görünüyor.' : 'Eskiden izlenenlerin akıştan gizlendi.', 'info');
                 }}
                 role="switch"
-                aria-checked={data.sharePastWatchedInFeed !== false}
+                aria-checked={sharePastWatchedInFeed !== false}
                 aria-label="Eskiden izlenenlerin akışta görünmesi"
                 className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
-                style={switchTrackStyle(data.sharePastWatchedInFeed !== false)}
+                style={switchTrackStyle(sharePastWatchedInFeed !== false)}
               >
                 <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.sharePastWatchedInFeed !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${sharePastWatchedInFeed !== false ? 'translate-x-5' : 'translate-x-0'}`}
                   style={SWITCH_KNOB_STYLE}
                 />
               </button>
@@ -1457,7 +1460,7 @@ export default function SettingsPage() {
             desc="Kartlarda ve detay penceresinde tek tıkla dış sitelere açılan şablonlar. Placeholder'lar medya bilgisinden otomatik doldurulur."
           >
             <ActionBridgeSection
-              actions={data.externalActions}
+              actions={externalActions}
               onSave={(actions) => {
                 setExternalActions(actions);
                 showToast('Hızlı aksiyon köprüsü şablonları kaydedildi.');
@@ -1758,7 +1761,7 @@ export default function SettingsPage() {
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
               {THEMES.map((theme) => {
-                const isSelected = (data.theme || 'default') === theme.id;
+                const isSelected = (activeTheme || 'default') === theme.id;
                 const ThemeIcon = theme.icon;
                 return (
                   <button
@@ -1798,7 +1801,7 @@ export default function SettingsPage() {
             title="Animasyon ve Kutlama Temposu"
             icon={<Sparkles size={18} className="text-gold-400 flex-shrink-0" />}
             badge={
-              (data.reducedMotion || data.fastCelebrations) && (
+              (reducedMotion || fastCelebrations) && (
                 <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-gold-500/20 text-gold-400 border border-gold-500/30 flex items-center gap-1 flex-shrink-0">
                   <Zap size={10} /> Aktif
                 </span>
@@ -1814,14 +1817,14 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={toggleReducedMotion}
-                  aria-pressed={!!data.reducedMotion}
+                  aria-pressed={!!reducedMotion}
                   role="switch"
                   aria-label="Animasyonları azalt"
                   className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
-                  style={switchTrackStyle(!!data.reducedMotion)}
+                  style={switchTrackStyle(!!reducedMotion)}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.reducedMotion ? 'translate-x-5' : 'translate-x-0'}`}
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${reducedMotion ? 'translate-x-5' : 'translate-x-0'}`}
                     style={SWITCH_KNOB_STYLE}
                   />
                 </button>
@@ -1834,14 +1837,14 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={toggleFastCelebrations}
-                  aria-pressed={!!data.fastCelebrations}
+                  aria-pressed={!!fastCelebrations}
                   role="switch"
                   aria-label="Kutlamaları hızlı geç"
                   className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
-                  style={switchTrackStyle(!!data.fastCelebrations)}
+                  style={switchTrackStyle(!!fastCelebrations)}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.fastCelebrations ? 'translate-x-5' : 'translate-x-0'}`}
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${fastCelebrations ? 'translate-x-5' : 'translate-x-0'}`}
                     style={SWITCH_KNOB_STYLE}
                   />
                 </button>
@@ -1856,9 +1859,9 @@ export default function SettingsPage() {
         <>
           <CollapsibleSection
             title="Akıllı Cihaz Bildirimleri"
-            icon={data.notificationsEnabled ? <BellRing size={18} className="text-emerald-400 flex-shrink-0 animate-pulse" /> : <BellOff size={18} className="text-ink-500 flex-shrink-0" />}
+            icon={notificationsEnabled ? <BellRing size={18} className="text-emerald-400 flex-shrink-0 animate-pulse" /> : <BellOff size={18} className="text-ink-500 flex-shrink-0" />}
             badge={
-              data.notificationsEnabled && (
+              notificationsEnabled && (
                 <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 flex-shrink-0">
                   Aktif
                 </span>
@@ -1874,14 +1877,14 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={async () => {
-                    if (data.notificationsEnabled) {
+                    if (notificationsEnabled) {
                       toggleNotifications(false);
-                      if (data.agentId) void removePushSubscription(data.agentId);
+                      if (agentId) void removePushSubscription(agentId);
                       showToast('Ana bildirim sistemi kapatıldı.', 'info');
                       return;
                     }
 
-                    if (!data.agentId) {
+                    if (!agentId) {
                       showToast('Bildirimler için önce Sinevia Ağı hesabına giriş yapmalısın.', 'warning');
                       return;
                     }
@@ -1903,7 +1906,7 @@ export default function SettingsPage() {
                       return;
                     }
 
-                    const result = await ensurePushSubscription(data.agentId);
+                    const result = await ensurePushSubscription(agentId);
                     if (result.ok) {
                       toggleNotifications(true);
                       showToast('Harika! Bildirim izni alındı ve bu cihaz kaydedildi.', 'success');
@@ -1914,19 +1917,19 @@ export default function SettingsPage() {
                     }
                   }}
                   role="switch"
-                  aria-checked={data.notificationsEnabled}
+                  aria-checked={notificationsEnabled}
                   aria-label="Cihaz bildirimleri"
                   className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--red-hi,#ff6b7a)] focus-visible:ring-offset-2"
-                  style={switchTrackStyle(!!data.notificationsEnabled)}
+                  style={switchTrackStyle(!!notificationsEnabled)}
                 >
                   <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${data.notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full transition duration-300 ease-in-out ${notificationsEnabled ? 'translate-x-5' : 'translate-x-0'}`}
                     style={SWITCH_KNOB_STYLE}
                   />
                 </button>
               </div>
 
-              {data.notificationsEnabled && (
+              {notificationsEnabled && (
                 <div className="mt-4 pt-4 border-t border-ink-800 space-y-3">
                   <h4 className="text-[10px] font-black text-ink-500 uppercase tracking-widest mb-3">Sosyal Ağ Bildirim Tercihleri</h4>
               
@@ -1939,15 +1942,15 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => toggleSpecificNotification('notifyMessages', data.notifyMessages === false ? true : false)}
+                      onClick={() => toggleSpecificNotification('notifyMessages', notifyMessages === false ? true : false)}
                       role="switch"
-                      aria-checked={data.notifyMessages !== false}
+                      aria-checked={notifyMessages !== false}
                       aria-label="Sohbet mesajı bildirimleri"
                       className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out"
-                      style={switchTrackStyle(data.notifyMessages !== false)}
+                      style={switchTrackStyle(notifyMessages !== false)}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${data.notifyMessages !== false ? 'translate-x-4' : 'translate-x-0'}`}
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${notifyMessages !== false ? 'translate-x-4' : 'translate-x-0'}`}
                         style={SWITCH_KNOB_STYLE}
                       />
                     </button>
@@ -1962,15 +1965,15 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => toggleSpecificNotification('notifyFriendRequests', data.notifyFriendRequests === false ? true : false)}
+                      onClick={() => toggleSpecificNotification('notifyFriendRequests', notifyFriendRequests === false ? true : false)}
                       role="switch"
-                      aria-checked={data.notifyFriendRequests !== false}
+                      aria-checked={notifyFriendRequests !== false}
                       aria-label="Arkadaşlık isteği bildirimleri"
                       className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out"
-                      style={switchTrackStyle(data.notifyFriendRequests !== false)}
+                      style={switchTrackStyle(notifyFriendRequests !== false)}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${data.notifyFriendRequests !== false ? 'translate-x-4' : 'translate-x-0'}`}
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${notifyFriendRequests !== false ? 'translate-x-4' : 'translate-x-0'}`}
                         style={SWITCH_KNOB_STYLE}
                       />
                     </button>
@@ -1985,15 +1988,15 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => toggleSpecificNotification('notifyLists', data.notifyLists === false ? true : false)}
+                      onClick={() => toggleSpecificNotification('notifyLists', notifyLists === false ? true : false)}
                       role="switch"
-                      aria-checked={data.notifyLists !== false}
+                      aria-checked={notifyLists !== false}
                       aria-label="Gelen liste bildirimleri"
                       className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ease-in-out"
-                      style={switchTrackStyle(data.notifyLists !== false)}
+                      style={switchTrackStyle(notifyLists !== false)}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${data.notifyLists !== false ? 'translate-x-4' : 'translate-x-0'}`}
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full transition duration-300 ease-in-out ${notifyLists !== false ? 'translate-x-4' : 'translate-x-0'}`}
                         style={SWITCH_KNOB_STYLE}
                       />
                     </button>
@@ -2020,8 +2023,8 @@ export default function SettingsPage() {
 
                     <button
                       onClick={async () => {
-                        if (!data.agentId) return;
-                        const result = await ensurePushSubscription(data.agentId);
+                        if (!agentId) return;
+                        const result = await ensurePushSubscription(agentId);
                         if (!result.ok) {
                           showToast(result.message, 'error');
                           return;
@@ -2230,7 +2233,7 @@ export default function SettingsPage() {
                     Özel Tür Filtresi <span className="text-[10px] text-ink-500 font-normal lowercase">(Boş bırakırsan her türde çıkar)</span>
                   </label>
                   <div className="flex flex-wrap gap-1.5">
-                    {data.genres.map((g) => (
+                    {genres.map((g) => (
                       <button
                         key={g}
                         onClick={() => toggleCritGenre(g)}
@@ -2250,11 +2253,11 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {!data.criteria || data.criteria.length === 0 ? (
+            {!criteria || criteria.length === 0 ? (
               <p className="text-sm text-ink-500">Henüz hiçbir kriter eklenmedi.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                {data.criteria.map((c) => (
+                {criteria.map((c) => (
                   <div
                     key={c.id}
                     className="rounded-[var(--r-sm,10px)] p-3 flex flex-col gap-2 transition-all"
@@ -2363,7 +2366,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              {data.genres.map((g) => (
+              {genres.map((g) => (
                 <div key={g} className="flex items-center gap-1.5 bg-ink-800 border border-ink-700 rounded-full pl-3 pr-2 py-1 hover:border-gold-500/50 transition-colors">
                   {editingGenre === g ? (
                     <>
@@ -2409,12 +2412,12 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            {data.collections.length === 0 ? (
+            {collections.length === 0 ? (
               <p className="text-sm text-ink-500">Henüz koleksiyon yok.</p>
             ) : (
               <div className="space-y-2">
-                {data.collections.map((c) => {
-                  const movieCount = data.movies.filter((m) => m.collectionId === c.id).length;
+                {collections.map((c) => {
+                  const movieCount = movies.filter((m) => m.collectionId === c.id).length;
                   return (
                     <div key={c.id} className="flex items-center gap-2 bg-ink-800/80 border border-ink-700 rounded-xl px-3 py-2.5 hover:border-azure-500/50 transition-colors">
                       {editingColl === c.id ? (
@@ -2466,10 +2469,10 @@ export default function SettingsPage() {
                 </span>
                 <button
                   onClick={toggleLockedNames}
-                  className={`${data.showLockedNames ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
-                  style={data.showLockedNames ? BTN_P_STYLE : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
+                  className={`${showLockedNames ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
+                  style={showLockedNames ? BTN_P_STYLE : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
                 >
-                  {data.showLockedNames ? 'Açık — İsimler Görünür' : 'Kapalı — ??? Modu'}
+                  {showLockedNames ? 'Açık — İsimler Görünür' : 'Kapalı — ??? Modu'}
                 </button>
               </div>
 
@@ -2479,10 +2482,10 @@ export default function SettingsPage() {
                 </span>
                 <button
                   onClick={toggleBadgeDetails}
-                  className={`${data.showBadgeDetails ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
-                  style={data.showBadgeDetails ? BTN_P_STYLE : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
+                  className={`${showBadgeDetails ? BTN_P : BTN_S} w-full sm:w-auto px-5 py-2.5 text-xs sm:text-sm`}
+                  style={showBadgeDetails ? BTN_P_STYLE : { ...BTN_S_STYLE, color: 'var(--text-main, #f4f4f2)' }}
                 >
-                  {data.showBadgeDetails ? 'Açık — İsim + XP Görünür' : 'Kapalı — Sadece İkonlar'}
+                  {showBadgeDetails ? 'Açık — İsim + XP Görünür' : 'Kapalı — Sadece İkonlar'}
                 </button>
               </div>
 

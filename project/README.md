@@ -2,7 +2,7 @@
 
 Sinevia, film ve dizi koleksiyonunu takip etmek, puanlamak, yorumlamak ve sosyal olarak paylaşmak için geliştirilmiş bir web uygulamasıdır. PWA (Progressive Web App) olarak kurulabilir, çevrimdışı çalışabilir ve bulut senkronizasyonu ile birden fazla cihazda aynı veriyi kullanabilir.
 
-**Sürüm:** 4.5
+**Sürüm:** 5.0
 
 ---
 
@@ -15,34 +15,38 @@ Sinevia, film ve dizi koleksiyonunu takip etmek, puanlamak, yorumlamak ve sosyal
 5. [Film Yönetimi](#film-yönetimi)
 6. [Dizi Yönetimi](#dizi-yönetimi)
 7. [Puanlama Sistemi](#puanlama-sistemi)
-8. [İzleme Geçmişi](#izleme-geçmişi)
-9. [Koleksiyonlar ve Türler](#koleksiyonlar-ve-türler)
-10. [Başarımlar](#başarımlar)
-11. [XP ve Seviye Sistemi](#xp-ve-seviye-sistemi)
-12. [SineCoin ve Pazar](#sinecoin-ve-pazar)
-13. [Pazar Görevleri (Sözleşmeler)](#pazar-görevleri-sözleşmeler)
-14. [Görevler (Quests)](#görevler-quests)
-15. [Akademi ve Eğitim](#akademi-ve-eğitim)
-16. [Kör Kalibrasyon (Düello)](#kör-kalibrasyon-düello)
-17. [Sinematik Otopsi (DNF)](#sinematik-otopsi-dnf)
-18. [Haftalık Plan](#haftalık-plan)
-19. [İstatistikler](#istatistikler)
-20. [Sinevia Ağı (Sosyal)](#sinevia-ağı-sosyal)
-21. [Bulut Senkronizasyonu](#bulut-senkronizasyonu)
-22. [Cihaz Yönetimi](#cihaz-yönetimi)
-23. [Bildirimler](#bildirimler)
-24. [Ayarlar](#ayarlar)
-25. [Kısayollar](#kısayollar)
-26. [PWA (Kurulabilir Uygulama)](#pwa-kurulabilir-uygulama)
-27. [Yedekleme ve Geri Yükleme](#yedekleme-ve-geri-yükleme)
-28. [Yapı ve Klasörler](#yapı-ve-klasörler)
-29. [Testler](#testler)
+8. [Yeniden İzleme (Rewatch) Sistemi](#yeniden-izleme-rewatch-sistemi)
+9. [İzleme Geçmişi](#izleme-geçmişi)
+10. [Koleksiyonlar ve Türler](#koleksiyonlar-ve-türler)
+11. [Başarımlar](#başarımlar)
+12. [XP ve Seviye Sistemi](#xp-ve-seviye-sistemi)
+13. [SineCoin ve Pazar](#sinecoin-ve-pazar)
+14. [Pazar Görevleri (Sözleşmeler)](#pazar-görevleri-sözleşmeler)
+15. [Görevler (Quests)](#görevler-quests)
+16. [Akademi ve Eğitim](#akademi-ve-eğitim)
+17. [Kör Kalibrasyon (Düello)](#kör-kalibrasyon-düello)
+18. [Sinematik Otopsi (DNF)](#sinematik-otopsi-dnf)
+19. [Haftalık Plan](#haftalık-plan)
+20. [İstatistikler](#istatistikler)
+21. [Sinevia Ağı (Sosyal)](#sinevia-ağı-sosyal)
+22. [Bulut Senkronizasyonu](#bulut-senkronizasyonu)
+23. [Cihaz Yönetimi](#cihaz-yönetimi)
+24. [Bildirimler](#bildirimler)
+25. [Ayarlar](#ayarlar)
+26. [Kısayollar](#kısayollar)
+27. [PWA (Kurulabilir Uygulama)](#pwa-kurulabilir-uygulama)
+28. [Yedekleme ve Geri Yükleme](#yedekleme-ve-geri-yükleme)
+29. [Yapı ve Klasörler](#yapı-ve-klasörler)
+30. [Testler](#testler)
+31. [Lisans](#lisans)
 
 ---
 
 ## Genel Bakış
 
 Sinevia, bir film ve dizi takip uygulamasıdır. Kullanıcılar filmlerini ve dizilerini ekleyebilir, puanlayabilir, not yazabilir, koleksiyonlar oluşturabilir, izleme geçmişini kaydedebilir. XP ve seviye sistemi, başarımlar, SineCoin ekonomisi, pazar ve görevler ile oyunlaştırılmış bir deneyim sunar. Bulut senkronizasyonu ile birden fazla cihazda aynı veri kullanılabilir.
+
+Tekrar izleme (rewatch), kör kalibrasyon (düello), puan enflasyonu tespiti ve optimum retrieval ile zenginleştirilmiş detaylı istatistikler mevcuttur.
 
 ---
 
@@ -55,9 +59,10 @@ Sinevia, bir film ve dizi takip uygulamasıdır. Kullanıcılar filmlerini ve di
 - **Durum Yönetimi:** React Context (AppContext, QuestContext, TutorialContext, NetworkAuthContext)
 - **Yerel Depolama:** IndexedDB (`sinevia-db`) + localStorage
 - **PWA:** vite-plugin-pwa (service worker, manifest, offline cache)
-- **Test:** Vitest (573+ test)
+- **Test:** Vitest (43 dosya / 619 test)
 - **İkonlar:** lucide-react
 - **Bildirimler:** Web Push (VAPID) + Service Worker
+- **Ortam:** Node.js, npm
 
 ---
 
@@ -70,7 +75,7 @@ npm run dev          # Geliştirme sunucusu (http://localhost:5173)
 npm run build        # Üretim derlemesi
 npm run typecheck    # TypeScript kontrolü
 npm run lint         # ESLint
-npx vitest run       # Testler
+npx vitest run       # Tüm testleri çalıştırır (43 dosya / 619 test)
 npm run preview      # Üretim önizlemesi
 ```
 
@@ -78,6 +83,7 @@ Ortam değişkenleri (`.env`):
 - `VITE_SUPABASE_URL` — Supabase proje URL'si
 - `VITE_SUPABASE_ANON_KEY` — Supabase anon key
 - `VITE_VAPID_PUBLIC_KEY` — Web Push VAPID public key (push:setup ile üretilir)
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (yalnızca sunucu tarafı / teşhis)
 
 ---
 
@@ -95,7 +101,7 @@ Alt navigasyon / sidebar ile erişilen sekmeler:
 | Geçmiş | İzleme geçmişi |
 | Başarımlar | Başarım listesi ve ilerleme |
 | Pazar | Market, sözleşmeler, görevler |
-| İstatistikler | Detaylı istatistikler |
+| İstatistikler | Detaylı istatistikler (kalibrasyon, tekrar izlemeler, puan enflasyonu) |
 | Ayarlar | Tüm ayarlar |
 | Yapay Zeka | AI asistan |
 
@@ -111,12 +117,13 @@ Alt navigasyon / sidebar ile erişilen sekmeler:
 - **Geçmiş izleme (past watch):** Daha önce izlenmiş filmleri arşive ekleme (`isPastWatch`).
 - **Koleksiyon atama:** Filmler koleksiyonlara atanabilir.
 - **Tür atama:** Filmler türlere atanabilir.
-- **Yeniden izleme:** Aynı film tekrar izlenince `rewatchCounter` artar.
+- **Yeniden izleme:** Aynı film tekrar izlenince `rewatchCount` artar ve `rewatchStartedAt` güncellenir.
 - **Yarım bırakma (DNF / Sinematik Otopsi):** Film yarım bırakılırsa autopsy kaydı.
-- **Kör kalibrasyon:** Düello ile puan düzeltilir (`calibratedScore`, `duelCount`, `duelWins`).
+- **Kör kalibrasyon:** Düello ile puan düzeltilir (`calibratedScore`, `duelCount`, `duelWins`, `duelLosses`).
 - **Gerçek izleme süresi sayacı:** `startedAt`, `actualRuntime` ile izleme süresi takibi.
 - **Hızlı izleme:** Orijinal süreden kısa sürede bitirme takibi.
 - **Film arama/filtreleme:** Başlık, tür, koleksiyon, izlenmiş durumu.
+- **Movie tipi opsiyonel alanları:** `calibratedScore?`, `duelCount?`, `duelWins?`, `duelLosses?`, `duelOpponents?`, `calibrationChanges?`, `rewatchStartedAt?`, `rewatchCount?` — hepsi opsiyonel, geriye uyumlu.
 
 ---
 
@@ -139,17 +146,36 @@ Alt navigasyon / sidebar ile erişilen sekmeler:
 - **Silinen bölümler:** Yanlışlıkla silinen bölümler "Eksikleri Bul" ile puan/not korunarak geri getirilebilir.
 - **Geçmiş izleme (past watch):** Daha önce izlenmiş dizileri arşive ekleme.
 - **Dizi arama/filtreleme:** Başlık, tür, izlenmiş durumu.
+- **deletedEpisodes:** 30 günlük arşivleme; `DELETE_EPISODE` işleminde prune edilir.
 
 ---
 
 ## Puanlama Sistemi
 
 - **10 üzerinden puanlama:** 0.5 artışlarla (0.5, 1, 1.5, ..., 10).
+- **Yuvarlama:** `roundHalfRating(n)` = `clamp(Math.round(n*2)/2, 1, 10)`. Örnekler: 9.8→10, 9.1→9, 9.4→9.5, 5.56→5.5, 5.75→6.
 - **Detaylı kriter puanlama:** Her film/dizi için birden fazla kriter (RatingCriterion) ile ağırlıklı puanlama. Kriterler kullanıcı tarafından oluşturulur (ad, ağırlık, uygulama alanı: film/dizi/ikisi, türler).
 - **İnceleme notu:** Her yapım için metin notu.
 - **İnceleme etiketleri (review tags):** Pozitif/negatif etiketler.
 - **Puan düzenleme geçmişi:** `previousRating`, `ratingChangedAt`, `noteChangedAt`, `editedAt`.
 - **Kör kalibrasyon düellosu:** İki filmi yan yana karşılaştırarak puan düzeltme.
+- **Puan değiştirme eşiği:** `needsUpdate = |calibratedScore − rating| ≥ 0.5`. Fark 0.5'in altındaysa "Puanı Değiştir" butonu çıkmaz (yalnız görünürlük için listelenir).
+- **Puan enflasyonu:** `suggestion = roundHalfRating(calibratedScore)`; gap = `suggestion − rating`; deviation = `calibratedScore − rating`.
+
+---
+
+## Yeniden İzleme (Rewatch) Sistemi
+
+Bu bölüm README'nin önceki sürümlerinde yoktu; sürüm 5.0 ile eklendi.
+
+- **Cooldown:** `REWATCH_COOLDOWN_MS = 30 gün`. `getRewatchCooldown(history, movieId, now)` sadece `isRewatch` olmayan (normal) izleme kayıtlarına bakar; en son normal izlemenin `watchedAt`'inden itibaren 30 gün bekleme zorunluluğu vardır.
+- **Past watch istisnası:** Film yalnızca "past watch" olarak kaydedilmişse (normal izleme kaydı yoksa) beklemeden yeniden izlemeye başlanabilir.
+- **Rewatch kaydı:** `WatchHistoryItem` alanları: `isRewatch: true`, `rewatchOfId` (ilk izleme kaydının ID'si), `watchNumber` (kaçıncı tekrar), `rewatchedFromPast` (past watch'tan mı gelindi).
+- **Movie alanları:** `rewatchStartedAt?` (sayaç başlangıcı), `rewatchCount?` (kaç kez tekrar izlendi).
+- **Sayaç (opsiyonel):** `startRewatchingMovie(id)` sayacı başlatır; `rewatchMovie()` timer olmadan da çalışabilir (`actualRuntime = maxMins`). Timer varsa geçen süre kullanılır.
+- **Sayaç çakışma koruması:** Bir filmde zaten aktif normal timer (`startedAt`) veya rewatch timer (`rewatchStartedAt`) varsa başka bir sayaç başlatılamaz. `WATCH_MOVIE` reducer'ı her durumda `startedAt: null, rewatchStartedAt: null` yazar (eski sayaç temizliği).
+- **UI:** MediaDetailModal'da rewatch modunda "Sayaç Başlat (Opsiyonel)" butonu, timer yokken de "Bitir & Puanla" aktif, "İlk izleme" şeridi (en eski kaydın tarihi, puanı, notu). HistoryPage'de "Tekrar İzle" butonu sadece modalı rewatch modunda açar (sayaç otomatik başlamaz).
+- **Başarım:** `rewatch_master` (Tekrar İzleme Ustası), kademeler 1/3/5/10/25/50, XP 15/40/90/180/400/800, kategori "İzleme", icon `RotateCcw`.
 
 ---
 
@@ -159,7 +185,8 @@ Alt navigasyon / sidebar ile erişilen sekmeler:
 - **Geçmiş düzenleme:** Puan, not, etiket düzenlenebilir (`UPDATE_HISTORY_RATING`).
 - **Geçmiş silme:** İzleme kaydı silinebilir.
 - **Geçmiş filtreleme:** Tarih, tür, puan aralığı.
-- **Yeniden izleme:** Aynı yapım tekrar izlenince yeni kayıt.
+- **Yeniden izleme:** Aynı yapım tekrar izlenince yeni kayıt (`isRewatch: true`).
+- **WatchHistoryItem alanları:** `id, itemId, seriesId, kind, type, title, rating, detailedRating, reviewTags, note, watchedAt, isPastWatch?, importedAt?, startedAt?, actualRuntime?, originalRuntime?, genres, year, season, episode, abandoned?, previousRating?, originalRating?, ratingChangedAt?, noteChangedAt?, editedAt?, ratingScope?, bulkRating?, bulkRuntimeMinutes?, isRewatch?, rewatchOfId?, watchNumber?, rewatchedFromPast?`.
 
 ---
 
@@ -187,6 +214,9 @@ Alt navigasyon / sidebar ile erişilen sekmeler:
 - **Gizli:** Acımasız yargıç, kusursuzluk takıntısı, dizi koması, sinevia efsanesi, vb.
 - **Pazar:** Pazar müşterisi, sinecoin sirkülasyonu, taahhüt ustası.
 - **Dizi Süresi:** Dizi süresi ustası, tek oturum efsanesi, tamamlanmış koleksiyon.
+- **Rewatch:** `rewatch_master` (Tekrar İzleme Ustası), kademeler 1/3/5/10/25/50.
+- **Kalibrasyon:** `calibration_master` (Kalibrasyon Ustası), kademeler 1/3/5/10/25/50, XP 15/40/90/180/400/800, kategori "Puanlama", icon `Scale`. `calibration_master` `RATING_SCOPED_ACHIEVEMENTS` içinde **değil** → kalibrasyon panelinden puan değiştirilince bu başarım açılır, diğer puan-bağımlı başarımlar açılmaz.
+- **Movie `calibrationChanges?`:** `APPLY_CALIBRATION_SUGGESTION` ile artırılır (sadece farklı puana geçildiğinde; aynı puan tekrarlanırsa artmaz).
 
 Her başarımın birden fazla kademesi (bronze, silver, gold, platinum, emerald, diamond) ve XP ödülü vardır. Gizli başarımlar kullanıcıya gösterilmez (kilit ikonu ile).
 
@@ -200,6 +230,8 @@ Her başarımın birden fazla kademesi (bronze, silver, gold, platinum, emerald,
 - **XP defteri:** Tüm XP hareketleri kaydedilir (`xpEvents`, `xpLedger`).
 - **XP kaynağı:** `source` ve `sourceId` ile izlenebilir (film, dizi, başarım, görev, pazar, vb.).
 - **Coin dönüşümü:** XP → SineCoin dönüşümü (`xp_conversion`).
+- **XP checkpoint:** 90 günden eski `xpEvents` tek `xp-checkpoint` kaydına katlanır (RAM/CPU tasarrufu).
+- **Düello XP'si yok:** Düello sonucu XP vermez; ödül yalnızca "Terazi Ustası" başarımlarından gelir.
 
 ---
 
@@ -247,6 +279,7 @@ Her başarımın birden fazla kademesi (bronze, silver, gold, platinum, emerald,
 - **Görev geçmişi:** Tamamlanan görevlerin kaydı.
 - **Görev soğuma (cooldown):** Reddedilen görevler için bekleme süresi.
 - **Ücretsiz görev kullanımı:** Günlük ve sabitlenmiş ücretsiz görev sayaçları.
+- **Puan değişimi ve görevler:** `APPLY_CALIBRATION_SUGGESTION` history kayıtına yazmıyor → puan-bağımlı görevler ve pazar görevleri tetiklenmez (bypass ile garanti altına alınmıştır).
 
 ---
 
@@ -265,8 +298,11 @@ Her başarımın birden fazla kademesi (bronze, silver, gold, platinum, emerald,
 - **Düello:** İki filmi yan yana karşılaştırarak puan düzeltme.
 - **Kör puanlama:** Orijinal puan gizli, kullanıcı kendi puanını verir.
 - **Sapma koruması:** Düello sonucu orijinal puandan bağımsız sapma korunur (`calibratedScore`).
-- **Düello istatistikleri:** `duelCount`, `duelWins`.
-- **Başarımlar:** Terazi ustası, taht deviren (gizli).
+- **Düello istatistikleri:** `duelCount`, `duelWins`, `duelLosses`, `duelOpponents`, `calibratedScore`.
+- **Eşleşme kuralı:** İki film sadece aynı puanlı veya ±0.5 farkta düelloya girer (`pickDuelPair`).
+- **Tekrar eşleşme engeli:** `haveDueled(a, b)` — `duelOpponents` dizisinde rakip varsa çift bir daha eşleşmez (200 rakip sınırı, `slice(-200)`).
+- **Elo:** `calculateEloDelta` — kazanana +0.1, kaybedene −0.1 (clamp [1,10]); `calculateEloTie` — puan >5 ise +0.1, <5 ise −0.1, =5 ise 0.
+- **Başarımlar:** Terazi ustası (`scale_master`), taht deviren (gizli, `secret_giant_slayer`).
 
 ---
 
@@ -297,6 +333,11 @@ Her başarımın birden fazla kademesi (bronze, silver, gold, platinum, emerald,
 - **Başarım istatistikleri:** Açılan başarımlar.
 - **SineCoin istatistikleri:** Kazanılan/harcanan coin.
 - **Sözleşme istatistikleri:** Tamamlanan/başarısız görevler.
+- **Başyapıt Bandı:** Yalnız tam 10 puan (`num ≥ 10`, aralık `'10'`); Güçlü Yapımlar `7.0 – 9.9`.
+- **Puan Enflasyonu Analizi:** `inflated` (puan kalibreden yüksek → düşürülecekler), `deflated` (puan kalibreden düşük → yükselilecekler), `pendingCount` (fark ≥0.5 olanlar).
+- **En Kötü 6 Film:** Şeref Kürsüsü'nin altına taşındı, afişli 6'lı grid, `duelLosses` sıralaması (rating asc, eşitse duelLosses desc).
+- **Tekrar İzlemeler paneli:** Toplam tekrar, benzersiz film, toplam süre, puan değişen film sayısı, top-5 liste (sıra, küçük poster, başlık, `×{count}` rozeti), kaydırılabilir yatay liste.
+- **Puan renkleri (`ratingBgClass`):** ≥10 mavi, ≥8 yeşil, ≥5.5 sarı, ≥3.5 turuncu, ≥1 kırmızı.
 
 ---
 
@@ -318,13 +359,19 @@ Her başarımın birden fazla kademesi (bronze, silver, gold, platinum, emerald,
 
 ## Bulut Senkronizasyonu
 
-- **Otomatik senkron:** Veri değiştiğinde 30 saniyelik sessizlik sonrası buluta kayıt.
+- **Otomatik senkron:** İçerik hash'i değiştiğinde 90 saniyelik debounce sonrası buluta kayıt. Açılışta 1 kez, manuel, giriş/hesap değişimi ve çakışma çözümünde tetiklenir. Periyodik timer yok.
 - **Çakışma çözümü:** Otomatik birleştirme (modal yok). Gerçek veri farkı varsa birleştirilir.
 - **Çakışma hash'i:** Yalnızca gerçek kullanıcı verisi (filmler, diziler, XP, görevler, envanter, vb.) karşılaştırılır. Saat, cihaz, tema, eğitim, market sayaçları çakışma nedeni değildir.
-- **İçerik sıkıştırma:** gzip+base64 ile taşıma boyutu küçültülür.
+- **Meta-first sync:** `sync_get_meta` (küçük) → hash aynıysa tam yük indirilmez; farklıysa `sync_get_state`.
+- **`sync_commit`:** 7 parametreli imza (`p_agent_id, p_base_revision, p_device_id, p_payload, p_payload_gz, p_save_hash, p_summary`); gzip base64 production'da devre dışı (`p_payload_gz` her zaman null). Legacy 5 parametreli çağrıya düşmeyi destekler.
+- **Debounce:** İçerik değişimi 90 sn; yerel kayıt 600 ms; tam yedek 10 sn debounce; sekme gizlenince/kapanınca anında flush.
+- **`notify_poll` RPC:** Tek çağrıda friendships + recommendations + unread_messages toplanır (3 sorgu yerine 1). NetworkPage 180 sn aralıkla yoklar.
+- **Önbellek:** `READ_CACHE_TTL_MS = 60 sn`, maksimum 80 kayıt, eşzamanlı aynı sorgular tek isteğe düşer, her yazma önbelleği temizler.
 - **Sürüm yönetimi:** Sunucu tarafı revizyon numarası ile atomik commit.
 - **Kimlik kurtarma:** Ağ hesabına bağlanınca yerel kimlik otomatik kurtarılır.
 - **Yedek arşivi:** Eski Storage arşivinden otomatik içe aktarma.
+- **Retention:** network_logs 12 ay + agent başına son 1000; süresi geçmiş `network_sessions`; `login_attempts` 30 gün; `push_subscriptions` 90 gün; `deletedEpisodes` 30 gün; `app_saves.last_seen` en fazla saatte bir; `payload_gz` bytea kolonu `app_saves` tablosunda (şu an kullanılmıyor, gelecek sıkıştırma için ayrılmış).
+- **SQL Dosyaları:** `supabase/fix_ag_hatasi.sql`, `supabase/sync_commit_fix.sql`, `supabase/sync_get_meta_fix.sql`, `supabase/notify_poll_fix.sql`, `supabase/sql/temizlik_teknik_kayit.sql`.
 
 ---
 
@@ -335,6 +382,7 @@ Her başarımın birden fazla kademesi (bronze, silver, gold, platinum, emerald,
 - **Bu cihaz işareti:** Mevcut cihaz "Bu cihaz" rozeti ile işaretlenir.
 - **Cihazdan çıkış:** Herhangi bir cihazdan uzaktan çıkış yapılabilir.
 - **Mevcut cihazdan çıkış:** Mevcut cihazdan çıkınca sayfa yenilenir.
+- **Ağ kimlik doğrulama:** `x-agent-token` (`sec_...`) ve `x-network-session` header'ları; `current_agent_id()` 3 çözüm yolu — `x-network-session` → `network_sessions`, `x-agent-token` → `profiles.secret_token`, tek cihaz durumunda `network_devices.device_secret`.
 
 ---
 
@@ -346,6 +394,7 @@ Her başarımın birden fazla kademesi (bronze, silver, gold, platinum, emerald,
 - **Seviye atlama bildirimi:** `LevelUpModal`.
 - **Sözleşme kutlaması:** `ContractCelebrationOverlay`.
 - **Bildirim tercihleri:** Kullanıcı ayarlayabilir (sunucu kopyası ile).
+- **Bildirim yoklaması:** `notificationsEnabled && agentId && Notification.permission==='granted'` iken görünür sekmede 120 sn'de bir 3 sorgu (messages/friendships/recommendations).
 
 ---
 
@@ -406,10 +455,15 @@ project/
 │   ├── lib/                 # Yardımcı kütüphaneler (50+ modül)
 │   ├── tutorial/            # Eğitim sistemi
 │   ├── hooks/               # Custom hooks
-│   └── test/                # Test dosyaları (41 dosya, 573+ test)
+│   └── test/                # Test dosyaları (43 dosya, 619 test)
 ├── supabase/
 │   ├── schema.sql           # Kanonik veritabanı şeması
+│   ├── schema/              # Modüler şema dosyaları (01_core, 02_functions, 03_security)
 │   ├── migrations/          # Migration dosyaları
+│   ├── fix_ag_hatasi.sql    # Ağ hatası düzeltme SQL'i
+│   ├── sync_commit_fix.sql  # sync_commit imza düzeltmesi
+│   ├── sync_get_meta_fix.sql # sync_get_meta fonksiyon düzeltmesi
+│   ├── notify_poll_fix.sql  # notify_poll fonksiyon düzeltmesi
 │   └── README.md            # Supabase rehberi
 ├── docs/
 │   └── sync-contract.md     # Senkronizasyon sözleşmesi
@@ -443,17 +497,20 @@ project/
 | `questLogic.ts` | Görev tamamlama kontrolü |
 | `selectors.ts` | Veri filtreleme/sıralama |
 | `utils.ts` | Yardımcı fonksiyonlar |
+| `calibrationEngine.ts` | Düello Elo hesaplama, eşleşme seçimi |
+| `rating.ts` | `roundHalfRating` puan yuvarlama |
+| `rewatch.ts` | Rewatch cooldown hesaplama |
 
 ---
 
 ## Testler
 
 ```bash
-npx vitest run                    # Tüm testler
+npx vitest run                    # Tüm testleri çalıştırır (43 dosya / 619 test)
 npx vitest run src/test/syncEngine.test.ts  # Belirli test
 ```
 
-**Test dosyaları (41 dosya, 573+ test):**
+**Test dosyaları (43 dosya / 619 test):**
 
 | Test Dosyası | Kapsam |
 |---|---|
@@ -470,6 +527,9 @@ npx vitest run src/test/syncEngine.test.ts  # Belirli test
 | `shortcuts.test.ts` | Kısayollar |
 | `xp*.test.ts` | XP mantığı |
 | `contract*.test.ts` | Sözleşme mantığı |
+| `rewatch.test.ts` | Tekrar izleme (16 test) |
+| `achievements.test.ts` | Başarım mantığı (rewatch_master, calibration_master) |
+| `rating yuvarlama testi` | roundHalfRating (9.8→10, 9.1→9, 9.4→9.5, 5.56→5.5) |
 
 ---
 

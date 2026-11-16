@@ -38,6 +38,13 @@ import {
   sameSaveHash,
 } from './syncContract';
 import { mergeXpLedgers, normalizeXpEvents, sumXpEvents } from './xpLedger';
+import { isFeatureEnabled } from './featureFlags';
+import {
+  applyTombstones,
+  itemTimestamp,
+  mergeTombstones,
+  type DeletedItem,
+} from './syncMerge';
 import { parseBackupPayload } from './appBackup';
 import { mergeQuestStates } from './localStateV3';
 
@@ -466,6 +473,31 @@ function mergeById<T extends { id: string }>(primary: T[] = [], secondary: T[] =
   return Array.from(merged.values());
 }
 
+/**
+ * `id` ile birleştirir; aynı id'de "en son değiştirilen" kazanır.
+ * Zaman damgası eşitse (eski kayıtlar) mevcut "daha zengin kazanır" kuralına düşer.
+ */
+function mergeByIdNewer<T extends { id: string }>(primary: T[] = [], secondary: T[] = []): T[] {
+  const merged = new Map<string, T>();
+  for (const item of primary ?? []) if (item?.id) merged.set(item.id, item);
+  for (const item of secondary ?? []) {
+    if (!item?.id) continue;
+    const existing = merged.get(item.id);
+    if (!existing) {
+      merged.set(item.id, item);
+      continue;
+    }
+    const cloudTs = itemTimestamp(existing);
+    const localTs = itemTimestamp(item);
+    if (localTs > cloudTs) {
+      merged.set(item.id, item);
+    } else if (localTs === cloudTs && mediaRichnessScore(item) > mediaRichnessScore(existing)) {
+      merged.set(item.id, item);
+    }
+  }
+  return Array.from(merged.values());
+}
+
 /** `id` ile birleştirir, ikisini de korur (geçmiş/ledger gibi append-only listeler). */
 function mergeByIdKeepingBoth<T extends { id: string }>(primary: T[] = [], secondary: T[] = []): T[] {
   const merged = new Map<string, T>();
@@ -547,6 +579,25 @@ function mergeInventory(primary: InventoryEntry[] = [], secondary: InventoryEntr
  */
 export function mergeForks(local: AppStateV3, cloud: AppStateV3, updatedAt: string): AppStateV3 {
   const xpEvents: XpEvent[] = mergeXpLedgers(cloud.xpEvents, local.xpEvents);
+
+  /**
+   * Merge V2 (feature flag): zaman damgasına göre "en yeni kazanır" + silinen
+   * kayıtların geri gelmemesi (tombstone). Flag kapalıyken davranış eskisiyle
+   * birebir aynıdır — yalnızca mevcut alanlar korunur.
+   */
+  const mergeV2 = isFeatureEnabled('syncMergeV2');
+  const tombstones: DeletedItem[] = mergeV2
+    ? mergeTombstones(cloud.deletedItems, local.deletedItems)
+    : Array.isArray(cloud.deletedItems)
+      ? cloud.deletedItems
+      : Array.isArray(local.deletedItems)
+        ? local.deletedItems
+        : [];
+
+  const mergeLibrary = mergeV2 ? mergeByIdNewer : mergeById;
+  const keepTombstones = <T extends { id: string }>(items: T[], type: 'movie' | 'series' | 'collection' | 'history'): T[] =>
+    mergeV2 ? applyTombstones(items, type, tombstones) : items;
+
   const merged: AppStateV3 = {
     ...cloud,
     schemaVersion: SAVE_SCHEMA_VERSION,
@@ -556,10 +607,11 @@ export function mergeForks(local: AppStateV3, cloud: AppStateV3, updatedAt: stri
     updatedAt,
     deviceId: cloud.deviceId || local.deviceId,
     xpEvents,
-    movies: mergeById(cloud.movies, local.movies),
-    series: mergeById(cloud.series, local.series),
-    collections: mergeById(cloud.collections, local.collections),
-    history: mergeByIdKeepingBoth(cloud.history, local.history),
+    movies: keepTombstones(mergeLibrary(cloud.movies, local.movies), 'movie'),
+    series: keepTombstones(mergeLibrary(cloud.series, local.series), 'series'),
+    collections: keepTombstones(mergeLibrary(cloud.collections, local.collections), 'collection'),
+    history: keepTombstones(mergeByIdKeepingBoth(cloud.history, local.history), 'history'),
+    deletedItems: tombstones,
     genres: unionStrings(cloud.genres, local.genres),
     removedSeriesTitles: unionStrings(cloud.removedSeriesTitles, local.removedSeriesTitles),
     achievements: mergeAchievements(cloud.achievements, local.achievements),

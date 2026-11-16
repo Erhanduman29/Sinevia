@@ -6,6 +6,7 @@ import {
   Timer, Lock, Calendar, Clock, Zap, Boxes, History, PlayCircle, Search, Image as ImageIcon
 } from 'lucide-react';
 import { useApp, getMovieTimerInfo } from '../context/AppContext';
+import { useVisibleNow } from '../hooks/useVisibleNow';
 import type { ShowcaseItem } from '../context/AppContext';
 import { ratingBgClass, formatDateShort } from '../lib/utils';
 import { levelFromXp } from '../lib/xp';
@@ -125,17 +126,13 @@ export default function AgentProfileModal({
   const [detailMovie, setDetailMovie] = useState<Movie | null>(null);
 
   // SAYAÇ İÇİN CANLI SANİYE GÜNCELLEMESİ
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const activeTimerMovie = useMemo(
     () => data.movies.find(m => !m.watched && m.startedAt) || null,
     [data.movies]
   );
 
-  useEffect(() => {
-    if (!activeTimerMovie) return;
-    const interval = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [activeTimerMovie]);
+  // Yalnızca sekme görünürken ve aktif sayaç varken tik atar.
+  const nowMs = useVisibleNow(Boolean(activeTimerMovie));
 
   const plannedMovieIds = useMemo(() => {
     const ids = new Set<string>();

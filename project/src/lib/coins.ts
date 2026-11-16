@@ -221,7 +221,7 @@ export function pendingLevelCoinTotal(
   return total;
 }
 
-export function inventoryQuantity(data: AppData, itemId: string): number {
+export function inventoryQuantity(data: Pick<AppData, 'inventory'>, itemId: string): number {
   const entry = (data.inventory || []).find((item) => item.itemId === itemId);
   return entry?.quantity || 0;
 }

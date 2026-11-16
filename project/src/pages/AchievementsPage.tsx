@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as Icons from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useGamification, useSettings } from '../context/slices';
 import { ACHIEVEMENT_DEFS, TIER_ORDER, AchievementIcon } from '../lib/achievements';
 import type { AchievementDef, AchievementTierDef } from '../lib/achievements';
 import { levelFromXp } from '../lib/xp';
@@ -744,7 +744,8 @@ function AchievementDetailModal({
 }
 
 export default function AchievementsPage() {
-  const { data } = useApp();
+  const { totalXp, achievements, level, xpEvents } = useGamification();
+  const { showLockedNames } = useSettings();
   const [activeTab, setActiveTab] = useState<ViewTab>('trophies');
   const [activeTier, setActiveTier] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('newest');
@@ -792,8 +793,8 @@ export default function AchievementsPage() {
     return () => window.removeEventListener('sinevia-search-action', applySearchAction);
   }, []);
 
-  const lvl = levelFromXp(data.totalXp || 0);
-  const progressMap = new Map((data.achievements || []).map((a) => [a.achievementId, a]));
+  const lvl = levelFromXp(totalXp || 0);
+  const progressMap = new Map((achievements || []).map((a) => [a.achievementId, a]));
 
   const currentRankIndex = useMemo(() => {
     for (let i = RANK_TIERS.length - 1; i >= 0; i--) {
@@ -863,13 +864,13 @@ export default function AchievementsPage() {
     for (const a of displayAchievements) {
       if (a.isUnlocked) {
         earnedTrophyXp += Number(a.tier.xp || 0);
-      } else if (!a.def.secret || data.showLockedNames) {
+      } else if (!a.def.secret || showLockedNames) {
         const target = Math.max(1, Number(a.tier.threshold || 1));
         const current = Math.min(target, Number(a.current || 0));
         const pct = Math.min(99, Math.floor((current / target) * 100));
         if (pct > 0 && (closestLocked === null || pct > closestLocked.pct)) {
           closestLocked = {
-            name: data.showLockedNames ? String(a.tier.name || a.def.name || '') : '???',
+            name: showLockedNames ? String(a.tier.name || a.def.name || '') : '???',
             pct,
             current,
             target,
@@ -880,7 +881,7 @@ export default function AchievementsPage() {
     }
 
     return { earnedTrophyXp, closestLocked };
-  }, [displayAchievements, data.showLockedNames]);
+  }, [displayAchievements, showLockedNames]);
 
   const filteredAchievements = displayAchievements.filter((a) => {
     if (activeTier && a.tier.tier !== activeTier) return false;
@@ -943,8 +944,8 @@ export default function AchievementsPage() {
   // PREMIUM: sayaç animasyonları (veri değişince yeni değere yumuşak geçiş)
   const animatedTrophyCount = useCountUp(unlockedTiersCount);
   const animatedCompletionPct = useCountUp(trophyCompletionPct);
-  const animatedTotalXp = useCountUp(data.totalXp || 0, 900);
-  const isTestMode = data.showLockedNames;
+  const animatedTotalXp = useCountUp(totalXp || 0, 900);
+  const isTestMode = showLockedNames;
   const closestTrophy = trophyVaultInsights.closestLocked;
 
   return (
@@ -1016,9 +1017,9 @@ export default function AchievementsPage() {
       {/* XP DEFTERİ SEKME İÇERİĞİ — veri AppContext'ten; bileşen saf/prop tabanlı */}
       {activeTab === 'xp' && (
         <XpLedgerTab
-          events={data.xpEvents ?? []}
-          totalXp={Number(data.totalXp || 0)}
-          level={Number(data.level || 1)}
+          events={xpEvents ?? []}
+          totalXp={Number(totalXp || 0)}
+          level={Number(level || 1)}
         />
       )}
 
@@ -1676,7 +1677,7 @@ export default function AchievementsPage() {
       {selectedAch && (
         <AchievementDetailModal
           ach={selectedAch}
-          showLockedNames={!!data.showLockedNames}
+          showLockedNames={!!showLockedNames}
           onClose={() => setSelectedAch(null)}
         />
       )}

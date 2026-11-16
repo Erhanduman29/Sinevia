@@ -15,6 +15,7 @@ import type {
   WatchHistoryItem,
   WeeklyPlanItem,
 } from '../types';
+import type { DeletedItem } from '../lib/syncMerge';
 
 /* =========================================================================
    UYGULAMA DURUMU (V3) — TEK KANONİK YEREL KAYIT
@@ -197,6 +198,12 @@ export interface AppStateV3 {
   genres: string[];
   /** Kaldırılan dizi başlıkları (Eksikleri Bul telafisi). */
   removedSeriesTitles: string[];
+  /**
+   * Silinen kayıtların "mezar taşları" (sync Merge V2). Bir cihazda silinen
+   * film/dizi/koleksiyon/geçmiş kaydı, diğer cihazın eski kopyasından geri
+   * gelmez. Opsiyoneldir; eski istemciler göndermez.
+   */
+  deletedItems?: DeletedItem[];
   criteria: RatingCriterion[];
   showcase: {
     id: string;

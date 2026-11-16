@@ -10,6 +10,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { getMovieTimerInfo, PAST_WATCH_COLLECTION_NAME } from '../context/AppContext';
 import { useActions, useLibrary, useSettings } from '../context/slices';
+import { useVisibleNow } from '../hooks/useVisibleNow';
 import { ratingBgClass, formatDateShort, normalize } from '../lib/utils';
 import { normalizeActionLabel, resolveActionUrl, rewriteLegacyTemplate } from '../lib/actionBridge';
 import { searchTMDB } from '../lib/tmdb';
@@ -332,14 +333,10 @@ export default function MoviesPage() {
     };
   }, [statusMenuOpen]);
 
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const activeTimerMovie = useMemo(() => libMovies.find((m) => !m.watched && m.startedAt) || null, [libMovies]);
 
-  useEffect(() => {
-    if (!activeTimerMovie) return;
-    const interval = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [activeTimerMovie]);
+  // Sayaç tiki yalnızca sekme görünürken ve aktif sayaç varken çalışır.
+  const nowMs = useVisibleNow(Boolean(activeTimerMovie));
 
   // PROFİLDEN VEYA AĞDAN "BU FİLME GİT" DENİLDİĞİNDE OTOMATİK FİLTRELE, KOLEKSİYONU AÇ VE KAYDIR
   useEffect(() => {
