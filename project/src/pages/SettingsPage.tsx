@@ -4,7 +4,7 @@ import {
   AlertTriangle, Wrench, SlidersHorizontal, PlayCircle, Palette,
   Sparkles, Moon, Sun, Award, ChevronDown, ThumbsUp, ThumbsDown,
   BellRing, BellOff, UserCircle, Key, Copy, MessageSquare, Gift, UserPlus, ShieldCheck,
-  LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal, Flame, Droplet, Zap, Eye
+  LogOut, Ghost, Snowflake, Coffee, Code, FileText, Terminal, Flame, Droplet, Zap, Eye, RefreshCw
 } from 'lucide-react';
 import { BookOpen, Keyboard, Gamepad2, Volume2, VolumeX, ExternalLink, ChevronUp, Star, Search, Info, Film, Play, MonitorPlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -21,6 +21,8 @@ import ShortcutsPanel from '../components/ShortcutsPanel';
 import InstallAppCard from '../components/InstallAppCard';
 import { useInstallSignal } from '../hooks/useInstallSignal';
 import { uid } from '../lib/utils';
+import { APP_VERSION } from '../lib/appVersion';
+import { checkForUpdate, forceAppUpdate } from '../lib/pwaUpdate';
 import { supabase } from '../lib/supabase';
 import {
   ensurePushSubscription,
@@ -754,6 +756,27 @@ export default function SettingsPage() {
     const next = !soundOn;
     setSoundOn(next);
     setSoundEnabled(next);
+  };
+
+  // Sürüm/güncelleme bölümü: sunucudaki sürümü elle denetleme ve önbelleği
+  // temizleyip uygulamayı zorla yenileme imkânı (mobil PWA'lar için kurtarma yolu).
+  const [isCheckingVersion, setIsCheckingVersion] = useState(false);
+  const handleVersionCheck = async () => {
+    if (isCheckingVersion) return;
+    setIsCheckingVersion(true);
+    try {
+      const result = await checkForUpdate();
+      if (result.updateApplied) return;
+      if (!result.deployedVersion) {
+        showToast('Sunucu sürümü okunamadı. İnternet bağlantını kontrol et.', 'error');
+      } else if (result.deployedVersion === APP_VERSION) {
+        showToast(`Uygulama güncel (v${APP_VERSION}).`, 'success');
+      } else {
+        showToast(`Yeni sürüm (v${result.deployedVersion}) hazır. "Yenile" ile yükle.`, 'info');
+      }
+    } finally {
+      setIsCheckingVersion(false);
+    }
   };
 
   const [editingNickname, setEditingNickname] = useState(false);
@@ -1585,6 +1608,44 @@ export default function SettingsPage() {
                 <Upload size={16} /> Geri Yükle
               </button>
               <input ref={fileRef} type="file" accept="application/json" onChange={handleFileImport} className="hidden" />
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Uygulama Sürümü ve Güncelleme"
+            icon={<RefreshCw size={18} className="text-sky-400 flex-shrink-0" />}
+            defaultOpen={false}
+            desc="Yeni sürüm yayınlandığında uygulama açılışta ve öne geldiğinde kendini günceller. Güncelleme takılırsa buradan zorlayabilirsin."
+          >
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-ink-950/50 px-3.5 py-3">
+                <span className="text-xs text-ink-400">Yüklü sürüm</span>
+                <span className="text-sm font-black text-white">v{APP_VERSION}</span>
+              </div>
+              <div className="flex flex-wrap gap-2.5">
+                <button
+                  onClick={handleVersionCheck}
+                  disabled={isCheckingVersion}
+                  className={`${BTN_P} px-4 py-2.5 text-xs sm:text-sm disabled:opacity-60`}
+                  style={BTN_P_STYLE}
+                >
+                  <RefreshCw size={16} className={isCheckingVersion ? 'animate-spin' : ''} /> Güncellemeyi Denetle
+                </button>
+                <button
+                  onClick={() => {
+                    showToast('Uygulama yeniden yükleniyor…', 'info');
+                    void forceAppUpdate();
+                  }}
+                  className={`${BTN_S} px-4 py-2.5 text-xs sm:text-sm text-ink-200`}
+                  style={BTN_S_STYLE}
+                >
+                  <Download size={16} /> Yenile
+                </button>
+              </div>
+              <p className="text-[11px] text-ink-500 leading-relaxed">
+                "Yenile" yalnızca uygulama önbelleğini temizleyip en son sürümü indirir. Filmlerin,
+                puanların, XP ve ayarların silinmez.
+              </p>
             </div>
           </CollapsibleSection>
 

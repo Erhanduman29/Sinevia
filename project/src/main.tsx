@@ -4,6 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import './styles/animations.css';
 import { initInstallPromptCapture } from './lib/installPrompt';
+import { initPwaUpdates } from './lib/pwaUpdate';
 
 // PWA kurulum olayı (`beforeinstallprompt`) sayfa açılışında, kullanıcı
 // Ayarlar'ı açmadan önce tetiklenir. Dinleyici burada erkenden kurulmazsa
@@ -25,6 +26,11 @@ if (import.meta.env.DEV && typeof navigator !== 'undefined' && 'serviceWorker' i
       .catch(() => { /* sessiz */ });
   }
 }
+
+// PWA güncelleme yönetimi: yeni sürüm yayınlandığında service worker'ı
+// günceller, gerekirse önbelleği temizleyip sayfayı yeniler. Mobil ana ekran
+// uygulamalarının eski sürümde takılı kalmasını engeller.
+initPwaUpdates();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -1,12 +1,47 @@
-import { defineConfig } from 'vite';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+
+/**
+ * `APP_VERSION` değerini tek kaynaktan (src/lib/appVersion.ts) okuyup
+ * derleme çıktısına `/version.json` olarak yazar. İstemci bu dosyayı
+ * `no-store` ile çekip yüklü sürümle karşılaştırarak, service worker
+ * önbelleğinde takılı kalan cihazları otomatik günceller.
+ */
+function appVersionManifest(): Plugin {
+  let version = '0.0.0';
+  return {
+    name: 'sinevia-app-version-manifest',
+    apply: 'build',
+    buildStart() {
+      const source = readFileSync(
+        fileURLToPath(new URL('./src/lib/appVersion.ts', import.meta.url)),
+        'utf8',
+      );
+      version = /APP_VERSION\s*=\s*['"]([^'"]+)['"]/.exec(source)?.[1] ?? '0.0.0';
+    },
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ version, builtAt: new Date().toISOString() }),
+      });
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     react(),
+    appVersionManifest(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Kayıt işlemi src/lib/pwaUpdate.ts içinde `virtual:pwa-register` ile
+      // yapılır. Otomatik enjekte edilen düz `registerSW.js` güncelleme
+      // sonrası sayfayı yenilemediği için mobil PWA'lar eski sürümde kalıyordu.
+      injectRegister: false,
       devOptions: {
         // Geliştirme sırasında service worker, güncelleme reload'larında eski önbelleği
         // servis edip veri kaybı yanılsaması/çakışması yaratabiliyor. Prod PWA etkilenmez.
@@ -61,6 +96,11 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // `injectRegister: false` kullanıldığında plugin bu iki bayrağı otomatik
+        // açmıyor. Yeni service worker'ın beklemeden devreye girmesi ve açık
+        // sayfaları devralması için açıkça set edilmeli.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // public/push-sw.js → üretilen service worker'a dahil edilir.
