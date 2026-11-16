@@ -23,6 +23,8 @@ import { APP_VERSION } from './appVersion';
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const FORCED_UPDATE_KEY = 'sinevia:forced-update-version';
 const VERSION_ENDPOINT = '/version.json';
+const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_MAX_RETRIES = 3;
 
 let swRegistration: ServiceWorkerRegistration | null = null;
 let listenersBound = false;
@@ -40,18 +42,36 @@ export function getRunningVersion(): string {
   return APP_VERSION;
 }
 
-/** Sunucudaki güncel sürümü önbelleğe dokunmadan okur. */
+/** Sunucudaki güncel sürümü önbelleğe dokunmadan okur. Geçici ağ/SSL
+ *  hataları için kısa bir yeniden deneme döngüsüyle çalışır. Hata durumunda
+ *  sessize geçer ve null döner (kullanıcıya hiçbir hata yansıtmaz). */
 export async function fetchDeployedVersion(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
+
+  const abortController = new AbortController();
+  const timeout = window.setTimeout(() => abortController.abort(), FETCH_TIMEOUT_MS);
+
+  const attempt = async (tryNo: number): Promise<string | null> => {
+    try {
+      const response = await fetch(VERSION_ENDPOINT, {
+        cache: 'no-store',
+        signal: abortController.signal,
+      });
+      if (!response.ok) return null;
+      const data = (await response.json()) as { version?: unknown };
+      return typeof data.version === 'string' && data.version ? data.version : null;
+    } catch {
+      if (tryNo >= FETCH_MAX_RETRIES) return null;
+      // Geçici hata: kısa bir beklemeden yeniden dene.
+      await new Promise((resolve) => window.setTimeout(resolve, 500 * (tryNo + 1)));
+      return attempt(tryNo + 1);
+    }
+  };
+
   try {
-    const response = await fetch(`${VERSION_ENDPOINT}?t=${Date.now().toString(36)}`, {
-      cache: 'no-store',
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as { version?: unknown };
-    return typeof data.version === 'string' && data.version ? data.version : null;
-  } catch {
-    return null;
+    return await attempt(0);
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
